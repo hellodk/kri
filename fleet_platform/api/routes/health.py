@@ -1,5 +1,5 @@
 from fastapi import APIRouter
-from platform.core.config import settings
+from fleet_platform.core.config import settings
 
 router = APIRouter()
 

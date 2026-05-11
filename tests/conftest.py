@@ -36,7 +36,7 @@ import builtins
 _original_import = builtins.__import__
 
 def _patched_import(name, globals=None, locals=None, fromlist=(), level=0):
-    # If something does a pure "import platform" (not "from platform..."),
+    # If something does a pure "import platform" (not "from fleet_platform..."),
     # give them the stdlib version to prevent breaking pytest and other libraries
     if name == "platform" and not fromlist and not level:
         return _stdlib_platform
@@ -51,7 +51,7 @@ from httpx import ASGITransport, AsyncClient
 
 @pytest.fixture
 async def client():
-    from platform.api.main import create_app
+    from fleet_platform.api.main import create_app
     app = create_app()
     async with AsyncClient(
         transport=ASGITransport(app=app),

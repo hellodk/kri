@@ -6,7 +6,7 @@ from sqlalchemy import DateTime, ForeignKey, Index, Numeric, SmallInteger, Strin
 from sqlalchemy.dialects.postgresql import INET, UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
-from platform.models.base import Base, TimestampMixin
+from fleet_platform.models.base import Base, TimestampMixin
 
 
 class Node(Base, TimestampMixin):

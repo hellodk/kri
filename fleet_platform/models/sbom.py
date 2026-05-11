@@ -5,7 +5,7 @@ from sqlalchemy import BigInteger, DateTime, ForeignKey, Index, Integer, String
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
-from platform.models.base import Base
+from fleet_platform.models.base import Base
 
 
 class SBOMScan(Base):

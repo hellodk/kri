@@ -4,8 +4,8 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from platform.api.deps import get_db
-from platform.core.auth import (
+from fleet_platform.api.deps import get_db
+from fleet_platform.core.auth import (
     TokenExpiredError,
     TokenInvalidError,
     create_access_token,
@@ -14,8 +14,8 @@ from platform.core.auth import (
     get_current_user,
     verify_password,
 )
-from platform.models.user import User
-from platform.schemas.auth import (
+from fleet_platform.models.user import User
+from fleet_platform.schemas.auth import (
     AccessTokenResponse,
     LoginRequest,
     MeResponse,

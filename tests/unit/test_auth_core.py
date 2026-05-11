@@ -1,7 +1,7 @@
 import pytest
 from datetime import timedelta
 
-from platform.core.auth import (
+from fleet_platform.core.auth import (
     hash_password,
     verify_password,
     create_access_token,

@@ -18,7 +18,7 @@ if "platform" not in sys.modules or not hasattr(sys.modules["platform"], "models
     sys.modules["platform"] = mod
     spec.loader.exec_module(mod)
 
-from platform.models import Base  # noqa: E402
+from fleet_platform.models import Base  # noqa: E402
 
 config = context.config
 if config.config_file_name is not None:

@@ -4,9 +4,9 @@ from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
-from platform.core.config import settings
-from platform.core.logging import configure_logging
-from platform.api.routes import health, auth
+from fleet_platform.core.config import settings
+from fleet_platform.core.logging import configure_logging
+from fleet_platform.api.routes import health, auth
 
 
 @asynccontextmanager

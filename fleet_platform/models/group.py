@@ -5,7 +5,7 @@ from sqlalchemy import DateTime, ForeignKey, String, Text
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
-from platform.models.base import Base, TimestampMixin
+from fleet_platform.models.base import Base, TimestampMixin
 
 
 class Group(Base, TimestampMixin):

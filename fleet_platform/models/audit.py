@@ -5,7 +5,7 @@ from sqlalchemy import BigInteger, DateTime, Index, String
 from sqlalchemy.dialects.postgresql import INET, JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
-from platform.models.base import Base
+from fleet_platform.models.base import Base
 
 
 class AuditEvent(Base):

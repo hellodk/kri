@@ -5,7 +5,7 @@ from sqlalchemy import Boolean, DateTime, String
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
-from platform.models.base import Base, TimestampMixin
+from fleet_platform.models.base import Base, TimestampMixin
 
 
 class User(Base, TimestampMixin):

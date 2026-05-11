@@ -1,4 +1,4 @@
-from platform.core.config import Settings
+from fleet_platform.core.config import Settings
 
 
 def test_defaults_are_sane():

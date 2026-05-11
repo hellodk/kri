@@ -6,7 +6,7 @@ import jwt
 from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
-from platform.core.config import settings
+from fleet_platform.core.config import settings
 
 
 class TokenExpiredError(Exception):

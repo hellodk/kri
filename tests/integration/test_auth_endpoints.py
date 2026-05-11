@@ -3,9 +3,9 @@ import pytest_asyncio
 from httpx import ASGITransport, AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
-from platform.core.auth import hash_password
-from platform.core.config import settings
-from platform.models import Base, User
+from fleet_platform.core.auth import hash_password
+from fleet_platform.core.config import settings
+from fleet_platform.models import Base, User
 
 
 @pytest_asyncio.fixture(scope="module", loop_scope="module")
@@ -44,8 +44,8 @@ async def test_user(db_session: AsyncSession):
 
 @pytest_asyncio.fixture(loop_scope="module")
 async def auth_client(test_engine):
-    from platform.api.main import create_app
-    from platform.api import deps
+    from fleet_platform.api.main import create_app
+    from fleet_platform.api import deps
 
     app = create_app()
     TestSession = async_sessionmaker(test_engine, expire_on_commit=False)
