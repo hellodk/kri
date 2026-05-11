@@ -15,7 +15,7 @@ class NodeFact(Base):
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
     node_id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), ForeignKey("nodes.id"), nullable=False
+        UUID(as_uuid=True), ForeignKey("nodes.id", ondelete="CASCADE"), nullable=False
     )
     collected_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, primary_key=True

@@ -41,7 +41,7 @@ class ExecutionResult(Base):
         nullable=False,
     )
     node_id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), ForeignKey("nodes.id"), nullable=False
+        UUID(as_uuid=True), ForeignKey("nodes.id", ondelete="CASCADE"), nullable=False
     )
     status: Mapped[str] = mapped_column(String(20), nullable=False)
     exit_code: Mapped[int | None] = mapped_column(Integer, nullable=True)

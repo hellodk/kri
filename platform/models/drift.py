@@ -30,7 +30,7 @@ class DriftRecord(Base):
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
     node_id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), ForeignKey("nodes.id"), nullable=False
+        UUID(as_uuid=True), ForeignKey("nodes.id", ondelete="CASCADE"), nullable=False
     )
     baseline_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
