@@ -43,3 +43,18 @@ def _patched_import(name, globals=None, locals=None, fromlist=(), level=0):
     return _original_import(name, globals, locals, fromlist, level)
 
 builtins.__import__ = _patched_import
+
+
+import pytest
+from httpx import ASGITransport, AsyncClient
+
+
+@pytest.fixture
+async def client():
+    from platform.api.main import create_app
+    app = create_app()
+    async with AsyncClient(
+        transport=ASGITransport(app=app),
+        base_url="http://testserver",
+    ) as ac:
+        yield ac
