@@ -6,7 +6,7 @@ from fastapi.responses import JSONResponse
 
 from platform.core.config import settings
 from platform.core.logging import configure_logging
-from platform.api.routes import health
+from platform.api.routes import health, auth
 
 
 @asynccontextmanager
@@ -33,6 +33,7 @@ def create_app() -> FastAPI:
     )
 
     app.include_router(health.router, tags=["health"])
+    app.include_router(auth.router, tags=["auth"])
 
     @app.exception_handler(Exception)
     async def unhandled_exception_handler(request: Request, exc: Exception):
