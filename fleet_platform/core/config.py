@@ -22,3 +22,5 @@ class Settings(BaseSettings):
 
 
 settings = Settings()
+
+VERSION = "0.1.0"

@@ -4,9 +4,11 @@ from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
-from fleet_platform.core.config import settings
-from fleet_platform.core.logging import configure_logging
+from fleet_platform.core.config import settings, VERSION
+from fleet_platform.core.logging import configure_logging, get_logger
 from fleet_platform.api.routes import health, auth
+
+_log = get_logger(__name__)
 
 
 @asynccontextmanager
@@ -18,7 +20,7 @@ async def lifespan(app: FastAPI):
 def create_app() -> FastAPI:
     app = FastAPI(
         title="Fleet Platform API",
-        version="0.1.0",
+        version=VERSION,
         docs_url="/docs" if settings.is_development else None,
         redoc_url="/redoc" if settings.is_development else None,
         lifespan=lifespan,
@@ -37,6 +39,7 @@ def create_app() -> FastAPI:
 
     @app.exception_handler(Exception)
     async def unhandled_exception_handler(request: Request, exc: Exception):
+        _log.error("unhandled_exception", path=str(request.url), exc_info=exc)
         return JSONResponse(
             status_code=500,
             content={"error": {"code": "INTERNAL_ERROR", "message": "An unexpected error occurred"}},

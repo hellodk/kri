@@ -1,3 +1,4 @@
+import uuid as _uuid
 from datetime import UTC, datetime
 
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -65,7 +66,7 @@ async def refresh(payload: RefreshRequest, db: AsyncSession = Depends(get_db)):
             status_code=status.HTTP_401_UNAUTHORIZED, detail="Not a refresh token"
         )
 
-    result = await db.execute(select(User).where(User.id == claims["sub"]))
+    result = await db.execute(select(User).where(User.id == _uuid.UUID(claims["sub"])))
     user = result.scalar_one_or_none()
     if not user or not user.is_active:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="User not found")
