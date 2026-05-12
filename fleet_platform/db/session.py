@@ -1,7 +1,13 @@
+from collections.abc import AsyncGenerator, Generator
+from contextlib import contextmanager
+
+from sqlalchemy import create_engine
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
+from sqlalchemy.orm import Session, sessionmaker
 
 from fleet_platform.core.config import settings
 
+# ── Async engine — used by FastAPI request handlers ──────────────────
 engine = create_async_engine(
     settings.database_url,
     echo=settings.is_development,
@@ -16,3 +22,25 @@ AsyncSessionLocal = async_sessionmaker(
     class_=AsyncSession,
     expire_on_commit=False,
 )
+
+# ── Sync engine — used by Celery workers ─────────────────────────────
+sync_engine = create_engine(
+    settings.database_url,
+    echo=False,
+    pool_size=5,
+    max_overflow=10,
+    pool_timeout=30,
+    pool_pre_ping=True,
+)
+
+SyncSessionLocal = sessionmaker(sync_engine, expire_on_commit=False)
+
+
+@contextmanager
+def get_sync_db() -> Generator[Session, None, None]:
+    with SyncSessionLocal() as session:
+        try:
+            yield session
+        except Exception:
+            session.rollback()
+            raise
