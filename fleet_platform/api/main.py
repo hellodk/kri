@@ -6,7 +6,7 @@ from fastapi.responses import JSONResponse
 
 from fleet_platform.core.config import settings, VERSION
 from fleet_platform.core.logging import configure_logging, get_logger
-from fleet_platform.api.routes import health, auth, nodes
+from fleet_platform.api.routes import health, auth, nodes, ingest
 
 _log = get_logger(__name__)
 
@@ -37,6 +37,7 @@ def create_app() -> FastAPI:
     app.include_router(health.router, tags=["health"])
     app.include_router(auth.router, tags=["auth"])
     app.include_router(nodes.router, tags=["nodes"])
+    app.include_router(ingest.router, tags=["ingest"])
 
     @app.exception_handler(Exception)
     async def unhandled_exception_handler(request: Request, exc: Exception):
