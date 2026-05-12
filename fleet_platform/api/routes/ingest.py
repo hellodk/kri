@@ -1,4 +1,6 @@
 # fleet_platform/api/routes/ingest.py
+import os
+import tempfile
 from datetime import UTC, datetime
 from decimal import Decimal
 
@@ -7,11 +9,13 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from fleet_platform.api.deps import get_db
+from fleet_platform.models.execution import ExecutionJob, ExecutionResult
 from fleet_platform.models.facts import NodeFact
 from fleet_platform.models.node import Node
-from fleet_platform.schemas.ingest import GrainIngestPayload
+from fleet_platform.schemas.ingest import ExecutionIngestPayload, GrainIngestPayload
 from fleet_platform.services.node_status import verify_node_token
 from fleet_platform.workers.drift_tasks import compute_drift
+from fleet_platform.workers.sbom_tasks import index_sbom
 
 router = APIRouter(prefix="/api/v1/ingest")
 
@@ -77,3 +81,73 @@ async def ingest_grains(
     compute_drift.delay(str(node.id))
 
     return {"status": "ok", "node_id": str(node.id)}
+
+
+@router.post("/executions")
+async def ingest_executions(
+    payload: ExecutionIngestPayload,
+    x_node_token: str | None = Header(alias="X-Node-Token", default=None),
+    db: AsyncSession = Depends(get_db),
+):
+    if not x_node_token:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Missing X-Node-Token")
+
+    node = await _resolve_node(payload.minion_id, x_node_token, db)
+    now = datetime.now(UTC)
+
+    job = ExecutionJob(
+        salt_jid=payload.jid,
+        type=payload.fun,
+        target_type="node",
+        target_id=node.id,
+        triggered_by="salt",
+        status="complete",
+        started_at=now,
+        completed_at=now,
+    )
+    db.add(job)
+    await db.flush()
+
+    result = ExecutionResult(
+        job_id=job.id,
+        node_id=node.id,
+        status="success" if payload.success and payload.retcode == 0 else "failure",
+        exit_code=payload.retcode,
+        changes=payload.return_data,
+        completed_at=now,
+    )
+    db.add(result)
+    await db.commit()
+
+    return {"status": "ok", "job_id": str(job.id)}
+
+
+@router.post("/sbom/{minion_id}", status_code=status.HTTP_202_ACCEPTED)
+async def ingest_sbom(
+    minion_id: str,
+    request: Request,
+    x_node_token: str | None = Header(alias="X-Node-Token", default=None),
+    db: AsyncSession = Depends(get_db),
+):
+    if not x_node_token:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Missing X-Node-Token")
+
+    node = await _resolve_node(minion_id, x_node_token, db)
+
+    tmp = tempfile.NamedTemporaryFile(
+        delete=False,
+        suffix=".json",
+        prefix=f"sbom_{node.id}_",
+    )
+    try:
+        async for chunk in request.stream():
+            tmp.write(chunk)
+        tmp.close()
+    except Exception:
+        tmp.close()
+        os.unlink(tmp.name)
+        raise
+
+    index_sbom.delay(node_id=str(node.id), file_path=tmp.name)
+
+    return {"status": "queued", "node_id": str(node.id)}
