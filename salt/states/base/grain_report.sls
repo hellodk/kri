@@ -14,6 +14,5 @@ report_grains_to_fleet_platform:
     - header_list:
         - "Content-Type: application/json"
         - "X-Node-Token: {{ node_token }}"
-    - data: >
-        {"minion_id": "{{ grains['id'] }}", "grains": {{ grains | tojson }}}
+    - data: {{ {"minion_id": grains["id"], "grains": grains} | tojson }}
     - unless: test -z "{{ ingest_url }}"

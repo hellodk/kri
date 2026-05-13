@@ -20,5 +20,8 @@ def classify_status(last_seen_at: datetime | None) -> str:
 
 
 def verify_node_token(plaintext_token: str, hashed_token: str) -> bool:
-    """Return True if plaintext_token matches the bcrypt hash."""
-    return bcrypt.checkpw(plaintext_token.encode(), hashed_token.encode())
+    """Return True if plaintext_token matches the bcrypt hash. Returns False on corrupt hash."""
+    try:
+        return bcrypt.checkpw(plaintext_token.encode(), hashed_token.encode())
+    except (ValueError, Exception):
+        return False

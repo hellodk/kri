@@ -18,6 +18,10 @@ def mark_stale_nodes() -> dict:
     offline_cutoff = now - _OFFLINE_THRESHOLD
 
     with get_sync_db() as db:
+        # NOTE: Nodes with last_seen_at IS NULL (registered but never reported) are
+        # intentionally not touched here. They stay in status="unknown" indefinitely.
+        # A separate cleanup task (Plan 3+) should evict nodes that are unknown for
+        # longer than the offline threshold.
         stale = db.execute(
             update(Node)
             .where(Node.last_seen_at < stale_cutoff)

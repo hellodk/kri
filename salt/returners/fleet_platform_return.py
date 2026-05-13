@@ -37,13 +37,14 @@ def returner(ret):
         log.warning("fleet_platform_return: ingest_url or node_token not set — skipping")
         return
 
+    retcode = ret.get("retcode", -1)
     payload = {
         "minion_id": ret.get("id", ""),
         "jid": ret.get("jid", ""),
         "return_data": ret.get("return") or {},
         "fun": ret.get("fun", ""),
-        "retcode": ret.get("retcode", 0),
-        "success": ret.get("success", True),
+        "retcode": retcode,
+        "success": ret.get("success", retcode == 0),
     }
 
     try:

@@ -1,4 +1,5 @@
 # fleet_platform/api/routes/ingest.py
+import asyncio
 import os
 import tempfile
 from datetime import UTC, datetime
@@ -6,6 +7,7 @@ from decimal import Decimal
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Request, status
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from fleet_platform.api.deps import get_db
@@ -26,18 +28,35 @@ async def _resolve_node(minion_id: str, token: str, db: AsyncSession) -> Node:
     node = result.scalar_one_or_none()
     if node is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Node not found")
-    if not verify_node_token(token, node.node_token_hash):
+    valid = await asyncio.to_thread(verify_node_token, token, node.node_token_hash)
+    if not valid:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid node token")
     return node
 
 
 def _extract_node_updates(grains: dict) -> dict:
     """Map Salt grain keys to Node column values."""
+    # Skip loopback and link-local; prefer en0/en1 style interfaces
     ip = None
-    for iface_ips in grains.get("ip4_interfaces", {}).values():
-        if iface_ips:
-            ip = iface_ips[0]
+    _skip_prefixes = ("127.", "169.254.", "::1", "fe80")
+    ip4 = grains.get("ip4_interfaces", {})
+    for iface, addrs in ip4.items():
+        if iface in ("lo", "lo0"):
+            continue
+        for addr in addrs:
+            if not any(addr.startswith(p) for p in _skip_prefixes):
+                ip = addr
+                break
+        if ip:
             break
+
+    # Fallback: use Salt's pre-filtered fqdn_ip4 list
+    if not ip:
+        fqdn_ips = grains.get("fqdn_ip4", [])
+        ip = next(
+            (a for a in fqdn_ips if not any(a.startswith(p) for p in _skip_prefixes)),
+            None,
+        )
 
     mem_mb = grains.get("mem_total")
     ram_gb = Decimal(str(round(mem_mb / 1024, 2))) if mem_mb else None
@@ -51,8 +70,6 @@ def _extract_node_updates(grains: dict) -> dict:
         "cpu_cores": grains.get("num_cpus"),
         "ram_gb": ram_gb,
         "status": "online",
-        "last_seen_at": datetime.now(UTC),
-        "updated_at": datetime.now(UTC),
     }
 
 
@@ -66,18 +83,20 @@ async def ingest_grains(
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Missing X-Node-Token")
 
     node = await _resolve_node(payload.minion_id, x_node_token, db)
+    now = datetime.now(UTC)
 
-    for key, value in _extract_node_updates(payload.grains).items():
+    updates = _extract_node_updates(payload.grains)
+    updates["last_seen_at"] = now
+    for key, value in updates.items():
         setattr(node, key, value)
 
     db.add(NodeFact(
         node_id=node.id,
-        collected_at=datetime.now(UTC),
+        collected_at=now,
         grains=payload.grains,
     ))
 
     await db.commit()
-
     compute_drift.delay(str(node.id))
 
     return {"status": "ok", "node_id": str(node.id)}
@@ -95,6 +114,17 @@ async def ingest_executions(
     node = await _resolve_node(payload.minion_id, x_node_token, db)
     now = datetime.now(UTC)
 
+    # Check for existing job with same JID (idempotency)
+    if payload.jid:
+        existing = await db.execute(
+            select(ExecutionJob).where(
+                ExecutionJob.salt_jid == payload.jid,
+                ExecutionJob.target_id == node.id,
+            )
+        )
+        if existing_job := existing.scalar_one_or_none():
+            return {"status": "ok", "job_id": str(existing_job.id)}
+
     job = ExecutionJob(
         salt_jid=payload.jid,
         type=payload.fun,
@@ -104,6 +134,7 @@ async def ingest_executions(
         status="complete",
         started_at=now,
         completed_at=now,
+        metadata_={},
     )
     db.add(job)
     await db.flush()
@@ -117,7 +148,20 @@ async def ingest_executions(
         completed_at=now,
     )
     db.add(result)
-    await db.commit()
+
+    try:
+        await db.commit()
+    except IntegrityError:
+        await db.rollback()
+        # Race condition — another request already inserted this JID; return existing
+        existing = await db.execute(
+            select(ExecutionJob).where(
+                ExecutionJob.salt_jid == payload.jid,
+                ExecutionJob.target_id == node.id,
+            )
+        )
+        existing_job = existing.scalar_one()
+        return {"status": "ok", "job_id": str(existing_job.id)}
 
     return {"status": "ok", "job_id": str(job.id)}
 
@@ -148,6 +192,10 @@ async def ingest_sbom(
         os.unlink(tmp.name)
         raise
 
-    index_sbom.delay(node_id=str(node.id), file_path=tmp.name)
+    try:
+        index_sbom.delay(node_id=str(node.id), file_path=tmp.name)
+    except Exception:
+        os.unlink(tmp.name)
+        raise
 
     return {"status": "queued", "node_id": str(node.id)}
