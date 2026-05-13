@@ -1380,12 +1380,11 @@ async def ingest_sbom(
     db: AsyncSession = Depends(get_db),
 ):
     node = await verify_node_token(db, minion_id, token)
-    raw_json = await request.json()
-
+    # Stream request body to a temp file to avoid loading large SBOMs into memory
     # Queue for async processing — don't block the returner
     await celery_app.send_task(
         'workers.sbom_tasks.index_sbom',
-        kwargs={'node_id': str(node.id), 'raw_json': raw_json},
+        kwargs={'node_id': str(node.id), 'tmp_path': '<temp_file_path>'},
         queue='sbom',
     )
     return {"status": "queued"}
@@ -1664,7 +1663,7 @@ POST /api/v1/ingest/sbom/{minion_id}
 
 POST /api/v1/ingest/executions
   Header: X-Node-Token: {token}
-  Body: { "jid": "20260509102800123456", "return": {...}, "retcode": 0 }
+  Body: { "jid": "20260509102800123456", "return_data": {...}, "retcode": 0 }
 
 POST /api/v1/ingest/baseline-update
   Header: X-CI-Token: {ci_token}   # separate token for CI pipeline
