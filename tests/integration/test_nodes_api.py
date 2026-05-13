@@ -98,3 +98,42 @@ async def test_get_node_requires_auth(client: AsyncClient, two_nodes):
     node_a, _ = two_nodes
     response = await client.get(f"/api/v1/nodes/{node_a.id}")
     assert response.status_code == 401
+
+
+async def test_get_node_facts_returns_200(admin_client: AsyncClient, two_nodes):
+    node_a, _ = two_nodes
+    response = await admin_client.get(f"/api/v1/nodes/{node_a.id}/facts")
+    assert response.status_code == 200
+    assert "grains" in response.json()
+
+
+async def test_add_tag_to_node(admin_client: AsyncClient, two_nodes):
+    node_a, _ = two_nodes
+    response = await admin_client.post(
+        f"/api/v1/nodes/{node_a.id}/tags",
+        json={"key": "team", "value": "mobile"},
+    )
+    assert response.status_code == 201
+    assert response.json()["key"] == "team"
+
+
+async def test_add_tag_requires_operator(viewer_client: AsyncClient, two_nodes):
+    node_a, _ = two_nodes
+    response = await viewer_client.post(
+        f"/api/v1/nodes/{node_a.id}/tags",
+        json={"key": "team", "value": "mobile"},
+    )
+    assert response.status_code == 403
+
+
+async def test_delete_tag_from_node(admin_client: AsyncClient, two_nodes):
+    node_a, _ = two_nodes
+    # The env:prod tag was added in the fixture
+    response = await admin_client.delete(f"/api/v1/nodes/{node_a.id}/tags/env")
+    assert response.status_code == 204
+
+
+async def test_delete_nonexistent_tag_returns_404(admin_client: AsyncClient, two_nodes):
+    node_a, _ = two_nodes
+    response = await admin_client.delete(f"/api/v1/nodes/{node_a.id}/tags/nonexistent-key")
+    assert response.status_code == 404

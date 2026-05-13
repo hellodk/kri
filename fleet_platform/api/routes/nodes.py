@@ -13,10 +13,12 @@ from sqlalchemy.orm import selectinload
 from fleet_platform.api.deps import get_db
 from fleet_platform.core.audit import audit
 from fleet_platform.core.auth import get_current_user, hash_password, require_role
+from fleet_platform.models.facts import NodeFact
 from fleet_platform.models.node import Node, Tag
 from fleet_platform.schemas.common import PaginatedResponse
 from fleet_platform.schemas.fleet import NodeDetailResponse, NodeListItem
 from fleet_platform.schemas.node import NodeRegisterRequest, NodeRegisterResponse
+from fleet_platform.schemas.tag import TagCreate, TagResponse
 
 router = APIRouter(prefix="/api/v1/nodes")
 
@@ -144,3 +146,98 @@ async def get_node(
     if not node:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Node not found")
     return NodeDetailResponse.model_validate(node)
+
+
+@router.get("/{node_id}/facts")
+async def get_node_facts(
+    node_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+    _: dict = Depends(get_current_user),
+):
+    """Return the latest Salt grain snapshot for a node."""
+    result = await db.execute(
+        select(NodeFact)
+        .where(NodeFact.node_id == node_id)
+        .order_by(NodeFact.collected_at.desc())
+        .limit(1)
+    )
+    fact = result.scalar_one_or_none()
+    return {"grains": fact.grains if fact else {}}
+
+
+@router.get("/{node_id}/packages")
+async def get_node_packages(
+    node_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+    _: dict = Depends(get_current_user),
+):
+    """Return installed packages extracted from the latest Salt grain snapshot."""
+    result = await db.execute(
+        select(NodeFact)
+        .where(NodeFact.node_id == node_id)
+        .order_by(NodeFact.collected_at.desc())
+        .limit(1)
+    )
+    fact = result.scalar_one_or_none()
+    if not fact:
+        return {"items": [], "source": "grains"}
+
+    grains = fact.grains
+    pkgs_raw = grains.get("pkgs") or grains.get("brew_pkgs") or {}
+    packages = [
+        {"name": name, "version": version, "source": "brew"}
+        for name, version in (pkgs_raw.items() if isinstance(pkgs_raw, dict) else [])
+    ]
+    return {"items": packages, "source": "grains", "collected_at": fact.collected_at}
+
+
+@router.post("/{node_id}/tags", response_model=TagResponse, status_code=201)
+async def add_node_tag(
+    node_id: uuid.UUID,
+    payload: TagCreate,
+    db: AsyncSession = Depends(get_db),
+    claims: dict = Depends(require_role("operator", "admin")),
+):
+    result = await db.execute(select(Node).where(Node.id == node_id))
+    node = result.scalar_one_or_none()
+    if not node:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Node not found")
+
+    existing = await db.execute(
+        select(Tag).where(Tag.node_id == node_id, Tag.key == payload.key)
+    )
+    tag = existing.scalar_one_or_none()
+    if tag:
+        tag.value = payload.value
+    else:
+        tag = Tag(node_id=node_id, key=payload.key, value=payload.value,
+                  created_at=datetime.now(UTC))
+        db.add(tag)
+
+    await audit(db, actor=claims["email"], action="node.tag.upsert",
+                resource_type="node", resource_id=node_id,
+                new_value={"key": payload.key, "value": payload.value})
+    await db.commit()
+    await db.refresh(tag)
+    return TagResponse.model_validate(tag)
+
+
+@router.delete("/{node_id}/tags/{key}", status_code=204)
+async def delete_node_tag(
+    node_id: uuid.UUID,
+    key: str,
+    db: AsyncSession = Depends(get_db),
+    claims: dict = Depends(require_role("operator", "admin")),
+):
+    result = await db.execute(
+        select(Tag).where(Tag.node_id == node_id, Tag.key == key)
+    )
+    tag = result.scalar_one_or_none()
+    if not tag:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Tag not found")
+
+    old_value = {"key": tag.key, "value": tag.value}
+    await db.delete(tag)
+    await audit(db, actor=claims["email"], action="node.tag.delete",
+                resource_type="node", resource_id=node_id, old_value=old_value)
+    await db.commit()
