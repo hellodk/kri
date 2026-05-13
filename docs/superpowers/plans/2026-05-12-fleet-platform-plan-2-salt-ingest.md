@@ -64,7 +64,9 @@ tests/
 └── integration/
     ├── conftest.py             CREATE — shared fixtures: admin_token, registered_node
     ├── test_node_registration.py  CREATE — registration endpoint tests
-    └── test_ingest_api.py      CREATE — grain/exec/sbom ingest tests
+    ├── test_ingest_grains.py    CREATE
+    ├── test_ingest_executions.py  CREATE
+    └── test_ingest_sbom.py      CREATE
 ```
 
 ---
@@ -1918,7 +1920,7 @@ git commit -m "chore: plan 2 complete — salt ingest pipeline, XX tests passing
 - ✅ RFC §6 (Backend: Ingest service, Celery workers, queue architecture)
 - ✅ RFC §13 (Security: node token hash, per-node auth for ingest)
 - ✅ RFC §15 (Operational: mark_stale_nodes beat task)
-- ✅ RFC §16 (Failure: ingest returns non-blocking 202 for SBOM; executions are idempotent by jid)
+- ✅ RFC §16 (Failure: ingest returns non-blocking 202 for SBOM; executions are idempotent by jid — partial unique index on `(salt_jid, target_id)` added in migration 002; application-level duplicate check returns existing `job_id` on re-POST)
 
 **Not in this plan (correct — belong in later plans):**
 - Full drift computation → Plan 4
