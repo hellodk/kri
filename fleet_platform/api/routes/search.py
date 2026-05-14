@@ -26,6 +26,7 @@ async def search(
             or_(
                 Node.hostname.ilike(pattern),
                 Node.minion_id.ilike(pattern),
+                # IP search deferred — INET cast differs by driver; add in Plan 6 frontend work
             )
         )
         .limit(50)

@@ -217,7 +217,18 @@ async def add_node_tag(
     await audit(db, actor=claims["email"], action="node.tag.upsert",
                 resource_type="node", resource_id=node_id,
                 new_value={"key": payload.key, "value": payload.value})
-    await db.commit()
+
+    try:
+        await db.commit()
+    except IntegrityError:
+        await db.rollback()
+        # Concurrent insert won the race — fetch and return the existing tag
+        result = await db.execute(
+            select(Tag).where(Tag.node_id == node_id, Tag.key == payload.key)
+        )
+        tag = result.scalar_one()
+        return TagResponse.model_validate(tag)
+
     await db.refresh(tag)
     return TagResponse.model_validate(tag)
 

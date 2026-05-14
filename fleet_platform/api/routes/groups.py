@@ -179,7 +179,8 @@ async def add_group_member(
         )
     )
     if existing.scalar_one_or_none():
-        return {"status": "already_member"}
+        from fastapi.responses import JSONResponse
+        return JSONResponse(status_code=200, content={"status": "already_member"})
     db.add(GroupMember(group_id=group_id, node_id=payload.node_id, added_at=datetime.now(UTC)))
     await db.commit()
     return {"status": "added"}
