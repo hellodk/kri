@@ -1581,6 +1581,7 @@ git commit -m "chore: plan 3 complete — all tests passing" 2>/dev/null || echo
 - ✅ RFC §12 Group members — add/remove static, resolve dynamic
 - ✅ RFC §12 `GET /api/v1/search` — hostname/minion_id/IP search
 - ✅ RFC §14 Redis caching — overview cached 15 s
+- ⚠️ RFC §12 search IP filter — deferred; INET→text cast is driver-specific; implement in Plan 6
 
 **Not in this plan (correct):**
 - `GET /api/v1/nodes/{id}/drift` → Plan 4

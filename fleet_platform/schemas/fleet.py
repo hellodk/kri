@@ -1,0 +1,50 @@
+import uuid
+from datetime import datetime
+
+from pydantic import BaseModel
+
+
+class TagResponse(BaseModel):
+    key: str
+    value: str
+
+    model_config = {"from_attributes": True}
+
+
+class NodeListItem(BaseModel):
+    id: uuid.UUID
+    minion_id: str
+    hostname: str | None = None
+    ip_address: str | None = None
+    os_version: str | None = None
+    hardware_model: str | None = None
+    status: str
+    drift_score: int
+    last_seen_at: datetime | None = None
+    tags: list[TagResponse]
+
+    model_config = {"from_attributes": True}
+
+
+class NodeDetailResponse(NodeListItem):
+    os_build: str | None
+    cpu_cores: int | None
+    ram_gb: float | None
+    storage_gb: float | None
+    first_seen_at: datetime
+    created_at: datetime
+
+
+class FleetOverviewResponse(BaseModel):
+    total_nodes: int
+    online: int
+    stale: int
+    offline: int
+    unknown: int
+    avg_drift_score: int
+    nodes_clean: int
+    nodes_low: int
+    nodes_medium: int
+    nodes_high: int
+    nodes_critical: int
+    last_updated: datetime

@@ -30,6 +30,8 @@ async def db_session(test_engine):
 
 @pytest_asyncio.fixture(scope="module", loop_scope="module")
 async def app_with_test_db(test_engine):
+    from unittest.mock import AsyncMock
+
     from fleet_platform.api.main import create_app
     from fleet_platform.api import deps
 
@@ -40,7 +42,16 @@ async def app_with_test_db(test_engine):
         async with TestSession() as session:
             yield session
 
+    mock_redis = AsyncMock()
+    mock_redis.get.return_value = None
+    mock_redis.setex = AsyncMock()
+
+    async def override_get_redis():
+        return mock_redis
+
     app.dependency_overrides[deps.get_db] = override_get_db
+    app.dependency_overrides[deps.get_redis] = override_get_redis
+    app._test_mock_redis = mock_redis  # expose for tests that need to configure it
     return app
 
 
