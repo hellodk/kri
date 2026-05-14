@@ -551,7 +551,7 @@ This handles 1000-row lists without DOM bloat. Combined with React Query's pagin
 
 **Global search** (TopBar):
 - Input debounced 300ms
-- Hits `GET /api/v1/search?q={term}` — searches node hostname, IP, tags
+- Hits `GET /api/v1/search?q={term}` — searches node hostname and minion_id (IP search deferred — INET cast is driver-specific)
 - Returns categorized results: nodes, packages
 - Keyboard navigable (↑↓ + Enter)
 
@@ -1504,13 +1504,14 @@ Response 200:
     "online": 38,
     "stale": 3,
     "offline": 1,
+    "unknown": 0,
     "avg_drift_score": 14,
     "nodes_clean": 30,
-    "nodes_low_drift": 6,
-    "nodes_medium_drift": 4,
-    "nodes_high_drift": 2,
-    "nodes_critical_drift": 0,
-    "last_updated": "2026-05-09T10:30:00Z"
+    "nodes_low": 6,
+    "nodes_medium": 4,
+    "nodes_high": 2,
+    "nodes_critical": 0,
+    "last_updated": "2026-05-12T10:30:00Z"
   }
 }
 ```
@@ -1557,6 +1558,7 @@ GET /api/v1/nodes/{node_id}/packages?source=brew&page=1&per_page=50
 Response: { items: [{name, version, source}], total, page, per_page }
 
 GET /api/v1/nodes/{node_id}/drift
+NOTE: Implemented in Plan 4 — not yet available.
 Response:
 {
   "data": {
