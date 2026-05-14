@@ -1,0 +1,26 @@
+# baselines/roles/builder.yaml
+name: builder
+description: "Baseline for CI builder Mac Minis"
+target_type: global
+version: "1.0"
+
+packages:
+  required:
+    - name: git
+      version: ">=2.39.0"
+    - name: python3
+      version: ">=3.11.0"
+    - name: node
+      version: ">=20.0.0"
+    - name: docker
+  forbidden:
+    - name: teamviewer
+    - name: anydesk
+    - name: vlc
+
+services:
+  required_stopped:
+    - com.apple.screensharing
+    - com.apple.ARDAgent
+  required_running:
+    - com.docker.helper
