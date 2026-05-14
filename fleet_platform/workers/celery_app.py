@@ -1,4 +1,5 @@
 from celery import Celery
+from celery.schedules import crontab
 
 from fleet_platform.core.config import settings
 
@@ -30,6 +31,11 @@ celery_app.conf.update(
         "mark-stale-nodes": {
             "task": "fleet_platform.workers.maintenance.mark_stale_nodes",
             "schedule": 300,
+        },
+        "archive-old-sbom-scans": {
+            "task": "fleet_platform.workers.sbom_tasks.cleanup_old_sbom_scans",
+            "schedule": crontab(hour=2, minute=0),
+            "kwargs": {"keep_count": 3},
         },
     },
 )
