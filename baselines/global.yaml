@@ -1,0 +1,20 @@
+# baselines/global.yaml
+name: global
+description: "Baseline applied to all managed Mac Minis"
+target_type: global
+version: "1.0"
+
+packages:
+  required:
+    - name: git
+      version: ">=2.39.0"
+    - name: python3
+      version: ">=3.11.0"
+  forbidden:
+    - name: teamviewer
+    - name: anydesk
+
+services:
+  required_stopped:
+    - com.apple.screensharing
+    - com.apple.ARDAgent
