@@ -1,0 +1,14 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(source .venv/**)",
+      "Read",
+      "Bash(git *)",
+      "Bash(python -m *)",
+      "Bash(pytest *)",
+      "Bash(alembic *)",
+      "Bash(docker compose *)",
+      "Bash(docker exec *)"
+    ]
+  }
+}
