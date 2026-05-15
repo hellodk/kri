@@ -1,7 +1,8 @@
 import uuid
 from datetime import datetime
+from typing import Any
 
-from pydantic import BaseModel
+from pydantic import BaseModel, field_validator
 
 
 class TagResponse(BaseModel):
@@ -17,6 +18,11 @@ class NodeListItem(BaseModel):
     hostname: str | None = None
     ip_address: str | None = None
     os_version: str | None = None
+
+    @field_validator("ip_address", mode="before")
+    @classmethod
+    def coerce_ip(cls, v: Any) -> str | None:
+        return str(v) if v is not None else None
     hardware_model: str | None = None
     status: str
     drift_score: int
