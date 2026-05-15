@@ -7,7 +7,7 @@ from fastapi.responses import JSONResponse
 from fleet_platform.core.config import settings, VERSION
 from fleet_platform.core.logging import configure_logging, get_logger
 from fleet_platform.api.routes import (
-    health, auth, nodes, ingest, fleet, groups, search, baselines, drift, executions
+    health, auth, nodes, ingest, fleet, groups, search, baselines, drift, executions, sbom
 )
 
 _log = get_logger(__name__)
@@ -46,6 +46,7 @@ def create_app() -> FastAPI:
     app.include_router(baselines.router, tags=["baselines"])
     app.include_router(drift.router, tags=["drift"])
     app.include_router(executions.router, tags=["executions"])
+    app.include_router(sbom.router, tags=["sbom"])
 
     @app.exception_handler(Exception)
     async def unhandled_exception_handler(request: Request, exc: Exception):
