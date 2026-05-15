@@ -17,9 +17,10 @@ from fleet_platform.workers.celery_app import celery_app
     queue="sbom",
 )
 def index_sbom(self, node_id: str, file_path: str) -> dict:
+    # Read and immediately delete the temp file
     try:
         with open(file_path) as f:
-            raw_json = json.load(f)
+            content = f.read()
     except FileNotFoundError:
         return {"status": "error", "reason": "file_not_found"}
     finally:
@@ -27,6 +28,11 @@ def index_sbom(self, node_id: str, file_path: str) -> dict:
             os.unlink(file_path)
         except OSError:
             pass
+
+    try:
+        raw_json = json.loads(content)
+    except json.JSONDecodeError:
+        return {"status": "error", "reason": "json_parse_error"}
 
     try:
         parser = SBOMParser()

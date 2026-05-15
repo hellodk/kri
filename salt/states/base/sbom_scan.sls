@@ -10,9 +10,8 @@ sbom_scan_run:
         /usr/local/bin/syft packages \
           --scope all-layers \
           --output cyclonedx-json \
-          / > /tmp/sbom-{{ grains['id'] }}-$(date +%Y%m%d%H%M%S).json
+          / > /tmp/sbom-{{ grains['id'] }}.json
     - timeout: 300
-    - creates: /tmp/sbom-{{ grains['id'] }}-*.json
 
 sbom_upload:
   module.run:
@@ -22,12 +21,12 @@ sbom_upload:
     - header_list:
         - "X-Node-Token: {{ pillar['fleet_platform']['node_token'] }}"
         - "Content-Type: application/json"
-    - data: __slot__:salt:file.read(/tmp/sbom-{{ grains['id'] }}-*.json)
+    - data: __slot__:salt:file.read(/tmp/sbom-{{ grains['id'] }}.json)
     - require:
         - cmd: sbom_scan_run
 
 sbom_cleanup:
-  file.absent:
-    - name: /tmp/sbom-{{ grains['id'] }}-*.json
+  cmd.run:
+    - name: rm -f /tmp/sbom-{{ grains['id'] }}.json
     - require:
         - module: sbom_upload

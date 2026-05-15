@@ -33,7 +33,7 @@ class SBOMParser:
     def _normalise(self, comp: dict) -> dict:
         licenses = []
         for lic in comp.get("licenses", []):
-            expr = lic.get("expression") or lic.get("id")
+            expr = lic.get("expression") or (lic.get("license") or {}).get("id") or (lic.get("license") or {}).get("name")
             if expr:
                 licenses.append(expr)
 

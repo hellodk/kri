@@ -82,3 +82,20 @@ def test_parse_empty_components():
     scan, components = parser.parse_cyclonedx(_NODE_ID, doc)
     assert scan.component_count == 0
     assert components == []
+
+
+def test_parse_component_nested_license_id():
+    doc = {
+        **_MINIMAL_CYCLONEDX,
+        "components": [
+            {
+                "type": "library",
+                "name": "mit-lib",
+                "version": "1.0",
+                "licenses": [{"license": {"id": "MIT"}}],
+            }
+        ],
+    }
+    parser = SBOMParser()
+    _, components = parser.parse_cyclonedx(_NODE_ID, doc)
+    assert components[0]["licenses"] == ["MIT"]
