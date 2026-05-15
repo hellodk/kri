@@ -8,7 +8,7 @@ import { useFilterStore } from '../../stores/filterStore'
 export function TopBar() {
   const [q, setQ] = useState('')
   const [open, setOpen] = useState(false)
-  const timerRef = useRef<ReturnType<typeof setTimeout>>()
+  const timerRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
   const navigate = useNavigate()
   const { clearAuth, user } = useAuthStore()
   const setSidebarOpen = useFilterStore((s) => s.setSidebarOpen)

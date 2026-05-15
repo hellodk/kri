@@ -9,7 +9,7 @@ import { formatDistanceToNow } from 'date-fns'
 export function SBOMExplorer() {
   const [q, setQ] = useState('')
   const [debouncedQ, setDebouncedQ] = useState('')
-  const timerRef = useRef<ReturnType<typeof setTimeout>>()
+  const timerRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
 
   function handleInput(value: string) {
     setQ(value)
