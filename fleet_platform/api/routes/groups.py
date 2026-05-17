@@ -14,7 +14,7 @@ from fleet_platform.models.node import Node
 from fleet_platform.schemas.common import PaginatedResponse
 from fleet_platform.schemas.fleet import NodeListItem
 from fleet_platform.schemas.group import GroupCreate, GroupMemberAdd, GroupResponse, GroupUpdate
-from fleet_platform.services.group_resolver import resolve_dynamic_group
+from fleet_platform.services.group_resolver import resolve_dynamic_group, validate_predicate
 
 router = APIRouter(prefix="/api/v1/groups")
 
@@ -71,6 +71,17 @@ async def create_group(
     db: AsyncSession = Depends(get_db),
     claims: dict = Depends(require_role("operator", "admin")),
 ):
+    if payload.type == "dynamic":
+        if not payload.predicate:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail="Dynamic groups require a predicate",
+            )
+        if not validate_predicate(payload.predicate):
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail='Invalid predicate. Must be {"and": [...]} or {"or": [...]} with {"key":"...","value":"..."} conditions.',
+            )
     group = Group(
         name=payload.name,
         description=payload.description,
