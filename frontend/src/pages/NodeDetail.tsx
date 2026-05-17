@@ -61,7 +61,7 @@ export function NodeDetail() {
 
   const { data: executions } = useQuery({
     queryKey: ['executions-node', nodeId, execPage],
-    queryFn: () => executionsApi.list({ page: execPage, per_page: 25 }),
+    queryFn: () => executionsApi.list({ node_id: nodeId!, page: execPage, per_page: 25 }),
     staleTime: 10_000,
     enabled: !!nodeId && tab === 'executions',
   })
