@@ -1,6 +1,6 @@
 import uuid
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import and_, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -21,7 +21,7 @@ router = APIRouter(prefix="/api/v1/sbom")
 @router.get("/search", response_model=list[SBOMSearchResult])
 async def search_sbom(
     q: str,
-    limit: int = 50,
+    limit: int = Query(default=50, ge=1, le=200),
     db: AsyncSession = Depends(get_db),
     _: dict = Depends(get_current_user),
 ):
@@ -88,8 +88,8 @@ async def get_latest_scan(
 @router.get("/{node_id}/scans", response_model=PaginatedResponse[SBOMScanResponse])
 async def list_scans(
     node_id: uuid.UUID,
-    page: int = 1,
-    per_page: int = 25,
+    page: int = Query(default=1, ge=1),
+    per_page: int = Query(default=25, ge=1, le=200),
     db: AsyncSession = Depends(get_db),
     _: dict = Depends(get_current_user),
 ):
@@ -121,8 +121,8 @@ async def list_scans(
 async def list_scan_components(
     node_id: uuid.UUID,
     scan_id: uuid.UUID,
-    page: int = 1,
-    per_page: int = 100,
+    page: int = Query(default=1, ge=1),
+    per_page: int = Query(default=100, ge=1, le=200),
     db: AsyncSession = Depends(get_db),
     _: dict = Depends(get_current_user),
 ):

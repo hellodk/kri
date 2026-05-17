@@ -4,7 +4,7 @@ import secrets
 import uuid
 from datetime import UTC, datetime
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -84,8 +84,8 @@ async def list_nodes(
     tag: str | None = None,
     group_id: uuid.UUID | None = None,
     sort: str = "drift_score:desc",
-    page: int = 1,
-    per_page: int = 25,
+    page: int = Query(default=1, ge=1),
+    per_page: int = Query(default=25, ge=1, le=200),
     db: AsyncSession = Depends(get_db),
     _: dict = Depends(get_current_user),
 ):

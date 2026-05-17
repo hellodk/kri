@@ -2,7 +2,7 @@
 import uuid
 from datetime import UTC, datetime
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
@@ -48,8 +48,8 @@ def _to_response(group: Group, count: int) -> GroupResponse:
 
 @router.get("", response_model=PaginatedResponse[GroupResponse])
 async def list_groups(
-    page: int = 1,
-    per_page: int = 25,
+    page: int = Query(default=1, ge=1),
+    per_page: int = Query(default=25, ge=1, le=200),
     db: AsyncSession = Depends(get_db),
     _: dict = Depends(get_current_user),
 ):
@@ -140,8 +140,8 @@ async def delete_group(
 @router.get("/{group_id}/nodes", response_model=PaginatedResponse[NodeListItem])
 async def list_group_nodes(
     group_id: uuid.UUID,
-    page: int = 1,
-    per_page: int = 25,
+    page: int = Query(default=1, ge=1),
+    per_page: int = Query(default=25, ge=1, le=200),
     db: AsyncSession = Depends(get_db),
     _: dict = Depends(get_current_user),
 ):
