@@ -2,7 +2,7 @@
 import uuid
 from datetime import UTC, datetime
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
@@ -14,7 +14,7 @@ from fleet_platform.models.node import Node
 from fleet_platform.schemas.common import PaginatedResponse
 from fleet_platform.schemas.fleet import NodeListItem
 from fleet_platform.schemas.group import GroupCreate, GroupMemberAdd, GroupResponse, GroupUpdate
-from fleet_platform.services.group_resolver import resolve_dynamic_group
+from fleet_platform.services.group_resolver import resolve_dynamic_group, validate_predicate
 
 router = APIRouter(prefix="/api/v1/groups")
 
@@ -48,8 +48,8 @@ def _to_response(group: Group, count: int) -> GroupResponse:
 
 @router.get("", response_model=PaginatedResponse[GroupResponse])
 async def list_groups(
-    page: int = 1,
-    per_page: int = 25,
+    page: int = Query(default=1, ge=1),
+    per_page: int = Query(default=25, ge=1, le=200),
     db: AsyncSession = Depends(get_db),
     _: dict = Depends(get_current_user),
 ):
@@ -71,6 +71,17 @@ async def create_group(
     db: AsyncSession = Depends(get_db),
     claims: dict = Depends(require_role("operator", "admin")),
 ):
+    if payload.type == "dynamic":
+        if not payload.predicate:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail="Dynamic groups require a predicate",
+            )
+        if not validate_predicate(payload.predicate):
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail='Invalid predicate. Must be {"and": [...]} or {"or": [...]} with {"key":"...","value":"..."} conditions.',
+            )
     group = Group(
         name=payload.name,
         description=payload.description,
@@ -129,8 +140,8 @@ async def delete_group(
 @router.get("/{group_id}/nodes", response_model=PaginatedResponse[NodeListItem])
 async def list_group_nodes(
     group_id: uuid.UUID,
-    page: int = 1,
-    per_page: int = 25,
+    page: int = Query(default=1, ge=1),
+    per_page: int = Query(default=25, ge=1, le=200),
     db: AsyncSession = Depends(get_db),
     _: dict = Depends(get_current_user),
 ):

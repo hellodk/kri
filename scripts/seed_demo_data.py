@@ -204,7 +204,7 @@ def seed():
             fact = NodeFact(
                 node_id=node.id,
                 grains=grains,
-                reported_at=node.last_seen_at,
+                collected_at=node.last_seen_at,
             )
             db.add(fact)
 
@@ -286,7 +286,7 @@ def seed():
                 status=status,
                 started_at=started,
                 completed_at=completed,
-                metadata={"args": []},
+                metadata_={"args": []},
             )
             db.add(job)
             db.flush()

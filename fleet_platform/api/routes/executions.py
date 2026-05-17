@@ -1,7 +1,7 @@
 # fleet_platform/api/routes/executions.py
 import uuid
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -18,8 +18,8 @@ router = APIRouter(prefix="/api/v1/executions")
 async def list_executions(
     status: str | None = None,
     node_id: uuid.UUID | None = None,
-    page: int = 1,
-    per_page: int = 25,
+    page: int = Query(default=1, ge=1),
+    per_page: int = Query(default=25, ge=1, le=200),
     db: AsyncSession = Depends(get_db),
     _: dict = Depends(get_current_user),
 ):
@@ -56,8 +56,8 @@ async def get_execution(
 @router.get("/{job_id}/results", response_model=PaginatedResponse[ExecutionResultResponse])
 async def get_execution_results(
     job_id: uuid.UUID,
-    page: int = 1,
-    per_page: int = 25,
+    page: int = Query(default=1, ge=1),
+    per_page: int = Query(default=25, ge=1, le=200),
     db: AsyncSession = Depends(get_db),
     _: dict = Depends(get_current_user),
 ):

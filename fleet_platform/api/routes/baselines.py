@@ -1,7 +1,7 @@
 # fleet_platform/api/routes/baselines.py
 import uuid
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -16,8 +16,8 @@ router = APIRouter(prefix="/api/v1/baselines")
 
 @router.get("", response_model=PaginatedResponse[BaselineResponse])
 async def list_baselines(
-    page: int = 1,
-    per_page: int = 25,
+    page: int = Query(default=1, ge=1),
+    per_page: int = Query(default=25, ge=1, le=200),
     db: AsyncSession = Depends(get_db),
     _: dict = Depends(get_current_user),
 ):

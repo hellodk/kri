@@ -1,7 +1,7 @@
 # fleet_platform/api/routes/drift.py
 import uuid
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -31,8 +31,8 @@ _SEVERITY_RANGES = {
 @router.get("", response_model=PaginatedResponse[DriftSummaryResponse])
 async def list_drift(
     severity: str | None = None,
-    page: int = 1,
-    per_page: int = 25,
+    page: int = Query(default=1, ge=1),
+    per_page: int = Query(default=25, ge=1, le=200),
     db: AsyncSession = Depends(get_db),
     _: dict = Depends(get_current_user),
 ):
@@ -118,8 +118,8 @@ async def get_node_drift_latest(
 @router.get("/{node_id}/history", response_model=PaginatedResponse[DriftSummaryResponse])
 async def get_node_drift_history(
     node_id: uuid.UUID,
-    page: int = 1,
-    per_page: int = 50,
+    page: int = Query(default=1, ge=1),
+    per_page: int = Query(default=50, ge=1, le=200),
     db: AsyncSession = Depends(get_db),
     _: dict = Depends(get_current_user),
 ):

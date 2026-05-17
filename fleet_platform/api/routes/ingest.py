@@ -1,9 +1,9 @@
 # fleet_platform/api/routes/ingest.py
 import asyncio
+import ipaddress as _ipaddress
 import os
 import tempfile
 from datetime import UTC, datetime
-from decimal import Decimal
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Request, status
 from sqlalchemy import select
@@ -34,41 +34,67 @@ async def _resolve_node(minion_id: str, token: str, db: AsyncSession) -> Node:
     return node
 
 
+def _is_valid_ip(addr: str) -> bool:
+    try:
+        _ipaddress.ip_address(addr)
+        return True
+    except ValueError:
+        return False
+
+
+def _extract_storage_gb(grains: dict) -> float | None:
+    for key in ("disk_total", "disks_total_size"):
+        val = grains.get(key)
+        if val is not None:
+            try:
+                return round(float(val) / 1024, 1)  # MB → GB
+            except (TypeError, ValueError):
+                pass
+    disk_info = grains.get("disk_info", [])
+    if isinstance(disk_info, list) and disk_info:
+        try:
+            total_bytes = sum(d.get("size", 0) for d in disk_info if isinstance(d, dict))
+            if total_bytes:
+                return round(total_bytes / (1024 ** 3), 1)
+        except (TypeError, ValueError):
+            pass
+    return None
+
+
 def _extract_node_updates(grains: dict) -> dict:
-    """Map Salt grain keys to Node column values."""
-    # Skip loopback and link-local; prefer en0/en1 style interfaces
-    ip = None
+    ip: str | None = None
     _skip_prefixes = ("127.", "169.254.", "::1", "fe80")
+
     ip4 = grains.get("ip4_interfaces", {})
     for iface, addrs in ip4.items():
         if iface in ("lo", "lo0"):
             continue
         for addr in addrs:
+            if not _is_valid_ip(addr):
+                continue
             if not any(addr.startswith(p) for p in _skip_prefixes):
                 ip = addr
                 break
         if ip:
             break
 
-    # Fallback: use Salt's pre-filtered fqdn_ip4 list
-    if not ip:
+    if ip is None:
         fqdn_ips = grains.get("fqdn_ip4", [])
         ip = next(
-            (a for a in fqdn_ips if not any(a.startswith(p) for p in _skip_prefixes)),
+            (a for a in fqdn_ips
+             if _is_valid_ip(a) and not any(a.startswith(p) for p in _skip_prefixes)),
             None,
         )
 
-    mem_mb = grains.get("mem_total")
-    ram_gb = Decimal(str(round(mem_mb / 1024, 2))) if mem_mb else None
-
     return {
-        "hostname": grains.get("id") or grains.get("host"),
+        "hostname": grains.get("fqdn") or grains.get("id"),
         "ip_address": ip,
         "os_version": grains.get("osrelease"),
         "os_build": grains.get("osbuild"),
         "hardware_model": grains.get("productname"),
         "cpu_cores": grains.get("num_cpus"),
-        "ram_gb": ram_gb,
+        "ram_gb": grains.get("mem_total", 0) / 1024 if grains.get("mem_total") else None,
+        "storage_gb": _extract_storage_gb(grains),
         "status": "online",
     }
 
@@ -131,7 +157,7 @@ async def ingest_executions(
         target_type="node",
         target_id=node.id,
         triggered_by="salt",
-        status="complete",
+        status="completed",
         started_at=now,
         completed_at=now,
         metadata_={},
