@@ -1,6 +1,7 @@
 services:
   postgres:
     image: timescale/timescaledb:latest-pg17
+    restart: unless-stopped
     environment:
       POSTGRES_DB: fleet_platform
       POSTGRES_USER: fleet
@@ -17,6 +18,7 @@ services:
 
   redis:
     image: redis:7.4-alpine
+    restart: unless-stopped
     command: redis-server --requirepass ${REDIS_PASSWORD:-redispass} --appendonly yes
     volumes:
       - redisdata:/data
