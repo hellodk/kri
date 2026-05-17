@@ -131,7 +131,7 @@ async def ingest_executions(
         target_type="node",
         target_id=node.id,
         triggered_by="salt",
-        status="complete",
+        status="completed",
         started_at=now,
         completed_at=now,
         metadata_={},

@@ -71,7 +71,7 @@ async def test_execution_ingest_creates_job_and_result(
         select(ExecutionJob).where(ExecutionJob.salt_jid == "20260512100000999999")
     )).scalar_one_or_none()
     assert job is not None
-    assert job.status == "complete"
+    assert job.status == "completed"
 
     result = (await db_session.execute(
         select(ExecutionResult).where(ExecutionResult.job_id == job.id)
