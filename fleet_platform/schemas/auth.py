@@ -25,3 +25,7 @@ class MeResponse(BaseModel):
     id: str
     email: str
     role: str
+
+
+class LogoutRequest(BaseModel):
+    refresh_token: str | None = None

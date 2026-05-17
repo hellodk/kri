@@ -1,11 +1,11 @@
 import uuid as _uuid
 from datetime import UTC, datetime
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from fleet_platform.api.deps import get_db
+from fleet_platform.api.deps import get_db, get_redis
 from fleet_platform.core.auth import (
     TokenExpiredError,
     TokenInvalidError,
@@ -13,12 +13,15 @@ from fleet_platform.core.auth import (
     create_refresh_token,
     decode_token,
     get_current_user,
+    is_token_revoked,
+    revoke_token,
     verify_password,
 )
 from fleet_platform.models.user import User
 from fleet_platform.schemas.auth import (
     AccessTokenResponse,
     LoginRequest,
+    LogoutRequest,
     MeResponse,
     RefreshRequest,
     TokenResponse,
@@ -51,8 +54,12 @@ async def login(payload: LoginRequest, db: AsyncSession = Depends(get_db)):
     )
 
 
-@router.post("/refresh", response_model=AccessTokenResponse)
-async def refresh(payload: RefreshRequest, db: AsyncSession = Depends(get_db)):
+@router.post("/refresh", response_model=TokenResponse)
+async def refresh(
+    payload: RefreshRequest,
+    db: AsyncSession = Depends(get_db),
+    redis=Depends(get_redis),
+):
     try:
         claims = decode_token(payload.refresh_token)
     except (TokenExpiredError, TokenInvalidError):
@@ -66,18 +73,47 @@ async def refresh(payload: RefreshRequest, db: AsyncSession = Depends(get_db)):
             status_code=status.HTTP_401_UNAUTHORIZED, detail="Not a refresh token"
         )
 
+    jti = claims.get("jti", "")
+    if jti and await is_token_revoked(redis, jti):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Refresh token has been revoked",
+        )
+
     result = await db.execute(select(User).where(User.id == _uuid.UUID(claims["sub"])))
     user = result.scalar_one_or_none()
     if not user or not user.is_active:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="User not found")
 
-    return AccessTokenResponse(
-        access_token=create_access_token(
-            user_id=str(user.id),
-            email=user.email,
-            role=user.role,
-        )
+    # Revoke the old refresh token
+    if jti:
+        exp = claims.get("exp", 0)
+        remaining_ttl = max(1, int(exp - datetime.now(UTC).timestamp()))
+        await revoke_token(redis, jti, remaining_ttl)
+
+    return TokenResponse(
+        access_token=create_access_token(user_id=str(user.id), email=user.email, role=user.role),
+        refresh_token=create_refresh_token(user_id=str(user.id)),
     )
+
+
+@router.post("/logout", status_code=204)
+async def logout(
+    payload: LogoutRequest | None = None,
+    claims: dict = Depends(get_current_user),
+    redis=Depends(get_redis),
+):
+    if payload and payload.refresh_token:
+        try:
+            rt_claims = decode_token(payload.refresh_token)
+            jti = rt_claims.get("jti", "")
+            if jti:
+                exp = rt_claims.get("exp", 0)
+                remaining_ttl = max(1, int(exp - datetime.now(UTC).timestamp()))
+                await revoke_token(redis, jti, remaining_ttl)
+        except (TokenExpiredError, TokenInvalidError):
+            pass
+    return None
 
 
 @router.get("/me", response_model=MeResponse)

@@ -27,8 +27,8 @@ export function TopBar() {
     setOpen(value.length >= 3)
   }
 
-  function handleLogout() {
-    clearAuth()
+  async function handleLogout() {
+    await clearAuth()
     navigate('/login')
   }
 

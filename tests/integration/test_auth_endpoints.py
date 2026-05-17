@@ -44,6 +44,8 @@ async def test_user(db_session: AsyncSession):
 
 @pytest_asyncio.fixture(loop_scope="module")
 async def auth_client(test_engine):
+    from unittest.mock import AsyncMock
+
     from fleet_platform.api.main import create_app
     from fleet_platform.api import deps
 
@@ -54,7 +56,15 @@ async def auth_client(test_engine):
         async with TestSession() as session:
             yield session
 
+    mock_redis = AsyncMock()
+    mock_redis.exists.return_value = 0
+    mock_redis.setex = AsyncMock()
+
+    async def override_get_redis():
+        return mock_redis
+
     app.dependency_overrides[deps.get_db] = override_get_db
+    app.dependency_overrides[deps.get_redis] = override_get_redis
 
     async with AsyncClient(
         transport=ASGITransport(app=app), base_url="http://testserver"
