@@ -32,10 +32,19 @@ async def db_session(test_engine):
 async def app_with_test_db(test_engine):
     from unittest.mock import AsyncMock
 
+    from slowapi import Limiter
+    from slowapi.util import get_remote_address
+    import fleet_platform.api.limiter as limiter_module
+
+    # Use in-memory rate limiter for tests to avoid 429 false positives
+    test_limiter = Limiter(key_func=get_remote_address, storage_uri="memory://")
+    limiter_module.limiter = test_limiter
+
     from fleet_platform.api.main import create_app
     from fleet_platform.api import deps
 
     app = create_app()
+    app.state.limiter = test_limiter
     TestSession = async_sessionmaker(test_engine, expire_on_commit=False)
 
     async def override_get_db():

@@ -154,8 +154,13 @@ async def get_node_drift_history(
 @router.post("/{node_id}/compute", status_code=202)
 async def trigger_drift_compute(
     node_id: uuid.UUID,
-    _: dict = Depends(require_role("operator", "admin")),
+    db: AsyncSession = Depends(get_db),
+    claims: dict = Depends(require_role("operator", "admin")),
 ):
     """Enqueue a drift recomputation for a node."""
+    from fleet_platform.core.audit import audit
+    await audit(db, actor=claims["email"], action="drift.compute.triggered",
+                resource_type="node", resource_id=node_id)
+    await db.commit()
     compute_drift.delay(str(node_id))
     return {"status": "queued", "node_id": str(node_id)}

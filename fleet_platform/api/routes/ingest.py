@@ -11,6 +11,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from fleet_platform.api.deps import get_db
+from fleet_platform.api.limiter import limiter
 from fleet_platform.models.execution import ExecutionJob, ExecutionResult
 from fleet_platform.models.facts import NodeFact
 from fleet_platform.models.node import Node
@@ -100,7 +101,9 @@ def _extract_node_updates(grains: dict) -> dict:
 
 
 @router.post("/grains")
+@limiter.limit("60/minute")
 async def ingest_grains(
+    request: Request,
     payload: GrainIngestPayload,
     x_node_token: str | None = Header(alias="X-Node-Token", default=None),
     db: AsyncSession = Depends(get_db),
@@ -129,7 +132,9 @@ async def ingest_grains(
 
 
 @router.post("/executions")
+@limiter.limit("120/minute")
 async def ingest_executions(
+    request: Request,
     payload: ExecutionIngestPayload,
     x_node_token: str | None = Header(alias="X-Node-Token", default=None),
     db: AsyncSession = Depends(get_db),
@@ -193,9 +198,10 @@ async def ingest_executions(
 
 
 @router.post("/sbom/{minion_id}", status_code=status.HTTP_202_ACCEPTED)
+@limiter.limit("10/minute")
 async def ingest_sbom(
-    minion_id: str,
     request: Request,
+    minion_id: str,
     x_node_token: str | None = Header(alias="X-Node-Token", default=None),
     db: AsyncSession = Depends(get_db),
 ):
@@ -204,15 +210,35 @@ async def ingest_sbom(
 
     node = await _resolve_node(minion_id, x_node_token, db)
 
+    _MAX_SBOM_BYTES = 50 * 1024 * 1024  # 50 MB
+    content_length = request.headers.get("content-length")
+    if content_length and int(content_length) > _MAX_SBOM_BYTES:
+        raise HTTPException(
+            status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+            detail="SBOM upload exceeds maximum size of 50MB",
+        )
+
+    size = 0
     tmp = tempfile.NamedTemporaryFile(
         delete=False,
         suffix=".json",
         prefix=f"sbom_{node.id}_",
+        mode="wb",
     )
     try:
         async for chunk in request.stream():
+            size += len(chunk)
+            if size > _MAX_SBOM_BYTES:
+                tmp.close()
+                os.unlink(tmp.name)
+                raise HTTPException(
+                    status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+                    detail="SBOM upload exceeds maximum size of 50MB",
+                )
             tmp.write(chunk)
         tmp.close()
+    except HTTPException:
+        raise
     except Exception:
         tmp.close()
         os.unlink(tmp.name)
