@@ -11,6 +11,7 @@ celery_app = Celery(
         "fleet_platform.workers.drift_tasks",
         "fleet_platform.workers.sbom_tasks",
         "fleet_platform.workers.maintenance",
+        "fleet_platform.workers.ansible_tasks",
     ],
 )
 
