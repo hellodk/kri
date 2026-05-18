@@ -7,11 +7,13 @@ import { DriftBadge } from '../components/DriftBadge'
 import { Skeleton } from '../components/Skeleton'
 import { ErrorState } from '../components/ErrorState'
 import { Pagination } from '../components/Pagination'
+import { BootstrapModal } from './BootstrapModal'
 import { formatDistanceToNow } from 'date-fns'
 
 export function FleetDashboard() {
   const [page, setPage] = useState(1)
   const [statusFilter, setStatusFilter] = useState('')
+  const [showBootstrap, setShowBootstrap] = useState(false)
 
   const { data: overview, isLoading: ovLoading } = useQuery({
     queryKey: ['fleet-overview'],
@@ -33,7 +35,15 @@ export function FleetDashboard() {
 
   return (
     <div className="space-y-6">
-      <h1 className="text-2xl font-bold text-gray-900">Fleet Dashboard</h1>
+      <div className="flex items-center justify-between">
+        <h1 className="text-2xl font-bold text-gray-900">Fleet Dashboard</h1>
+        <button
+          onClick={() => setShowBootstrap(true)}
+          className="px-4 py-2 bg-brand-600 text-white text-sm font-medium rounded-lg hover:bg-brand-700 shadow-sm"
+        >
+          + Bootstrap Node
+        </button>
+      </div>
 
       {/* Stat cards */}
       {ovLoading ? (
@@ -132,6 +142,7 @@ export function FleetDashboard() {
           </>
         )}
       </div>
+      {showBootstrap && <BootstrapModal onClose={() => setShowBootstrap(false)} />}
     </div>
   )
 }

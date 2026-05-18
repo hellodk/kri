@@ -8,6 +8,7 @@ const links = [
   { to: '/groups',     label: 'Groups',     icon: '◫' },
   { to: '/executions', label: 'Executions', icon: '▷' },
   { to: '/audit',      label: 'Audit',      icon: '◎' },
+  { to: '/settings',   label: 'Settings',   icon: '⚙' },
 ]
 
 export function Sidebar() {
