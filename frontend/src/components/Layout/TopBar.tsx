@@ -33,10 +33,10 @@ export function TopBar() {
   }
 
   return (
-    <header className="h-14 flex items-center px-4 bg-white border-b border-gray-200 gap-4">
+    <header className="h-14 flex items-center px-4 bg-gray-900/80 backdrop-blur border-b border-white/10 gap-4">
       <button
         onClick={() => setSidebarOpen(!sidebarOpen)}
-        className="text-gray-500 hover:text-gray-700 text-lg"
+        className="text-white/40 hover:text-white/80 transition-colors text-lg leading-none"
         aria-label="Toggle sidebar"
       >
         ☰
@@ -48,29 +48,30 @@ export function TopBar() {
           onChange={(e) => handleInput(e.target.value)}
           onFocus={() => q.length >= 3 && setOpen(true)}
           onBlur={() => setTimeout(() => setOpen(false), 200)}
-          className="w-full px-3 py-1.5 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
+          className="w-full px-3 py-1.5 bg-white/5 border border-white/10 text-white placeholder-white/25 rounded-lg text-sm focus:outline-none focus:border-brand-500 focus:bg-white/8 transition-colors"
         />
         {open && data && data.items.length > 0 && (
-          <ul className="absolute top-full mt-1 w-full bg-white border border-gray-200 rounded shadow-lg z-50 max-h-60 overflow-auto">
+          <ul className="absolute top-full mt-1 w-full rounded-lg shadow-xl z-50 max-h-60 overflow-auto border border-white/10"
+              style={{ background: '#1a1a3e' }}>
             {data.items.map((r) => (
               <li key={r.id}>
                 <button
-                  className="w-full text-left px-3 py-2 text-sm hover:bg-gray-50"
+                  className="w-full text-left px-3 py-2.5 text-sm hover:bg-white/5 transition-colors"
                   onClick={() => { navigate(`/nodes/${r.id}`); setOpen(false) }}
                 >
-                  <span className="font-medium">{r.hostname ?? r.minion_id}</span>
-                  <span className="ml-2 text-gray-400 text-xs">{r.status}</span>
+                  <span className="font-medium text-white">{r.hostname ?? r.minion_id}</span>
+                  <span className="ml-2 text-white/30 text-xs">{r.status}</span>
                 </button>
               </li>
             ))}
           </ul>
         )}
       </div>
-      <div className="ml-auto flex items-center gap-3 text-sm text-gray-600">
-        <span>{user?.email}</span>
-        <span className="text-xs text-gray-400 bg-gray-100 px-2 py-0.5 rounded">{user?.role}</span>
-        <button onClick={handleLogout} className="text-red-500 hover:text-red-700">
-          Logout
+      <div className="ml-auto flex items-center gap-3 text-sm">
+        <span className="text-white/50">{user?.email}</span>
+        <span className="text-xs text-white/30 bg-white/5 border border-white/10 px-2 py-0.5 rounded-full font-mono">{user?.role}</span>
+        <button onClick={handleLogout} className="text-white/30 hover:text-red-400 transition-colors text-sm">
+          Sign out
         </button>
       </div>
     </header>

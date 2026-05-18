@@ -31,7 +31,9 @@
       "Bash(head *)",
       "Bash(cat *)",
       "Bash(echo *)",
-      "Bash(sleep *)"
+      "Bash(sleep *)",
+      "Bash(gh *)",
+      "Bash(PGPASSWORD=* psql *)"
     ]
   }
 }

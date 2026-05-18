@@ -39,8 +39,9 @@ async def list_baselines(
 async def create_baseline(
     payload: BaselineCreate,
     db: AsyncSession = Depends(get_db),
-    _: dict = Depends(require_role("admin")),
+    claims: dict = Depends(require_role("admin")),
 ):
+    from fleet_platform.core.audit import audit
     baseline = DesiredStateBaseline(
         name=payload.name,
         description=payload.description,
@@ -50,6 +51,10 @@ async def create_baseline(
         state_json=payload.state_json,
     )
     db.add(baseline)
+    await db.flush()
+    await audit(db, actor=claims["email"], action="baseline.create",
+                resource_type="baseline", resource_id=baseline.id,
+                new_value={"name": baseline.name, "target_type": baseline.target_type})
     await db.commit()
     await db.refresh(baseline)
     return BaselineResponse.model_validate(baseline)

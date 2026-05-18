@@ -1,13 +1,17 @@
-const colours: Record<string, string> = {
-  online: 'bg-green-100 text-green-800',
-  offline: 'bg-red-100 text-red-800',
-  stale: 'bg-yellow-100 text-yellow-800',
-  unknown: 'bg-gray-100 text-gray-600',
+interface BadgeStyle { bg: string; text: string; dot: string }
+
+const config: Record<string, BadgeStyle> = {
+  online:  { bg: 'bg-emerald-950/80 border-emerald-800/60', text: 'text-emerald-400', dot: 'bg-emerald-400 animate-pulse' },
+  offline: { bg: 'bg-red-950/80 border-red-800/60',         text: 'text-red-400',     dot: 'bg-red-400' },
+  stale:   { bg: 'bg-amber-950/80 border-amber-800/60',     text: 'text-amber-400',   dot: 'bg-amber-500' },
+  unknown: { bg: 'bg-gray-800/80 border-gray-700/60',       text: 'text-gray-400',    dot: 'bg-gray-500' },
 }
 
 export function StatusBadge({ status }: { status: string }) {
+  const { bg, text, dot } = config[status] ?? config.unknown
   return (
-    <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${colours[status] ?? colours.unknown}`}>
+    <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium border ${bg} ${text}`}>
+      <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${dot}`} />
       {status}
     </span>
   )

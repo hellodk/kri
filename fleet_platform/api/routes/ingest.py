@@ -210,15 +210,35 @@ async def ingest_sbom(
 
     node = await _resolve_node(minion_id, x_node_token, db)
 
+    _MAX_SBOM_BYTES = 50 * 1024 * 1024  # 50 MB
+    content_length = request.headers.get("content-length")
+    if content_length and int(content_length) > _MAX_SBOM_BYTES:
+        raise HTTPException(
+            status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+            detail="SBOM upload exceeds maximum size of 50MB",
+        )
+
+    size = 0
     tmp = tempfile.NamedTemporaryFile(
         delete=False,
         suffix=".json",
         prefix=f"sbom_{node.id}_",
+        mode="wb",
     )
     try:
         async for chunk in request.stream():
+            size += len(chunk)
+            if size > _MAX_SBOM_BYTES:
+                tmp.close()
+                os.unlink(tmp.name)
+                raise HTTPException(
+                    status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+                    detail="SBOM upload exceeds maximum size of 50MB",
+                )
             tmp.write(chunk)
         tmp.close()
+    except HTTPException:
+        raise
     except Exception:
         tmp.close()
         os.unlink(tmp.name)

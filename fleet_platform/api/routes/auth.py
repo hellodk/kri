@@ -43,7 +43,11 @@ async def login(request: Request, payload: LoginRequest, db: AsyncSession = Depe
     if not user.is_active:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Account is disabled")
 
+    from fleet_platform.core.audit import audit
     user.last_login_at = datetime.now(UTC)
+    await audit(db, actor=payload.email, action="auth.login",
+                resource_type="user", resource_id=user.id,
+                ip_address=request.client.host if request.client else None)
     await db.commit()
 
     return TokenResponse(

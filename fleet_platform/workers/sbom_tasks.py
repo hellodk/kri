@@ -15,6 +15,10 @@ from fleet_platform.workers.celery_app import celery_app
     bind=True,
     max_retries=3,
     queue="sbom",
+    autoretry_for=(Exception,),
+    retry_backoff=True,
+    retry_backoff_max=300,
+    retry_jitter=True,
 )
 def index_sbom(self, node_id: str, file_path: str) -> dict:
     # Read and immediately delete the temp file
@@ -34,25 +38,21 @@ def index_sbom(self, node_id: str, file_path: str) -> dict:
     except json.JSONDecodeError:
         return {"status": "error", "reason": "json_parse_error"}
 
-    try:
-        parser = SBOMParser()
-        scan, components = parser.parse_cyclonedx(node_id, raw_json)
+    parser = SBOMParser()
+    scan, components = parser.parse_cyclonedx(node_id, raw_json)
 
-        with get_sync_db() as db:
-            db.add(scan)
-            db.flush()
-            if components:
-                db.bulk_insert_mappings(
-                    SBOMComponent,
-                    [{"scan_id": scan.id, "node_id": _uuid.UUID(node_id), **c} for c in components],
-                )
-            db.commit()
+    with get_sync_db() as db:
+        db.add(scan)
+        db.flush()
+        if components:
+            db.bulk_insert_mappings(
+                SBOMComponent,
+                [{"scan_id": scan.id, "node_id": _uuid.UUID(node_id), **c} for c in components],
+            )
+        db.commit()
 
-        archive_old_scans.delay(node_id=node_id, keep_count=3)
-        return {"status": "indexed", "node_id": node_id, "component_count": len(components)}
-
-    except Exception as exc:
-        raise self.retry(exc=exc, countdown=60)
+    archive_old_scans.delay(node_id=node_id, keep_count=3)
+    return {"status": "indexed", "node_id": node_id, "component_count": len(components)}
 
 
 @celery_app.task(
@@ -60,30 +60,31 @@ def index_sbom(self, node_id: str, file_path: str) -> dict:
     bind=True,
     max_retries=3,
     queue="sbom",
+    autoretry_for=(Exception,),
+    retry_backoff=True,
+    retry_backoff_max=300,
+    retry_jitter=True,
 )
 def archive_old_scans(self, node_id: str, keep_count: int = 3) -> dict:
     node_uuid = _uuid.UUID(node_id)
-    try:
-        with get_sync_db() as db:
-            keep_ids = db.execute(
-                select(SBOMScan.id)
-                .where(SBOMScan.node_id == node_uuid)
-                .order_by(SBOMScan.scanned_at.desc())
-                .limit(keep_count)
-            ).scalars().all()
+    with get_sync_db() as db:
+        keep_ids = db.execute(
+            select(SBOMScan.id)
+            .where(SBOMScan.node_id == node_uuid)
+            .order_by(SBOMScan.scanned_at.desc())
+            .limit(keep_count)
+        ).scalars().all()
 
-            if not keep_ids:
-                return {"deleted": 0}
+        if not keep_ids:
+            return {"deleted": 0}
 
-            result = db.execute(
-                delete(SBOMScan)
-                .where(SBOMScan.node_id == node_uuid)
-                .where(SBOMScan.id.not_in(keep_ids))
-            )
-            db.commit()
-        return {"deleted": result.rowcount}
-    except Exception as exc:
-        raise self.retry(exc=exc, countdown=60)
+        result = db.execute(
+            delete(SBOMScan)
+            .where(SBOMScan.node_id == node_uuid)
+            .where(SBOMScan.id.not_in(keep_ids))
+        )
+        db.commit()
+    return {"deleted": result.rowcount}
 
 
 @celery_app.task(

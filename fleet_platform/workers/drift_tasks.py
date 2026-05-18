@@ -18,6 +18,10 @@ from fleet_platform.workers.celery_app import celery_app
     bind=True,
     max_retries=3,
     queue="drift",
+    autoretry_for=(Exception,),
+    retry_backoff=True,
+    retry_backoff_max=300,
+    retry_jitter=True,
 )
 def compute_drift(self, node_id: str) -> dict:
     """Compute drift for a node and persist the result."""

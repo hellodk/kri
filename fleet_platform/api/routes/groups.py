@@ -89,7 +89,12 @@ async def create_group(
         predicate=payload.predicate,
         created_by=uuid.UUID(claims["sub"]),
     )
+    from fleet_platform.core.audit import audit
     db.add(group)
+    await db.flush()
+    await audit(db, actor=claims["email"], action="group.create",
+                resource_type="group", resource_id=group.id,
+                new_value={"name": group.name, "type": group.type})
     await db.commit()
     await db.refresh(group)
     return _to_response(group, 0)
@@ -111,8 +116,9 @@ async def update_group(
     group_id: uuid.UUID,
     payload: GroupUpdate,
     db: AsyncSession = Depends(get_db),
-    _: dict = Depends(require_role("operator", "admin")),
+    claims: dict = Depends(require_role("operator", "admin")),
 ):
+    from fleet_platform.core.audit import audit
     group = await _get_group_or_404(group_id, db)
     if payload.name is not None:
         group.name = payload.name
@@ -120,6 +126,9 @@ async def update_group(
         group.description = payload.description
     if payload.predicate is not None:
         group.predicate = payload.predicate
+    await audit(db, actor=claims["email"], action="group.update",
+                resource_type="group", resource_id=group_id,
+                new_value=payload.model_dump(exclude_none=True))
     await db.commit()
     await db.refresh(group)
     count = await _member_count(group_id, db)
@@ -130,9 +139,13 @@ async def update_group(
 async def delete_group(
     group_id: uuid.UUID,
     db: AsyncSession = Depends(get_db),
-    _: dict = Depends(require_role("admin")),
+    claims: dict = Depends(require_role("admin")),
 ):
+    from fleet_platform.core.audit import audit
     group = await _get_group_or_404(group_id, db)
+    await audit(db, actor=claims["email"], action="group.delete",
+                resource_type="group", resource_id=group_id,
+                old_value={"name": group.name, "type": group.type})
     await db.delete(group)
     await db.commit()
 
