@@ -1,10 +1,10 @@
 interface BadgeStyle { bg: string; text: string; dot: string }
 
 const config: Record<string, BadgeStyle> = {
-  online:  { bg: 'bg-emerald-950/80 border-emerald-800/60', text: 'text-emerald-400', dot: 'bg-emerald-400 animate-pulse' },
-  offline: { bg: 'bg-red-950/80 border-red-800/60',         text: 'text-red-400',     dot: 'bg-red-400' },
-  stale:   { bg: 'bg-amber-950/80 border-amber-800/60',     text: 'text-amber-400',   dot: 'bg-amber-500' },
-  unknown: { bg: 'bg-gray-800/80 border-gray-700/60',       text: 'text-gray-400',    dot: 'bg-gray-500' },
+  online:  { bg: 'bg-emerald-100 border-emerald-300', text: 'text-emerald-800', dot: 'bg-emerald-500 animate-pulse' },
+  offline: { bg: 'bg-red-100 border-red-300',         text: 'text-red-800',     dot: 'bg-red-500' },
+  stale:   { bg: 'bg-amber-100 border-amber-300',     text: 'text-amber-800',   dot: 'bg-amber-500' },
+  unknown: { bg: 'bg-gray-100 border-gray-300',       text: 'text-gray-700',    dot: 'bg-gray-400' },
 }
 
 export function StatusBadge({ status }: { status: string }) {

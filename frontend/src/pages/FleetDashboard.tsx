@@ -33,37 +33,38 @@ export function FleetDashboard() {
 
   return (
     <div className="space-y-6">
-      <h1 className="text-2xl font-bold text-white">Fleet Dashboard</h1>
+      <h1 className="text-2xl font-bold text-gray-900">Fleet Dashboard</h1>
 
+      {/* Stat cards */}
       {ovLoading ? (
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
           {[...Array(4)].map((_, i) => (
-            <div key={i} className="h-28 rounded-xl animate-pulse" style={{ background: '#1a1a3e' }} />
+            <div key={i} className="h-24 bg-gray-200 rounded-xl animate-pulse" />
           ))}
         </div>
       ) : overview ? (
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
           {[
-            { label: 'Total Nodes', value: overview.total_nodes, colour: 'text-white',         border: 'border-l-brand-500',   glow: 'shadow-brand-500/10' },
-            { label: 'Online',      value: overview.online,       colour: 'text-emerald-400',   border: 'border-l-emerald-500', glow: 'shadow-emerald-500/10' },
-            { label: 'Offline / Stale', value: overview.offline + overview.stale, colour: 'text-red-400', border: 'border-l-red-500', glow: 'shadow-red-500/10' },
-            { label: 'Avg Drift',   value: overview.avg_drift_score, colour: 'text-amber-400', border: 'border-l-amber-500',   glow: 'shadow-amber-500/10' },
-          ].map(({ label, value, colour, border, glow }) => (
-            <div key={label} className={`rounded-xl border border-white/8 border-l-4 ${border} p-5 shadow-lg ${glow}`}
-                 style={{ background: 'linear-gradient(135deg, #1a1a3e 0%, #13132e 100%)' }}>
-              <p className="text-white/40 text-xs font-medium uppercase tracking-wider mb-2">{label}</p>
-              <p className={`text-4xl font-bold tabular-nums ${colour}`}>{value}</p>
+            { label: 'Total Nodes',    value: overview.total_nodes,                    accent: 'border-l-brand-600',   num: 'text-gray-900' },
+            { label: 'Online',         value: overview.online,                         accent: 'border-l-emerald-500', num: 'text-emerald-700' },
+            { label: 'Offline / Stale',value: overview.offline + overview.stale,       accent: 'border-l-red-500',     num: 'text-red-700' },
+            { label: 'Avg Drift Score',value: overview.avg_drift_score,                accent: 'border-l-amber-500',   num: 'text-amber-700' },
+          ].map(({ label, value, accent, num }) => (
+            <div key={label} className={`bg-white rounded-xl border border-gray-200 border-l-4 ${accent} p-5 shadow-sm`}>
+              <p className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-2">{label}</p>
+              <p className={`text-4xl font-bold tabular-nums ${num}`}>{value}</p>
             </div>
           ))}
         </div>
       ) : null}
 
+      {/* Filter */}
       <div className="flex items-center gap-3">
-        <label className="text-sm text-white/40">Status:</label>
+        <label className="text-sm font-medium text-gray-600">Status:</label>
         <select
           value={statusFilter}
           onChange={(e) => { setStatusFilter(e.target.value); setPage(1) }}
-          className="text-sm bg-white/5 border border-white/10 text-white rounded-lg px-3 py-1.5 focus:outline-none focus:border-brand-500"
+          className="text-sm bg-white border border-gray-300 text-gray-900 rounded-lg px-3 py-1.5 focus:outline-none focus:border-brand-600"
         >
           <option value="">All</option>
           <option value="online">Online</option>
@@ -73,7 +74,8 @@ export function FleetDashboard() {
         </select>
       </div>
 
-      <div className="rounded-xl border border-white/8 overflow-hidden" style={{ background: '#13132e' }}>
+      {/* Node table */}
+      <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
         {nodesLoading ? (
           <Skeleton rows={10} />
         ) : isError ? (
@@ -82,7 +84,7 @@ export function FleetDashboard() {
           <>
             <table className="w-full text-sm">
               <thead>
-                <tr className="border-b border-white/8 text-left text-xs text-white/30 uppercase tracking-wider" style={{ background: '#1a1a3e' }}>
+                <tr className="bg-gray-50 border-b border-gray-200 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide">
                   <th className="px-4 py-3">Hostname</th>
                   <th className="px-4 py-3">Status</th>
                   <th className="px-4 py-3">OS</th>
@@ -91,22 +93,22 @@ export function FleetDashboard() {
                   <th className="px-4 py-3">Tags</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-white/5">
+              <tbody className="divide-y divide-gray-100">
                 {nodes?.items.map((node) => (
-                  <tr key={node.id} className="hover:bg-white/3 transition-colors">
+                  <tr key={node.id} className="hover:bg-gray-50 transition-colors">
                     <td className="px-4 py-3 font-medium font-mono text-xs">
-                      <Link to={`/nodes/${node.id}`} className="text-brand-400 hover:text-brand-300 transition-colors">
+                      <Link to={`/nodes/${node.id}`} className="text-brand-600 hover:text-brand-700 hover:underline">
                         {node.hostname ?? node.minion_id}
                       </Link>
                     </td>
                     <td className="px-4 py-3">
                       <StatusBadge status={node.status} />
                     </td>
-                    <td className="px-4 py-3 text-white/40 text-xs">{node.os_version ?? '—'}</td>
+                    <td className="px-4 py-3 text-gray-600">{node.os_version ?? '—'}</td>
                     <td className="px-4 py-3">
                       <DriftBadge score={node.drift_score} />
                     </td>
-                    <td className="px-4 py-3 text-white/30 text-xs">
+                    <td className="px-4 py-3 text-gray-500">
                       {node.last_seen_at
                         ? formatDistanceToNow(new Date(node.last_seen_at), { addSuffix: true })
                         : '—'}
@@ -114,10 +116,7 @@ export function FleetDashboard() {
                     <td className="px-4 py-3">
                       <div className="flex flex-wrap gap-1">
                         {node.tags.map((t) => (
-                          <span
-                            key={t.key}
-                            className="text-xs bg-brand-950/50 text-brand-300 border border-brand-800/40 px-1.5 py-0.5 rounded-full"
-                          >
+                          <span key={t.key} className="text-xs bg-brand-50 text-brand-700 border border-brand-200 px-1.5 py-0.5 rounded">
                             {t.key}={t.value}
                           </span>
                         ))}
@@ -128,12 +127,7 @@ export function FleetDashboard() {
               </tbody>
             </table>
             {nodes && (
-              <Pagination
-                page={page}
-                total={nodes.total}
-                perPage={nodes.per_page}
-                onPage={setPage}
-              />
+              <Pagination page={page} total={nodes.total} perPage={nodes.per_page} onPage={setPage} />
             )}
           </>
         )}
