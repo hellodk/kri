@@ -2,7 +2,7 @@ import uuid
 from datetime import datetime
 from decimal import Decimal
 
-from sqlalchemy import DateTime, ForeignKey, Index, Numeric, SmallInteger, String, UniqueConstraint
+from sqlalchemy import DateTime, ForeignKey, Index, Numeric, SmallInteger, String, Text, UniqueConstraint
 from sqlalchemy.dialects.postgresql import INET, UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -29,6 +29,11 @@ class Node(Base, TimestampMixin):
     node_token_hash: Mapped[str] = mapped_column(String(72), nullable=False)
     first_seen_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     last_seen_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    bootstrap_status: Mapped[str] = mapped_column(
+        String(20), nullable=False, default="unregistered"
+    )
+    bootstrap_ip: Mapped[str | None] = mapped_column(String(45), nullable=True)
+    bootstrap_error: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     tags: Mapped[list["Tag"]] = relationship(
         "Tag", back_populates="node", cascade="all, delete-orphan"
