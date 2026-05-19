@@ -14,6 +14,8 @@ SSH_USERNAME = "ssh_bootstrap_username"
 SSH_PASSWORD = "ssh_bootstrap_password"
 CONTROLLER_PRIVKEY_PATH = "controller_privkey_path"
 CONTROLLER_PUBKEY_PATH = "controller_pubkey_path"
+ANSIBLE_ENDPOINT_URL = "ansible_endpoint_url"
+ANSIBLE_API_TOKEN = "ansible_api_token"
 
 
 def _fernet_key() -> bytes:
