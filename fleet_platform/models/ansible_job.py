@@ -2,7 +2,7 @@
 import uuid
 from datetime import datetime
 
-from sqlalchemy import DateTime, Index, Integer, String, Text
+from sqlalchemy import DateTime, Index, Integer, String, Text, func
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -27,7 +27,7 @@ class AnsibleJob(Base):
     stdout: Mapped[str | None] = mapped_column(Text, nullable=True)
     rc: Mapped[int | None] = mapped_column(Integer, nullable=True)
     created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), nullable=False, default=lambda: datetime.now()
+        DateTime(timezone=True), nullable=False, server_default=func.now()
     )
 
     __table_args__ = (
