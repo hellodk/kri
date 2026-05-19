@@ -2,6 +2,7 @@
 import secrets
 import uuid
 from datetime import UTC, datetime
+from pathlib import Path
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import select
@@ -9,11 +10,21 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from fleet_platform.api.deps import get_db
 from fleet_platform.core.auth import hash_password, require_role
+from fleet_platform.models.ansible_job import AnsibleJob
 from fleet_platform.models.node import Node
 from fleet_platform.schemas.ansible import BootstrapRequest, BootstrapResponse
+from fleet_platform.schemas.playbook import (
+    AnsibleJobResponse,
+    PlaybookEntryResponse,
+    PlaybookRunRequest,
+    PlaybookRunResponse,
+)
+from fleet_platform.services.playbook_discovery import discover_all
 from fleet_platform.workers.ansible_tasks import bootstrap_node
 
 router = APIRouter(prefix="/api/v1/ansible")
+
+_PLAYBOOKS_DIR = Path(__file__).parent.parent.parent.parent / "playbooks"
 
 
 @router.post("/bootstrap", response_model=BootstrapResponse, status_code=202)
@@ -83,3 +94,102 @@ async def bootstrap_status(
         "bootstrap_ip": node.bootstrap_ip,
         "bootstrap_error": node.bootstrap_error,
     }
+
+
+@router.get("/playbooks", response_model=list[PlaybookEntryResponse])
+async def list_playbooks(
+    _: dict = Depends(require_role("viewer", "operator", "admin")),
+):
+    entries = discover_all(_PLAYBOOKS_DIR)
+    return [
+        PlaybookEntryResponse(
+            filename=e.filename,
+            name=e.name,
+            description=e.description,
+            entry_type=e.entry_type,
+            default_vars=e.default_vars,
+        )
+        for e in entries
+    ]
+
+
+@router.post("/playbooks/run", response_model=PlaybookRunResponse, status_code=202)
+async def run_playbook_endpoint(
+    payload: PlaybookRunRequest,
+    db: AsyncSession = Depends(get_db),
+    claims: dict = Depends(require_role("operator", "admin")),
+):
+    safe_name = payload.playbook.lstrip("/").replace("..", "")
+    entries = discover_all(_PLAYBOOKS_DIR)
+    entry = next((e for e in entries if e.filename == safe_name), None)
+    if not entry:
+        raise HTTPException(status_code=404, detail=f"Playbook '{safe_name}' not found")
+
+    target_label = payload.target_id
+    if payload.target_type == "node":
+        node_result = await db.execute(select(Node).where(Node.id == uuid.UUID(payload.target_id)))
+        node = node_result.scalar_one_or_none()
+        if not node:
+            raise HTTPException(status_code=404, detail="Node not found")
+        target_label = node.hostname or node.minion_id
+    elif payload.target_type == "group":
+        from fleet_platform.models.group import Group
+        grp_result = await db.execute(select(Group).where(Group.id == uuid.UUID(payload.target_id)))
+        grp = grp_result.scalar_one_or_none()
+        if not grp:
+            raise HTTPException(status_code=404, detail="Group not found")
+        target_label = grp.name
+
+    job = AnsibleJob(
+        playbook=safe_name,
+        target_type=payload.target_type,
+        target_id=payload.target_id,
+        target_label=target_label,
+        extravars=payload.extravars,
+        status="pending",
+        triggered_by=claims["sub"],
+    )
+    db.add(job)
+    await db.commit()
+    await db.refresh(job)
+
+    # Defer import to avoid circular — task module not yet created
+    try:
+        from fleet_platform.workers.playbook_tasks import run_playbook
+        run_playbook.delay(str(job.id))
+    except ImportError:
+        pass  # Task module created in T5; job is queued in DB
+
+    return PlaybookRunResponse(
+        job_id=job.id,
+        playbook=safe_name,
+        target_label=target_label,
+        status="pending",
+        message="Playbook queued.",
+    )
+
+
+@router.get("/jobs/{job_id}", response_model=AnsibleJobResponse)
+async def get_ansible_job(
+    job_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+    _: dict = Depends(require_role("viewer", "operator", "admin")),
+):
+    result = await db.execute(select(AnsibleJob).where(AnsibleJob.id == job_id))
+    job = result.scalar_one_or_none()
+    if not job:
+        raise HTTPException(status_code=404, detail="Job not found")
+    return AnsibleJobResponse(
+        id=job.id,
+        playbook=job.playbook,
+        target_type=job.target_type,
+        target_label=job.target_label,
+        extravars=job.extravars,
+        status=job.status,
+        triggered_by=job.triggered_by,
+        started_at=job.started_at,
+        completed_at=job.completed_at,
+        stdout=job.stdout,
+        rc=job.rc,
+        created_at=job.created_at,
+    )

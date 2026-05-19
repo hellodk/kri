@@ -139,3 +139,37 @@ async def viewer_client(app_with_test_db, viewer_token: str):
         headers={"Authorization": f"Bearer {viewer_token}"},
     ) as ac:
         yield ac
+
+
+@pytest_asyncio.fixture(scope="module", loop_scope="module")
+async def operator_user(db_session: AsyncSession):
+    user = User(
+        email="operator-test@fleet.local",
+        password_hash=hash_password("operator123"),
+        role="operator",
+    )
+    db_session.add(user)
+    await db_session.commit()
+    await db_session.refresh(user)
+    yield user
+    await db_session.delete(user)
+    await db_session.commit()
+
+
+@pytest_asyncio.fixture(scope="module", loop_scope="module")
+async def operator_token(operator_user: User) -> str:
+    return create_access_token(
+        user_id=str(operator_user.id),
+        email=operator_user.email,
+        role=operator_user.role,
+    )
+
+
+@pytest_asyncio.fixture(scope="module", loop_scope="module")
+async def operator_client(app_with_test_db, operator_token: str):
+    async with AsyncClient(
+        transport=ASGITransport(app=app_with_test_db),
+        base_url="http://testserver",
+        headers={"Authorization": f"Bearer {operator_token}"},
+    ) as ac:
+        yield ac
