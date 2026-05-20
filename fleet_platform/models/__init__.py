@@ -7,6 +7,8 @@ from fleet_platform.models.drift import DesiredStateBaseline, DriftRecord
 from fleet_platform.models.sbom import SBOMScan, SBOMComponent
 from fleet_platform.models.execution import ExecutionJob, ExecutionResult
 from fleet_platform.models.audit import AuditEvent
+from fleet_platform.models.platform_setting import PlatformSetting
+from fleet_platform.models.ansible_job import AnsibleJob
 
 __all__ = [
     "Base", "TimestampMixin",
@@ -18,4 +20,6 @@ __all__ = [
     "SBOMScan", "SBOMComponent",
     "ExecutionJob", "ExecutionResult",
     "AuditEvent",
+    "PlatformSetting",
+    "AnsibleJob",
 ]

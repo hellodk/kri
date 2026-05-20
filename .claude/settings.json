@@ -1,7 +1,7 @@
 {
   "permissions": {
     "allow": [
-      "Bash(source .venv/**)",
+      "Bash(source *)",
       "Read",
       "Bash(git *)",
       "Bash(python -m *)",

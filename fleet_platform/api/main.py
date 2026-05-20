@@ -10,7 +10,8 @@ from fleet_platform.core.config import settings, VERSION
 from fleet_platform.core.logging import configure_logging, get_logger
 from fleet_platform.api.limiter import limiter
 from fleet_platform.api.routes import (
-    health, auth, nodes, ingest, fleet, groups, search, baselines, drift, executions, sbom
+    health, auth, nodes, ingest, fleet, groups, search, baselines, drift, executions, sbom,
+    ansible, platform_settings
 )
 
 _log = get_logger(__name__)
@@ -53,6 +54,8 @@ def create_app() -> FastAPI:
     app.include_router(drift.router, tags=["drift"])
     app.include_router(executions.router, tags=["executions"])
     app.include_router(sbom.router, tags=["sbom"])
+    app.include_router(ansible.router, tags=["ansible"])
+    app.include_router(platform_settings.router, tags=["settings"])
 
     @app.exception_handler(Exception)
     async def unhandled_exception_handler(request: Request, exc: Exception):

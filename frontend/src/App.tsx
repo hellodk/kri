@@ -11,6 +11,8 @@ import { GroupExplorer } from './pages/GroupExplorer'
 import { GroupDetail } from './pages/GroupDetail'
 import { ExecutionHistory } from './pages/ExecutionHistory'
 import { JobDetail } from './pages/JobDetail'
+import { SettingsPage } from './pages/SettingsPage'
+import { PlaybooksPage } from './pages/PlaybooksPage'
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -44,6 +46,8 @@ export default function App() {
             <Route path="/groups/:groupId" element={<GroupDetail />} />
             <Route path="/executions" element={<ExecutionHistory />} />
             <Route path="/executions/:jobId" element={<JobDetail />} />
+            <Route path="/playbooks" element={<PlaybooksPage />} />
+            <Route path="/settings" element={<SettingsPage />} />
           </Route>
         </Routes>
       </BrowserRouter>

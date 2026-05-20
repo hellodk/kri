@@ -1,0 +1,155 @@
+---
+# playbooks/bootstrap_mac_mini.yml
+# Bootstraps a Mac Mini into the kri fleet:
+#   1. Detects architecture (Apple Silicon vs Intel)
+#   2. Installs Xcode Command Line Tools (headless)
+#   3. Installs Homebrew
+#   4. Installs Salt via Homebrew
+#   5. Writes Salt minion config
+#   6. Authorises the kri controller SSH public key
+#   7. Starts the Salt minion service
+
+- name: Bootstrap Mac Mini into kri fleet
+  hosts: target
+  gather_facts: false
+  vars:
+    ansible_ssh_common_args: '-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null'
+    ansible_become: true
+    ansible_become_method: sudo
+    ansible_become_password: "{{ ansible_ssh_pass }}"
+    brew_prefix_arm64: /opt/homebrew
+    brew_prefix_x86: /usr/local
+
+  tasks:
+
+    # ── Detect architecture ──────────────────────────────────────────────────
+    - name: Detect CPU architecture
+      raw: uname -m
+      register: uname_result
+      changed_when: false
+
+    - name: Set Homebrew prefix based on architecture
+      set_fact:
+        brew_prefix: "{{ brew_prefix_arm64 if 'arm64' in uname_result.stdout else brew_prefix_x86 }}"
+
+    # ── Minimal fact collection ──────────────────────────────────────────────
+    - name: Gather minimal facts
+      setup:
+        gather_subset: [min]
+
+    # ── Xcode Command Line Tools ─────────────────────────────────────────────
+    - name: Check if Xcode CLT is installed
+      command: xcode-select -p
+      register: xcode_check
+      failed_when: false
+      changed_when: false
+      become: false
+
+    - name: Install Xcode Command Line Tools (headless via softwareupdate)
+      shell: |
+        touch /tmp/.com.apple.dt.CommandLineTools.installondemand.in-progress
+        LABEL=$(softwareupdate -l 2>&1 | awk -F'*' '/Command Line/{print $2}' | head -1 | xargs)
+        if [ -n "$LABEL" ]; then
+          softwareupdate -i "$LABEL" --agree-to-license
+        fi
+        rm -f /tmp/.com.apple.dt.CommandLineTools.installondemand.in-progress
+      when: xcode_check.rc != 0
+      become: true
+      timeout: 600
+      register: clt_install
+      changed_when: clt_install.rc == 0
+
+    # ── Homebrew ─────────────────────────────────────────────────────────────
+    - name: Check if Homebrew is installed
+      stat:
+        path: "{{ brew_prefix }}/bin/brew"
+      register: brew_stat
+      become: false
+
+    - name: Install Homebrew (non-interactive)
+      shell: |
+        NONINTERACTIVE=1 /bin/bash -c \
+          "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+      when: not brew_stat.stat.exists
+      become: false
+      environment:
+        NONINTERACTIVE: "1"
+      timeout: 600
+
+    - name: Add Homebrew to PATH in shell profile
+      lineinfile:
+        path: "~/.zprofile"
+        line: 'eval "$({{ brew_prefix }}/bin/brew shellenv)"'
+        create: true
+        mode: "0644"
+      become: false
+
+    # ── Salt ─────────────────────────────────────────────────────────────────
+    - name: Check if Salt minion binary is present
+      stat:
+        path: "{{ brew_prefix }}/bin/salt-minion"
+      register: salt_stat
+      become: false
+
+    - name: Install Salt via Homebrew
+      shell: "{{ brew_prefix }}/bin/brew install salt"
+      when: not salt_stat.stat.exists
+      become: false
+      environment:
+        PATH: "{{ brew_prefix }}/bin:/usr/local/bin:/usr/bin:/bin"
+      timeout: 300
+
+    # ── Salt configuration ────────────────────────────────────────────────────
+    - name: Create /etc/salt directory
+      file:
+        path: /etc/salt
+        state: directory
+        owner: root
+        group: wheel
+        mode: "0755"
+      become: true
+
+    - name: Write Salt minion config
+      copy:
+        dest: /etc/salt/minion
+        owner: root
+        group: wheel
+        mode: "0644"
+        content: |
+          master: {{ salt_master_address }}
+          id: {{ minion_id }}
+          log_level: info
+          log_file: /var/log/salt/minion
+      become: true
+
+    # ── Authorised keys ───────────────────────────────────────────────────────
+    - name: Ensure ~/.ssh directory exists
+      file:
+        path: "~/.ssh"
+        state: directory
+        mode: "0700"
+      become: false
+
+    - name: Authorise kri controller public key
+      authorized_key:
+        user: "{{ ansible_user }}"
+        key: "{{ controller_pubkey }}"
+        state: present
+      become: false
+
+    # ── Start Salt minion ─────────────────────────────────────────────────────
+    - name: Start Salt minion service via Homebrew services
+      shell: "{{ brew_prefix }}/bin/brew services start salt-minion || true"
+      become: true
+      environment:
+        PATH: "{{ brew_prefix }}/bin:/usr/local/bin:/usr/bin:/bin"
+      changed_when: false
+
+    - name: Verify Salt minion process is running
+      shell: pgrep -f salt-minion
+      register: minion_pid_check
+      failed_when: minion_pid_check.rc != 0
+      changed_when: false
+      retries: 6
+      delay: 5
+      become: false
