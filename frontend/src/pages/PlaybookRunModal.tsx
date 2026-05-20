@@ -85,9 +85,11 @@ export function PlaybookRunModal({ playbook, onClose }: Props) {
   const hasVars = Object.keys(vars).length > 0
 
   return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-      <div className="bg-white rounded-2xl shadow-2xl p-6 w-full max-w-2xl mx-4 flex flex-col gap-4 max-h-[92vh] overflow-y-auto">
-        <div className="flex items-center justify-between">
+    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-3xl flex flex-col max-h-[92vh]">
+
+        {/* Fixed header */}
+        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200 shrink-0">
           <div>
             <h2 className="text-lg font-bold text-gray-900">Run Playbook</h2>
             <p className="text-sm text-gray-500">{playbook.name}</p>
@@ -95,8 +97,10 @@ export function PlaybookRunModal({ playbook, onClose }: Props) {
           <button onClick={onClose} className="flex items-center justify-center w-8 h-8 rounded-lg text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-colors text-lg">×</button>
         </div>
 
+        {/* Scrollable body */}
+        <div className="flex-1 overflow-y-auto px-6 py-5">
         {!jobId ? (
-          <form onSubmit={(e) => { e.preventDefault(); runMutation.mutate() }} className="space-y-5">
+          <div className="space-y-5">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">Target type</label>
               <div className="flex gap-4">
@@ -142,11 +146,11 @@ export function PlaybookRunModal({ playbook, onClose }: Props) {
                     (changes committed to git before run)
                   </span>
                 </label>
-                <div className="space-y-2 bg-gray-50 rounded-lg border border-gray-200 p-3">
+                <div className="space-y-2 bg-gray-50 rounded-lg border border-gray-200 p-3 max-h-64 overflow-y-auto">
                   {Object.entries(vars).map(([key, value]) => (
-                    <div key={key} className="flex items-start gap-2">
-                      <div className="flex flex-col w-44 shrink-0">
-                        <span className="text-xs font-mono text-gray-600 truncate">{key}</span>
+                    <div key={key} className="flex items-start gap-3">
+                      <div className="flex flex-col w-52 shrink-0">
+                        <span className="text-xs font-mono text-gray-700">{key}</span>
                         {SYSTEM_VARS.has(key) && (
                           <span className="text-xs text-amber-600">⚠ system var</span>
                         )}
@@ -155,7 +159,7 @@ export function PlaybookRunModal({ playbook, onClose }: Props) {
                         type="text"
                         value={value}
                         onChange={(e) => setVars((prev) => ({ ...prev, [key]: e.target.value }))}
-                        className={`flex-1 px-2 py-1 text-xs border rounded focus:outline-none font-mono ${
+                        className={`flex-1 px-2.5 py-1.5 text-sm border rounded-lg focus:outline-none font-mono ${
                           SYSTEM_VARS.has(key)
                             ? 'border-amber-300 bg-amber-50 focus:border-amber-500'
                             : 'border-gray-300 focus:border-brand-600'
@@ -166,18 +170,7 @@ export function PlaybookRunModal({ playbook, onClose }: Props) {
                 </div>
               </div>
             )}
-
-            <div className="flex gap-3 pt-1">
-              <button type="button" onClick={onClose}
-                className="flex-1 py-2.5 border border-gray-300 text-gray-700 rounded-lg text-sm font-medium hover:bg-gray-50">
-                Cancel
-              </button>
-              <button type="submit" disabled={!targetId || runMutation.isPending}
-                className="flex-1 py-2.5 bg-brand-600 text-white rounded-lg text-sm font-medium hover:bg-brand-700 disabled:opacity-50">
-                {runMutation.isPending ? 'Starting…' : 'Run Playbook'}
-              </button>
-            </div>
-          </form>
+          </div>
         ) : (
           <div className="space-y-4">
             <div className="flex items-center gap-3 p-4 bg-gray-50 rounded-xl border border-gray-200">
@@ -191,7 +184,7 @@ export function PlaybookRunModal({ playbook, onClose }: Props) {
             {jobData?.stdout && (
               <div>
                 <p className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-1">Output</p>
-                <pre className="text-xs font-mono bg-gray-900 text-gray-100 rounded-lg p-3 overflow-x-auto max-h-64 whitespace-pre-wrap">
+                <pre className="text-sm font-mono bg-gray-900 text-gray-100 rounded-lg p-4 overflow-auto min-h-32 max-h-[40vh] whitespace-pre-wrap leading-relaxed">
                   {jobData.stdout}
                 </pre>
               </div>
@@ -200,13 +193,33 @@ export function PlaybookRunModal({ playbook, onClose }: Props) {
             {typeof jobData?.rc === 'number' && (
               <p className="text-xs text-gray-400">Exit code: {jobData.rc}</p>
             )}
-
-            <button onClick={onClose}
-              className="w-full py-2.5 border border-gray-300 text-gray-700 rounded-lg text-sm font-medium hover:bg-gray-50">
-              {status === 'completed' || status === 'failed' ? 'Close' : 'Close (runs in background)'}
-            </button>
           </div>
         )}
+        </div>
+
+        {/* Fixed footer */}
+        <div className="px-6 py-4 border-t border-gray-200 shrink-0">
+        {!jobId ? (
+          <form onSubmit={(e) => { e.preventDefault(); runMutation.mutate() }}>
+            <div className="flex gap-3">
+              <button type="button" onClick={onClose}
+                className="flex-1 py-2.5 border border-gray-300 text-gray-700 rounded-lg text-sm font-medium hover:bg-gray-50">
+                Cancel
+              </button>
+              <button type="submit" disabled={!targetId || runMutation.isPending}
+                className="flex-1 py-2.5 bg-brand-600 text-white rounded-lg text-sm font-medium hover:bg-brand-700 disabled:opacity-50">
+                {runMutation.isPending ? 'Starting…' : 'Run Playbook'}
+              </button>
+            </div>
+          </form>
+        ) : (
+          <button onClick={onClose}
+            className="w-full py-2.5 border border-gray-300 text-gray-700 rounded-lg text-sm font-medium hover:bg-gray-50">
+            {status === 'completed' || status === 'failed' ? 'Close' : 'Close (runs in background)'}
+          </button>
+        )}
+        </div>
+
       </div>
     </div>
   )
