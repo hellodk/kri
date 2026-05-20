@@ -149,6 +149,35 @@ async def list_playbooks(
     ]
 
 
+@router.get("/playbooks/content")
+async def get_playbook_content(
+    filename: str,
+    _: dict = Depends(require_role("viewer", "operator", "admin")),
+):
+    """Return raw YAML content of a discovered playbook or role's main task file."""
+    entries = discover_all(_PLAYBOOKS_DIR)
+    entry = next((e for e in entries if e.filename == filename), None)
+    if not entry:
+        raise HTTPException(status_code=404, detail="Playbook not found")
+
+    if entry.entry_type == "playbook":
+        content_path = _PLAYBOOKS_DIR / filename
+    else:
+        # For roles: show tasks/main.yml
+        role_name = filename.replace("roles/", "")
+        content_path = _PLAYBOOKS_DIR / "roles" / role_name / "tasks" / "main.yml"
+
+    if not content_path.exists():
+        raise HTTPException(status_code=404, detail="Playbook file not found on disk")
+
+    try:
+        content = content_path.read_text()
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Could not read playbook: {e}")
+
+    return {"filename": filename, "content": content}
+
+
 @router.post("/playbooks/run", response_model=PlaybookRunResponse, status_code=202)
 async def run_playbook_endpoint(
     payload: PlaybookRunRequest,

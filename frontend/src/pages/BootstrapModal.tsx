@@ -33,9 +33,17 @@ function SingleMode({ onClose }: { onClose: () => void }) {
   const [minionId, setMinionId] = useState('')
   const [targetIp, setTargetIp] = useState('')
   const [nodeId, setNodeId] = useState<string | null>(null)
+  const [showPlaybook, setShowPlaybook] = useState(false)
   const toast = useToastStore((s) => s.add)
   const qc = useQueryClient()
   const navigate = useNavigate()
+
+  const { data: playbookData } = useQuery({
+    queryKey: ['playbook-content', 'bootstrap_mac_mini.yml'],
+    queryFn: () => ansibleApi.playbookContent('bootstrap_mac_mini.yml'),
+    enabled: showPlaybook,
+    staleTime: Infinity,
+  })
 
   const bootstrapMutation = useMutation({
     mutationFn: () => ansibleApi.bootstrap(minionId, targetIp),
@@ -90,6 +98,27 @@ function SingleMode({ onClose }: { onClose: () => void }) {
             placeholder="10.0.1.11"
             className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm text-gray-900 focus:outline-none focus:border-brand-600" />
         </div>
+            {/* Playbook preview */}
+            <div>
+              <button
+                type="button"
+                onClick={() => setShowPlaybook(!showPlaybook)}
+                className="text-xs text-brand-600 hover:text-brand-700 font-medium flex items-center gap-1"
+              >
+                {showPlaybook ? '▲ Hide playbook' : '▼ Preview bootstrap playbook'}
+              </button>
+              {showPlaybook && (
+                <div className="mt-2 rounded-xl border border-gray-200 overflow-hidden">
+                  <div className="bg-gray-50 px-3 py-2 border-b border-gray-200 flex items-center justify-between">
+                    <span className="text-xs font-mono text-gray-600">bootstrap_mac_mini.yml</span>
+                    <span className="text-xs text-gray-400">read-only preview</span>
+                  </div>
+                  <pre className="text-xs font-mono bg-gray-900 text-gray-100 p-3 overflow-auto max-h-64 whitespace-pre">
+                    {playbookData?.content ?? 'Loading…'}
+                  </pre>
+                </div>
+              )}
+            </div>
         <p className="text-xs text-gray-500 bg-amber-50 border border-amber-200 rounded-lg p-3">
           Make sure Remote Login (SSH) is enabled before bootstrapping.
         </p>
