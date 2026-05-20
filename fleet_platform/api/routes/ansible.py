@@ -21,6 +21,7 @@ from fleet_platform.schemas.playbook import (
 )
 from fleet_platform.services.playbook_discovery import discover_all
 from fleet_platform.workers.ansible_tasks import bootstrap_node
+from fleet_platform.workers.playbook_tasks import run_playbook
 
 router = APIRouter(prefix="/api/v1/ansible")
 
@@ -153,12 +154,7 @@ async def run_playbook_endpoint(
     await db.commit()
     await db.refresh(job)
 
-    # Defer import to avoid circular — task module not yet created
-    try:
-        from fleet_platform.workers.playbook_tasks import run_playbook
-        run_playbook.delay(str(job.id))
-    except ImportError:
-        pass  # Task module created in T5; job is queued in DB
+    run_playbook.delay(str(job.id))
 
     return PlaybookRunResponse(
         job_id=job.id,
