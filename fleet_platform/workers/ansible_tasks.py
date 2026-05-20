@@ -148,7 +148,6 @@ def bootstrap_node(self, node_id: str, target_ip: str) -> dict:
                 "salt_master_address": salt_master,
                 "minion_id": node.minion_id,
                 "controller_pubkey": controller_pubkey,
-                "ansible_ssh_common_args": "-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null",
             },
             quiet=False,
             rotate_artifacts=1,
