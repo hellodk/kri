@@ -1,4 +1,4 @@
-import { useState, useRef } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { searchApi } from '../../api/search'
@@ -14,17 +14,20 @@ export function TopBar() {
   const setSidebarOpen = useFilterStore((s) => s.setSidebarOpen)
   const sidebarOpen = useFilterStore((s) => s.sidebarOpen)
 
-  const { data } = useQuery({
+  const { data, isLoading } = useQuery({
     queryKey: ['search', q],
     queryFn: () => searchApi.search(q),
     enabled: q.length >= 3,
     staleTime: 5_000,
   })
 
+  useEffect(() => {
+    setOpen(q.length >= 3)
+  }, [q])
+
   function handleInput(value: string) {
     clearTimeout(timerRef.current)
     timerRef.current = setTimeout(() => setQ(value), 300)
-    setOpen(value.length >= 3)
   }
 
   async function handleLogout() {
@@ -50,20 +53,25 @@ export function TopBar() {
           onBlur={() => setTimeout(() => setOpen(false), 200)}
           className="w-full px-3 py-1.5 bg-gray-50 border border-gray-300 text-gray-900 placeholder-gray-400 rounded-lg text-sm focus:outline-none focus:border-brand-600 focus:bg-white transition-colors"
         />
-        {open && data && data.items.length > 0 && (
-          <ul className="absolute top-full mt-1 w-full bg-white border border-gray-200 rounded-lg shadow-lg z-50 max-h-60 overflow-auto">
-            {data.items.map((r) => (
-              <li key={r.id}>
+        {open && (
+          <div className="absolute top-full left-0 right-0 mt-1 bg-white rounded-xl border border-gray-200 shadow-lg overflow-hidden z-50">
+            {isLoading ? (
+              <div className="px-4 py-3 text-sm text-gray-400">Searching…</div>
+            ) : !data || data.items.length === 0 ? (
+              <div className="px-4 py-3 text-sm text-gray-400">No nodes found</div>
+            ) : (
+              data.items.map((r) => (
                 <button
-                  className="w-full text-left px-3 py-2.5 text-sm text-gray-900 hover:bg-gray-50 transition-colors"
+                  key={r.id}
                   onClick={() => { navigate(`/nodes/${r.id}`); setOpen(false) }}
+                  className="w-full px-4 py-2.5 text-left text-sm hover:bg-gray-50 flex items-center gap-3"
                 >
-                  <span className="font-medium">{r.hostname ?? r.minion_id}</span>
-                  <span className="ml-2 text-gray-400 text-xs">{r.status}</span>
+                  <span className="font-medium text-gray-900">{r.hostname ?? r.minion_id}</span>
+                  <span className="text-xs text-gray-400">{r.status}</span>
                 </button>
-              </li>
-            ))}
-          </ul>
+              ))
+            )}
+          </div>
         )}
       </div>
       <div className="ml-auto flex items-center gap-3 text-sm">

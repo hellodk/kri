@@ -64,10 +64,11 @@ function SingleMode({ onClose }: { onClose: () => void }) {
   const [showLogs, setShowLogs] = useState(false)
   const [logTab, setLogTab] = useState<LogTab>('ansible')
 
-  const { data: logsData, refetch: refetchLogs } = useQuery({
+  const { data: logsData } = useQuery({
     queryKey: ['bootstrap-logs', nodeId],
     queryFn: () => ansibleApi.bootstrapLogs(nodeId!),
-    enabled: false,
+    enabled: showLogs && !!nodeId,
+    refetchInterval: showLogs && (status === 'pending' || status === 'bootstrapping') ? 5000 : false,
   })
 
   if (!nodeId) {
@@ -127,7 +128,7 @@ function SingleMode({ onClose }: { onClose: () => void }) {
       {/* Log viewer */}
       {nodeId && (
         <button
-          onClick={() => { setShowLogs(!showLogs); if (!showLogs) refetchLogs() }}
+          onClick={() => setShowLogs(!showLogs)}
           className="w-full py-2 border border-gray-200 text-gray-600 rounded-lg text-xs font-medium hover:bg-gray-50 flex items-center justify-center gap-1"
         >
           {showLogs ? '▲ Hide logs' : '▼ View logs (Salt pillar + Ansible output)'}
@@ -266,6 +267,7 @@ function BulkMode({ onClose }: { onClose: () => void }) {
     setLaunching(false)
     toast(`Launched ${parsedRows.length} bootstrap job(s)`)
     qc.invalidateQueries({ queryKey: ['fleet-overview'] })
+    qc.invalidateQueries({ queryKey: ['nodes'] })
   }
 
   if (jobs.length === 0) {

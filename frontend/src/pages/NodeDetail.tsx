@@ -12,6 +12,7 @@ import { ErrorState } from '../components/ErrorState'
 import { Pagination } from '../components/Pagination'
 import { formatDistanceToNow, format } from 'date-fns'
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts'
+import { useToastStore } from '../stores/toastStore'
 
 type Tab = 'overview' | 'drift' | 'sbom' | 'executions'
 
@@ -23,6 +24,7 @@ export function NodeDetail() {
   const [tagKey, setTagKey] = useState('')
   const [tagValue, setTagValue] = useState('')
   const qc = useQueryClient()
+  const toast = useToastStore((s) => s.add)
 
   const { data: node, isLoading, isError, refetch } = useQuery({
     queryKey: ['node', nodeId],
@@ -72,12 +74,18 @@ export function NodeDetail() {
       qc.invalidateQueries({ queryKey: ['node', nodeId] })
       setTagKey('')
       setTagValue('')
+      toast('Tag added')
     },
+    onError: (e: Error) => toast(e.message, 'error'),
   })
 
   const removeTagMutation = useMutation({
     mutationFn: (key: string) => fleetApi.removeTag(nodeId!, key),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['node', nodeId] }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['node', nodeId] })
+      toast('Tag removed')
+    },
+    onError: (e: Error) => toast(e.message, 'error'),
   })
 
   const computeMutation = useMutation({
