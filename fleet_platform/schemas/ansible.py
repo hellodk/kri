@@ -23,6 +23,7 @@ class PlatformSettingsUpdate(BaseModel):
     ansible_endpoint_url: str | None = None
     ansible_api_token: str | None = None
     playbooks_dir: str | None = None
+    pillar_dir: str | None = None
 
 
 class PlatformSettingsResponse(BaseModel):
@@ -33,3 +34,4 @@ class PlatformSettingsResponse(BaseModel):
     ansible_endpoint_url: str | None = None
     ansible_api_token: None = None
     playbooks_dir: str | None = None
+    pillar_dir: str | None = None

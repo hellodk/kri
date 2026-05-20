@@ -7,7 +7,7 @@ from fleet_platform.core.auth import require_role
 from fleet_platform.schemas.ansible import PlatformSettingsResponse, PlatformSettingsUpdate
 from fleet_platform.services.platform_settings_svc import (
     SALT_MASTER, SSH_USERNAME, SSH_PASSWORD, ANSIBLE_ENDPOINT_URL, ANSIBLE_API_TOKEN,
-    PLAYBOOKS_DIR, get_setting, set_setting,
+    PLAYBOOKS_DIR, PILLAR_DIR, get_setting, set_setting,
 )
 from fleet_platform.services.ssh_keypair import ensure_controller_keypair, get_controller_pubkey
 
@@ -26,6 +26,7 @@ async def get_settings(
         controller_pubkey=get_controller_pubkey(),
         ansible_endpoint_url=await get_setting(db, ANSIBLE_ENDPOINT_URL),
         playbooks_dir=await get_setting(db, PLAYBOOKS_DIR),
+        pillar_dir=await get_setting(db, PILLAR_DIR),
     )
 
 
@@ -48,10 +49,13 @@ async def update_settings(
         await set_setting(db, ANSIBLE_API_TOKEN, payload.ansible_api_token, encrypt=True)
     if payload.playbooks_dir is not None:
         await set_setting(db, PLAYBOOKS_DIR, payload.playbooks_dir)
+    if payload.pillar_dir is not None:
+        await set_setting(db, PILLAR_DIR, payload.pillar_dir)
     return PlatformSettingsResponse(
         salt_master_address=await get_setting(db, SALT_MASTER),
         ssh_bootstrap_username=await get_setting(db, SSH_USERNAME),
         controller_pubkey=get_controller_pubkey(),
         ansible_endpoint_url=await get_setting(db, ANSIBLE_ENDPOINT_URL),
         playbooks_dir=await get_setting(db, PLAYBOOKS_DIR),
+        pillar_dir=await get_setting(db, PILLAR_DIR),
     )

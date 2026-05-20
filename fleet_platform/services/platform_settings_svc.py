@@ -21,6 +21,7 @@ CONTROLLER_PUBKEY_PATH = "controller_pubkey_path"
 ANSIBLE_ENDPOINT_URL = "ansible_endpoint_url"
 ANSIBLE_API_TOKEN = "ansible_api_token"
 PLAYBOOKS_DIR = "playbooks_dir"
+PILLAR_DIR = "pillar_dir"
 
 
 def _fernet_key() -> bytes:

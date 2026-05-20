@@ -1,5 +1,7 @@
 # fleet_platform/workers/playbook_tasks.py
 """Celery tasks for running arbitrary Ansible playbooks."""
+import logging
+import re
 import tempfile
 import uuid as _uuid
 from datetime import UTC, datetime
@@ -17,6 +19,20 @@ from fleet_platform.workers.celery_app import celery_app
 
 _DEFAULT_PLAYBOOKS_DIR = Path(__file__).parent.parent.parent / "playbooks"
 _REPO_ROOT = Path(__file__).parent.parent.parent
+
+_log = logging.getLogger(__name__)
+_SAFE_PATH_RE = re.compile(r'^[a-zA-Z0-9._\-]{1,128}$')
+
+
+def _safe_label(label: str) -> str:
+    """Sanitise a label used in file paths — prevents path traversal."""
+    cleaned = re.sub(r'[^a-zA-Z0-9._\-]', '_', label)
+    # Collapse any sequence of two or more dots to a single dot
+    cleaned = re.sub(r'\.{2,}', '.', cleaned)
+    cleaned = cleaned.strip('.')
+    if not cleaned:
+        cleaned = "unknown"
+    return cleaned[:128]
 
 
 def _get_playbooks_dir(db) -> Path:
@@ -36,6 +52,7 @@ def _write_static_inventory(tmpdir: str, hosts: list[tuple[str, str, str]]) -> s
         lines.append(f"{hostname} ansible_host={ip} ansible_user={user}")
     inv_path = Path(tmpdir) / "inventory.ini"
     inv_path.write_text("\n".join(lines))
+    inv_path.chmod(0o600)  # not world-readable — contains IP addresses
     return str(inv_path)
 
 
@@ -56,8 +73,8 @@ def _commit_var_files(var_files: list[Path]) -> None:
                 author=git.Actor("kri", "kri@localhost"),
                 committer=git.Actor("kri", "kri@localhost"),
             )
-    except Exception:
-        pass
+    except Exception as e:
+        _log.warning("Could not commit var files to git: %s", e)
 
 
 def _resolve_hosts(db, job: AnsibleJob, ssh_user: str) -> list[tuple[str, str, str]] | None:
@@ -122,12 +139,12 @@ def run_playbook(self, job_id: str) -> dict:
         job = db.execute(select(AnsibleJob).where(AnsibleJob.id == job_uuid)).scalar_one()
         if job.extravars:
             if job.target_type == "node" and hosts:
-                hostname = hosts[0][0]
+                hostname = _safe_label(hosts[0][0])
                 vf = playbooks_dir / "host_vars" / f"{hostname}.yml"
                 _write_var_file(vf, job.extravars)
                 var_files.append(vf)
             elif job.target_type == "group":
-                vf = playbooks_dir / "group_vars" / f"{job.target_label}.yml"
+                vf = playbooks_dir / "group_vars" / f"{_safe_label(job.target_label)}.yml"
                 _write_var_file(vf, job.extravars)
                 var_files.append(vf)
 

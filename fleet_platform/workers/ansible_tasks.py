@@ -1,5 +1,7 @@
 # fleet_platform/workers/ansible_tasks.py
 """Celery tasks for Ansible-based node bootstrap."""
+import fcntl
+import re
 import secrets
 import tempfile
 import uuid as _uuid
@@ -19,6 +21,16 @@ from fleet_platform.workers.celery_app import celery_app
 _PLAYBOOKS_DIR = Path(__file__).parent.parent.parent / "playbooks"
 _DEFAULT_PILLAR_DIR = Path("/srv/salt/pillar")
 _DEFAULT_KRI_DIR = Path.home() / ".kri"
+
+
+_MINION_ID_RE = re.compile(r'^[a-zA-Z0-9._-]{1,128}$')
+
+
+def _validate_minion_id(minion_id: str) -> str:
+    """Validate minion ID to prevent path traversal and YAML injection."""
+    if not _MINION_ID_RE.match(minion_id):
+        raise ValueError(f"Invalid minion ID '{minion_id}': must match [a-zA-Z0-9._-]{{1,128}}")
+    return minion_id
 
 
 def _get_bootstrap_settings(db) -> tuple[str, str, str, str]:
@@ -46,6 +58,18 @@ def _get_bootstrap_settings(db) -> tuple[str, str, str, str]:
     return salt_master, ssh_user, ssh_password, pubkey
 
 
+def _get_pillar_dir(db) -> Path:
+    """Return the configured pillar directory, falling back to /srv/salt/pillar."""
+    from fleet_platform.models.platform_setting import PlatformSetting
+    from sqlalchemy import select as _select
+    row = db.execute(
+        _select(PlatformSetting).where(PlatformSetting.key == "pillar_dir")
+    ).scalar_one_or_none()
+    if row and row.value:
+        return Path(row.value)
+    return _DEFAULT_PILLAR_DIR
+
+
 def _write_pillar_file(
     pillar_dir: str,
     minion_id: str,
@@ -53,6 +77,7 @@ def _write_pillar_file(
     node_token: str,
 ) -> None:
     """Write /srv/salt/pillar/<minion_id>.sls and update top.sls."""
+    _validate_minion_id(minion_id)  # raises ValueError on invalid input
     pillar_path = Path(pillar_dir)
     pillar_path.mkdir(parents=True, exist_ok=True)
 
@@ -65,14 +90,20 @@ def _write_pillar_file(
     (pillar_path / f"{minion_id}.sls").write_text(sls_content)
 
     top_path = pillar_path / "top.sls"
-    if top_path.exists():
-        existing = top_path.read_text()
-        if minion_id not in existing:
-            top_path.write_text(
-                existing.rstrip() + f"\n  '{minion_id}':\n    - {minion_id}\n"
-            )
-    else:
-        top_path.write_text(f"base:\n  '{minion_id}':\n    - {minion_id}\n")
+    lock_path = pillar_path / ".top.sls.lock"
+    with open(lock_path, "w") as lock_f:
+        fcntl.flock(lock_f, fcntl.LOCK_EX)
+        try:
+            if top_path.exists():
+                existing = top_path.read_text()
+                if minion_id not in existing:
+                    top_path.write_text(
+                        existing.rstrip() + f"\n  '{minion_id}':\n    - {minion_id}\n"
+                    )
+            else:
+                top_path.write_text(f"base:\n  '{minion_id}':\n    - {minion_id}\n")
+        finally:
+            fcntl.flock(lock_f, fcntl.LOCK_UN)
 
 
 @celery_app.task(
@@ -92,6 +123,13 @@ def bootstrap_node(self, node_id: str, target_ip: str) -> dict:
         ).scalar_one_or_none()
         if not node:
             return {"status": "error", "reason": "node_not_found"}
+        try:
+            _validate_minion_id(node.minion_id)
+        except ValueError as e:
+            node.bootstrap_status = "failed"
+            node.bootstrap_error = str(e)
+            db.commit()
+            return {"status": "error", "reason": str(e)}
 
         node.bootstrap_status = "bootstrapping"
         node.bootstrap_ip = target_ip
@@ -100,13 +138,14 @@ def bootstrap_node(self, node_id: str, target_ip: str) -> dict:
 
         salt_master, ssh_user, ssh_password, controller_pubkey = \
             _get_bootstrap_settings(db)
+        pillar_dir = _get_pillar_dir(db)
 
     # 2. Generate fresh node token and write pillar BEFORE Ansible runs
     raw_token = secrets.token_urlsafe(32)
     ingest_url = f"http://{salt_master}:8000/api/v1/ingest"
 
     _write_pillar_file(
-        pillar_dir=str(_DEFAULT_PILLAR_DIR),
+        pillar_dir=str(pillar_dir),
         minion_id=node.minion_id,
         ingest_url=ingest_url,
         node_token=raw_token,

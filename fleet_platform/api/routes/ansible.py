@@ -4,11 +4,12 @@ import uuid
 from datetime import UTC, datetime
 from pathlib import Path
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from fleet_platform.api.deps import get_db
+from fleet_platform.api.limiter import limiter
 from fleet_platform.core.auth import hash_password, require_role
 from fleet_platform.models.ansible_job import AnsibleJob
 from fleet_platform.models.node import Node
@@ -29,7 +30,9 @@ _PLAYBOOKS_DIR = Path(__file__).parent.parent.parent.parent / "playbooks"
 
 
 @router.post("/bootstrap", response_model=BootstrapResponse, status_code=202)
+@limiter.limit("10/minute")
 async def bootstrap(
+    request: Request,
     payload: BootstrapRequest,
     db: AsyncSession = Depends(get_db),
     claims: dict = Depends(require_role("operator", "admin")),
@@ -152,11 +155,12 @@ async def run_playbook_endpoint(
     db: AsyncSession = Depends(get_db),
     claims: dict = Depends(require_role("operator", "admin")),
 ):
-    safe_name = payload.playbook.lstrip("/").replace("..", "")
+    # Use discover_all as the authoritative allowlist — only known playbooks/roles can run
     entries = discover_all(_PLAYBOOKS_DIR)
-    entry = next((e for e in entries if e.filename == safe_name), None)
+    entry = next((e for e in entries if e.filename == payload.playbook), None)
     if not entry:
-        raise HTTPException(status_code=404, detail=f"Playbook '{safe_name}' not found")
+        raise HTTPException(status_code=404, detail=f"Playbook not found")
+    safe_name = entry.filename  # trusted — came from filesystem scan, not user input
 
     target_label = payload.target_id
     if payload.target_type == "node":
