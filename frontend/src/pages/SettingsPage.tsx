@@ -12,6 +12,7 @@ export function SettingsPage() {
   const [showPassword, setShowPassword] = useState(false)
   const [ansibleEndpoint, setAnsibleEndpoint] = useState('')
   const [ansibleToken, setAnsibleToken] = useState('')
+  const [playbooksDir, setPlaybooksDir] = useState('')
 
   const { data, isLoading } = useQuery({
     queryKey: ['settings'],
@@ -23,6 +24,7 @@ export function SettingsPage() {
       if (data.salt_master_address) setMaster(data.salt_master_address)
       if (data.ssh_bootstrap_username) setUsername(data.ssh_bootstrap_username)
       if (data.ansible_endpoint_url) setAnsibleEndpoint(data.ansible_endpoint_url)
+      if (data.playbooks_dir) setPlaybooksDir(data.playbooks_dir)
     }
   }, [data])
 
@@ -33,6 +35,7 @@ export function SettingsPage() {
       ssh_bootstrap_password: password || undefined,
       ansible_endpoint_url: ansibleEndpoint || undefined,
       ansible_api_token: ansibleToken || undefined,
+      playbooks_dir: playbooksDir || undefined,
     }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['settings'] })
@@ -133,6 +136,20 @@ export function SettingsPage() {
             No keypair generated yet. Save settings once to generate the controller keypair.
           </p>
         )}
+      </div>
+
+      {/* Playbooks directory */}
+      <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-6 space-y-4">
+        <h2 className="text-base font-semibold text-gray-900">Playbooks Directory</h2>
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">Path to playbooks &amp; roles</label>
+          <input type="text" value={playbooksDir} onChange={(e) => setPlaybooksDir(e.target.value)}
+            placeholder="/home/user/my-playbooks  (default: <repo>/playbooks)"
+            className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm text-gray-900 focus:outline-none focus:border-brand-600 font-mono" />
+          <p className="text-xs text-gray-400 mt-1">
+            Absolute path. Roles must be under <code>roles/</code> inside this directory. Leave blank to use the built-in <code>playbooks/</code> folder.
+          </p>
+        </div>
       </div>
 
       {/* External Ansible endpoint */}
