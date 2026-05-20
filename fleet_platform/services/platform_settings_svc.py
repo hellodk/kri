@@ -1,9 +1,13 @@
 # fleet_platform/services/platform_settings_svc.py
 import base64
 import hashlib
+from pathlib import Path
 from cryptography.fernet import Fernet
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
+
+_REPO_ROOT = Path(__file__).parent.parent.parent
+_DEFAULT_PLAYBOOKS_DIR = _REPO_ROOT / "playbooks"
 
 from fleet_platform.core.config import settings
 from fleet_platform.models.platform_setting import PlatformSetting
@@ -16,6 +20,7 @@ CONTROLLER_PRIVKEY_PATH = "controller_privkey_path"
 CONTROLLER_PUBKEY_PATH = "controller_pubkey_path"
 ANSIBLE_ENDPOINT_URL = "ansible_endpoint_url"
 ANSIBLE_API_TOKEN = "ansible_api_token"
+PLAYBOOKS_DIR = "playbooks_dir"
 
 
 def _fernet_key() -> bytes:
@@ -35,6 +40,14 @@ async def get_setting(db: AsyncSession, key: str) -> str | None:
     if row.is_encrypted and row.value:
         return _fernet().decrypt(row.value.encode()).decode()
     return row.value
+
+
+async def get_playbooks_dir(db: AsyncSession) -> Path:
+    """Return the configured playbooks directory, falling back to repo default."""
+    custom = await get_setting(db, PLAYBOOKS_DIR)
+    if custom:
+        return Path(custom)
+    return _DEFAULT_PLAYBOOKS_DIR
 
 
 async def set_setting(db: AsyncSession, key: str, value: str, encrypt: bool = False) -> None:

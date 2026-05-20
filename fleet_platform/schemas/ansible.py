@@ -22,6 +22,7 @@ class PlatformSettingsUpdate(BaseModel):
     ssh_bootstrap_password: str | None = None
     ansible_endpoint_url: str | None = None
     ansible_api_token: str | None = None
+    playbooks_dir: str | None = None
 
 
 class PlatformSettingsResponse(BaseModel):
@@ -31,3 +32,4 @@ class PlatformSettingsResponse(BaseModel):
     controller_pubkey: str | None
     ansible_endpoint_url: str | None = None
     ansible_api_token: None = None
+    playbooks_dir: str | None = None

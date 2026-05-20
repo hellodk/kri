@@ -15,8 +15,19 @@ from fleet_platform.models.node import Node
 from fleet_platform.workers.ansible_tasks import _get_bootstrap_settings
 from fleet_platform.workers.celery_app import celery_app
 
-_PLAYBOOKS_DIR = Path(__file__).parent.parent.parent / "playbooks"
+_DEFAULT_PLAYBOOKS_DIR = Path(__file__).parent.parent.parent / "playbooks"
 _REPO_ROOT = Path(__file__).parent.parent.parent
+
+
+def _get_playbooks_dir(db) -> Path:
+    from fleet_platform.models.platform_setting import PlatformSetting
+    from sqlalchemy import select as _select
+    row = db.execute(
+        _select(PlatformSetting).where(PlatformSetting.key == "playbooks_dir")
+    ).scalar_one_or_none()
+    if row and row.value:
+        return Path(row.value)
+    return _DEFAULT_PLAYBOOKS_DIR
 
 
 def _write_static_inventory(tmpdir: str, hosts: list[tuple[str, str, str]]) -> str:
@@ -91,6 +102,7 @@ def run_playbook(self, job_id: str) -> dict:
         job.started_at = datetime.now(UTC)
         db.commit()
         _, ssh_user, ssh_password, _ = _get_bootstrap_settings(db)
+        playbooks_dir = _get_playbooks_dir(db)
 
     with get_sync_db() as db:
         job = db.execute(select(AnsibleJob).where(AnsibleJob.id == job_uuid)).scalar_one()
@@ -111,18 +123,18 @@ def run_playbook(self, job_id: str) -> dict:
         if job.extravars:
             if job.target_type == "node" and hosts:
                 hostname = hosts[0][0]
-                vf = _PLAYBOOKS_DIR / "host_vars" / f"{hostname}.yml"
+                vf = playbooks_dir / "host_vars" / f"{hostname}.yml"
                 _write_var_file(vf, job.extravars)
                 var_files.append(vf)
             elif job.target_type == "group":
-                vf = _PLAYBOOKS_DIR / "group_vars" / f"{job.target_label}.yml"
+                vf = playbooks_dir / "group_vars" / f"{job.target_label}.yml"
                 _write_var_file(vf, job.extravars)
                 var_files.append(vf)
 
     if var_files:
         _commit_var_files(var_files)
 
-    playbook_path = _PLAYBOOKS_DIR / job.playbook
+    playbook_path = playbooks_dir / job.playbook
     stdout_lines = []
 
     with tempfile.TemporaryDirectory(prefix="kri-playbook-") as tmpdir:
