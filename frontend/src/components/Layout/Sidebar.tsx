@@ -7,6 +7,7 @@ const links = [
   { to: '/sbom',       label: 'SBOM',       icon: '◉' },
   { to: '/groups',     label: 'Groups',     icon: '◫' },
   { to: '/executions', label: 'Executions', icon: '▷' },
+  { to: '/playbooks',  label: 'Playbooks',  icon: '▤' },
   { to: '/audit',      label: 'Audit',      icon: '◎' },
   { to: '/settings',   label: 'Settings',   icon: '⚙' },
 ]

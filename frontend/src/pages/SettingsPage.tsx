@@ -10,6 +10,8 @@ export function SettingsPage() {
   const [username, setUsername] = useState('')
   const [password, setPassword] = useState('')
   const [showPassword, setShowPassword] = useState(false)
+  const [ansibleEndpoint, setAnsibleEndpoint] = useState('')
+  const [ansibleToken, setAnsibleToken] = useState('')
 
   const { data, isLoading } = useQuery({
     queryKey: ['settings'],
@@ -20,6 +22,7 @@ export function SettingsPage() {
     if (data) {
       if (data.salt_master_address) setMaster(data.salt_master_address)
       if (data.ssh_bootstrap_username) setUsername(data.ssh_bootstrap_username)
+      if (data.ansible_endpoint_url) setAnsibleEndpoint(data.ansible_endpoint_url)
     }
   }, [data])
 
@@ -28,6 +31,8 @@ export function SettingsPage() {
       salt_master_address: master || undefined,
       ssh_bootstrap_username: username || undefined,
       ssh_bootstrap_password: password || undefined,
+      ansible_endpoint_url: ansibleEndpoint || undefined,
+      ansible_api_token: ansibleToken || undefined,
     }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['settings'] })
@@ -128,6 +133,31 @@ export function SettingsPage() {
             No keypair generated yet. Save settings once to generate the controller keypair.
           </p>
         )}
+      </div>
+
+      {/* External Ansible endpoint */}
+      <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-6 space-y-4">
+        <h2 className="text-base font-semibold text-gray-900">External Ansible Endpoint</h2>
+        <p className="text-sm text-gray-500">
+          Optional: configure an AWX or Ansible Tower endpoint. When set, kri will send playbook jobs
+          to this endpoint instead of running ansible-runner locally.
+        </p>
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">Endpoint URL</label>
+          <input type="text" value={ansibleEndpoint} onChange={(e) => setAnsibleEndpoint(e.target.value)}
+            placeholder="https://awx.example.com"
+            className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm text-gray-900 focus:outline-none focus:border-brand-600" />
+          <p className="text-xs text-gray-400 mt-1">Leave blank to use local ansible-runner.</p>
+        </div>
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">
+            API Token
+            <span className="ml-2 text-xs font-normal text-gray-400">(stored encrypted)</span>
+          </label>
+          <input type="password" value={ansibleToken} onChange={(e) => setAnsibleToken(e.target.value)}
+            placeholder="Leave blank to keep existing"
+            className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm text-gray-900 focus:outline-none focus:border-brand-600" />
+        </div>
       </div>
 
       <div className="flex justify-end">
