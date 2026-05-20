@@ -36,7 +36,7 @@ export function Sidebar() {
               to={to}
               title={!open ? label : undefined}
               className={({ isActive }) =>
-                `flex items-center gap-3 rounded-lg text-sm font-medium transition-all duration-150 ${
+                `group relative flex items-center gap-3 rounded-lg text-sm font-medium transition-all duration-150 ${
                   open ? 'px-3 py-2.5' : 'px-2.5 py-2.5 justify-center'
                 } ${isActive
                   ? 'bg-brand-600/20 text-brand-300 border border-brand-600/30 shadow-sm shadow-brand-600/20'
@@ -46,6 +46,11 @@ export function Sidebar() {
             >
               <span className="text-base flex-shrink-0 font-mono">{icon}</span>
               {open && <span>{label}</span>}
+              {!open && (
+                <span className="pointer-events-none absolute left-full ml-2 whitespace-nowrap rounded-md bg-gray-900 px-2 py-1 text-xs text-white opacity-0 group-hover:opacity-100 transition-opacity z-50 shadow-lg">
+                  {label}
+                </span>
+              )}
             </NavLink>
           </li>
         ))}

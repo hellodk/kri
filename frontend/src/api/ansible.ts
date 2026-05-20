@@ -7,6 +7,7 @@ export interface PlatformSettings {
   controller_pubkey: string | null
   ansible_endpoint_url: string | null
   playbooks_dir: string | null
+  pillar_dir: string | null
 }
 
 export interface BootstrapResponse {
@@ -34,6 +35,7 @@ export const ansibleApi = {
     ansible_endpoint_url?: string
     ansible_api_token?: string
     playbooks_dir?: string
+    pillar_dir?: string
   }) => api.put<PlatformSettings>('/api/v1/settings', payload),
   bootstrap: (minion_id: string, target_ip: string) =>
     api.post<BootstrapResponse>('/api/v1/ansible/bootstrap', { minion_id, target_ip }),

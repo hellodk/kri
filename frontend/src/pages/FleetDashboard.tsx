@@ -12,6 +12,7 @@ import { formatDistanceToNow } from 'date-fns'
 
 export function FleetDashboard() {
   const [page, setPage] = useState(1)
+  const [perPage, setPerPage] = useState(50)
   const [statusFilter, setStatusFilter] = useState('')
   const [showBootstrap, setShowBootstrap] = useState(false)
 
@@ -28,8 +29,8 @@ export function FleetDashboard() {
     isError,
     refetch,
   } = useQuery({
-    queryKey: ['nodes', page, statusFilter],
-    queryFn: () => fleetApi.nodes({ page, per_page: 50, status: statusFilter || undefined }),
+    queryKey: ['nodes', page, perPage, statusFilter],
+    queryFn: () => fleetApi.nodes({ page, per_page: perPage, status: statusFilter || undefined }),
     staleTime: 30_000,
   })
 
@@ -153,7 +154,7 @@ export function FleetDashboard() {
                   </tbody>
                 </table>
                 {nodes && (
-                  <Pagination page={page} total={nodes.total} perPage={nodes.per_page} onPage={setPage} />
+                  <Pagination page={page} total={nodes.total} perPage={nodes.per_page} onPage={setPage} onPerPage={(n) => { setPerPage(n); setPage(1) }} />
                 )}
               </>
             )}

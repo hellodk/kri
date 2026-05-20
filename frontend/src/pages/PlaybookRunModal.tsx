@@ -92,7 +92,7 @@ export function PlaybookRunModal({ playbook, onClose }: Props) {
             <h2 className="text-lg font-bold text-gray-900">Run Playbook</h2>
             <p className="text-sm text-gray-500">{playbook.name}</p>
           </div>
-          <button onClick={onClose} className="text-gray-400 hover:text-gray-600 text-xl leading-none">×</button>
+          <button onClick={onClose} className="flex items-center justify-center w-8 h-8 rounded-lg text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-colors text-lg">×</button>
         </div>
 
         {!jobId ? (
