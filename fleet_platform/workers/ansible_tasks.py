@@ -118,7 +118,17 @@ def bootstrap_node(self, node_id: str, target_ip: str) -> dict:
         node.node_token_hash = hash_password(raw_token)
         db.commit()
 
-    # 4. Run Ansible
+    # 4. Install required Ansible collections
+    requirements_file = _PLAYBOOKS_DIR / "requirements.yml"
+    if requirements_file.exists():
+        import subprocess
+        subprocess.run(
+            ["ansible-galaxy", "collection", "install", "-r", str(requirements_file)],
+            capture_output=True,
+        )
+
+    # 5. Run Ansible and capture stdout
+    stdout_lines: list[str] = []
     with tempfile.TemporaryDirectory(prefix="kri-bootstrap-") as tmpdir:
         result = ansible_runner.run(
             private_data_dir=tmpdir,
@@ -137,8 +147,12 @@ def bootstrap_node(self, node_id: str, target_ip: str) -> dict:
             quiet=False,
             rotate_artifacts=1,
         )
+        for event in result.events:
+            msg = event.get("stdout", "")
+            if msg:
+                stdout_lines.append(msg)
 
-    # 5. Update bootstrap status
+    # 6. Update bootstrap status + logs
     with get_sync_db() as db:
         node = db.execute(select(Node).where(Node.id == node_uuid)).scalar_one()
         if result.status == "successful" and result.rc == 0:
@@ -147,6 +161,7 @@ def bootstrap_node(self, node_id: str, target_ip: str) -> dict:
         else:
             node.bootstrap_status = "failed"
             node.bootstrap_error = f"ansible rc={result.rc} status={result.status}"
+        node.bootstrap_logs = "\n".join(stdout_lines) or f"rc={result.rc} status={result.status}"
         db.commit()
 
     return {"status": result.status, "rc": result.rc, "node_id": node_id}

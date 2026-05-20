@@ -131,7 +131,7 @@
       become: false
 
     - name: Authorise kri controller public key
-      authorized_key:
+      ansible.posix.authorized_key:
         user: "{{ ansible_user }}"
         key: "{{ controller_pubkey }}"
         state: present

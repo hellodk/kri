@@ -39,4 +39,6 @@ export const ansibleApi = {
     api.post<BootstrapResponse>('/api/v1/ansible/bootstrap', { minion_id, target_ip }),
   bootstrapStatus: (nodeId: string) =>
     api.get<BootstrapStatus>(`/api/v1/ansible/bootstrap/${nodeId}/status`),
+  bootstrapLogs: (nodeId: string) =>
+    api.get<{ node_id: string; minion_id: string; bootstrap_status: string; pillar_path: string; pillar: string | null; ansible_stdout: string | null }>(`/api/v1/ansible/bootstrap/${nodeId}/logs`),
 }

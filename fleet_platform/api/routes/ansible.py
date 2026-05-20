@@ -97,6 +97,38 @@ async def bootstrap_status(
     }
 
 
+@router.get("/bootstrap/{node_id}/logs")
+async def bootstrap_logs(
+    node_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+    _: dict = Depends(require_role("operator", "admin")),
+):
+    result = await db.execute(select(Node).where(Node.id == node_id))
+    node = result.scalar_one_or_none()
+    if not node:
+        raise HTTPException(status_code=404, detail="Node not found")
+
+    # Read the Salt pillar file written before the Ansible run
+    pillar_content: str | None = None
+    pillar_path = Path("/srv/salt/pillar") / f"{node.minion_id}.sls"
+    if pillar_path.exists():
+        try:
+            pillar_content = pillar_path.read_text()
+        except Exception:
+            pillar_content = f"(could not read {pillar_path})"
+    else:
+        pillar_content = f"(pillar file not found at {pillar_path})"
+
+    return {
+        "node_id": str(node.id),
+        "minion_id": node.minion_id,
+        "bootstrap_status": node.bootstrap_status,
+        "pillar_path": str(pillar_path),
+        "pillar": pillar_content,
+        "ansible_stdout": node.bootstrap_logs,
+    }
+
+
 @router.get("/playbooks", response_model=list[PlaybookEntryResponse])
 async def list_playbooks(
     _: dict = Depends(require_role("viewer", "operator", "admin")),

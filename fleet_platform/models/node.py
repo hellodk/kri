@@ -34,6 +34,7 @@ class Node(Base, TimestampMixin):
     )
     bootstrap_ip: Mapped[str | None] = mapped_column(String(45), nullable=True)
     bootstrap_error: Mapped[str | None] = mapped_column(Text, nullable=True)
+    bootstrap_logs: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     tags: Mapped[list["Tag"]] = relationship(
         "Tag", back_populates="node", cascade="all, delete-orphan"
