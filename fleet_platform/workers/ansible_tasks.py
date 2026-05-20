@@ -127,22 +127,28 @@ def bootstrap_node(self, node_id: str, target_ip: str) -> dict:
             capture_output=True,
         )
 
-    # 5. Run Ansible and capture stdout
+    # 5. Run Ansible with static inventory and capture stdout
     stdout_lines: list[str] = []
     with tempfile.TemporaryDirectory(prefix="kri-bootstrap-") as tmpdir:
+        # Write static inventory — more reliable than dynamic.py (env var propagation issues)
+        inv_path = Path(tmpdir) / "inventory.ini"
+        inv_path.write_text(
+            f"[targets]\n"
+            f"{target_ip} ansible_host={target_ip} "
+            f"ansible_user={ssh_user} ansible_ssh_pass={ssh_password} "
+            f"ansible_become_password={ssh_password}\n"
+        )
+        inv_path.chmod(0o600)
+
         result = ansible_runner.run(
             private_data_dir=tmpdir,
             playbook=str(_PLAYBOOKS_DIR / "bootstrap_mac_mini.yml"),
-            inventory=str(_PLAYBOOKS_DIR / "inventory" / "dynamic.py"),
+            inventory=str(inv_path),
             extravars={
                 "salt_master_address": salt_master,
                 "minion_id": node.minion_id,
                 "controller_pubkey": controller_pubkey,
-            },
-            envvars={
-                "TARGET_HOST": target_ip,
-                "ANSIBLE_USER": ssh_user,
-                "ANSIBLE_PASSWORD": ssh_password,
+                "ansible_ssh_common_args": "-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null",
             },
             quiet=False,
             rotate_artifacts=1,
