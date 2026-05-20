@@ -2,6 +2,8 @@ import { useEffect, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useNavigate } from 'react-router-dom'
 import { ansibleApi } from '../api/ansible'
+import { searchApi } from '../api/search'
+import { fleetApi } from '../api/fleet'
 import { useToastStore } from '../stores/toastStore'
 
 type LogTab = 'pillar' | 'ansible'
@@ -34,9 +36,39 @@ function SingleMode({ onClose }: { onClose: () => void }) {
   const [targetIp, setTargetIp] = useState('')
   const [nodeId, setNodeId] = useState<string | null>(null)
   const [showPlaybook, setShowPlaybook] = useState(false)
+  const [existingNodeDbId, setExistingNodeDbId] = useState<string | null>(null)
   const toast = useToastStore((s) => s.add)
   const qc = useQueryClient()
   const navigate = useNavigate()
+
+  // Look up the node by minion ID as the user types (exact match only)
+  const { data: searchData } = useQuery({
+    queryKey: ['bootstrap-lookup', minionId],
+    queryFn: () => searchApi.search(minionId),
+    enabled: minionId.length >= 2,
+    staleTime: 10_000,
+  })
+
+  const exactMatch = searchData?.items.find((r) => r.minion_id === minionId) ?? null
+
+  // Fetch full node details to get IP once we have an exact match
+  const { data: existingNode } = useQuery({
+    queryKey: ['node', exactMatch?.id],
+    queryFn: () => fleetApi.node(exactMatch!.id),
+    enabled: !!exactMatch?.id,
+    staleTime: 30_000,
+  })
+
+  // Auto-populate IP when an existing node is found
+  useEffect(() => {
+    if (existingNode) {
+      setExistingNodeDbId(existingNode.id)
+      if (existingNode.ip_address) setTargetIp(existingNode.ip_address)
+    } else {
+      setExistingNodeDbId(null)
+      // Don't clear IP if user typed it themselves
+    }
+  }, [existingNode])
 
   const { data: playbookData } = useQuery({
     queryKey: ['playbook-content', 'bootstrap_mac_mini.yml'],
@@ -88,15 +120,38 @@ function SingleMode({ onClose }: { onClose: () => void }) {
           <label className="block text-sm font-medium text-gray-700 mb-1">
             Minion ID <span className="text-gray-400 font-normal">(e.g. mac-mini-01)</span>
           </label>
-          <input required value={minionId} onChange={(e) => setMinionId(e.target.value)}
+          <input required value={minionId} onChange={(e) => {
+              setMinionId(e.target.value)
+              // Clear auto-filled IP when user changes minion ID
+              if (!existingNodeDbId) setTargetIp('')
+            }}
             placeholder="mac-mini-01"
             className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm text-gray-900 focus:outline-none focus:border-brand-600" />
+          {existingNode && (
+            <p className="text-xs text-brand-600 mt-1 flex items-center gap-1">
+              <span>✓</span> Node found in fleet — IP pre-filled and locked
+            </p>
+          )}
+          {minionId.length >= 2 && !existingNode && searchData && (
+            <p className="text-xs text-gray-400 mt-1">New node — enter IP address below</p>
+          )}
         </div>
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">IP address</label>
-          <input required value={targetIp} onChange={(e) => setTargetIp(e.target.value)}
+          <label className="block text-sm font-medium text-gray-700 mb-1">
+            IP address
+            {existingNodeDbId && (
+              <span className="ml-2 text-xs font-normal text-gray-400">(locked — node already registered)</span>
+            )}
+          </label>
+          <input required value={targetIp}
+            readOnly={!!existingNodeDbId}
+            onChange={(e) => !existingNodeDbId && setTargetIp(e.target.value)}
             placeholder="10.0.1.11"
-            className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm text-gray-900 focus:outline-none focus:border-brand-600" />
+            className={`w-full px-3 py-2 border rounded-lg text-sm text-gray-900 focus:outline-none ${
+              existingNodeDbId
+                ? 'bg-gray-50 border-gray-200 text-gray-500 cursor-not-allowed'
+                : 'border-gray-300 focus:border-brand-600'
+            }`} />
         </div>
             {/* Playbook preview */}
             <div>
