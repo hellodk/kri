@@ -5,6 +5,7 @@ import { fleetApi } from '../api/fleet'
 import { driftApi } from '../api/drift'
 import { sbomApi } from '../api/sbom'
 import { executionsApi } from '../api/executions'
+import { ansibleApi } from '../api/ansible'
 import { StatusBadge } from '../components/StatusBadge'
 import { DriftBadge } from '../components/DriftBadge'
 import { Skeleton } from '../components/Skeleton'
@@ -13,6 +14,14 @@ import { Pagination } from '../components/Pagination'
 import { formatDistanceToNow, format } from 'date-fns'
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts'
 import { useToastStore } from '../stores/toastStore'
+
+const BOOTSTRAP_STATUS_STYLE: Record<string, { label: string; colour: string; bg: string }> = {
+  unregistered: { label: 'Not bootstrapped', colour: 'text-gray-500', bg: 'bg-gray-50 border-gray-200' },
+  pending:      { label: 'Queued',           colour: 'text-gray-600', bg: 'bg-gray-50 border-gray-200' },
+  bootstrapping:{ label: 'Running…',         colour: 'text-brand-600', bg: 'bg-brand-50 border-brand-200' },
+  completed:    { label: 'Completed',        colour: 'text-emerald-700', bg: 'bg-emerald-50 border-emerald-200' },
+  failed:       { label: 'Failed',           colour: 'text-red-700', bg: 'bg-red-50 border-red-200' },
+}
 
 type Tab = 'overview' | 'drift' | 'sbom' | 'executions'
 
@@ -93,6 +102,15 @@ export function NodeDetail() {
     onSuccess: () => {
       setTimeout(() => qc.invalidateQueries({ queryKey: ['drift-latest', nodeId] }), 3000)
     },
+  })
+
+  const cancelBootstrapMutation = useMutation({
+    mutationFn: () => ansibleApi.cancelBootstrap(nodeId!),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['node', nodeId] })
+      toast('Bootstrap cancelled')
+    },
+    onError: (e: Error) => toast(e.message, 'error'),
   })
 
   if (isLoading) return <Skeleton rows={8} />
@@ -187,6 +205,50 @@ export function NodeDetail() {
               ))}
             </dl>
           </div>
+          {/* Bootstrap status — only show if node has been bootstrapped or is bootstrapping */}
+          {node.bootstrap_status !== 'unregistered' && (
+            <div className="bg-white rounded-lg border border-gray-200 p-4 md:col-span-2 space-y-3">
+              <div className="flex items-center justify-between">
+                <h3 className="font-semibold text-gray-700">Bootstrap Status</h3>
+                {(node.bootstrap_status === 'bootstrapping' || node.bootstrap_status === 'pending') && (
+                  <button
+                    onClick={() => cancelBootstrapMutation.mutate()}
+                    disabled={cancelBootstrapMutation.isPending}
+                    className="text-xs text-red-600 hover:text-red-700 font-medium border border-red-200 bg-red-50 hover:bg-red-100 px-3 py-1 rounded-lg disabled:opacity-50 transition-colors"
+                  >
+                    {cancelBootstrapMutation.isPending ? 'Cancelling…' : 'Cancel bootstrap'}
+                  </button>
+                )}
+              </div>
+              <div className={`flex items-center gap-3 p-3 rounded-lg border ${BOOTSTRAP_STATUS_STYLE[node.bootstrap_status]?.bg ?? 'bg-gray-50 border-gray-200'}`}>
+                <span className={`text-sm font-semibold ${BOOTSTRAP_STATUS_STYLE[node.bootstrap_status]?.colour ?? 'text-gray-600'}`}>
+                  {BOOTSTRAP_STATUS_STYLE[node.bootstrap_status]?.label ?? node.bootstrap_status}
+                </span>
+                {node.bootstrap_ip && (
+                  <span className="text-xs text-gray-500">via {node.bootstrap_ip}</span>
+                )}
+                {(node.bootstrap_status === 'bootstrapping' || node.bootstrap_status === 'pending') && (
+                  <div className="w-3.5 h-3.5 border-2 border-brand-600 border-t-transparent rounded-full animate-spin ml-auto" />
+                )}
+              </div>
+              {node.bootstrap_error && (
+                <div className="p-3 bg-red-50 border border-red-200 rounded-lg text-xs text-red-700 font-mono whitespace-pre-wrap">
+                  {node.bootstrap_error}
+                </div>
+              )}
+              {node.bootstrap_logs && (
+                <details className="group">
+                  <summary className="text-xs text-gray-500 cursor-pointer hover:text-gray-700 select-none">
+                    View Ansible output
+                  </summary>
+                  <pre className="mt-2 text-xs font-mono bg-gray-900 text-gray-100 rounded-lg p-3 overflow-auto max-h-48 whitespace-pre-wrap">
+                    {node.bootstrap_logs}
+                  </pre>
+                </details>
+              )}
+            </div>
+          )}
+
           <div className="bg-white rounded-lg border border-gray-200 p-4 md:col-span-2">
             <h3 className="font-semibold text-gray-700 mb-3">Tags</h3>
             <div className="flex flex-wrap gap-2 mb-3">

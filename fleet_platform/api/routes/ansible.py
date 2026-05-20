@@ -100,6 +100,28 @@ async def bootstrap_status(
     }
 
 
+@router.post("/bootstrap/{node_id}/cancel")
+async def cancel_bootstrap(
+    node_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+    _: dict = Depends(require_role("operator", "admin")),
+):
+    """Reset a stuck bootstrap job so the node can be re-bootstrapped."""
+    result = await db.execute(select(Node).where(Node.id == node_id))
+    node = result.scalar_one_or_none()
+    if not node:
+        raise HTTPException(status_code=404, detail="Node not found")
+    if node.bootstrap_status not in ("bootstrapping", "pending"):
+        raise HTTPException(
+            status_code=409,
+            detail=f"Bootstrap status is '{node.bootstrap_status}' — nothing to cancel",
+        )
+    node.bootstrap_status = "failed"
+    node.bootstrap_error = "Manually cancelled by user"
+    await db.commit()
+    return {"node_id": str(node.id), "bootstrap_status": "failed", "message": "Bootstrap cancelled"}
+
+
 @router.get("/bootstrap/{node_id}/logs")
 async def bootstrap_logs(
     node_id: uuid.UUID,

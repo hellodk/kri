@@ -35,6 +35,10 @@ export interface NodeDetail extends Node {
   storage_gb: number | null
   first_seen_at: string
   created_at: string
+  bootstrap_status: 'unregistered' | 'pending' | 'bootstrapping' | 'completed' | 'failed'
+  bootstrap_ip: string | null
+  bootstrap_error: string | null
+  bootstrap_logs: string | null
 }
 
 export interface FleetOverview {

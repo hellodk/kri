@@ -113,6 +113,65 @@ function SingleMode({ onClose }: { onClose: () => void }) {
     refetchInterval: showLogs && (status === 'pending' || status === 'bootstrapping') ? 5000 : false,
   })
 
+  // Cancel mutation for stuck bootstraps
+  const cancelMutation = useMutation({
+    mutationFn: () => ansibleApi.cancelBootstrap(existingNodeDbId!),
+    onSuccess: () => {
+      toast('Bootstrap cancelled — you can now re-bootstrap')
+      setExistingNodeDbId(null)
+      qc.invalidateQueries({ queryKey: ['node', existingNode?.id] })
+      qc.invalidateQueries({ queryKey: ['bootstrap-lookup', minionId] })
+    },
+    onError: (e: Error) => toast(e.message, 'error'),
+  })
+
+  // If node is already bootstrapping/pending, show live status + cancel instead of form
+  if (!nodeId && existingNode && (existingNode.bootstrap_status === 'bootstrapping' || existingNode.bootstrap_status === 'pending')) {
+    return (
+      <div className="space-y-4">
+        <div className="p-4 bg-amber-50 border border-amber-200 rounded-xl space-y-1">
+          <p className="text-sm font-semibold text-amber-800">Bootstrap already in progress</p>
+          <p className="text-xs text-amber-700">
+            <span className="font-mono">{existingNode.minion_id}</span> is currently being bootstrapped.
+            If this has been stuck for more than a few minutes, cancel it and retry.
+          </p>
+        </div>
+
+        <div className="flex items-center gap-3 p-4 bg-gray-50 rounded-xl border border-gray-200">
+          <div className={`text-sm font-semibold ${
+            existingNode.bootstrap_status === 'bootstrapping' ? 'text-brand-600' : 'text-gray-500'
+          }`}>
+            {existingNode.bootstrap_status === 'bootstrapping' ? 'Running…' : 'Queued'}
+          </div>
+          <div className="text-sm text-gray-600 flex-1">
+            {existingNode.hostname ?? existingNode.minion_id}
+            {existingNode.bootstrap_ip ? ` @ ${existingNode.bootstrap_ip}` : ''}
+          </div>
+          <div className="w-4 h-4 border-2 border-brand-600 border-t-transparent rounded-full animate-spin" />
+        </div>
+
+        {existingNode.bootstrap_error && (
+          <div className="p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700 font-mono">
+            {existingNode.bootstrap_error}
+          </div>
+        )}
+
+        <div className="flex gap-3">
+          <button onClick={onClose}
+            className="flex-1 py-2.5 border border-gray-300 text-gray-700 rounded-lg text-sm font-medium hover:bg-gray-50">
+            Close (runs in background)
+          </button>
+          <button
+            onClick={() => cancelMutation.mutate()}
+            disabled={cancelMutation.isPending}
+            className="flex-1 py-2.5 bg-red-600 text-white rounded-lg text-sm font-medium hover:bg-red-700 disabled:opacity-50">
+            {cancelMutation.isPending ? 'Cancelling…' : 'Cancel bootstrap'}
+          </button>
+        </div>
+      </div>
+    )
+  }
+
   if (!nodeId) {
     return (
       <form onSubmit={(e) => { e.preventDefault(); bootstrapMutation.mutate() }} className="space-y-4">
@@ -122,7 +181,6 @@ function SingleMode({ onClose }: { onClose: () => void }) {
           </label>
           <input required value={minionId} onChange={(e) => {
               setMinionId(e.target.value)
-              // Clear auto-filled IP when user changes minion ID
               if (!existingNodeDbId) setTargetIp('')
             }}
             placeholder="mac-mini-01"
