@@ -8,6 +8,7 @@ import { PlaybookRunModal } from './PlaybookRunModal'
 
 export function PlaybooksPage() {
   const [selected, setSelected] = useState<PlaybookEntry | null>(null)
+  const [pendingRun, setPendingRun] = useState<PlaybookEntry | null>(null)
 
   const { data, isLoading, isError, refetch } = useQuery({
     queryKey: ['playbooks'],
@@ -40,7 +41,7 @@ export function PlaybooksPage() {
               <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wide">Playbooks</h2>
               <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
                 {playbooks.map((p) => (
-                  <PlaybookCard key={p.filename} entry={p} onRun={() => setSelected(p)} />
+                  <PlaybookCard key={p.filename} entry={p} onRun={() => setPendingRun(p)} />
                 ))}
               </div>
             </section>
@@ -51,7 +52,7 @@ export function PlaybooksPage() {
               <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wide">Roles</h2>
               <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
                 {roles.map((r) => (
-                  <PlaybookCard key={r.filename} entry={r} onRun={() => setSelected(r)} />
+                  <PlaybookCard key={r.filename} entry={r} onRun={() => setPendingRun(r)} />
                 ))}
               </div>
             </section>
@@ -63,6 +64,29 @@ export function PlaybooksPage() {
             </div>
           )}
         </>
+      )}
+
+      {/* Run confirmation */}
+      {pendingRun && !selected && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-2xl shadow-2xl p-6 w-full max-w-sm mx-4 space-y-4">
+            <h2 className="text-lg font-bold text-gray-900">Run playbook?</h2>
+            <p className="text-sm text-gray-600">
+              <span className="font-semibold">{pendingRun.name}</span> will run against real infrastructure. This cannot be undone.
+            </p>
+            <p className="text-xs text-gray-400 font-mono">{pendingRun.filename}</p>
+            <div className="flex gap-3">
+              <button onClick={() => setPendingRun(null)}
+                className="flex-1 py-2.5 border border-gray-300 text-gray-700 rounded-lg text-sm font-medium hover:bg-gray-50">
+                Cancel
+              </button>
+              <button onClick={() => { setSelected(pendingRun); setPendingRun(null) }}
+                className="flex-1 py-2.5 bg-brand-600 text-white rounded-lg text-sm font-medium hover:bg-brand-700">
+                Continue
+              </button>
+            </div>
+          </div>
+        </div>
       )}
 
       {selected && <PlaybookRunModal playbook={selected} onClose={() => setSelected(null)} />}

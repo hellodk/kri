@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { useNavigate } from 'react-router-dom'
 import { ansibleApi } from '../api/ansible'
 import { useToastStore } from '../stores/toastStore'
 
@@ -34,6 +35,7 @@ function SingleMode({ onClose }: { onClose: () => void }) {
   const [nodeId, setNodeId] = useState<string | null>(null)
   const toast = useToastStore((s) => s.add)
   const qc = useQueryClient()
+  const navigate = useNavigate()
 
   const bootstrapMutation = useMutation({
     mutationFn: () => ansibleApi.bootstrap(minionId, targetIp),
@@ -120,9 +122,17 @@ function SingleMode({ onClose }: { onClose: () => void }) {
         </div>
       )}
       {status === 'completed' && (
-        <p className="text-sm text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-lg p-3">
-          Bootstrap complete. Node will appear in the fleet once Salt minion connects.
-        </p>
+        <div className="space-y-2">
+          <p className="text-sm text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-lg p-3">
+            Bootstrap complete. The Salt minion is starting — the node will appear in the fleet within 30–60 seconds.
+          </p>
+          <button
+            onClick={() => { onClose(); navigate('/fleet') }}
+            className="w-full py-2 bg-brand-600 text-white rounded-lg text-sm font-medium hover:bg-brand-700"
+          >
+            Go to Fleet Dashboard →
+          </button>
+        </div>
       )}
 
       {/* Log viewer */}

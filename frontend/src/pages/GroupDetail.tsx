@@ -75,12 +75,17 @@ export function GroupDetail() {
         <Link to="/groups" className="text-sm text-brand-600 hover:underline">← Groups</Link>
         <span className="text-gray-400">/</span>
         <h1 className="text-2xl font-bold text-gray-900">{group.name}</h1>
-        <span className={`text-xs px-2 py-0.5 rounded font-medium ${
-          group.type === 'dynamic'
-            ? 'bg-purple-100 text-purple-800 border border-purple-200'
-            : 'bg-gray-100 text-gray-700 border border-gray-200'
-        }`}>
-          {group.type}
+        <span
+          title={group.type === 'dynamic'
+            ? 'Dynamic group: membership is resolved automatically from a predicate. Nodes cannot be added or removed manually.'
+            : 'Static group: add and remove nodes manually using the controls below.'}
+          className={`cursor-help text-xs px-2 py-0.5 rounded font-medium ${
+            group.type === 'dynamic'
+              ? 'bg-purple-100 text-purple-800 border border-purple-200'
+              : 'bg-gray-100 text-gray-700 border border-gray-200'
+          }`}
+        >
+          {group.type} ℹ
         </span>
       </div>
 

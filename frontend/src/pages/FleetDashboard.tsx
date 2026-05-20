@@ -92,52 +92,70 @@ export function FleetDashboard() {
           <ErrorState message="Failed to load nodes" retry={refetch} />
         ) : (
           <>
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="bg-gray-50 border-b border-gray-200 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide">
-                  <th className="px-4 py-3">Hostname</th>
-                  <th className="px-4 py-3">Status</th>
-                  <th className="px-4 py-3">OS</th>
-                  <th className="px-4 py-3">Drift</th>
-                  <th className="px-4 py-3">Last Seen</th>
-                  <th className="px-4 py-3">Tags</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-100">
-                {nodes?.items.map((node) => (
-                  <tr key={node.id} className="hover:bg-gray-50 transition-colors">
-                    <td className="px-4 py-3 font-medium font-mono text-xs">
-                      <Link to={`/nodes/${node.id}`} className="text-brand-600 hover:text-brand-700 hover:underline">
-                        {node.hostname ?? node.minion_id}
-                      </Link>
-                    </td>
-                    <td className="px-4 py-3">
-                      <StatusBadge status={node.status} />
-                    </td>
-                    <td className="px-4 py-3 text-gray-600">{node.os_version ?? '—'}</td>
-                    <td className="px-4 py-3">
-                      <DriftBadge score={node.drift_score} />
-                    </td>
-                    <td className="px-4 py-3 text-gray-500">
-                      {node.last_seen_at
-                        ? formatDistanceToNow(new Date(node.last_seen_at), { addSuffix: true })
-                        : '—'}
-                    </td>
-                    <td className="px-4 py-3">
-                      <div className="flex flex-wrap gap-1">
-                        {node.tags.map((t) => (
-                          <span key={t.key} className="text-xs bg-brand-50 text-brand-700 border border-brand-200 px-1.5 py-0.5 rounded">
-                            {t.key}={t.value}
-                          </span>
-                        ))}
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-            {nodes && (
-              <Pagination page={page} total={nodes.total} perPage={nodes.per_page} onPage={setPage} />
+            {nodes?.items.length === 0 ? (
+              <div className="px-4 py-16 text-center space-y-4">
+                <p className="text-4xl">🖥️</p>
+                <p className="text-lg font-semibold text-gray-700">No nodes in your fleet yet</p>
+                <p className="text-sm text-gray-500 max-w-sm mx-auto">
+                  Bootstrap a Mac Mini to get started. Make sure Remote Login (SSH) is enabled on the device first.
+                </p>
+                <button
+                  onClick={() => setShowBootstrap(true)}
+                  className="px-6 py-2.5 bg-brand-600 text-white text-sm font-medium rounded-lg hover:bg-brand-700 shadow-sm"
+                >
+                  Bootstrap your first node →
+                </button>
+              </div>
+            ) : (
+              <>
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="bg-gray-50 border-b border-gray-200 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide">
+                      <th className="px-4 py-3">Hostname</th>
+                      <th className="px-4 py-3">Status</th>
+                      <th className="px-4 py-3">OS</th>
+                      <th className="px-4 py-3">Drift</th>
+                      <th className="px-4 py-3">Last Seen</th>
+                      <th className="px-4 py-3">Tags</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-100">
+                    {nodes?.items.map((node) => (
+                      <tr key={node.id} className="hover:bg-gray-50 transition-colors">
+                        <td className="px-4 py-3 font-medium font-mono text-xs">
+                          <Link to={`/nodes/${node.id}`} className="text-brand-600 hover:text-brand-700 hover:underline">
+                            {node.hostname ?? node.minion_id}
+                          </Link>
+                        </td>
+                        <td className="px-4 py-3">
+                          <StatusBadge status={node.status} />
+                        </td>
+                        <td className="px-4 py-3 text-gray-600">{node.os_version ?? '—'}</td>
+                        <td className="px-4 py-3">
+                          <DriftBadge score={node.drift_score} />
+                        </td>
+                        <td className="px-4 py-3 text-gray-500">
+                          {node.last_seen_at
+                            ? formatDistanceToNow(new Date(node.last_seen_at), { addSuffix: true })
+                            : '—'}
+                        </td>
+                        <td className="px-4 py-3">
+                          <div className="flex flex-wrap gap-1">
+                            {node.tags.map((t) => (
+                              <span key={t.key} className="text-xs bg-brand-50 text-brand-700 border border-brand-200 px-1.5 py-0.5 rounded">
+                                {t.key}={t.value}
+                              </span>
+                            ))}
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+                {nodes && (
+                  <Pagination page={page} total={nodes.total} perPage={nodes.per_page} onPage={setPage} />
+                )}
+              </>
             )}
           </>
         )}

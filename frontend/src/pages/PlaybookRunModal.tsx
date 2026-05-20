@@ -6,6 +6,11 @@ import { fleetApi } from '../api/fleet'
 import { groupsApi } from '../api/groups'
 import { useToastStore } from '../stores/toastStore'
 
+const SYSTEM_VARS = new Set([
+  'ansible_become', 'ansible_become_method', 'ansible_become_password',
+  'ansible_ssh_common_args', 'ansible_ssh_pass', 'ansible_user',
+])
+
 interface Props {
   playbook: PlaybookEntry
   onClose: () => void
@@ -81,7 +86,7 @@ export function PlaybookRunModal({ playbook, onClose }: Props) {
 
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-      <div className="bg-white rounded-2xl shadow-2xl p-6 w-full max-w-lg mx-4 flex flex-col gap-4 max-h-[90vh] overflow-y-auto">
+      <div className="bg-white rounded-2xl shadow-2xl p-6 w-full max-w-2xl mx-4 flex flex-col gap-4 max-h-[92vh] overflow-y-auto">
         <div className="flex items-center justify-between">
           <div>
             <h2 className="text-lg font-bold text-gray-900">Run Playbook</h2>
@@ -139,13 +144,22 @@ export function PlaybookRunModal({ playbook, onClose }: Props) {
                 </label>
                 <div className="space-y-2 bg-gray-50 rounded-lg border border-gray-200 p-3">
                   {Object.entries(vars).map(([key, value]) => (
-                    <div key={key} className="flex items-center gap-2">
-                      <span className="text-xs font-mono text-gray-600 w-40 shrink-0">{key}</span>
+                    <div key={key} className="flex items-start gap-2">
+                      <div className="flex flex-col w-44 shrink-0">
+                        <span className="text-xs font-mono text-gray-600 truncate">{key}</span>
+                        {SYSTEM_VARS.has(key) && (
+                          <span className="text-xs text-amber-600">⚠ system var</span>
+                        )}
+                      </div>
                       <input
                         type="text"
                         value={value}
                         onChange={(e) => setVars((prev) => ({ ...prev, [key]: e.target.value }))}
-                        className="flex-1 px-2 py-1 text-xs border border-gray-300 rounded focus:outline-none focus:border-brand-600 font-mono"
+                        className={`flex-1 px-2 py-1 text-xs border rounded focus:outline-none font-mono ${
+                          SYSTEM_VARS.has(key)
+                            ? 'border-amber-300 bg-amber-50 focus:border-amber-500'
+                            : 'border-gray-300 focus:border-brand-600'
+                        }`}
                       />
                     </div>
                   ))}
