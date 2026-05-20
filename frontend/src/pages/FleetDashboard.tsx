@@ -143,7 +143,13 @@ export function FleetDashboard() {
                         <td className="px-4 py-3">
                           <div className="flex flex-wrap gap-1">
                             {node.tags.map((t) => (
-                              <span key={t.key} className="text-xs bg-brand-50 text-brand-700 border border-brand-200 px-1.5 py-0.5 rounded">
+                              <span key={t.key}
+                                title={t.source === 'system' ? 'Auto-populated from Salt' : undefined}
+                                className={`text-xs border px-1.5 py-0.5 rounded ${
+                                  t.source === 'system'
+                                    ? 'bg-brand-50 text-brand-700 border-brand-200'
+                                    : 'bg-gray-100 text-gray-600 border-gray-200'
+                                }`}>
                                 {t.key}={t.value}
                               </span>
                             ))}

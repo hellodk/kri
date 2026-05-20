@@ -61,6 +61,7 @@ class Tag(Base):
     )
     key: Mapped[str] = mapped_column(String(100), nullable=False)
     value: Mapped[str] = mapped_column(String(255), nullable=False)
+    source: Mapped[str] = mapped_column(String(20), nullable=False, default="user")
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
 
     node: Mapped["Node"] = relationship("Node", back_populates="tags")
@@ -68,4 +69,5 @@ class Tag(Base):
     __table_args__ = (
         UniqueConstraint("node_id", "key", name="uq_tags_node_key"),
         Index("idx_tags_key_value", "key", "value"),
+        Index("idx_tags_source", "source"),
     )

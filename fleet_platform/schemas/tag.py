@@ -9,5 +9,6 @@ class TagCreate(BaseModel):
 class TagResponse(BaseModel):
     key: str
     value: str
+    source: str = "user"
 
     model_config = {"from_attributes": True}

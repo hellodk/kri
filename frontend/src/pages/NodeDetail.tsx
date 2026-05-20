@@ -250,20 +250,44 @@ export function NodeDetail() {
           )}
 
           <div className="bg-white rounded-lg border border-gray-200 p-4 md:col-span-2">
-            <h3 className="font-semibold text-gray-700 mb-3">Tags</h3>
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="font-semibold text-gray-700">Tags</h3>
+              <div className="flex items-center gap-3 text-xs text-gray-400">
+                <span className="flex items-center gap-1">
+                  <span className="inline-block w-2 h-2 rounded-full bg-brand-300" /> auto (Salt)
+                </span>
+                <span className="flex items-center gap-1">
+                  <span className="inline-block w-2 h-2 rounded-full bg-gray-400" /> manual
+                </span>
+              </div>
+            </div>
             <div className="flex flex-wrap gap-2 mb-3">
               {node.tags.map((t) => (
                 <span
                   key={t.key}
-                  className="flex items-center gap-1 text-xs bg-gray-100 text-gray-700 px-2 py-1 rounded"
+                  title={t.source === 'system' ? 'Auto-populated from Salt grains — read-only' : 'User-defined tag'}
+                  className={`flex items-center gap-1 text-xs px-2 py-1 rounded border ${
+                    t.source === 'system'
+                      ? 'bg-brand-50 text-brand-700 border-brand-200'
+                      : 'bg-gray-100 text-gray-700 border-gray-200'
+                  }`}
                 >
-                  {t.key}={t.value}
-                  <button
-                    onClick={() => removeTagMutation.mutate(t.key)}
-                    className="ml-1 text-gray-400 hover:text-red-500"
-                  >
-                    ×
-                  </button>
+                  <span className="font-medium">{t.key}</span>
+                  <span className="text-gray-400">=</span>
+                  <span>{t.value}</span>
+                  {t.source === 'user' && (
+                    <button
+                      onClick={() => removeTagMutation.mutate(t.key)}
+                      disabled={removeTagMutation.isPending}
+                      className="ml-1 text-gray-400 hover:text-red-500 disabled:opacity-40"
+                      title="Remove tag"
+                    >
+                      ×
+                    </button>
+                  )}
+                  {t.source === 'system' && (
+                    <span className="ml-1 text-brand-400" title="Auto-populated">⊙</span>
+                  )}
                 </span>
               ))}
             </div>

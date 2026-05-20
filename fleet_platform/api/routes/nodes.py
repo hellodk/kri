@@ -208,10 +208,15 @@ async def add_node_tag(
     )
     tag = existing.scalar_one_or_none()
     if tag:
+        if tag.source == "system":
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail=f"Tag '{payload.key}' is auto-populated by Salt and cannot be modified",
+            )
         tag.value = payload.value
     else:
         tag = Tag(node_id=node_id, key=payload.key, value=payload.value,
-                  created_at=datetime.now(UTC))
+                  source="user", created_at=datetime.now(UTC))
         db.add(tag)
 
     await audit(db, actor=claims["email"], action="node.tag.upsert",
@@ -246,6 +251,11 @@ async def delete_node_tag(
     tag = result.scalar_one_or_none()
     if not tag:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Tag not found")
+    if tag.source == "system":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=f"Tag '{key}' is auto-populated by Salt and cannot be deleted",
+        )
 
     old_value = {"key": tag.key, "value": tag.value}
     await db.delete(tag)

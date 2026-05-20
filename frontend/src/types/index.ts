@@ -13,6 +13,7 @@ export interface User {
 export interface Tag {
   key: string
   value: string
+  source: 'system' | 'user'
 }
 
 export interface Node {

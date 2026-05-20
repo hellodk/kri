@@ -14,7 +14,7 @@ from fleet_platform.api.deps import get_db
 from fleet_platform.api.limiter import limiter
 from fleet_platform.models.execution import ExecutionJob, ExecutionResult
 from fleet_platform.models.facts import NodeFact
-from fleet_platform.models.node import Node
+from fleet_platform.models.node import Node, Tag
 from fleet_platform.schemas.ingest import ExecutionIngestPayload, GrainIngestPayload
 from fleet_platform.services.node_status import verify_node_token
 from fleet_platform.workers.drift_tasks import compute_drift
@@ -100,6 +100,56 @@ def _extract_node_updates(grains: dict) -> dict:
     }
 
 
+_SYSTEM_TAG_GRAINS: list[tuple[str, str]] = [
+    # (tag_key, grain_key)
+    ("hostname",        "fqdn"),
+    ("ip",              None),          # computed from ip4_interfaces — set below
+    ("arch",            "cpuarch"),
+    ("model",           "productname"),
+    ("macos_version",   "osrelease"),
+    ("serial",          "serialnumber"),
+    ("os",              "osfullname"),
+    ("kernel",          "kernelrelease"),
+    ("cpu",             "cpu_model"),
+]
+
+
+async def _upsert_system_tags(db: AsyncSession, node: Node, grains: dict, now: datetime) -> None:
+    """Write auto-populated tags from Salt grains. Existing user tags with same key are skipped."""
+    tag_values: dict[str, str] = {}
+
+    for tag_key, grain_key in _SYSTEM_TAG_GRAINS:
+        if grain_key is None:
+            continue
+        val = grains.get(grain_key)
+        if val and str(val).strip():
+            tag_values[tag_key] = str(val).strip()
+
+    # IP: use the already-computed ip_address on the node (extracted by _extract_node_updates)
+    if node.ip_address:
+        tag_values["ip"] = str(node.ip_address)
+
+    if not tag_values:
+        return
+
+    # Batch fetch existing tags for this node
+    existing_result = await db.execute(
+        select(Tag).where(Tag.node_id == node.id, Tag.key.in_(list(tag_values)))
+    )
+    existing_tags = {t.key: t for t in existing_result.scalars()}
+
+    for key, value in tag_values.items():
+        if key in existing_tags:
+            tag = existing_tags[key]
+            # Update system tags freely; skip user tags entirely
+            if tag.source == "system":
+                tag.value = value
+            # user tags with same key: do not overwrite
+        else:
+            db.add(Tag(node_id=node.id, key=key, value=value,
+                       source="system", created_at=now))
+
+
 @router.post("/grains")
 @limiter.limit("60/minute")
 async def ingest_grains(
@@ -124,6 +174,8 @@ async def ingest_grains(
         collected_at=now,
         grains=payload.grains,
     ))
+
+    await _upsert_system_tags(db, node, payload.grains, now)
 
     await db.commit()
     compute_drift.delay(str(node.id))
