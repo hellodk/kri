@@ -8,6 +8,7 @@ from pydantic import BaseModel, field_validator
 class TagResponse(BaseModel):
     key: str
     value: str
+    source: str = "user"
 
     model_config = {"from_attributes": True}
 
@@ -39,6 +40,10 @@ class NodeDetailResponse(NodeListItem):
     storage_gb: float | None
     first_seen_at: datetime
     created_at: datetime
+    bootstrap_status: str = "unregistered"
+    bootstrap_ip: str | None = None
+    bootstrap_error: str | None = None
+    bootstrap_logs: str | None = None
 
 
 class FleetOverviewResponse(BaseModel):

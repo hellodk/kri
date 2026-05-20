@@ -113,7 +113,7 @@ function SingleMode({ onClose }: { onClose: () => void }) {
     refetchInterval: showLogs && (status === 'pending' || status === 'bootstrapping') ? 5000 : false,
   })
 
-  // Cancel mutation for stuck bootstraps
+  // Cancel mutation for stuck bootstraps — declared before any early returns (Rules of Hooks)
   const cancelMutation = useMutation({
     mutationFn: () => ansibleApi.cancelBootstrap(existingNodeDbId!),
     onSuccess: () => {
@@ -125,8 +125,14 @@ function SingleMode({ onClose }: { onClose: () => void }) {
     onError: (e: Error) => toast(e.message, 'error'),
   })
 
+  // Detect stuck bootstrap — only if bootstrap_status is returned by backend
+  const isStuckBootstrap = !nodeId &&
+    !!existingNode &&
+    !!existingNodeDbId &&
+    (existingNode.bootstrap_status === 'bootstrapping' || existingNode.bootstrap_status === 'pending')
+
   // If node is already bootstrapping/pending, show live status + cancel instead of form
-  if (!nodeId && existingNode && (existingNode.bootstrap_status === 'bootstrapping' || existingNode.bootstrap_status === 'pending')) {
+  if (isStuckBootstrap) {
     return (
       <div className="space-y-4">
         <div className="p-4 bg-amber-50 border border-amber-200 rounded-xl space-y-1">
