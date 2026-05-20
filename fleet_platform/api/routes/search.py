@@ -32,7 +32,12 @@ async def search(
         .limit(50)
     )
     nodes = result.scalars().all()
+    items = [NodeListItem.model_validate(n) for n in nodes]
     return {
         "query": q,
-        "nodes": [NodeListItem.model_validate(n) for n in nodes],
+        "nodes": items,   # kept for backwards compat
+        "items": items,   # matches Paginated<SearchResult> type in frontend
+        "total": len(items),
+        "page": 1,
+        "per_page": 50,
     }

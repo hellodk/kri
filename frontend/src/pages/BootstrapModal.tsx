@@ -45,11 +45,15 @@ function SingleMode({ onClose }: { onClose: () => void }) {
   const { data: searchData } = useQuery({
     queryKey: ['bootstrap-lookup', minionId],
     queryFn: () => searchApi.search(minionId),
-    enabled: minionId.length >= 2,
+    enabled: minionId.length >= 3,
     staleTime: 10_000,
   })
 
-  const exactMatch = searchData?.items.find((r) => r.minion_id === minionId) ?? null
+  const exactMatch = searchData?.items?.find(
+    (r) => r.minion_id === minionId ||
+           r.minion_id.split('.')[0] === minionId ||
+           r.hostname === minionId
+  ) ?? null
 
   // Fetch full node details to get IP once we have an exact match
   const { data: existingNode } = useQuery({
@@ -79,7 +83,7 @@ function SingleMode({ onClose }: { onClose: () => void }) {
 
   const bootstrapMutation = useMutation({
     mutationFn: () => ansibleApi.bootstrap(minionId, targetIp),
-    onSuccess: (data) => { setNodeId(data.node_id); toast('Bootstrap started') },
+    onSuccess: (data) => { setNodeId(data.node_id); setShowLogs(true); toast('Bootstrap started') },
     onError: (e: Error) => toast(e.message, 'error'),
   })
 
@@ -196,7 +200,7 @@ function SingleMode({ onClose }: { onClose: () => void }) {
               <span>✓</span> Node found in fleet — IP pre-filled and locked
             </p>
           )}
-          {minionId.length >= 2 && !existingNode && searchData && (
+          {minionId.length >= 3 && !existingNode && searchData && (
             <p className="text-xs text-gray-400 mt-1">New node — enter IP address below</p>
           )}
         </div>
@@ -309,7 +313,7 @@ function SingleMode({ onClose }: { onClose: () => void }) {
             ))}
           </div>
           {/* Content */}
-          <pre className="text-xs font-mono bg-gray-900 text-gray-100 p-3 overflow-auto max-h-72 whitespace-pre-wrap">
+          <pre className="text-xs font-mono bg-gray-900 text-gray-100 p-3 overflow-auto max-h-96 whitespace-pre-wrap">
             {logTab === 'ansible'
               ? (logsData.ansible_stdout || '(no output captured yet — run in progress or not started)')
               : (logsData.pillar || '(pillar file not found)')}
@@ -503,27 +507,32 @@ export function BootstrapModal({ onClose }: Props) {
   const [mode, setMode] = useState<Mode>('single')
 
   return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-      <div className="bg-white rounded-2xl shadow-2xl p-6 w-full max-w-lg mx-4">
+    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg flex flex-col max-h-[92vh]">
         {/* Header */}
-        <div className="flex items-center justify-between mb-5">
+        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200 shrink-0">
           <h2 className="text-lg font-bold text-gray-900">Bootstrap Mac Mini</h2>
           <button onClick={onClose} className="flex items-center justify-center w-8 h-8 rounded-lg text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-colors text-lg">×</button>
         </div>
 
         {/* Mode tabs */}
-        <div className="flex gap-1 bg-gray-100 rounded-lg p-1 mb-5">
-          {(['single', 'bulk'] as Mode[]).map((m) => (
-            <button key={m} onClick={() => setMode(m)}
-              className={`flex-1 py-1.5 text-sm font-medium rounded-md transition-colors ${
-                mode === m ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'
-              }`}>
-              {m === 'single' ? 'Single node' : 'Bulk (multiple nodes)'}
-            </button>
-          ))}
+        <div className="px-6 pt-4 shrink-0">
+          <div className="flex gap-1 bg-gray-100 rounded-lg p-1 mb-4">
+            {(['single', 'bulk'] as Mode[]).map((m) => (
+              <button key={m} onClick={() => setMode(m)}
+                className={`flex-1 py-1.5 text-sm font-medium rounded-md transition-colors ${
+                  mode === m ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'
+                }`}>
+                {m === 'single' ? 'Single node' : 'Bulk (multiple nodes)'}
+              </button>
+            ))}
+          </div>
         </div>
 
-        {mode === 'single' ? <SingleMode onClose={onClose} /> : <BulkMode onClose={onClose} />}
+        {/* Scrollable body */}
+        <div className="flex-1 overflow-y-auto px-6 pb-6">
+          {mode === 'single' ? <SingleMode onClose={onClose} /> : <BulkMode onClose={onClose} />}
+        </div>
       </div>
     </div>
   )

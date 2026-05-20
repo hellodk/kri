@@ -127,6 +127,9 @@ export function FleetDashboard() {
                           <Link to={`/nodes/${node.id}`} className="text-brand-600 hover:text-brand-700 hover:underline">
                             {node.hostname ?? node.minion_id}
                           </Link>
+                          {node.ip_address && (
+                            <p className="text-gray-400 font-normal mt-0.5">{node.ip_address}</p>
+                          )}
                         </td>
                         <td className="px-4 py-3">
                           <StatusBadge status={node.status} />
