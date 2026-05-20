@@ -118,16 +118,7 @@ def bootstrap_node(self, node_id: str, target_ip: str) -> dict:
         node.node_token_hash = hash_password(raw_token)
         db.commit()
 
-    # 4. Install required Ansible collections
-    requirements_file = _PLAYBOOKS_DIR / "requirements.yml"
-    if requirements_file.exists():
-        import subprocess
-        subprocess.run(
-            ["ansible-galaxy", "collection", "install", "-r", str(requirements_file)],
-            capture_output=True,
-        )
-
-    # 5. Run Ansible with static inventory and capture stdout
+    # 4. Run Ansible with static inventory and capture stdout
     stdout_lines: list[str] = []
     with tempfile.TemporaryDirectory(prefix="kri-bootstrap-") as tmpdir:
         # Write static inventory — more reliable than dynamic.py (env var propagation issues)
@@ -149,6 +140,9 @@ def bootstrap_node(self, node_id: str, target_ip: str) -> dict:
                 "minion_id": node.minion_id,
                 "controller_pubkey": controller_pubkey,
             },
+            envvars={
+                "ANSIBLE_COLLECTIONS_PATH": str(_PLAYBOOKS_DIR / "collections" / "installed"),
+            },
             quiet=False,
             rotate_artifacts=1,
         )
@@ -157,7 +151,7 @@ def bootstrap_node(self, node_id: str, target_ip: str) -> dict:
             if msg:
                 stdout_lines.append(msg)
 
-    # 6. Update bootstrap status + logs
+    # 5. Update bootstrap status + logs
     with get_sync_db() as db:
         node = db.execute(select(Node).where(Node.id == node_uuid)).scalar_one()
         if result.status == "successful" and result.rc == 0:

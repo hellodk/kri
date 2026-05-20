@@ -147,6 +147,7 @@ def run_playbook(self, job_id: str) -> dict:
             envvars={
                 "ANSIBLE_USER": ssh_user,
                 "ANSIBLE_PASSWORD": ssh_password,
+                "ANSIBLE_COLLECTIONS_PATH": str(playbooks_dir / "collections" / "installed"),
             },
             quiet=False,
             rotate_artifacts=1,
