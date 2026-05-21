@@ -54,12 +54,16 @@ class NodeDetailResponse(NodeListItem):
     @classmethod
     def compute_ssh_flags(cls, data: Any, handler: Any) -> "NodeDetailResponse":
         """Set has_ssh_password/has_ssh_key from ORM encrypted columns without exposing secrets."""
+        # FastAPI re-validates the return value through the response_model. When
+        # data is already a NodeDetailResponse (from our endpoint return), the flags
+        # are already correct — return it as-is to avoid re-computing from missing fields.
+        if isinstance(data, cls):
+            return data
         if isinstance(data, dict):
             data.setdefault("has_ssh_password", bool(data.get("ssh_password_enc")))
             data.setdefault("has_ssh_key", bool(data.get("ssh_key_enc")))
             return handler(data)
-        # ORM object: build the model first, then use model_copy to set flags.
-        # object.__setattr__ doesn't work on frozen Pydantic v2 models.
+        # ORM object: compute flags from the encrypted column presence.
         result = handler(data)
         return result.model_copy(update={
             "has_ssh_password": bool(getattr(data, "ssh_password_enc", None)),
