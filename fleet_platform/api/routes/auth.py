@@ -32,7 +32,6 @@ router = APIRouter(prefix="/auth")
 
 
 @router.post("/login", response_model=TokenResponse)
-@limiter.limit("10/minute")
 async def login(request: Request, payload: LoginRequest, db: AsyncSession = Depends(get_db)):
     result = await db.execute(select(User).where(User.email == payload.email))
     user = result.scalar_one_or_none()
