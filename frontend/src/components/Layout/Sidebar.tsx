@@ -8,7 +8,8 @@ const links = [
   { to: '/groups',     label: 'Groups',     icon: '◫' },
   { to: '/executions', label: 'Executions', icon: '▷' },
   { to: '/playbooks',  label: 'Playbooks',  icon: '▤' },
-  { to: '/baselines',  label: 'Baselines',  icon: '◑' },
+  { to: '/baselines',     label: 'Baselines',     icon: '◑' },
+  { to: '/provisioning',  label: 'Provisioning',  icon: '⊡' },
   { to: '/audit',      label: 'Audit',      icon: '◎' },
   { to: '/settings',   label: 'Settings',   icon: '⚙' },
 ]

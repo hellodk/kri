@@ -14,6 +14,7 @@ import { JobDetail } from './pages/JobDetail'
 import { SettingsPage } from './pages/SettingsPage'
 import { PlaybooksPage } from './pages/PlaybooksPage'
 import { BaselinesPage } from './pages/BaselinesPage'
+import { ProvisioningPage } from './pages/ProvisioningPage'
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -49,6 +50,7 @@ export default function App() {
             <Route path="/executions/:jobId" element={<JobDetail />} />
             <Route path="/playbooks" element={<PlaybooksPage />} />
             <Route path="/baselines" element={<BaselinesPage />} />
+            <Route path="/provisioning" element={<ProvisioningPage />} />
             <Route path="/settings" element={<SettingsPage />} />
           </Route>
         </Routes>

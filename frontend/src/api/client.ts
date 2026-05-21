@@ -62,6 +62,28 @@ export const api = {
   get: <T>(path: string) => request<T>(path),
   post: <T>(path: string, body?: unknown) =>
     request<T>(path, { method: 'POST', body: JSON.stringify(body) }),
+  postForm: async <T>(path: string, form: FormData, retry = true): Promise<T> => {
+    // Do NOT set Content-Type — browser must set it with the multipart boundary.
+    const token = localStorage.getItem('access_token')
+    const res = await fetch(path, {
+      method: 'POST',
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+      body: form,
+    })
+    if (res.status === 401 && retry) {
+      const refreshed = await tryRefresh()
+      if (refreshed) return api.postForm<T>(path, form, false)
+      localStorage.removeItem('access_token')
+      localStorage.removeItem('refresh_token')
+      window.location.href = '/login'
+      throw new ApiError(401, 'Session expired')
+    }
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({}))
+      throw new ApiError(res.status, body.detail ?? res.statusText)
+    }
+    return res.json()
+  },
   put: <T>(path: string, body?: unknown) =>
     request<T>(path, { method: 'PUT', body: JSON.stringify(body) }),
   patch: <T>(path: string, body?: unknown) =>
