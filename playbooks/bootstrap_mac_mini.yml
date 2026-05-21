@@ -16,7 +16,8 @@
     ansible_ssh_common_args: '-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null'
     ansible_become: true
     ansible_become_method: sudo
-    ansible_become_password: "{{ ansible_ssh_pass }}"
+    # ansible_become_password is set per-host in the static inventory
+    # (ansible_become_password=<pass>) so no need to reference ansible_ssh_pass here
     brew_prefix_arm64: /opt/homebrew
     brew_prefix_x86: /usr/local
 
