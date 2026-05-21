@@ -203,6 +203,10 @@ def bootstrap_node(self, node_id: str, target_ip: str) -> dict:
             },
             envvars={
                 "ANSIBLE_COLLECTIONS_PATH": str(_PLAYBOOKS_DIR / "collections" / "installed"),
+                # -F /dev/null skips ~/.ssh/config entirely — required when the config
+                # file is bind-mounted from the host with wrong ownership (UID mismatch
+                # between host user and container root causes "Bad owner or permissions")
+                "ANSIBLE_SSH_ARGS": "-F /dev/null -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null",
             },
             quiet=False,
             rotate_artifacts=1,
