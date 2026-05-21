@@ -188,14 +188,30 @@ cmd_restart() {
   cmd_start
 }
 
+cmd_test() {
+  echo ""
+  echo "  kri E2E test suite"
+  echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+  echo "  Requires kri to be running (./scripts/kri.sh start)"
+  echo ""
+  local filter="${2:-}"
+  cd "$REPO_DIR"
+  if [[ -n "$filter" ]]; then
+    npx playwright test --grep "$filter" --reporter=line 2>&1
+  else
+    npx playwright test --reporter=line 2>&1
+  fi
+}
+
 case "${1:-help}" in
   start)   cmd_start ;;
   stop)    cmd_stop ;;
   status)  cmd_status ;;
   restart) cmd_restart ;;
   logs)    cmd_logs "$@" ;;
+  test)    cmd_test "$@" ;;
   *)
-    echo "Usage: $(basename "$0") {start|stop|restart|status|logs [api|worker|frontend]}"
+    echo "Usage: $(basename "$0") {start|stop|restart|status|logs [api|worker|frontend]|test [grep-pattern]}"
     exit 1
     ;;
 esac
