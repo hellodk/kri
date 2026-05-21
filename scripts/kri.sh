@@ -196,10 +196,11 @@ cmd_test() {
   echo ""
   local filter="${2:-}"
   cd "$REPO_DIR"
+  local PW="$REPO_DIR/frontend/node_modules/.bin/playwright"
   if [[ -n "$filter" ]]; then
-    npx playwright test --grep "$filter" --reporter=line 2>&1
+    "$PW" test --grep "$filter" --reporter=line 2>&1
   else
-    npx playwright test --reporter=line 2>&1
+    "$PW" test --reporter=line 2>&1
   fi
 }
 
