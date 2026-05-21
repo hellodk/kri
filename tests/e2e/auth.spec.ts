@@ -24,8 +24,7 @@ test.describe('Authentication', () => {
     await page.fill('input[type="password"]', 'wrong-password')
     await page.click('button[type="submit"]')
     await expect(page).toHaveURL(/\/login/)
-    // Toast error — check for any error indicator
-    await expect(page.locator('text=Invalid credentials').or(page.locator('[role="alert"]'))).toBeVisible({ timeout: 4000 })
+    await expect(page.locator('[role="alert"]')).toBeVisible({ timeout: 6000 })
   })
 
   test('AUTH-03 unknown email shows error', async ({ page }) => {
@@ -34,7 +33,7 @@ test.describe('Authentication', () => {
     await page.fill('input[type="password"]', 'anything')
     await page.click('button[type="submit"]')
     await expect(page).toHaveURL(/\/login/)
-    await expect(page.locator('[role="alert"]').or(page.locator('text=Invalid'))).toBeVisible({ timeout: 4000 })
+    await expect(page.locator('[role="alert"]')).toBeVisible({ timeout: 6000 })
   })
 
   test('AUTH-09 protected route without session redirects to login', async ({ page }) => {

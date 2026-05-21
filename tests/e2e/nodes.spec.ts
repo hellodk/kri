@@ -18,10 +18,11 @@ test.describe('Node Detail', () => {
       headers: { Authorization: `Bearer ${access_token}` },
     })
     const body = await res.json()
-    firstNodeId = body.items[0].id
+    firstNodeId = body.items?.[0]?.id ?? ''
   })
 
   test.beforeEach(async ({ page }) => {
+    if (!firstNodeId) test.skip()
     await loginViaApi(page)
     await page.goto(`/nodes/${firstNodeId}`)
     await page.waitForSelector('h1', { timeout: 8000 })

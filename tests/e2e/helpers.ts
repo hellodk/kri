@@ -34,8 +34,8 @@ export async function loginViaApi(page: Page, user = ADMIN) {
   })
   const me = await meRes.json()
 
-  // 3. Inject everything into a blank page before navigating to the app
-  await page.goto('about:blank')
+  // 3. Navigate to app origin first so localStorage is same-origin
+  await page.goto('/')
   await page.evaluate(({ at, rt, me }) => {
     localStorage.setItem('access_token', at)
     localStorage.setItem('refresh_token', rt)
