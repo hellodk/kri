@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # kri — start/stop/status for the kri fleet management platform
-# Usage: kri.sh [start|stop|status|restart|logs]
+# Usage: kri.sh [start|stop|status|restart|logs [service]|dev|test [grep]]
 
 set -euo pipefail
 
@@ -18,12 +18,59 @@ ok()   { echo -e "${GREEN}✓${NC} $*"; }
 warn() { echo -e "${YELLOW}⚠${NC} $*"; }
 err()  { echo -e "${RED}✗${NC} $*"; }
 
+# ── Docker Compose commands ───────────────────────────────────────────────────
+
+cmd_start() {
+  echo ""
+  echo "  kri fleet management platform"
+  echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+  echo "  Starting all services via Docker Compose…"
+  docker compose -f "$COMPOSE_FILE" up -d --build
+  echo ""
+  ok "kri is up →  http://localhost"
+  echo "   API docs →  http://localhost/api/docs"
+  echo ""
+}
+
+cmd_stop() {
+  echo ""
+  echo "  Stopping kri…"
+  echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+  docker compose -f "$COMPOSE_FILE" down
+  ok "kri stopped"
+  echo ""
+}
+
+cmd_status() {
+  echo ""
+  echo "  kri status"
+  echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+  docker compose -f "$COMPOSE_FILE" ps
+  echo ""
+}
+
+cmd_logs() {
+  local svc="${2:-}"
+  if [[ -n "$svc" ]]; then
+    docker compose -f "$COMPOSE_FILE" logs -f "$svc"
+  else
+    docker compose -f "$COMPOSE_FILE" logs -f
+  fi
+}
+
+cmd_restart() {
+  cmd_stop
+  cmd_start
+}
+
+# ── Local dev (old behaviour) ─────────────────────────────────────────────────
+
 is_running() {
   local pid_file="$PID_DIR/$1.pid"
   [[ -f "$pid_file" ]] && kill -0 "$(cat "$pid_file")" 2>/dev/null
 }
 
-stop_service() {
+stop_local_service() {
   local name="$1"
   local pid_file="$PID_DIR/$name.pid"
   if is_running "$name"; then
@@ -34,17 +81,15 @@ stop_service() {
   fi
 }
 
-start_infra() {
+start_infra_local() {
   echo "Starting infrastructure (postgres + redis)…"
-  docker compose -f "$COMPOSE_FILE" up -d --quiet-pull 2>&1 | tail -2
+  docker compose -f "$COMPOSE_FILE" up -d db redis --quiet-pull 2>&1 | tail -2
 
-  # Wait for healthy
   local retries=20
   while [[ $retries -gt 0 ]]; do
-    local pg_health
-    pg_health=$(docker inspect deploy-postgres-1 --format '{{.State.Health.Status}}' 2>/dev/null || echo "missing")
-    local redis_health
-    redis_health=$(docker inspect deploy-redis-1 --format '{{.State.Health.Status}}' 2>/dev/null || echo "missing")
+    local pg_health redis_health
+    pg_health=$(docker compose -f "$COMPOSE_FILE" ps --format json db 2>/dev/null | python3 -c "import sys,json; d=json.load(sys.stdin); print(d[0].get('Health','') if isinstance(d,list) else d.get('Health',''))" 2>/dev/null || echo "unknown")
+    redis_health=$(docker compose -f "$COMPOSE_FILE" ps --format json redis 2>/dev/null | python3 -c "import sys,json; d=json.load(sys.stdin); print(d[0].get('Health','') if isinstance(d,list) else d.get('Health',''))" 2>/dev/null || echo "unknown")
     if [[ "$pg_health" == "healthy" && "$redis_health" == "healthy" ]]; then
       ok "Infrastructure ready"
       return 0
@@ -56,7 +101,7 @@ start_infra() {
   exit 1
 }
 
-start_backend() {
+start_backend_local() {
   if is_running "api"; then
     warn "API already running (pid $(cat "$PID_DIR/api.pid"))"
     return
@@ -79,7 +124,7 @@ start_backend() {
   fi
 }
 
-start_worker() {
+start_worker_local() {
   if is_running "worker"; then
     warn "Celery worker already running (pid $(cat "$PID_DIR/worker.pid"))"
     return
@@ -103,7 +148,7 @@ start_worker() {
   fi
 }
 
-start_frontend() {
+start_frontend_local() {
   if is_running "frontend"; then
     warn "Frontend already running (pid $(cat "$PID_DIR/frontend.pid"))"
     return
@@ -122,71 +167,34 @@ start_frontend() {
   fi
 }
 
-cmd_start() {
+cmd_dev() {
   echo ""
-  echo "  kri fleet management platform"
+  echo "  kri fleet management platform (dev mode)"
   echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-  start_infra
-  start_backend
-  start_worker
-  start_frontend
+  start_infra_local
+  start_backend_local
+  start_worker_local
+  start_frontend_local
   echo ""
-  ok "kri is up →  http://localhost:5173"
+  ok "kri dev is up →  http://localhost:5173"
   echo "   API     →  http://localhost:8000/docs"
   echo ""
 }
 
-cmd_stop() {
+cmd_dev_stop() {
   echo ""
-  echo "  Stopping kri…"
+  echo "  Stopping kri dev…"
   echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-  stop_service "frontend"
-  stop_service "worker"
-  stop_service "api"
+  stop_local_service "frontend"
+  stop_local_service "worker"
+  stop_local_service "api"
   echo "  Stopping infrastructure…"
-  docker compose -f "$COMPOSE_FILE" stop 2>&1 | tail -1
-  ok "kri stopped"
+  docker compose -f "$COMPOSE_FILE" stop db redis 2>&1 | tail -1
+  ok "kri dev stopped"
   echo ""
 }
 
-cmd_status() {
-  echo ""
-  echo "  kri status"
-  echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-  for svc in api worker frontend; do
-    if is_running "$svc"; then
-      ok "$svc  (pid $(cat "$PID_DIR/$svc.pid"))"
-    else
-      err "$svc  (not running)"
-    fi
-  done
-  echo ""
-  docker compose -f "$COMPOSE_FILE" ps 2>/dev/null | tail -n +2 | while read -r line; do
-    if echo "$line" | grep -q "healthy"; then
-      ok "$line"
-    else
-      warn "$line"
-    fi
-  done
-  echo ""
-}
-
-cmd_logs() {
-  local svc="${2:-api}"
-  local log_file="$LOGS_DIR/$svc.log"
-  if [[ -f "$log_file" ]]; then
-    tail -f "$log_file"
-  else
-    err "No log file for '$svc'. Available: api, worker, frontend"
-    exit 1
-  fi
-}
-
-cmd_restart() {
-  cmd_stop
-  sleep 1
-  cmd_start
-}
+# ── Test ──────────────────────────────────────────────────────────────────────
 
 cmd_test() {
   echo ""
@@ -197,6 +205,7 @@ cmd_test() {
   local filter="${2:-}"
   cd "$REPO_DIR"
   local PW="$REPO_DIR/frontend/node_modules/.bin/playwright"
+  export NODE_PATH="$REPO_DIR/frontend/node_modules"
   if [[ -n "$filter" ]]; then
     "$PW" test --grep "$filter" --reporter=line 2>&1
   else
@@ -204,15 +213,28 @@ cmd_test() {
   fi
 }
 
+# ── Dispatch ──────────────────────────────────────────────────────────────────
+
 case "${1:-help}" in
-  start)   cmd_start ;;
-  stop)    cmd_stop ;;
-  status)  cmd_status ;;
-  restart) cmd_restart ;;
-  logs)    cmd_logs "$@" ;;
-  test)    cmd_test "$@" ;;
+  start)    cmd_start ;;
+  stop)     cmd_stop ;;
+  status)   cmd_status ;;
+  restart)  cmd_restart ;;
+  logs)     cmd_logs "$@" ;;
+  dev)      cmd_dev ;;
+  dev-stop) cmd_dev_stop ;;
+  test)     cmd_test "$@" ;;
   *)
-    echo "Usage: $(basename "$0") {start|stop|restart|status|logs [api|worker|frontend]|test [grep-pattern]}"
+    echo "Usage: $(basename "$0") {start|stop|restart|status|logs [service]|dev|dev-stop|test [grep-pattern]}"
+    echo ""
+    echo "  start      — build and start all services in Docker"
+    echo "  stop       — stop all Docker services"
+    echo "  restart    — stop then start"
+    echo "  status     — show Docker Compose service status"
+    echo "  logs [svc] — tail logs for all or a specific service"
+    echo "  dev        — local dev: host uvicorn + celery + vite (infra in Docker)"
+    echo "  dev-stop   — stop local dev processes + infra"
+    echo "  test       — run Playwright E2E suite against running stack"
     exit 1
     ;;
 esac

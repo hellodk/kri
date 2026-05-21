@@ -1,0 +1,20 @@
+FROM python:3.13-slim AS base
+WORKDIR /app
+
+# System deps for psycopg, ansible-runner, git
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    gcc libpq-dev git openssh-client \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install uv for fast dependency install
+RUN pip install uv
+
+COPY pyproject.toml uv.lock ./
+RUN uv sync --frozen --no-dev
+
+COPY fleet_platform/ ./fleet_platform/
+COPY playbooks/ ./playbooks/
+COPY alembic.ini ./
+
+ENV PYTHONPATH=/app
+ENV PYTHONUNBUFFERED=1
