@@ -35,6 +35,12 @@ async function request<T>(path: string, init?: RequestInit, retry = true): Promi
   const res = await fetch(path, { ...init, headers })
 
   if (res.status === 401 && retry) {
+    // Don't attempt refresh or redirect when the login endpoint itself rejects —
+    // let the caller (LoginPage) handle the error and display it to the user.
+    if (path.includes('/auth/login')) {
+      const body = await res.json().catch(() => ({}))
+      throw new ApiError(401, body.detail ?? 'Invalid credentials')
+    }
     const refreshed = await tryRefresh()
     if (refreshed) return request<T>(path, init, false)
     localStorage.removeItem('access_token')
