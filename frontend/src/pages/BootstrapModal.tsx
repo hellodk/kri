@@ -321,7 +321,7 @@ function SingleMode({ onClose }: { onClose: () => void }) {
                     <span className="text-xs font-mono text-gray-600">bootstrap_mac_mini.yml</span>
                     <span className="text-xs text-gray-400">read-only preview</span>
                   </div>
-                  <pre className="text-xs font-mono bg-gray-900 text-gray-100 p-3 overflow-auto max-h-64 whitespace-pre">
+                  <pre className="text-xs font-mono bg-gray-900 text-gray-100 p-3 overflow-auto max-h-80 whitespace-pre">
                     {playbookData?.content ?? 'Loading…'}
                   </pre>
                 </div>
@@ -421,7 +421,7 @@ function SingleMode({ onClose }: { onClose: () => void }) {
           {logTab === 'ansible' ? (
             <pre
               ref={preRef}
-              className="text-xs font-mono bg-gray-900 p-3 overflow-auto max-h-[28rem] whitespace-pre-wrap"
+              className="text-xs font-mono bg-gray-900 p-3 overflow-auto max-h-[42rem] whitespace-pre-wrap"
               dangerouslySetInnerHTML={{
                 __html: logsData.ansible_stdout
                   ? colorizeAnsibleLog(logsData.ansible_stdout)
@@ -429,7 +429,7 @@ function SingleMode({ onClose }: { onClose: () => void }) {
               }}
             />
           ) : (
-            <pre className="text-xs font-mono bg-gray-900 text-gray-100 p-3 overflow-auto max-h-[28rem] whitespace-pre-wrap">
+            <pre className="text-xs font-mono bg-gray-900 text-gray-100 p-3 overflow-auto max-h-[42rem] whitespace-pre-wrap">
               {logsData.pillar || '(pillar file not found)'}
             </pre>
           )}
@@ -623,7 +623,7 @@ export function BootstrapModal({ onClose }: Props) {
 
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-3xl flex flex-col max-h-[92vh]">
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-5xl flex flex-col max-h-[95vh]">
         {/* Header */}
         <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200 shrink-0">
           <h2 className="text-lg font-bold text-gray-900">Bootstrap Mac Mini</h2>
