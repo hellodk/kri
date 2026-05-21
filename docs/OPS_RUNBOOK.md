@@ -15,6 +15,21 @@ Primary reference for running and troubleshooting the kri fleet management platf
 
 ---
 
+## One-Time Setup
+
+Before running kri for the first time, create the Salt pillar directory on the **kri server** (the machine running the API and Celery worker). The Celery worker writes node config files here before each Ansible bootstrap run.
+
+```bash
+sudo mkdir -p /srv/salt/pillar
+sudo chown -R $(whoami):$(whoami) /srv/salt
+```
+
+> **Why on this machine?** kri's Celery worker writes a `.sls` pillar file locally before Ansible runs. Salt on the Mac Mini then reads its pillar from the Salt master (also this server). If you're deploying kri on a dedicated server, run these commands there.
+>
+> **Alternative:** Set `PILLAR_DIR=/your/writable/path` in `.env` to use a non-standard location instead of `/srv/salt/pillar`.
+
+---
+
 ## Starting and Stopping kri
 
 All lifecycle operations go through `./scripts/kri.sh`. The script manages PIDs in `.kri-pids/` and writes logs to `.kri-logs/`.
