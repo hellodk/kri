@@ -2,6 +2,7 @@ import { api } from './client'
 
 export interface PlatformSettings {
   salt_master_address: string | null
+  kri_api_url: string | null
   ssh_bootstrap_username: string | null
   ssh_bootstrap_password: null
   controller_pubkey: string | null
@@ -58,6 +59,7 @@ export const ansibleApi = {
   getSettings: () => api.get<PlatformSettings>('/api/v1/settings'),
   updateSettings: (payload: {
     salt_master_address?: string
+    kri_api_url?: string
     ssh_bootstrap_username?: string
     ssh_bootstrap_password?: string
     ansible_endpoint_url?: string
@@ -84,4 +86,6 @@ export const ansibleApi = {
     api.get<BootstrapRunDetail>(`/api/v1/ansible/bootstrap/${nodeId}/history/${runId}`),
   playbookContent: (filename: string) =>
     api.get<{ filename: string; content: string }>(`/api/v1/ansible/playbooks/content?filename=${encodeURIComponent(filename)}`),
+  collectGrains: (nodeId: string) =>
+    api.post<{ task_id: string; node_id: string; status: string }>(`/api/v1/ansible/nodes/${nodeId}/collect-grains`),
 }

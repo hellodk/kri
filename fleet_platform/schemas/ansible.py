@@ -21,6 +21,7 @@ class BootstrapResponse(BaseModel):
 
 class PlatformSettingsUpdate(BaseModel):
     salt_master_address: str | None = None
+    kri_api_url: str | None = None
     ssh_bootstrap_username: str | None = None
     ssh_bootstrap_password: str | None = None
     ansible_endpoint_url: str | None = None
@@ -31,6 +32,7 @@ class PlatformSettingsUpdate(BaseModel):
 
 class PlatformSettingsResponse(BaseModel):
     salt_master_address: str | None
+    kri_api_url: str | None = None
     ssh_bootstrap_username: str | None
     ssh_bootstrap_password: None = None
     controller_pubkey: str | None

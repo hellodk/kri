@@ -22,6 +22,7 @@ ANSIBLE_ENDPOINT_URL = "ansible_endpoint_url"
 ANSIBLE_API_TOKEN = "ansible_api_token"
 PLAYBOOKS_DIR = "playbooks_dir"
 PILLAR_DIR = "pillar_dir"
+KRI_API_URL = "kri_api_url"
 
 
 def _fernet_key() -> bytes:
