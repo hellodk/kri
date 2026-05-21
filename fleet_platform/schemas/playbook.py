@@ -11,6 +11,7 @@ class PlaybookEntryResponse(BaseModel):
     description: str | None
     entry_type: str
     default_vars: dict
+    lint_errors: list[str] = []
 
 
 class PlaybookRunRequest(BaseModel):

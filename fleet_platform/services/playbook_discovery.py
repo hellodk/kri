@@ -12,6 +12,18 @@ class PlaybookEntry:
     description: str | None
     entry_type: str      # "playbook" | "role"
     default_vars: dict = field(default_factory=dict)
+    lint_errors: list[str] = field(default_factory=list)
+
+
+def _lint_yaml(path: Path) -> list[str]:
+    """Return list of error strings, empty if valid."""
+    try:
+        with open(path) as f:
+            # consume all documents in multi-doc YAML files
+            list(yaml.safe_load_all(f))
+        return []
+    except yaml.YAMLError as e:
+        return [str(e)]
 
 
 def _parse_description(text: str) -> str | None:
@@ -25,6 +37,7 @@ def _parse_description(text: str) -> str | None:
 def _discover_playbooks(playbooks_dir: Path) -> list[PlaybookEntry]:
     results = []
     for path in sorted(playbooks_dir.glob("*.yml")):
+        lint_errors = _lint_yaml(path)
         try:
             raw = path.read_text()
             data = yaml.safe_load(raw)
@@ -38,6 +51,7 @@ def _discover_playbooks(playbooks_dir: Path) -> list[PlaybookEntry]:
                 description=_parse_description(raw),
                 entry_type="playbook",
                 default_vars=default_vars if isinstance(default_vars, dict) else {},
+                lint_errors=lint_errors,
             ))
         except Exception:
             continue
@@ -55,7 +69,9 @@ def _discover_roles(playbooks_dir: Path) -> list[PlaybookEntry]:
         defaults_path = role_path / "defaults" / "main.yml"
         default_vars: dict = {}
         description: str | None = None
+        lint_errors: list[str] = []
         if defaults_path.exists():
+            lint_errors = _lint_yaml(defaults_path)
             try:
                 raw = defaults_path.read_text()
                 parsed = yaml.safe_load(raw)
@@ -70,6 +86,7 @@ def _discover_roles(playbooks_dir: Path) -> list[PlaybookEntry]:
             description=description,
             entry_type="role",
             default_vars=default_vars,
+            lint_errors=lint_errors,
         ))
     return results
 

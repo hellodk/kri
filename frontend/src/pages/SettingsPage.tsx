@@ -46,6 +46,7 @@ export function SettingsPage() {
     }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['settings'] })
+      qc.invalidateQueries({ queryKey: ['playbooks'] })
       toast('Settings saved')
       setPassword('')
     },

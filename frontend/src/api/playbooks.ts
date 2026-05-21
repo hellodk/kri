@@ -6,6 +6,7 @@ export interface PlaybookEntry {
   description: string | null
   entry_type: 'playbook' | 'role'
   default_vars: Record<string, unknown>
+  lint_errors: string[]
 }
 
 export interface PlaybookRunResponse {

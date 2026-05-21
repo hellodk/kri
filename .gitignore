@@ -1,4 +1,5 @@
 .env
+.env.*
 .venv/
 __pycache__/
 *.pyc
@@ -11,4 +12,13 @@ dist/
 *.egg-info/
 .worktrees/
 .env.docker
-.env
+.env.local
+*.pem
+*.key
+*.p12
+.kri/
+node_modules/
+test-results/
+.playwright-mcp/
+.kri-logs/
+.kri-pids/

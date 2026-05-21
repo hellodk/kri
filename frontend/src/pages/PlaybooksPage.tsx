@@ -181,6 +181,15 @@ function PlaybookCard({
           <p className="text-sm text-gray-600">{entry.description}</p>
         )}
 
+        {entry.lint_errors.length > 0 && (
+          <div className="bg-red-50 border border-red-200 rounded-lg p-2.5">
+            <p className="text-xs font-semibold text-red-600 mb-1">⚠ YAML syntax errors — not runnable</p>
+            {entry.lint_errors.map((e, i) => (
+              <p key={i} className="text-xs font-mono text-red-500">{e}</p>
+            ))}
+          </div>
+        )}
+
         {varCount > 0 && (
           <div className="bg-gray-50 rounded-lg border border-gray-100 p-2.5 space-y-1">
             <p className="text-xs font-medium text-gray-400 uppercase tracking-wide mb-1">Default Variables ({varCount})</p>
@@ -260,7 +269,8 @@ function PlaybookCard({
         </button>
         <button
           onClick={onRun}
-          className="flex-1 px-3 py-2 bg-brand-600 text-white text-xs font-medium rounded-lg hover:bg-brand-700 shadow-sm"
+          disabled={entry.lint_errors.length > 0}
+          className="flex-1 px-3 py-2 bg-brand-600 text-white text-xs font-medium rounded-lg hover:bg-brand-700 shadow-sm disabled:opacity-40 disabled:cursor-not-allowed"
         >
           Run
         </button>
