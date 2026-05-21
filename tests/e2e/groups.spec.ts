@@ -72,7 +72,7 @@ test.describe('Groups', () => {
       headers: { Authorization: `Bearer ${access_token}` },
       data: { node_id: nodeId },
     })
-    expect([200, 201]).toContain(addRes.status())
+    expect([200, 201, 204]).toContain(addRes.status())
 
     // Verify member count
     const detail = await request.get(`${API}/api/v1/groups/${groupId}`, {

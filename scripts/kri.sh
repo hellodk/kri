@@ -9,6 +9,7 @@ VENV="$REPO_DIR/.venv/bin/activate"
 LOGS_DIR="$REPO_DIR/.kri-logs"
 PID_DIR="$REPO_DIR/.kri-pids"
 COMPOSE_FILE="$REPO_DIR/deploy/docker-compose.yml"
+COMPOSE_DEV_OVERRIDE="$REPO_DIR/deploy/docker-compose.override.yml"
 FRONTEND_DIR="$REPO_DIR/frontend"
 
 mkdir -p "$LOGS_DIR" "$PID_DIR"
@@ -83,13 +84,14 @@ stop_local_service() {
 
 start_infra_local() {
   echo "Starting infrastructure (postgres + redis)…"
-  docker compose -f "$COMPOSE_FILE" up -d db redis --quiet-pull 2>&1 | tail -2
+  # Use override so db:5432 and redis:6379 are exposed to local processes
+  docker compose -f "$COMPOSE_FILE" -f "$COMPOSE_DEV_OVERRIDE" up -d db redis --quiet-pull 2>&1 | tail -2
 
   local retries=20
   while [[ $retries -gt 0 ]]; do
     local pg_health redis_health
-    pg_health=$(docker compose -f "$COMPOSE_FILE" ps --format json db 2>/dev/null | python3 -c "import sys,json; d=json.load(sys.stdin); print(d[0].get('Health','') if isinstance(d,list) else d.get('Health',''))" 2>/dev/null || echo "unknown")
-    redis_health=$(docker compose -f "$COMPOSE_FILE" ps --format json redis 2>/dev/null | python3 -c "import sys,json; d=json.load(sys.stdin); print(d[0].get('Health','') if isinstance(d,list) else d.get('Health',''))" 2>/dev/null || echo "unknown")
+    pg_health=$(docker compose -f "$COMPOSE_FILE" -f "$COMPOSE_DEV_OVERRIDE" ps --format json db 2>/dev/null | python3 -c "import sys,json; d=json.load(sys.stdin); print(d[0].get('Health','') if isinstance(d,list) else d.get('Health',''))" 2>/dev/null || echo "unknown")
+    redis_health=$(docker compose -f "$COMPOSE_FILE" -f "$COMPOSE_DEV_OVERRIDE" ps --format json redis 2>/dev/null | python3 -c "import sys,json; d=json.load(sys.stdin); print(d[0].get('Health','') if isinstance(d,list) else d.get('Health',''))" 2>/dev/null || echo "unknown")
     if [[ "$pg_health" == "healthy" && "$redis_health" == "healthy" ]]; then
       ok "Infrastructure ready"
       return 0
@@ -189,7 +191,7 @@ cmd_dev_stop() {
   stop_local_service "worker"
   stop_local_service "api"
   echo "  Stopping infrastructure…"
-  docker compose -f "$COMPOSE_FILE" stop db redis 2>&1 | tail -1
+  docker compose -f "$COMPOSE_FILE" -f "$COMPOSE_DEV_OVERRIDE" stop db redis 2>&1 | tail -1
   ok "kri dev stopped"
   echo ""
 }

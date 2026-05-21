@@ -1,6 +1,11 @@
 # docker-compose.override.yml — development overrides
 # Run: docker compose -f docker-compose.yml -f docker-compose.override.yml up
 services:
+  redis:
+    # Expose Redis to local dev processes (API + Celery running on host)
+    ports:
+      - "6379:6379"
+
   api:
     command: >
       sh -c "uv run alembic upgrade head &&
