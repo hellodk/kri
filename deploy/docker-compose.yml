@@ -31,10 +31,7 @@ services:
     build:
       context: ..
       dockerfile: deploy/Dockerfile.api
-    command: >
-      sh -c "uv run alembic upgrade head &&
-             uv run uvicorn fleet_platform.api.main:app
-             --host 0.0.0.0 --port 8000 --log-level info"
+    command: ["sh", "-c", "uv run alembic upgrade head && uv run uvicorn fleet_platform.api.main:app --host 0.0.0.0 --port 8000 --log-level info"]
     restart: unless-stopped
     env_file: ../.env.docker
     depends_on:
@@ -49,9 +46,7 @@ services:
     build:
       context: ..
       dockerfile: deploy/Dockerfile.api
-    command: >
-      uv run celery -A fleet_platform.workers.celery_app worker
-      --queues default,maintenance --concurrency 2 --loglevel info
+    command: ["uv", "run", "celery", "-A", "fleet_platform.workers.celery_app", "worker", "--queues", "default,maintenance", "--concurrency", "2", "--loglevel", "info"]
     restart: unless-stopped
     env_file: ../.env.docker
     depends_on:

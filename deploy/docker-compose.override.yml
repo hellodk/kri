@@ -7,10 +7,7 @@ services:
       - "6379:6379"
 
   api:
-    command: >
-      sh -c "uv run alembic upgrade head &&
-             uv run uvicorn fleet_platform.api.main:app
-             --host 0.0.0.0 --port 8000 --reload --log-level debug"
+    command: ["sh", "-c", "uv run alembic upgrade head && uv run uvicorn fleet_platform.api.main:app --host 0.0.0.0 --port 8000 --reload --log-level debug"]
     ports:
       - "8000:8000"
     volumes:

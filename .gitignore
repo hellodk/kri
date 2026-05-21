@@ -10,3 +10,5 @@ htmlcov/
 dist/
 *.egg-info/
 .worktrees/
+.env.docker
+.env

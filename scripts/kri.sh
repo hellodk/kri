@@ -196,6 +196,17 @@ cmd_dev_stop() {
   echo ""
 }
 
+# ── Seed ──────────────────────────────────────────────────────────────────────
+
+cmd_seed() {
+  echo ""
+  echo "  Seeding default users…"
+  echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+  docker cp "$REPO_DIR/scripts/seed.py" deploy-api-1:/app/seed.py
+  docker exec deploy-api-1 uv run python3 /app/seed.py
+  echo ""
+}
+
 # ── Test ──────────────────────────────────────────────────────────────────────
 
 cmd_test() {
@@ -223,17 +234,19 @@ case "${1:-help}" in
   status)   cmd_status ;;
   restart)  cmd_restart ;;
   logs)     cmd_logs "$@" ;;
+  seed)     cmd_seed ;;
   dev)      cmd_dev ;;
   dev-stop) cmd_dev_stop ;;
   test)     cmd_test "$@" ;;
   *)
-    echo "Usage: $(basename "$0") {start|stop|restart|status|logs [service]|dev|dev-stop|test [grep-pattern]}"
+    echo "Usage: $(basename "$0") {start|stop|restart|status|logs [service]|seed|dev|dev-stop|test [grep-pattern]}"
     echo ""
     echo "  start      — build and start all services in Docker"
     echo "  stop       — stop all Docker services"
     echo "  restart    — stop then start"
     echo "  status     — show Docker Compose service status"
     echo "  logs [svc] — tail logs for all or a specific service"
+    echo "  seed       — create default users (admin@fleet.local / changeme)"
     echo "  dev        — local dev: host uvicorn + celery + vite (infra in Docker)"
     echo "  dev-stop   — stop local dev processes + infra"
     echo "  test       — run Playwright E2E suite against running stack"
