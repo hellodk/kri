@@ -547,6 +547,30 @@ async def run_playbook_endpoint(
     )
 
 
+@router.post("/nodes/{node_id}/collect-grains", status_code=202)
+async def collect_grains(
+    node_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+    claims: dict = Depends(require_role("operator", "admin")),
+):
+    """Trigger an Ansible run to collect grains from a live node and push to ingest."""
+    from sqlalchemy import select as _sel
+    result = await db.execute(_sel(Node).where(Node.id == node_id))
+    node = result.scalar_one_or_none()
+    if not node:
+        raise HTTPException(status_code=404, detail="Node not found")
+    if not node.bootstrap_ip:
+        raise HTTPException(status_code=400, detail="Node has no bootstrap_ip — run bootstrap first")
+
+    from fleet_platform.workers.celery_app import celery_app
+    task = celery_app.send_task(
+        "fleet_platform.workers.ansible_tasks.collect_node_grains",
+        args=[str(node_id)],
+        queue="maintenance",
+    )
+    return {"task_id": task.id, "node_id": str(node_id), "status": "queued"}
+
+
 @router.get("/jobs/{job_id}", response_model=AnsibleJobResponse)
 async def get_ansible_job(
     job_id: uuid.UUID,

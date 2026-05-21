@@ -14,6 +14,7 @@ import { Pagination } from '../components/Pagination'
 import { formatDistanceToNow, format } from 'date-fns'
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts'
 import { useToastStore } from '../stores/toastStore'
+import { api } from '../api/client'
 
 const BOOTSTRAP_STATUS_STYLE: Record<string, { label: string; colour: string; bg: string }> = {
   unregistered: { label: 'Not bootstrapped', colour: 'text-gray-500', bg: 'bg-gray-50 border-gray-200' },
@@ -34,6 +35,7 @@ export function NodeDetail() {
   const [expandedRunId, setExpandedRunId] = useState<string | null>(null)
   const [tagKey, setTagKey] = useState('')
   const [tagValue, setTagValue] = useState('')
+  const [collectingGrains, setCollectingGrains] = useState(false)
   const qc = useQueryClient()
   const toast = useToastStore((s) => s.add)
 
@@ -128,6 +130,21 @@ export function NodeDetail() {
     },
     onError: (e: Error) => toast(e.message, 'error'),
   })
+
+  async function collectGrains() {
+    if (!nodeId) return
+    setCollectingGrains(true)
+    try {
+      await api.post(`/api/v1/ansible/nodes/${nodeId}/collect-grains`)
+      toast('Grain collection queued — refreshing in 5s…')
+      setTimeout(() => refetch(), 5000)
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : 'Failed to queue grain collection'
+      toast(msg, 'error')
+    } finally {
+      setCollectingGrains(false)
+    }
+  }
 
   if (isLoading) return <Skeleton rows={8} />
   if (isError || !node) return <ErrorState message="Node not found" retry={refetch} />
@@ -227,15 +244,26 @@ export function NodeDetail() {
             <div className="bg-white rounded-lg border border-gray-200 p-4 md:col-span-2 space-y-3">
               <div className="flex items-center justify-between">
                 <h3 className="font-semibold text-gray-700">Bootstrap Status</h3>
-                {(node.bootstrap_status === 'bootstrapping' || node.bootstrap_status === 'pending') && (
-                  <button
-                    onClick={() => cancelBootstrapMutation.mutate()}
-                    disabled={cancelBootstrapMutation.isPending}
-                    className="text-xs text-red-600 hover:text-red-700 font-medium border border-red-200 bg-red-50 hover:bg-red-100 px-3 py-1 rounded-lg disabled:opacity-50 transition-colors"
-                  >
-                    {cancelBootstrapMutation.isPending ? 'Cancelling…' : 'Cancel bootstrap'}
-                  </button>
-                )}
+                <div className="flex items-center gap-2">
+                  {node.bootstrap_status === 'completed' && (
+                    <button
+                      onClick={() => collectGrains()}
+                      disabled={collectingGrains}
+                      className="px-3 py-1.5 bg-brand-600 hover:bg-brand-700 text-white text-sm rounded-lg disabled:opacity-50"
+                    >
+                      {collectingGrains ? 'Collecting…' : 'Collect Grains Now'}
+                    </button>
+                  )}
+                  {(node.bootstrap_status === 'bootstrapping' || node.bootstrap_status === 'pending') && (
+                    <button
+                      onClick={() => cancelBootstrapMutation.mutate()}
+                      disabled={cancelBootstrapMutation.isPending}
+                      className="text-xs text-red-600 hover:text-red-700 font-medium border border-red-200 bg-red-50 hover:bg-red-100 px-3 py-1 rounded-lg disabled:opacity-50 transition-colors"
+                    >
+                      {cancelBootstrapMutation.isPending ? 'Cancelling…' : 'Cancel bootstrap'}
+                    </button>
+                  )}
+                </div>
               </div>
               <div className={`flex items-center gap-3 p-3 rounded-lg border ${BOOTSTRAP_STATUS_STYLE[node.bootstrap_status]?.bg ?? 'bg-gray-50 border-gray-200'}`}>
                 <span className={`text-sm font-semibold ${BOOTSTRAP_STATUS_STYLE[node.bootstrap_status]?.colour ?? 'text-gray-600'}`}>

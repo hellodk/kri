@@ -57,6 +57,7 @@ services:
     volumes:
       - salt-pillar:/srv/salt/pillar
       - ~/.ssh:/root/.ssh:ro
+      - ~/.kri:/root/.kri:ro
 
   frontend:
     build:

@@ -191,7 +191,7 @@ def bootstrap_node(self, node_id: str, target_ip: str, ssh_username: str | None 
 
     # 2. Generate fresh node token and write pillar BEFORE Ansible runs
     raw_token = secrets.token_urlsafe(32)
-    ingest_url = f"http://{salt_master}:8000/api/v1/ingest"
+    ingest_url = f"http://{salt_master}/api/v1/ingest"
 
     if not pillar_dir.is_dir() or not _pillar_dir_writable(pillar_dir):
         logger.warning(
@@ -269,6 +269,8 @@ def bootstrap_node(self, node_id: str, target_ip: str, ssh_username: str | None 
                 "salt_master_address": salt_master,
                 "minion_id": node_minion_id,
                 "controller_pubkey": controller_pubkey,
+                "ingest_url": ingest_url,
+                "node_token": raw_token,
             },
             envvars={
                 "ANSIBLE_COLLECTIONS_PATH": str(_PLAYBOOKS_DIR / "collections" / "installed"),
@@ -381,3 +383,112 @@ def _pillar_dir_writable(pillar_dir: Path) -> bool:
     """Return True if pillar_dir exists and is writable by the current process."""
     import os
     return os.access(pillar_dir, os.W_OK)
+
+
+@celery_app.task(
+    name="fleet_platform.workers.ansible_tasks.collect_node_grains",
+    bind=True,
+    max_retries=0,
+    queue="maintenance",
+)
+def collect_node_grains(self, node_id: str) -> dict:
+    """SSH into node via controller key, run salt-call grains, push to ingest API."""
+    import json as _json
+    import subprocess
+
+    node_uuid = _uuid.UUID(node_id)
+    with get_sync_db() as db:
+        node = db.execute(select(Node).where(Node.id == node_uuid)).scalar_one_or_none()
+        if not node:
+            return {"status": "error", "reason": "node_not_found"}
+
+        target_ip = node.bootstrap_ip
+        salt_master, _, _, _ = _get_bootstrap_settings(db)
+        node_user, node_password, node_auth_mode = _get_node_credentials(node)
+        ssh_user = node_user or "admin"
+        minion_id = node.minion_id
+        pillar_dir = _get_pillar_dir(db)
+
+        # Prefer kri_api_url for ingest; fall back to salt_master
+        from fleet_platform.services.platform_settings_svc import KRI_API_URL
+        kri_api_url = ""
+        try:
+            row = db.execute(
+                select(PlatformSetting).where(PlatformSetting.key == KRI_API_URL)
+            ).scalar_one_or_none()
+            if row and row.value:
+                kri_api_url = row.value.rstrip("/")
+        except Exception:
+            pass
+
+    ingest_base = kri_api_url or (f"http://{salt_master}" if salt_master else "http://localhost")
+    ingest_url = f"{ingest_base}/api/v1/ingest"
+
+    # Controller private key — deployed to every bootstrapped node
+    # Must be copied to a tmp file so SSH doesn't reject it for wrong ownership
+    # (the ~/.kri volume is mounted from host uid != container uid)
+    controller_priv = Path.home() / ".kri" / "id_rsa"
+
+    with tempfile.TemporaryDirectory(prefix="kri-grains-") as tmpdir:
+        key_file_path: str | None = None
+        if controller_priv.exists():
+            tmp_key = Path(tmpdir) / "id_ctrl"
+            tmp_key.write_bytes(controller_priv.read_bytes())
+            tmp_key.chmod(0o600)
+            key_file_path = str(tmp_key)
+
+        ssh_opts = [
+            "ssh",
+            "-F", "/dev/null",  # skip mounted ~/.ssh/config (UID mismatch in container)
+            "-o", "StrictHostKeyChecking=no",
+            "-o", "UserKnownHostsFile=/dev/null",
+            "-o", "ConnectTimeout=15",
+            "-o", "BatchMode=yes",
+        ]
+        if key_file_path:
+            ssh_opts += ["-i", key_file_path]
+
+        ssh_cmd = ssh_opts + [
+            f"{ssh_user}@{target_ip}",
+            (
+                "sudo /opt/homebrew/bin/salt-call --local grains.items --out=json --log-level=warning 2>/dev/null"
+                " || sudo /usr/local/bin/salt-call --local grains.items --out=json --log-level=warning 2>/dev/null"
+            ),
+        ]
+
+        try:
+            proc = subprocess.run(ssh_cmd, capture_output=True, text=True, timeout=30)
+            if proc.returncode != 0:
+                return {"status": "error", "reason": f"ssh failed: {proc.stderr[:200]}"}
+
+            raw = proc.stdout.strip()
+            parsed = _json.loads(raw)
+            grains = parsed.get("local", parsed)
+
+            # Read node token from pillar file
+            pillar_file = pillar_dir / f"{minion_id}.sls"
+            node_token = ""
+            if pillar_file.exists():
+                for line in pillar_file.read_text().splitlines():
+                    if "node_token:" in line:
+                        node_token = line.split("node_token:")[-1].strip()
+                        break
+
+            if not node_token:
+                return {"status": "error", "reason": "no node_token found in pillar"}
+
+            import urllib.request
+            payload = _json.dumps({"minion_id": minion_id, "grains": grains}).encode()
+            req = urllib.request.Request(
+                f"{ingest_url}/grains",
+                data=payload,
+                headers={"Content-Type": "application/json", "X-Node-Token": node_token},
+                method="POST",
+            )
+            with urllib.request.urlopen(req, timeout=15) as resp:
+                return {"status": "ok", "http_status": resp.status, "node_id": node_id}
+
+        except subprocess.TimeoutExpired:
+            return {"status": "error", "reason": "ssh timeout"}
+        except Exception as e:
+            return {"status": "error", "reason": str(e)[:200]}
