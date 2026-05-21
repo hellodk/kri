@@ -1,7 +1,7 @@
 import { APIRequestContext, Page } from '@playwright/test'
 
-export const BASE = 'http://localhost:5173'
-export const API  = 'http://localhost:8000'
+export const BASE = 'http://localhost'
+export const API  = 'http://localhost'
 
 export const ADMIN  = { email: 'admin@fleet.local',  password: 'changeme' }
 export const VIEWER = { email: 'viewer@fleet.local', password: 'changeme' }

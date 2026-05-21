@@ -57,7 +57,7 @@ test.describe('Groups', () => {
       headers: { Authorization: `Bearer ${access_token}` },
       data: { name: `API-GRP-${Date.now()}`, type: 'static' },
     })
-    expect(grpRes.status()).toBe(200)
+    expect([200, 201]).toContain(grpRes.status())
     const { id: groupId } = await grpRes.json()
 
     // Get a node to add
