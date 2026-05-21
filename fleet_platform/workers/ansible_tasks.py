@@ -1,6 +1,7 @@
 # fleet_platform/workers/ansible_tasks.py
 """Celery tasks for Ansible-based node bootstrap."""
 import fcntl
+import logging
 import re
 import secrets
 import tempfile
@@ -17,6 +18,8 @@ from fleet_platform.models.node import Node
 from fleet_platform.models.platform_setting import PlatformSetting
 from fleet_platform.services.ssh_keypair import get_controller_pubkey
 from fleet_platform.workers.celery_app import celery_app
+
+logger = logging.getLogger(__name__)
 
 _PLAYBOOKS_DIR = Path(__file__).parent.parent.parent / "playbooks"
 _DEFAULT_PILLAR_DIR = Path("/srv/salt/pillar")
@@ -115,6 +118,7 @@ def _write_pillar_file(
 def bootstrap_node(self, node_id: str, target_ip: str) -> dict:
     """Run bootstrap_mac_mini.yml against a single Mac Mini."""
     node_uuid = _uuid.UUID(node_id)
+    logger.info("bootstrap_node starting: node_id=%s target_ip=%s", node_id, target_ip)
 
     # 1. Load node and mark as bootstrapping
     with get_sync_db() as db:
@@ -140,15 +144,28 @@ def bootstrap_node(self, node_id: str, target_ip: str) -> dict:
             _get_bootstrap_settings(db)
         pillar_dir = _get_pillar_dir(db)
 
+        if not ssh_password:
+            logger.warning(
+                "bootstrap_node: SSH password missing from settings for node_id=%s", node_id
+            )
+
     # 2. Generate fresh node token and write pillar BEFORE Ansible runs
     raw_token = secrets.token_urlsafe(32)
     ingest_url = f"http://{salt_master}:8000/api/v1/ingest"
+
+    if not pillar_dir.is_dir() or not _pillar_dir_writable(pillar_dir):
+        logger.warning(
+            "bootstrap_node: pillar dir %s is not writable for node_id=%s", pillar_dir, node_id
+        )
 
     _write_pillar_file(
         pillar_dir=str(pillar_dir),
         minion_id=node.minion_id,
         ingest_url=ingest_url,
         node_token=raw_token,
+    )
+    logger.info(
+        "bootstrap_node: pillar written for minion_id=%s node_id=%s", node.minion_id, node_id
     )
 
     # 3. Update the stored token hash
@@ -159,6 +176,11 @@ def bootstrap_node(self, node_id: str, target_ip: str) -> dict:
 
     # 4. Run Ansible with static inventory and capture stdout
     stdout_lines: list[str] = []
+    last_task: str = ""
+    node_minion_id = node.minion_id  # capture before context closes
+
+    logger.info("bootstrap_node: starting ansible-runner for node_id=%s", node_id)
+
     with tempfile.TemporaryDirectory(prefix="kri-bootstrap-") as tmpdir:
         # Write static inventory — more reliable than dynamic.py (env var propagation issues)
         inv_path = Path(tmpdir) / "inventory.ini"
@@ -176,7 +198,7 @@ def bootstrap_node(self, node_id: str, target_ip: str) -> dict:
             inventory=str(inv_path),
             extravars={
                 "salt_master_address": salt_master,
-                "minion_id": node.minion_id,
+                "minion_id": node_minion_id,
                 "controller_pubkey": controller_pubkey,
             },
             envvars={
@@ -184,13 +206,65 @@ def bootstrap_node(self, node_id: str, target_ip: str) -> dict:
             },
             quiet=False,
             rotate_artifacts=1,
+            timeout=1200,  # 20-minute hard timeout
         )
         for event in result.events:
+            event_type = event.get("event", "")
+            logger.debug("bootstrap_node: ansible event type=%s node_id=%s", event_type, node_id)
+
+            # Track last executing task name for progress + failure diagnostics
+            if event_type in ("runner_on_start", "playbook_on_task_start"):
+                event_data = event.get("event_data", {})
+                task_name = event_data.get("task", "") or event_data.get("task_path", "")
+                if task_name:
+                    last_task = task_name
+                    # Write live progress into bootstrap_error while still bootstrapping
+                    # (no bootstrap_last_task column on model — embed in bootstrap_error)
+                    with get_sync_db() as _db:
+                        _node = _db.execute(
+                            select(Node).where(Node.id == node_uuid)
+                        ).scalar_one_or_none()
+                        if _node and _node.bootstrap_status == "bootstrapping":
+                            _node.bootstrap_error = f"[blocked at: TASK {last_task}]"
+                            _db.commit()
+
             msg = event.get("stdout", "")
             if msg:
                 stdout_lines.append(msg)
 
-    # 5. Update bootstrap status + logs
+    # 5. Detect common failure modes from stdout
+    full_stdout = "\n".join(stdout_lines)
+    bootstrap_error: str | None = None
+
+    if result.status == "timeout":
+        bootstrap_error = (
+            f"Timed out after 20 minutes. Last task: {last_task}" if last_task
+            else "Timed out after 20 minutes."
+        )
+    elif result.status != "successful" or result.rc != 0:
+        if "UNREACHABLE" in full_stdout:
+            bootstrap_error = (
+                f"SSH unreachable: check IP {target_ip} and SSH credentials in Settings"
+            )
+        elif "Authentication failure" in full_stdout or "Permission denied" in full_stdout:
+            bootstrap_error = (
+                "SSH auth failed: check SSH username/password in Settings → Bootstrap"
+            )
+        elif "No such file or directory" in full_stdout and "salt" in full_stdout:
+            bootstrap_error = "Salt package not found on target node"
+        elif "Could not match supplied host pattern" in full_stdout:
+            bootstrap_error = (
+                "Inventory misconfiguration — check minion ID format"
+            )
+        else:
+            bootstrap_error = f"ansible rc={result.rc} status={result.status}"
+
+        logger.error(
+            "bootstrap_node: ansible failure rc=%s status=%s last_task=%r node_id=%s",
+            result.rc, result.status, last_task, node_id,
+        )
+
+    # 6. Update bootstrap status + logs
     with get_sync_db() as db:
         node = db.execute(select(Node).where(Node.id == node_uuid)).scalar_one()
         if result.status == "successful" and result.rc == 0:
@@ -198,8 +272,14 @@ def bootstrap_node(self, node_id: str, target_ip: str) -> dict:
             node.bootstrap_error = None
         else:
             node.bootstrap_status = "failed"
-            node.bootstrap_error = f"ansible rc={result.rc} status={result.status}"
-        node.bootstrap_logs = "\n".join(stdout_lines) or f"rc={result.rc} status={result.status}"
+            node.bootstrap_error = bootstrap_error
+        node.bootstrap_logs = full_stdout or f"rc={result.rc} status={result.status}"
         db.commit()
 
     return {"status": result.status, "rc": result.rc, "node_id": node_id}
+
+
+def _pillar_dir_writable(pillar_dir: Path) -> bool:
+    """Return True if pillar_dir exists and is writable by the current process."""
+    import os
+    return os.access(pillar_dir, os.W_OK)
