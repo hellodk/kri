@@ -46,6 +46,21 @@ class NodeDetailResponse(NodeListItem):
     bootstrap_logs: str | None = None
 
 
+class NodeCreateRequest(BaseModel):
+    minion_id: str
+    hostname: str | None = None
+    ip_address: str | None = None
+    hardware_model: str | None = None
+    os_version: str | None = None
+
+
+class NodeUpdateRequest(BaseModel):
+    hostname: str | None = None
+    ip_address: str | None = None
+    hardware_model: str | None = None
+    os_version: str | None = None
+
+
 class FleetOverviewResponse(BaseModel):
     total_nodes: int
     online: int

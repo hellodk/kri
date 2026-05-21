@@ -12,6 +12,12 @@ export const fleetApi = {
     return api.get<Paginated<Node>>(`/api/v1/nodes?${q}`)
   },
   node: (id: string) => api.get<NodeDetail>(`/api/v1/nodes/${id}`),
+  createNode: (data: { minion_id: string; hostname?: string; ip_address?: string; hardware_model?: string; os_version?: string }) =>
+    api.post<NodeDetail>('/api/v1/nodes', data),
+  updateNode: (id: string, data: { hostname?: string; ip_address?: string; hardware_model?: string; os_version?: string }) =>
+    api.patch<NodeDetail>(`/api/v1/nodes/${id}`, data),
+  deleteNode: (id: string) =>
+    api.delete(`/api/v1/nodes/${id}`),
   addTag: (nodeId: string, key: string, value: string) =>
     api.post<Tag>(`/api/v1/nodes/${nodeId}/tags`, { key, value }),
   removeTag: (nodeId: string, key: string) =>

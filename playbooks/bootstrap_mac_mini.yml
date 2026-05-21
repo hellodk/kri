@@ -59,44 +59,65 @@
       register: clt_install
       changed_when: clt_install.rc == 0
 
+    # ── Detect actual macOS user (even when SSH'd in as root) ────────────────
+    - name: Get logged-in macOS user from console
+      shell: stat -f "%Su" /dev/console
+      register: mac_console_user
+      changed_when: false
+      become: false
+
+    - name: Set brew_user fact
+      set_fact:
+        # If SSH user is not root, use it directly; otherwise use the console user
+        brew_user: "{{ ansible_user if ansible_user != 'root' else mac_console_user.stdout }}"
+
     # ── Homebrew ─────────────────────────────────────────────────────────────
     - name: Check if Homebrew is installed
       stat:
         path: "{{ brew_prefix }}/bin/brew"
       register: brew_stat
-      become: false
+      become: true
+      become_user: "{{ brew_user }}"
 
     - name: Install Homebrew (non-interactive)
       shell: |
         NONINTERACTIVE=1 /bin/bash -c \
           "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
       when: not brew_stat.stat.exists
-      become: false
+      become: true
+      become_user: "{{ brew_user }}"
       environment:
         NONINTERACTIVE: "1"
+        USER: "{{ brew_user }}"
+        HOME: "/Users/{{ brew_user }}"
       timeout: 600
 
     - name: Add Homebrew to PATH in shell profile
       lineinfile:
-        path: "~/.zprofile"
+        path: "/Users/{{ brew_user }}/.zprofile"
         line: 'eval "$({{ brew_prefix }}/bin/brew shellenv)"'
         create: true
         mode: "0644"
-      become: false
+      become: true
+      become_user: "{{ brew_user }}"
 
     # ── Salt ─────────────────────────────────────────────────────────────────
     - name: Check if Salt minion binary is present
       stat:
         path: "{{ brew_prefix }}/bin/salt-minion"
       register: salt_stat
-      become: false
+      become: true
+      become_user: "{{ brew_user }}"
 
     - name: Install Salt via Homebrew
       shell: "{{ brew_prefix }}/bin/brew install salt"
       when: not salt_stat.stat.exists
-      become: false
+      become: true
+      become_user: "{{ brew_user }}"
       environment:
         PATH: "{{ brew_prefix }}/bin:/usr/local/bin:/usr/bin:/bin"
+        USER: "{{ brew_user }}"
+        HOME: "/Users/{{ brew_user }}"
       timeout: 300
 
     # ── Salt configuration ────────────────────────────────────────────────────
@@ -141,8 +162,11 @@
     - name: Start Salt minion service via Homebrew services
       shell: "{{ brew_prefix }}/bin/brew services start salt-minion || true"
       become: true
+      become_user: "{{ brew_user }}"
       environment:
         PATH: "{{ brew_prefix }}/bin:/usr/local/bin:/usr/bin:/bin"
+        USER: "{{ brew_user }}"
+        HOME: "/Users/{{ brew_user }}"
       changed_when: false
 
     - name: Verify Salt minion process is running

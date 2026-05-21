@@ -1,7 +1,9 @@
 import { useState } from 'react'
 import { Link } from 'react-router-dom'
-import { useQuery } from '@tanstack/react-query'
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { fleetApi } from '../api/fleet'
+import { useAuthStore } from '../stores/authStore'
+import { useToastStore } from '../stores/toastStore'
 import { StatusBadge } from '../components/StatusBadge'
 import { DriftBadge } from '../components/DriftBadge'
 import { Skeleton } from '../components/Skeleton'
@@ -9,12 +11,293 @@ import { ErrorState } from '../components/ErrorState'
 import { Pagination } from '../components/Pagination'
 import { BootstrapModal } from './BootstrapModal'
 import { formatDistanceToNow } from 'date-fns'
+import type { Node } from '../types'
+
+// ─── Add Node modal ────────────────────────────────────────────────────────────
+
+function AddNodeModal({ onClose }: { onClose: () => void }) {
+  const qc = useQueryClient()
+  const toast = useToastStore((s) => s.add)
+  const [minionId, setMinionId] = useState('')
+  const [hostname, setHostname] = useState('')
+  const [ipAddress, setIpAddress] = useState('')
+
+  const mutation = useMutation({
+    mutationFn: () =>
+      fleetApi.createNode({
+        minion_id: minionId.trim(),
+        hostname: hostname.trim() || undefined,
+        ip_address: ipAddress.trim() || undefined,
+      }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['nodes'] })
+      qc.invalidateQueries({ queryKey: ['fleet-overview'] })
+      toast('Node added successfully')
+      onClose()
+    },
+    onError: (e: Error) => toast(e.message, 'error'),
+  })
+
+  return (
+    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md flex flex-col">
+        {/* Header */}
+        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200">
+          <h2 className="text-lg font-bold text-gray-900">Add Node</h2>
+          <button
+            onClick={onClose}
+            className="flex items-center justify-center w-8 h-8 rounded-lg text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-colors text-lg"
+          >
+            ×
+          </button>
+        </div>
+
+        {/* Body */}
+        <div className="px-6 py-5 space-y-4">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Minion ID <span className="text-red-500">*</span>
+            </label>
+            <input
+              required
+              value={minionId}
+              onChange={(e) => setMinionId(e.target.value)}
+              placeholder="mac-mini-01"
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm text-gray-900 focus:outline-none focus:border-brand-600"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Hostname <span className="text-gray-400 font-normal">(optional)</span>
+            </label>
+            <input
+              value={hostname}
+              onChange={(e) => setHostname(e.target.value)}
+              placeholder="mac-mini-01.local"
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm text-gray-900 focus:outline-none focus:border-brand-600"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              IP Address <span className="text-gray-400 font-normal">(optional)</span>
+            </label>
+            <input
+              value={ipAddress}
+              onChange={(e) => setIpAddress(e.target.value)}
+              placeholder="192.168.1.50"
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm text-gray-900 focus:outline-none focus:border-brand-600"
+            />
+          </div>
+        </div>
+
+        {/* Footer */}
+        <div className="px-6 py-4 border-t border-gray-200">
+          <div className="flex gap-3">
+            <button
+              onClick={onClose}
+              className="flex-1 py-2.5 border border-gray-300 text-gray-700 rounded-lg text-sm font-medium hover:bg-gray-50"
+            >
+              Cancel
+            </button>
+            <button
+              disabled={!minionId.trim() || mutation.isPending}
+              onClick={() => mutation.mutate()}
+              className="flex-1 py-2.5 bg-brand-600 text-white rounded-lg text-sm font-medium hover:bg-brand-700 disabled:opacity-50"
+            >
+              {mutation.isPending ? 'Adding…' : 'Add Node'}
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// ─── Edit Node modal ───────────────────────────────────────────────────────────
+
+function EditNodeModal({ node, onClose }: { node: Node; onClose: () => void }) {
+  const qc = useQueryClient()
+  const toast = useToastStore((s) => s.add)
+  const [hostname, setHostname] = useState(node.hostname ?? '')
+  const [ipAddress, setIpAddress] = useState(node.ip_address ?? '')
+  const [hardwareModel, setHardwareModel] = useState(node.hardware_model ?? '')
+  const [osVersion, setOsVersion] = useState(node.os_version ?? '')
+
+  const mutation = useMutation({
+    mutationFn: () =>
+      fleetApi.updateNode(node.id, {
+        hostname: hostname.trim() || undefined,
+        ip_address: ipAddress.trim() || undefined,
+        hardware_model: hardwareModel.trim() || undefined,
+        os_version: osVersion.trim() || undefined,
+      }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['nodes'] })
+      qc.invalidateQueries({ queryKey: [`node-${node.id}`] })
+      toast('Node updated')
+      onClose()
+    },
+    onError: (e: Error) => toast(e.message, 'error'),
+  })
+
+  return (
+    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md flex flex-col">
+        {/* Header */}
+        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200">
+          <div>
+            <h2 className="text-lg font-bold text-gray-900">Edit Node</h2>
+            <p className="text-xs text-gray-400 mt-0.5 font-mono">{node.minion_id}</p>
+          </div>
+          <button
+            onClick={onClose}
+            className="flex items-center justify-center w-8 h-8 rounded-lg text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-colors text-lg"
+          >
+            ×
+          </button>
+        </div>
+
+        {/* Body */}
+        <div className="px-6 py-5 space-y-4">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Hostname</label>
+            <input
+              value={hostname}
+              onChange={(e) => setHostname(e.target.value)}
+              placeholder="mac-mini-01.local"
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm text-gray-900 focus:outline-none focus:border-brand-600"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">IP Address</label>
+            <input
+              value={ipAddress}
+              onChange={(e) => setIpAddress(e.target.value)}
+              placeholder="192.168.1.50"
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm text-gray-900 focus:outline-none focus:border-brand-600"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Hardware Model</label>
+            <input
+              value={hardwareModel}
+              onChange={(e) => setHardwareModel(e.target.value)}
+              placeholder="Mac mini (2023)"
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm text-gray-900 focus:outline-none focus:border-brand-600"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">OS Version</label>
+            <input
+              value={osVersion}
+              onChange={(e) => setOsVersion(e.target.value)}
+              placeholder="macOS 14.4.1"
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm text-gray-900 focus:outline-none focus:border-brand-600"
+            />
+          </div>
+        </div>
+
+        {/* Footer */}
+        <div className="px-6 py-4 border-t border-gray-200">
+          <div className="flex gap-3">
+            <button
+              onClick={onClose}
+              className="flex-1 py-2.5 border border-gray-300 text-gray-700 rounded-lg text-sm font-medium hover:bg-gray-50"
+            >
+              Cancel
+            </button>
+            <button
+              disabled={mutation.isPending}
+              onClick={() => mutation.mutate()}
+              className="flex-1 py-2.5 bg-brand-600 text-white rounded-lg text-sm font-medium hover:bg-brand-700 disabled:opacity-50"
+            >
+              {mutation.isPending ? 'Saving…' : 'Save Changes'}
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// ─── Delete confirmation dialog ────────────────────────────────────────────────
+
+function DeleteNodeDialog({ node, onClose }: { node: Node; onClose: () => void }) {
+  const qc = useQueryClient()
+  const toast = useToastStore((s) => s.add)
+
+  const mutation = useMutation({
+    mutationFn: () => fleetApi.deleteNode(node.id),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['nodes'] })
+      qc.invalidateQueries({ queryKey: ['fleet-overview'] })
+      toast('Node deleted')
+      onClose()
+    },
+    onError: (e: Error) => toast(e.message, 'error'),
+  })
+
+  const displayName = node.hostname ?? node.minion_id
+
+  return (
+    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm flex flex-col">
+        {/* Header */}
+        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200">
+          <h2 className="text-lg font-bold text-gray-900">Delete Node</h2>
+          <button
+            onClick={onClose}
+            className="flex items-center justify-center w-8 h-8 rounded-lg text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-colors text-lg"
+          >
+            ×
+          </button>
+        </div>
+
+        {/* Body */}
+        <div className="px-6 py-5">
+          <p className="text-sm text-gray-700">
+            Delete <span className="font-semibold font-mono">{displayName}</span>? This will remove
+            the node and all its history.
+          </p>
+          <p className="text-xs text-red-600 mt-2">This action cannot be undone.</p>
+        </div>
+
+        {/* Footer */}
+        <div className="px-6 py-4 border-t border-gray-200">
+          <div className="flex gap-3">
+            <button
+              onClick={onClose}
+              className="flex-1 py-2.5 border border-gray-300 text-gray-700 rounded-lg text-sm font-medium hover:bg-gray-50"
+            >
+              Cancel
+            </button>
+            <button
+              disabled={mutation.isPending}
+              onClick={() => mutation.mutate()}
+              className="flex-1 py-2.5 bg-red-600 text-white rounded-lg text-sm font-medium hover:bg-red-700 disabled:opacity-50"
+            >
+              {mutation.isPending ? 'Deleting…' : 'Delete Node'}
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// ─── Main page ─────────────────────────────────────────────────────────────────
 
 export function FleetDashboard() {
   const [page, setPage] = useState(1)
   const [perPage, setPerPage] = useState(50)
   const [statusFilter, setStatusFilter] = useState('')
   const [showBootstrap, setShowBootstrap] = useState(false)
+  const [showAddNode, setShowAddNode] = useState(false)
+  const [editingNode, setEditingNode] = useState<Node | null>(null)
+  const [deletingNode, setDeletingNode] = useState<Node | null>(null)
+
+  const user = useAuthStore((s) => s.user)
+  const canManage = user?.role === 'admin' || user?.role === 'operator'
 
   const { data: overview, isLoading: ovLoading } = useQuery({
     queryKey: ['fleet-overview'],
@@ -38,12 +321,22 @@ export function FleetDashboard() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold text-gray-900">Fleet Dashboard</h1>
-        <button
-          onClick={() => setShowBootstrap(true)}
-          className="px-4 py-2 bg-brand-600 text-white text-sm font-medium rounded-lg hover:bg-brand-700 shadow-sm"
-        >
-          + Bootstrap Node
-        </button>
+        <div className="flex items-center gap-2">
+          {canManage && (
+            <button
+              onClick={() => setShowAddNode(true)}
+              className="px-4 py-2 bg-white border border-gray-300 text-gray-700 text-sm font-medium rounded-lg hover:bg-gray-50 shadow-sm"
+            >
+              + Add Node
+            </button>
+          )}
+          <button
+            onClick={() => setShowBootstrap(true)}
+            className="px-4 py-2 bg-brand-600 text-white text-sm font-medium rounded-lg hover:bg-brand-700 shadow-sm"
+          >
+            + Bootstrap Node
+          </button>
+        </div>
       </div>
 
       {/* Stat cards */}
@@ -118,6 +411,7 @@ export function FleetDashboard() {
                       <th className="px-4 py-3">Drift</th>
                       <th className="px-4 py-3">Last Seen</th>
                       <th className="px-4 py-3">Tags</th>
+                      {canManage && <th className="px-4 py-3 w-24"></th>}
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-100">
@@ -158,6 +452,24 @@ export function FleetDashboard() {
                             ))}
                           </div>
                         </td>
+                        {canManage && (
+                          <td className="px-4 py-3 text-right">
+                            <div className="flex items-center justify-end gap-2">
+                              <button
+                                onClick={() => setEditingNode(node)}
+                                className="text-xs text-brand-600 hover:text-brand-700 font-medium"
+                              >
+                                Edit
+                              </button>
+                              <button
+                                onClick={() => setDeletingNode(node)}
+                                className="text-xs text-red-500 hover:text-red-700 font-medium"
+                              >
+                                Delete
+                              </button>
+                            </div>
+                          </td>
+                        )}
                       </tr>
                     ))}
                   </tbody>
@@ -170,7 +482,11 @@ export function FleetDashboard() {
           </>
         )}
       </div>
+
       {showBootstrap && <BootstrapModal onClose={() => setShowBootstrap(false)} />}
+      {showAddNode && <AddNodeModal onClose={() => setShowAddNode(false)} />}
+      {editingNode && <EditNodeModal node={editingNode} onClose={() => setEditingNode(null)} />}
+      {deletingNode && <DeleteNodeDialog node={deletingNode} onClose={() => setDeletingNode(null)} />}
     </div>
   )
 }
