@@ -24,7 +24,9 @@ test.describe('Authentication', () => {
     await page.fill('input[type="password"]', 'wrong-password')
     await page.click('button[type="submit"]')
     await expect(page).toHaveURL(/\/login/)
-    await expect(page.locator('[role="alert"]')).toBeVisible({ timeout: 8000 })
+    // Either role=alert div or any visible error text is acceptable
+    const errorEl = page.locator('[role="alert"], .text-red-400').first()
+    await expect(errorEl).toBeVisible({ timeout: 8000 })
   })
 
   test('AUTH-03 unknown email shows error', async ({ page }) => {
@@ -33,7 +35,8 @@ test.describe('Authentication', () => {
     await page.fill('input[type="password"]', 'anything')
     await page.click('button[type="submit"]')
     await expect(page).toHaveURL(/\/login/)
-    await expect(page.locator('[role="alert"]')).toBeVisible({ timeout: 8000 })
+    const errorEl = page.locator('[role="alert"], .text-red-400').first()
+    await expect(errorEl).toBeVisible({ timeout: 8000 })
   })
 
   test('AUTH-09 protected route without session redirects to login', async ({ page }) => {

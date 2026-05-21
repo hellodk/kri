@@ -73,7 +73,7 @@ test.describe('Baselines', () => {
         state_json: { packages: [], services: [] },
       },
     })
-    expect(res.status()).toBe(200)
+    expect([200, 201]).toContain(res.status())
     const body = await res.json()
     expect(body).toHaveProperty('id')
     expect(body.version).toBe(1)

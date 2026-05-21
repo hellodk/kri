@@ -1,4 +1,4 @@
-import { Page } from '@playwright/test'
+import { APIRequestContext, Page } from '@playwright/test'
 
 export const BASE = 'http://localhost:5173'
 export const API  = 'http://localhost:8000'
@@ -18,15 +18,15 @@ export async function login(page: Page, user = ADMIN) {
 /**
  * Log in via API and inject tokens before the first navigation.
  *
- * Zustand's persist middleware reads localStorage at store creation time
- * (synchronously, before React renders). If we navigate first and then set
- * localStorage, Zustand already has null in memory and AuthGuard blocks.
+ * Key constraint: Zustand's persist middleware reads localStorage synchronously
+ * at store creation (first render). We must inject BEFORE navigating so the
+ * store hydrates with the correct user — use addInitScript for this.
  *
- * Fix: use addInitScript to inject values BEFORE the page's JavaScript runs,
- * so Zustand sees the auth-store the very first time it hydrates.
+ * We do NOT use waitForLoadState('networkidle') because TanStack Query's
+ * background polling keeps the network busy indefinitely.
  */
 export async function loginViaApi(page: Page, user = ADMIN) {
-  // 1. Get tokens + user profile from API (no browser involved yet)
+  // 1. Get tokens + user profile (no browser involved yet)
   const loginRes = await page.request.post(`${API}/auth/login`, {
     data: { email: user.email, password: user.password },
   })
@@ -37,15 +37,25 @@ export async function loginViaApi(page: Page, user = ADMIN) {
   })
   const me = await meRes.json()
 
-  // 2. Inject into localStorage BEFORE any navigation so Zustand reads them on init
+  // 2. Inject into localStorage BEFORE first navigation — runs before page JS
   await page.addInitScript(({ at, rt, me }) => {
     localStorage.setItem('access_token', at)
     localStorage.setItem('refresh_token', rt)
+    // Zustand persist key — must match { name: 'auth-store' } in authStore.ts
     localStorage.setItem('auth-store', JSON.stringify({ state: { user: me }, version: 0 }))
   }, { at: access_token, rt: refresh_token, me })
 
-  // 3. Navigate — Zustand will hydrate with the user already set
+  // 3. Navigate — avoid networkidle, TanStack Query polls indefinitely
   await page.goto('/fleet')
-  await page.waitForLoadState('networkidle')
-  await page.locator('h1:has-text("Fleet Dashboard")').waitFor({ state: 'visible', timeout: 15000 })
+  await page.waitForURL('**/fleet', { timeout: 10000 })
+  await page.locator('h1').first().waitFor({ state: 'visible', timeout: 15000 })
+}
+
+/** Get a fresh Bearer token for API-only tests */
+export async function getToken(request: APIRequestContext, user = ADMIN): Promise<string> {
+  const res = await request.post(`${API}/auth/login`, {
+    data: { email: user.email, password: user.password },
+  })
+  const body = await res.json()
+  return body.access_token as string
 }

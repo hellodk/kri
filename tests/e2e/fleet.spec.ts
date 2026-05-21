@@ -3,7 +3,7 @@
  * Covers: FLEET-01..FLEET-14 from TEST_CASES.md
  */
 import { test, expect } from '@playwright/test'
-import { loginViaApi, ADMIN, API } from './helpers'
+import { loginViaApi, getToken, ADMIN, API } from './helpers'
 
 test.describe('Fleet Dashboard', () => {
 
@@ -107,10 +107,7 @@ test.describe('Fleet Dashboard', () => {
   })
 
   test('FLEET-13 node list paginates', async ({ request }) => {
-    const loginRes = await request.post(`${API}/auth/login`, {
-      data: { email: ADMIN.email, password: ADMIN.password },
-    })
-    const { access_token } = await loginRes.json()
+    const access_token = await getToken(request)
     const res = await request.get(`${API}/api/v1/nodes?page=1&per_page=3`, {
       headers: { Authorization: `Bearer ${access_token}` },
     })
@@ -122,10 +119,7 @@ test.describe('Fleet Dashboard', () => {
   })
 
   test('FLEET-14 node list filters by status', async ({ request }) => {
-    const loginRes = await request.post(`${API}/auth/login`, {
-      data: { email: ADMIN.email, password: ADMIN.password },
-    })
-    const { access_token } = await loginRes.json()
+    const access_token = await getToken(request)
     const res = await request.get(`${API}/api/v1/nodes?status=online`, {
       headers: { Authorization: `Bearer ${access_token}` },
     })
