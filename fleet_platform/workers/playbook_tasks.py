@@ -108,7 +108,7 @@ def _resolve_hosts(db, job: AnsibleJob, ssh_user: str) -> list[tuple[str, str, s
     max_retries=0,
     queue="maintenance",
 )
-def run_playbook(self, job_id: str) -> dict:
+def run_playbook(self, job_id: str, ssh_username: str | None = None, ssh_password: str | None = None) -> dict:
     job_uuid = _uuid.UUID(job_id)
 
     with get_sync_db() as db:
@@ -118,7 +118,10 @@ def run_playbook(self, job_id: str) -> dict:
         job.status = "running"
         job.started_at = datetime.now(UTC)
         db.commit()
-        _, ssh_user, ssh_password, _ = _get_bootstrap_settings(db)
+        _, _settings_ssh_user, _settings_ssh_password, _ = _get_bootstrap_settings(db)
+        # Per-run credentials override global platform settings
+        ssh_user = ssh_username or _settings_ssh_user
+        ssh_password = _settings_ssh_password if ssh_password is None else ssh_password
         playbooks_dir = _get_playbooks_dir(db)
 
     with get_sync_db() as db:

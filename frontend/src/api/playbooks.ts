@@ -33,7 +33,7 @@ export interface AnsibleJob {
 
 export const playbooksApi = {
   list: () => api.get<PlaybookEntry[]>('/api/v1/ansible/playbooks'),
-  run: (playbook: string, target_type: string, target_id: string, extravars: Record<string, unknown>) =>
-    api.post<PlaybookRunResponse>('/api/v1/ansible/playbooks/run', { playbook, target_type, target_id, extravars }),
+  run: (playbook: string, target_type: string, target_id: string, extravars: Record<string, unknown>, sshUsername?: string, sshPassword?: string) =>
+    api.post<PlaybookRunResponse>('/api/v1/ansible/playbooks/run', { playbook, target_type, target_id, extravars, ssh_username: sshUsername || undefined, ssh_password: sshPassword || undefined }),
   getJob: (jobId: string) => api.get<AnsibleJob>(`/api/v1/ansible/jobs/${jobId}`),
 }

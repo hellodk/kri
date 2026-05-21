@@ -79,7 +79,12 @@ async def bootstrap(
         node.bootstrap_ip = payload.target_ip
         await db.commit()
 
-    task = bootstrap_node.delay(str(node.id), payload.target_ip)
+    task = bootstrap_node.delay(
+        str(node.id),
+        payload.target_ip,
+        ssh_username=payload.ssh_username,
+        ssh_password=payload.ssh_password,
+    )
 
     return BootstrapResponse(
         node_id=node.id,
@@ -250,7 +255,11 @@ async def run_playbook_endpoint(
     await db.commit()
     await db.refresh(job)
 
-    run_playbook.delay(str(job.id))
+    run_playbook.delay(
+        str(job.id),
+        ssh_username=payload.ssh_username,
+        ssh_password=payload.ssh_password,
+    )
 
     return PlaybookRunResponse(
         job_id=job.id,

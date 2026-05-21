@@ -61,12 +61,29 @@ function colorizeAnsibleLog(raw: string): string {
 function SingleMode({ onClose }: { onClose: () => void }) {
   const [minionId, setMinionId] = useState('')
   const [targetIp, setTargetIp] = useState('')
+  const [sshUsername, setSshUsername] = useState('')
+  const [sshPassword, setSshPassword] = useState('')
+  const [showSshPassword, setShowSshPassword] = useState(false)
   const [nodeId, setNodeId] = useState<string | null>(null)
   const [showPlaybook, setShowPlaybook] = useState(false)
   const [existingNodeDbId, setExistingNodeDbId] = useState<string | null>(null)
   const toast = useToastStore((s) => s.add)
   const qc = useQueryClient()
   const navigate = useNavigate()
+
+  // Load SSH credential defaults from platform settings
+  const { data: settingsData } = useQuery({
+    queryKey: ['platform-settings'],
+    queryFn: () => ansibleApi.getSettings(),
+    staleTime: 60_000,
+  })
+
+  useEffect(() => {
+    if (settingsData) {
+      if (!sshUsername) setSshUsername(settingsData.ssh_bootstrap_username || '')
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [settingsData])
 
   // Look up the node by minion ID as the user types (exact match only)
   const { data: searchData } = useQuery({
@@ -109,7 +126,7 @@ function SingleMode({ onClose }: { onClose: () => void }) {
   })
 
   const bootstrapMutation = useMutation({
-    mutationFn: () => ansibleApi.bootstrap(minionId, targetIp),
+    mutationFn: () => ansibleApi.bootstrap(minionId, targetIp, sshUsername || undefined, sshPassword || undefined),
     onSuccess: (data) => { setNodeId(data.node_id); setShowLogs(true); toast('Bootstrap started') },
     onError: (e: Error) => toast(e.message, 'error'),
   })
@@ -256,6 +273,39 @@ function SingleMode({ onClose }: { onClose: () => void }) {
                 : 'border-gray-300 focus:border-brand-600'
             }`} />
         </div>
+            {/* SSH Credentials */}
+            <div className="border-t border-gray-100 pt-4 space-y-3">
+              <p className="text-xs font-medium text-gray-500 uppercase tracking-wide">SSH Credentials</p>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Username</label>
+                  <input
+                    value={sshUsername}
+                    onChange={(e) => setSshUsername(e.target.value)}
+                    placeholder="admin"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm text-gray-900 focus:outline-none focus:border-brand-600"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Password</label>
+                  <div className="relative">
+                    <input
+                      type={showSshPassword ? 'text' : 'password'}
+                      value={sshPassword}
+                      onChange={(e) => setSshPassword(e.target.value)}
+                      placeholder="••••••••"
+                      className="w-full px-3 py-2 pr-9 border border-gray-300 rounded-lg text-sm text-gray-900 focus:outline-none focus:border-brand-600"
+                    />
+                    <button type="button" onClick={() => setShowSshPassword(!showSshPassword)}
+                      className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">
+                      {showSshPassword ? '🙈' : '👁'}
+                    </button>
+                  </div>
+                </div>
+              </div>
+              <p className="text-xs text-gray-400">Overrides global Settings credentials for this run only.</p>
+            </div>
+
             {/* Playbook preview */}
             <div>
               <button
@@ -285,7 +335,7 @@ function SingleMode({ onClose }: { onClose: () => void }) {
             className="flex-1 py-2.5 border border-gray-300 text-gray-700 rounded-lg text-sm font-medium hover:bg-gray-50">
             Cancel
           </button>
-          <button type="submit" disabled={bootstrapMutation.isPending}
+          <button type="submit" disabled={!minionId || !targetIp || !sshUsername || !sshPassword || bootstrapMutation.isPending}
             className="flex-1 py-2.5 bg-brand-600 text-white rounded-lg text-sm font-medium hover:bg-brand-700 disabled:opacity-50">
             {bootstrapMutation.isPending ? 'Starting…' : 'Bootstrap'}
           </button>

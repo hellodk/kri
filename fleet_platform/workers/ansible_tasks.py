@@ -115,7 +115,7 @@ def _write_pillar_file(
     max_retries=0,
     queue="maintenance",
 )
-def bootstrap_node(self, node_id: str, target_ip: str) -> dict:
+def bootstrap_node(self, node_id: str, target_ip: str, ssh_username: str | None = None, ssh_password: str | None = None) -> dict:
     """Run bootstrap_mac_mini.yml against a single Mac Mini."""
     node_uuid = _uuid.UUID(node_id)
     logger.info("bootstrap_node starting: node_id=%s target_ip=%s", node_id, target_ip)
@@ -140,9 +140,13 @@ def bootstrap_node(self, node_id: str, target_ip: str) -> dict:
         node.bootstrap_error = None
         db.commit()
 
-        salt_master, ssh_user, ssh_password, controller_pubkey = \
+        salt_master, _settings_ssh_user, _settings_ssh_password, controller_pubkey = \
             _get_bootstrap_settings(db)
         pillar_dir = _get_pillar_dir(db)
+
+        # Per-run credentials override global platform settings
+        ssh_user = ssh_username or _settings_ssh_user
+        ssh_password = _settings_ssh_password if ssh_password is None else ssh_password
 
         if not ssh_password:
             logger.warning(

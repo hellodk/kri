@@ -37,8 +37,13 @@ export const ansibleApi = {
     playbooks_dir?: string
     pillar_dir?: string
   }) => api.put<PlatformSettings>('/api/v1/settings', payload),
-  bootstrap: (minion_id: string, target_ip: string) =>
-    api.post<BootstrapResponse>('/api/v1/ansible/bootstrap', { minion_id, target_ip }),
+  bootstrap: (minion_id: string, target_ip: string, sshUsername?: string, sshPassword?: string) =>
+    api.post<BootstrapResponse>('/api/v1/ansible/bootstrap', {
+      minion_id,
+      target_ip,
+      ssh_username: sshUsername || undefined,
+      ssh_password: sshPassword || undefined,
+    }),
   bootstrapStatus: (nodeId: string) =>
     api.get<BootstrapStatus>(`/api/v1/ansible/bootstrap/${nodeId}/status`),
   bootstrapLogs: (nodeId: string) =>
