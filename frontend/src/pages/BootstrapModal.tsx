@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useNavigate } from 'react-router-dom'
 import { ansibleApi } from '../api/ansible'
@@ -27,6 +27,33 @@ const STATUS_LABEL: Record<string, { label: string; colour: string }> = {
   bootstrapping:{ label: 'Running…', colour: 'text-brand-600' },
   completed:    { label: 'Done ✓',   colour: 'text-emerald-700' },
   failed:       { label: 'Failed',   colour: 'text-red-700' },
+}
+
+// ─── Ansible log colourizer ───────────────────────────────────────────────────
+
+function colorizeAnsibleLog(raw: string): string {
+  return raw
+    .split('\n')
+    .map((line) => {
+      const esc = line
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+      if (/^PLAY \[/.test(line))
+        return `<span class="font-bold text-indigo-400">${esc}</span>`
+      if (/^TASK \[/.test(line))
+        return `<span class="font-bold text-gray-300">${esc}</span>`
+      if (/\bok:/.test(line))
+        return `<span class="text-green-400">${esc}</span>`
+      if (/fatal:|FAILED/.test(line))
+        return `<span class="text-red-400">${esc}</span>`
+      if (/\bchanged:/.test(line))
+        return `<span class="text-amber-400">${esc}</span>`
+      if (/^PLAY RECAP/.test(line))
+        return `<span class="font-bold text-purple-400">${esc}</span>`
+      return `<span class="text-gray-300">${esc}</span>`
+    })
+    .join('\n')
 }
 
 // ─── Single bootstrap ────────────────────────────────────────────────────────
@@ -128,6 +155,14 @@ function SingleMode({ onClose }: { onClose: () => void }) {
     },
     onError: (e: Error) => toast(e.message, 'error'),
   })
+
+  // Auto-scroll log panel to bottom when new content arrives
+  const preRef = useRef<HTMLPreElement>(null)
+  useEffect(() => {
+    if (preRef.current) {
+      preRef.current.scrollTop = preRef.current.scrollHeight
+    }
+  }, [logsData?.ansible_stdout])
 
   // Detect stuck bootstrap — only if bootstrap_status is returned by backend
   const isStuckBootstrap = !nodeId &&
@@ -268,6 +303,16 @@ function SingleMode({ onClose }: { onClose: () => void }) {
           <div className="w-4 h-4 border-2 border-brand-600 border-t-transparent rounded-full animate-spin" />
         )}
       </div>
+      {status === 'bootstrapping' && logsData?.ansible_stdout && (() => {
+        const lastTask = logsData.ansible_stdout
+          .split('\n')
+          .filter((l) => /^TASK \[/.test(l))
+          .pop()
+        const taskName = lastTask ? lastTask.replace(/^TASK \[/, '').replace(/\].*$/, '') : null
+        return taskName ? (
+          <p className="text-xs text-gray-500 -mt-2">Currently: <span className="font-mono">{taskName}</span></p>
+        ) : null
+      })()}
       {statusData?.bootstrap_error && (
         <div className="p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700 font-mono">
           {statusData.bootstrap_error}
@@ -308,16 +353,36 @@ function SingleMode({ onClose }: { onClose: () => void }) {
                     ? 'border-brand-600 text-brand-700 bg-white'
                     : 'border-transparent text-gray-500 hover:text-gray-700'
                 }`}>
-                {t === 'ansible' ? 'Ansible output' : `Salt pillar (${logsData.pillar_path?.split('/').pop()})`}
+                {t === 'ansible' ? (
+                  <span className="flex items-center gap-1.5">
+                    Ansible output
+                    {(status === 'pending' || status === 'bootstrapping') && (
+                      <span className="relative flex h-2 w-2">
+                        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75" />
+                        <span className="relative inline-flex rounded-full h-2 w-2 bg-green-500" />
+                      </span>
+                    )}
+                  </span>
+                ) : `Salt pillar (${logsData.pillar_path?.split('/').pop()})`}
               </button>
             ))}
           </div>
           {/* Content */}
-          <pre className="text-xs font-mono bg-gray-900 text-gray-100 p-3 overflow-auto max-h-96 whitespace-pre-wrap">
-            {logTab === 'ansible'
-              ? (logsData.ansible_stdout || '(no output captured yet — run in progress or not started)')
-              : (logsData.pillar || '(pillar file not found)')}
-          </pre>
+          {logTab === 'ansible' ? (
+            <pre
+              ref={preRef}
+              className="text-xs font-mono bg-gray-900 p-3 overflow-auto max-h-[28rem] whitespace-pre-wrap"
+              dangerouslySetInnerHTML={{
+                __html: logsData.ansible_stdout
+                  ? colorizeAnsibleLog(logsData.ansible_stdout)
+                  : '<span class="text-gray-500">(no output captured yet — run in progress or not started)</span>',
+              }}
+            />
+          ) : (
+            <pre className="text-xs font-mono bg-gray-900 text-gray-100 p-3 overflow-auto max-h-[28rem] whitespace-pre-wrap">
+              {logsData.pillar || '(pillar file not found)'}
+            </pre>
+          )}
         </div>
       )}
 
@@ -508,7 +573,7 @@ export function BootstrapModal({ onClose }: Props) {
 
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg flex flex-col max-h-[92vh]">
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-3xl flex flex-col max-h-[92vh]">
         {/* Header */}
         <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200 shrink-0">
           <h2 className="text-lg font-bold text-gray-900">Bootstrap Mac Mini</h2>
