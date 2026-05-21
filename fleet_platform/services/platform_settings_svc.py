@@ -33,6 +33,16 @@ def _fernet() -> Fernet:
     return Fernet(_fernet_key())
 
 
+def encrypt_secret(plaintext: str) -> str:
+    """Encrypt a secret string for storage."""
+    return _fernet().encrypt(plaintext.encode()).decode()
+
+
+def decrypt_secret(ciphertext: str) -> str:
+    """Decrypt a stored secret."""
+    return _fernet().decrypt(ciphertext.encode()).decode()
+
+
 async def get_setting(db: AsyncSession, key: str) -> str | None:
     result = await db.execute(select(PlatformSetting).where(PlatformSetting.key == key))
     row = result.scalar_one_or_none()

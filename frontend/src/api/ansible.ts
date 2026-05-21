@@ -26,6 +26,34 @@ export interface BootstrapStatus {
   bootstrap_error: string | null
 }
 
+export interface BootstrapRunSummary {
+  id: string
+  started_at: string
+  finished_at: string | null
+  target_ip: string | null
+  status: 'running' | 'completed' | 'failed'
+  error: string | null
+  has_stdout: boolean
+}
+
+export interface BootstrapRunDetail {
+  id: string
+  node_id: string
+  started_at: string
+  finished_at: string | null
+  target_ip: string | null
+  status: 'running' | 'completed' | 'failed'
+  ansible_stdout: string | null
+  error: string | null
+}
+
+export interface BootstrapHistoryResponse {
+  items: BootstrapRunSummary[]
+  total: number
+  page: number
+  per_page: number
+}
+
 export const ansibleApi = {
   getSettings: () => api.get<PlatformSettings>('/api/v1/settings'),
   updateSettings: (payload: {
@@ -50,6 +78,10 @@ export const ansibleApi = {
     api.get<{ node_id: string; minion_id: string; bootstrap_status: string; pillar_path: string; pillar: string | null; ansible_stdout: string | null }>(`/api/v1/ansible/bootstrap/${nodeId}/logs`),
   cancelBootstrap: (nodeId: string) =>
     api.post<{ node_id: string; bootstrap_status: string; message: string }>(`/api/v1/ansible/bootstrap/${nodeId}/cancel`, {}),
+  bootstrapHistory: (nodeId: string, page = 1, perPage = 20) =>
+    api.get<BootstrapHistoryResponse>(`/api/v1/ansible/bootstrap/${nodeId}/history?page=${page}&per_page=${perPage}`),
+  bootstrapRunDetail: (nodeId: string, runId: string) =>
+    api.get<BootstrapRunDetail>(`/api/v1/ansible/bootstrap/${nodeId}/history/${runId}`),
   playbookContent: (filename: string) =>
     api.get<{ filename: string; content: string }>(`/api/v1/ansible/playbooks/content?filename=${encodeURIComponent(filename)}`),
 }

@@ -22,7 +22,10 @@ export const fleetApi = {
   node: (id: string) => api.get<NodeDetail>(`/api/v1/nodes/${id}`),
   createNode: (data: { minion_id: string; hostname?: string; ip_address?: string; hardware_model?: string; os_version?: string }) =>
     api.post<NodeDetail>('/api/v1/nodes', data),
-  updateNode: (id: string, data: { hostname?: string; ip_address?: string; hardware_model?: string; os_version?: string }) =>
+  updateNode: (id: string, data: {
+    hostname?: string; ip_address?: string; hardware_model?: string; os_version?: string;
+    ssh_username?: string; ssh_password?: string; ssh_auth_mode?: string; ssh_key?: string;
+  }) =>
     api.patch<NodeDetail>(`/api/v1/nodes/${id}`, data),
   deleteNode: (id: string) =>
     api.delete(`/api/v1/nodes/${id}`),

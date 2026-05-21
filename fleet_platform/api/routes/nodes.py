@@ -13,6 +13,7 @@ from sqlalchemy.orm import selectinload
 from fleet_platform.api.deps import get_db
 from fleet_platform.core.audit import audit
 from fleet_platform.core.auth import get_current_user, hash_password, require_role
+from fleet_platform.services.platform_settings_svc import encrypt_secret
 from fleet_platform.models.facts import NodeFact
 from fleet_platform.models.node import Node, Tag
 from fleet_platform.schemas.common import PaginatedResponse
@@ -157,6 +158,16 @@ async def update_node(
     if payload.os_version is not None:
         old_value["os_version"] = node.os_version
         node.os_version = payload.os_version
+
+    # SSH credential updates
+    if payload.ssh_username is not None:
+        node.ssh_username = payload.ssh_username
+    if payload.ssh_password is not None:
+        node.ssh_password_enc = encrypt_secret(payload.ssh_password) if payload.ssh_password else None
+    if payload.ssh_auth_mode is not None:
+        node.ssh_auth_mode = payload.ssh_auth_mode
+    if payload.ssh_key is not None:
+        node.ssh_key_enc = encrypt_secret(payload.ssh_key) if payload.ssh_key else None
 
     await audit(
         db,

@@ -5,7 +5,8 @@ import uuid
 from datetime import UTC, datetime
 from pathlib import Path
 
-from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
+from sqlalchemy import func
 
 _MINION_ID_RE = re.compile(r'^[a-zA-Z0-9._-]{1,128}$')
 from sqlalchemy import select
@@ -14,6 +15,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from fleet_platform.api.deps import get_db
 from fleet_platform.api.limiter import limiter
 from fleet_platform.core.auth import hash_password, require_role
+from fleet_platform.services.platform_settings_svc import encrypt_secret
 from fleet_platform.models.ansible_job import AnsibleJob
 from fleet_platform.models.node import Node
 from fleet_platform.schemas.ansible import BootstrapRequest, BootstrapResponse
@@ -83,7 +85,18 @@ async def bootstrap(
     else:
         node.bootstrap_status = "pending"
         node.bootstrap_ip = payload.target_ip
-        await db.commit()
+
+    # Save SSH credentials to the node for future reuse
+    if payload.ssh_username:
+        node.ssh_username = payload.ssh_username
+    if payload.ssh_password:
+        node.ssh_password_enc = encrypt_secret(payload.ssh_password)
+        node.ssh_auth_mode = "password"
+    elif payload.ssh_key:
+        node.ssh_key_enc = encrypt_secret(payload.ssh_key)
+        node.ssh_auth_mode = "key"
+    await db.commit()
+    await db.refresh(node)
 
     task = bootstrap_node.delay(
         str(node.id),
@@ -171,6 +184,84 @@ async def bootstrap_logs(
         "pillar_path": str(pillar_path),
         "pillar": pillar_content,
         "ansible_stdout": node.bootstrap_logs,
+    }
+
+
+@router.get("/bootstrap/{node_id}/history")
+async def bootstrap_history(
+    node_id: uuid.UUID,
+    page: int = Query(default=1, ge=1),
+    per_page: int = Query(default=20, ge=1, le=100),
+    db: AsyncSession = Depends(get_db),
+    _: dict = Depends(require_role("viewer", "operator", "admin")),
+):
+    """List all bootstrap runs for a node, newest first."""
+    from fleet_platform.models.bootstrap_run import BootstrapRun
+    from sqlalchemy import desc
+
+    result = await db.execute(
+        select(BootstrapRun)
+        .where(BootstrapRun.node_id == node_id)
+        .order_by(desc(BootstrapRun.started_at))
+        .offset((page - 1) * per_page)
+        .limit(per_page)
+    )
+    runs = result.scalars().all()
+
+    total = await db.scalar(
+        select(func.count()).select_from(
+            select(BootstrapRun).where(BootstrapRun.node_id == node_id).subquery()
+        )
+    )
+
+    return {
+        "items": [
+            {
+                "id": str(r.id),
+                "started_at": r.started_at.isoformat(),
+                "finished_at": r.finished_at.isoformat() if r.finished_at else None,
+                "target_ip": r.target_ip,
+                "status": r.status,
+                "error": r.error,
+                "has_stdout": bool(r.ansible_stdout),
+            }
+            for r in runs
+        ],
+        "total": total or 0,
+        "page": page,
+        "per_page": per_page,
+    }
+
+
+@router.get("/bootstrap/{node_id}/history/{run_id}")
+async def bootstrap_run_detail(
+    node_id: uuid.UUID,
+    run_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+    _: dict = Depends(require_role("viewer", "operator", "admin")),
+):
+    """Return full logs for a specific bootstrap run."""
+    from fleet_platform.models.bootstrap_run import BootstrapRun
+
+    result = await db.execute(
+        select(BootstrapRun).where(
+            BootstrapRun.id == run_id,
+            BootstrapRun.node_id == node_id,
+        )
+    )
+    run = result.scalar_one_or_none()
+    if not run:
+        raise HTTPException(status_code=404, detail="Run not found")
+
+    return {
+        "id": str(run.id),
+        "node_id": str(run.node_id),
+        "started_at": run.started_at.isoformat(),
+        "finished_at": run.finished_at.isoformat() if run.finished_at else None,
+        "target_ip": run.target_ip,
+        "status": run.status,
+        "ansible_stdout": run.ansible_stdout,
+        "error": run.error,
     }
 
 

@@ -107,14 +107,16 @@ function SingleMode({ onClose }: { onClose: () => void }) {
     staleTime: 30_000,
   })
 
-  // Auto-populate IP when an existing node is found
+  // Auto-populate IP and SSH credentials when an existing node is found
   useEffect(() => {
     if (existingNode) {
       setExistingNodeDbId(existingNode.id)
       if (existingNode.ip_address) setTargetIp(existingNode.ip_address)
+      // Pre-fill SSH username from stored node credentials
+      if (existingNode.ssh_username) setSshUsername(existingNode.ssh_username)
     } else {
       setExistingNodeDbId(null)
-      // Don't clear IP if user typed it themselves
+      // Don't clear IP or credentials if user typed them themselves
     }
   }, [existingNode])
 
@@ -303,7 +305,12 @@ function SingleMode({ onClose }: { onClose: () => void }) {
                   </div>
                 </div>
               </div>
-              <p className="text-xs text-gray-400">Overrides global Settings credentials for this run only.</p>
+              {existingNode?.has_ssh_password && !sshPassword && (
+                <p className="text-xs text-brand-600">Saved password will be used — enter a new one to override.</p>
+              )}
+              {!existingNode?.has_ssh_password && (
+                <p className="text-xs text-gray-400">Overrides global Settings credentials for this run only.</p>
+              )}
             </div>
 
             {/* Playbook preview */}
@@ -335,7 +342,7 @@ function SingleMode({ onClose }: { onClose: () => void }) {
             className="flex-1 py-2.5 border border-gray-300 text-gray-700 rounded-lg text-sm font-medium hover:bg-gray-50">
             Cancel
           </button>
-          <button type="submit" disabled={!minionId || !targetIp || !sshUsername || !sshPassword || bootstrapMutation.isPending}
+          <button type="submit" disabled={!minionId || !targetIp || !sshUsername || (!sshPassword && !existingNode?.has_ssh_password) || bootstrapMutation.isPending}
             className="flex-1 py-2.5 bg-brand-600 text-white rounded-lg text-sm font-medium hover:bg-brand-700 disabled:opacity-50">
             {bootstrapMutation.isPending ? 'Starting…' : 'Bootstrap'}
           </button>

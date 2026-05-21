@@ -27,6 +27,11 @@ export interface Node {
   drift_score: number
   last_seen_at: string | null
   tags: Tag[]
+  // SSH credential metadata (present when loaded via detail endpoint)
+  ssh_username?: string | null
+  ssh_auth_mode?: 'password' | 'key'
+  has_ssh_password?: boolean
+  has_ssh_key?: boolean
 }
 
 export interface NodeDetail extends Node {
@@ -40,6 +45,10 @@ export interface NodeDetail extends Node {
   bootstrap_ip: string | null
   bootstrap_error: string | null
   bootstrap_logs: string | null
+  ssh_username: string | null
+  ssh_auth_mode: 'password' | 'key'
+  has_ssh_password: boolean
+  has_ssh_key: boolean
 }
 
 export interface FleetOverview {

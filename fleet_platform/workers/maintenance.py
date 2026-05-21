@@ -1,9 +1,11 @@
 from datetime import UTC, datetime, timedelta
 
-from sqlalchemy import update
+from sqlalchemy import select, update
 
 from fleet_platform.db.session import get_sync_db
+from fleet_platform.models.bootstrap_run import BootstrapRun
 from fleet_platform.models.node import Node
+from fleet_platform.models.platform_setting import PlatformSetting
 from fleet_platform.workers.celery_app import celery_app
 
 _STALE_THRESHOLD = timedelta(minutes=15)
@@ -38,3 +40,29 @@ def mark_stale_nodes() -> dict:
         db.commit()
 
     return {"stale": stale.rowcount, "offline": offline.rowcount}
+
+
+@celery_app.task(
+    name="fleet_platform.workers.maintenance.cleanup_old_bootstrap_runs",
+    queue="maintenance",
+)
+def cleanup_old_bootstrap_runs() -> dict:
+    """Delete bootstrap run records older than the configured retention period."""
+    with get_sync_db() as db:
+        row = db.execute(
+            select(PlatformSetting).where(
+                PlatformSetting.key == "bootstrap_log_retention_days"
+            )
+        ).scalar_one_or_none()
+        days = int(row.value) if row and row.value else 30
+        cutoff = datetime.now(UTC) - timedelta(days=days)
+
+        runs = db.execute(
+            select(BootstrapRun).where(BootstrapRun.finished_at < cutoff)
+        ).scalars().all()
+        count = len(runs)
+        for run in runs:
+            db.delete(run)
+        db.commit()
+
+    return {"deleted": count, "cutoff_days": days}

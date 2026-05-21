@@ -122,6 +122,10 @@ function EditNodeModal({ node, onClose }: { node: Node; onClose: () => void }) {
   const [ipAddress, setIpAddress] = useState(node.ip_address ?? '')
   const [hardwareModel, setHardwareModel] = useState(node.hardware_model ?? '')
   const [osVersion, setOsVersion] = useState(node.os_version ?? '')
+  const [authMode, setAuthMode] = useState<'password' | 'key'>(node.ssh_auth_mode ?? 'password')
+  const [sshUsername, setSshUsername] = useState(node.ssh_username ?? '')
+  const [sshPassword, setSshPassword] = useState('')
+  const [sshKey, setSshKey] = useState('')
 
   const mutation = useMutation({
     mutationFn: () =>
@@ -130,6 +134,10 @@ function EditNodeModal({ node, onClose }: { node: Node; onClose: () => void }) {
         ip_address: ipAddress.trim() || undefined,
         hardware_model: hardwareModel.trim() || undefined,
         os_version: osVersion.trim() || undefined,
+        ssh_username: sshUsername || undefined,
+        ssh_password: sshPassword || undefined,
+        ssh_auth_mode: authMode,
+        ssh_key: sshKey || undefined,
       }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['nodes'] })
@@ -142,9 +150,9 @@ function EditNodeModal({ node, onClose }: { node: Node; onClose: () => void }) {
 
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md flex flex-col">
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md flex flex-col max-h-[95vh]">
         {/* Header */}
-        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200">
+        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200 shrink-0">
           <div>
             <h2 className="text-lg font-bold text-gray-900">Edit Node</h2>
             <p className="text-xs text-gray-400 mt-0.5 font-mono">{node.minion_id}</p>
@@ -158,7 +166,7 @@ function EditNodeModal({ node, onClose }: { node: Node; onClose: () => void }) {
         </div>
 
         {/* Body */}
-        <div className="px-6 py-5 space-y-4">
+        <div className="flex-1 overflow-y-auto px-6 py-5 space-y-4">
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Hostname</label>
             <input
@@ -195,10 +203,56 @@ function EditNodeModal({ node, onClose }: { node: Node; onClose: () => void }) {
               className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm text-gray-900 focus:outline-none focus:border-brand-600"
             />
           </div>
+
+          {/* SSH Access */}
+          <div className="border-t border-gray-100 pt-4 space-y-3">
+            <p className="text-sm font-semibold text-gray-700">SSH Access</p>
+
+            {/* Auth mode toggle */}
+            <div className="flex gap-3">
+              {(['password', 'key'] as const).map((mode) => (
+                <label key={mode} className="flex items-center gap-2 text-sm cursor-pointer">
+                  <input type="radio" name="authMode" value={mode}
+                    checked={authMode === mode}
+                    onChange={() => setAuthMode(mode)}
+                    className="accent-brand-600" />
+                  {mode === 'password' ? 'Password auth' : 'SSH key auth'}
+                </label>
+              ))}
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">SSH Username</label>
+              <input value={sshUsername} onChange={(e) => setSshUsername(e.target.value)}
+                placeholder="admin"
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm text-gray-900 focus:outline-none focus:border-brand-600" />
+            </div>
+
+            {authMode === 'password' ? (
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Password {node.has_ssh_password && <span className="text-gray-400 font-normal">(saved — leave blank to keep)</span>}
+                </label>
+                <input type="password" value={sshPassword} onChange={(e) => setSshPassword(e.target.value)}
+                  placeholder={node.has_ssh_password ? '••••••••' : 'Enter password'}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm text-gray-900 focus:outline-none focus:border-brand-600" />
+              </div>
+            ) : (
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Private Key {node.has_ssh_key && <span className="text-gray-400 font-normal">(saved — paste to replace)</span>}
+                </label>
+                <textarea rows={6} value={sshKey} onChange={(e) => setSshKey(e.target.value)}
+                  placeholder={'-----BEGIN OPENSSH PRIVATE KEY-----\n...'}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm font-mono text-gray-900 focus:outline-none focus:border-brand-600 resize-none" />
+                <p className="text-xs text-gray-400 mt-1">Paste the private key. The public key will be authorized on the node automatically during bootstrap.</p>
+              </div>
+            )}
+          </div>
         </div>
 
         {/* Footer */}
-        <div className="px-6 py-4 border-t border-gray-200">
+        <div className="px-6 py-4 border-t border-gray-200 shrink-0">
           <div className="flex gap-3">
             <button
               onClick={onClose}

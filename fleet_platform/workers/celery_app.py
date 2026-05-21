@@ -39,5 +39,9 @@ celery_app.conf.update(
             "schedule": crontab(hour=2, minute=0),
             "kwargs": {"keep_count": 3},
         },
+        "cleanup-old-bootstrap-runs": {
+            "task": "fleet_platform.workers.maintenance.cleanup_old_bootstrap_runs",
+            "schedule": crontab(hour=3, minute=0),
+        },
     },
 )

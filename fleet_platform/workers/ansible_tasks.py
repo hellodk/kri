@@ -6,6 +6,7 @@ import re
 import secrets
 import tempfile
 import uuid as _uuid
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 import ansible_runner
@@ -14,6 +15,7 @@ from sqlalchemy import select
 from fleet_platform.core.auth import hash_password
 from fleet_platform.core.config import settings
 from fleet_platform.db.session import get_sync_db
+from fleet_platform.models.bootstrap_run import BootstrapRun
 from fleet_platform.models.node import Node
 from fleet_platform.models.platform_setting import PlatformSetting
 from fleet_platform.services.ssh_keypair import get_controller_pubkey
@@ -59,6 +61,20 @@ def _get_bootstrap_settings(db) -> tuple[str, str, str, str]:
     pub_path = _get(CONTROLLER_PUBKEY_PATH) or str(_DEFAULT_KRI_DIR / "id_rsa.pub")
     pubkey = get_controller_pubkey(pub_path) or ""
     return salt_master, ssh_user, ssh_password, pubkey
+
+
+def _get_node_credentials(node) -> tuple[str, str, str]:
+    """Returns (ssh_user, ssh_password, ssh_auth_mode) from per-node stored credentials."""
+    from fleet_platform.services.platform_settings_svc import decrypt_secret
+    user = node.ssh_username or ""
+    password = ""
+    auth_mode = node.ssh_auth_mode or "password"
+    if node.ssh_password_enc:
+        try:
+            password = decrypt_secret(node.ssh_password_enc)
+        except Exception:
+            pass
+    return user, password, auth_mode
 
 
 def _get_pillar_dir(db) -> Path:
@@ -144,13 +160,33 @@ def bootstrap_node(self, node_id: str, target_ip: str, ssh_username: str | None 
             _get_bootstrap_settings(db)
         pillar_dir = _get_pillar_dir(db)
 
-        # Per-run credentials override global platform settings
-        ssh_user = ssh_username or _settings_ssh_user
-        ssh_password = _settings_ssh_password if ssh_password is None else ssh_password
+        # Per-node stored credentials
+        node_user, node_password, node_auth_mode = _get_node_credentials(node)
 
-        if not ssh_password:
+        # Priority: per-run args > node-stored > global settings
+        ssh_user = ssh_username or node_user or _settings_ssh_user or "admin"
+        ssh_password = ssh_password or node_password or _settings_ssh_password
+
+        # Resolve auth mode: per-run password/key arg takes priority, then node-stored mode
+        if ssh_password:
+            resolved_auth_mode = "password"
+        else:
+            resolved_auth_mode = node_auth_mode
+
+        # Load node's SSH key if key-auth mode is active and no per-run password provided
+        node_ssh_key: str | None = None
+        if resolved_auth_mode == "key" and node.ssh_key_enc:
+            from fleet_platform.services.platform_settings_svc import decrypt_secret
+            try:
+                node_ssh_key = decrypt_secret(node.ssh_key_enc)
+            except Exception:
+                logger.warning(
+                    "bootstrap_node: failed to decrypt ssh_key_enc for node_id=%s", node_id
+                )
+
+        if not ssh_password and not node_ssh_key:
             logger.warning(
-                "bootstrap_node: SSH password missing from settings for node_id=%s", node_id
+                "bootstrap_node: SSH credentials missing from settings for node_id=%s", node_id
             )
 
     # 2. Generate fresh node token and write pillar BEFORE Ansible runs
@@ -172,11 +208,19 @@ def bootstrap_node(self, node_id: str, target_ip: str, ssh_username: str | None 
         "bootstrap_node: pillar written for minion_id=%s node_id=%s", node.minion_id, node_id
     )
 
-    # 3. Update the stored token hash
+    # 3. Update the stored token hash AND create a BootstrapRun record
     with get_sync_db() as db:
         node = db.execute(select(Node).where(Node.id == node_uuid)).scalar_one()
         node.node_token_hash = hash_password(raw_token)
+        run = BootstrapRun(
+            node_id=node_uuid,
+            target_ip=target_ip,
+            status="running",
+            started_at=datetime.now(UTC),
+        )
+        db.add(run)
         db.commit()
+        run_id = run.id
 
     # 4. Run Ansible with static inventory and capture stdout
     stdout_lines: list[str] = []
@@ -186,15 +230,36 @@ def bootstrap_node(self, node_id: str, target_ip: str, ssh_username: str | None 
     logger.info("bootstrap_node: starting ansible-runner for node_id=%s", node_id)
 
     with tempfile.TemporaryDirectory(prefix="kri-bootstrap-") as tmpdir:
+        # Write SSH private key to temp file if using key auth
+        key_file_path: str | None = None
+        if node_ssh_key:
+            key_path = Path(tmpdir) / "id_bootstrap"
+            key_path.write_text(node_ssh_key)
+            key_path.chmod(0o600)
+            key_file_path = str(key_path)
+
         # Write static inventory — more reliable than dynamic.py (env var propagation issues)
         inv_path = Path(tmpdir) / "inventory.ini"
-        inv_path.write_text(
-            f"[targets]\n"
-            f"{target_ip} ansible_host={target_ip} "
-            f"ansible_user={ssh_user} ansible_ssh_pass={ssh_password} "
-            f"ansible_become_password={ssh_password}\n"
-        )
+        if key_file_path:
+            inv_path.write_text(
+                f"[targets]\n"
+                f"{target_ip} ansible_host={target_ip} "
+                f"ansible_user={ssh_user} "
+                f"ansible_ssh_private_key_file={key_file_path} "
+                f"ansible_become_password=''\n"
+            )
+        else:
+            inv_path.write_text(
+                f"[targets]\n"
+                f"{target_ip} ansible_host={target_ip} "
+                f"ansible_user={ssh_user} ansible_ssh_pass={ssh_password} "
+                f"ansible_become_password={ssh_password}\n"
+            )
         inv_path.chmod(0o600)
+
+        ssh_args = "-F /dev/null -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null"
+        if key_file_path:
+            ssh_args += f" -i {key_file_path}"
 
         result = ansible_runner.run(
             private_data_dir=tmpdir,
@@ -210,7 +275,7 @@ def bootstrap_node(self, node_id: str, target_ip: str, ssh_username: str | None 
                 # -F /dev/null skips ~/.ssh/config entirely — required when the config
                 # file is bind-mounted from the host with wrong ownership (UID mismatch
                 # between host user and container root causes "Bad owner or permissions")
-                "ANSIBLE_SSH_ARGS": "-F /dev/null -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null",
+                "ANSIBLE_SSH_ARGS": ssh_args,
             },
             quiet=False,
             rotate_artifacts=1,
@@ -239,6 +304,21 @@ def bootstrap_node(self, node_id: str, target_ip: str, ssh_username: str | None 
             msg = event.get("stdout", "")
             if msg:
                 stdout_lines.append(msg)
+                # Write incrementally every 10 lines so UI can poll and see progress
+                if len(stdout_lines) % 10 == 0:
+                    joined = "\n".join(stdout_lines)
+                    with get_sync_db() as _db:
+                        _n = _db.execute(
+                            select(Node).where(Node.id == node_uuid)
+                        ).scalar_one_or_none()
+                        _run = _db.execute(
+                            select(BootstrapRun).where(BootstrapRun.id == run_id)
+                        ).scalar_one_or_none()
+                        if _n:
+                            _n.bootstrap_logs = joined
+                        if _run:
+                            _run.ansible_stdout = joined
+                        _db.commit()
 
     # 5. Detect common failure modes from stdout
     full_stdout = "\n".join(stdout_lines)
@@ -272,7 +352,7 @@ def bootstrap_node(self, node_id: str, target_ip: str, ssh_username: str | None 
             result.rc, result.status, last_task, node_id,
         )
 
-    # 6. Update bootstrap status + logs
+    # 6. Update bootstrap status + logs; finalize the BootstrapRun record
     with get_sync_db() as db:
         node = db.execute(select(Node).where(Node.id == node_uuid)).scalar_one()
         if result.status == "successful" and result.rc == 0:
@@ -282,6 +362,16 @@ def bootstrap_node(self, node_id: str, target_ip: str, ssh_username: str | None 
             node.bootstrap_status = "failed"
             node.bootstrap_error = bootstrap_error
         node.bootstrap_logs = full_stdout or f"rc={result.rc} status={result.status}"
+
+        run = db.execute(
+            select(BootstrapRun).where(BootstrapRun.id == run_id)
+        ).scalar_one_or_none()
+        if run:
+            run.finished_at = datetime.now(UTC)
+            run.status = "completed" if result.status == "successful" and result.rc == 0 else "failed"
+            run.ansible_stdout = node.bootstrap_logs
+            run.error = bootstrap_error
+
         db.commit()
 
     return {"status": result.status, "rc": result.rc, "node_id": node_id}
