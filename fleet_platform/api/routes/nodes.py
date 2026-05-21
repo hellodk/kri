@@ -179,11 +179,12 @@ async def update_node(
         new_value=payload.model_dump(exclude_none=True),
     )
     await db.commit()
-    await db.refresh(node)
-    response = NodeDetailResponse.model_validate(node)
-    # model_validate doesn't always pick up encrypted columns from ORM refresh;
-    # set the flags explicitly from the in-memory node object post-commit.
-    return response.model_copy(update={
+    # Re-query after commit so all columns (including encrypted ones) are fresh
+    result2 = await db.execute(
+        select(Node).options(selectinload(Node.tags)).where(Node.id == node_id)
+    )
+    node = result2.scalar_one()
+    return NodeDetailResponse.model_validate(node).model_copy(update={
         "has_ssh_password": bool(node.ssh_password_enc),
         "has_ssh_key": bool(node.ssh_key_enc),
     })
