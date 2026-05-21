@@ -180,7 +180,13 @@ async def update_node(
     )
     await db.commit()
     await db.refresh(node)
-    return NodeDetailResponse.model_validate(node)
+    response = NodeDetailResponse.model_validate(node)
+    # model_validate doesn't always pick up encrypted columns from ORM refresh;
+    # set the flags explicitly from the in-memory node object post-commit.
+    return response.model_copy(update={
+        "has_ssh_password": bool(node.ssh_password_enc),
+        "has_ssh_key": bool(node.ssh_key_enc),
+    })
 
 
 @router.delete("/{node_id}", status_code=204)
