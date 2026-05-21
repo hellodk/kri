@@ -320,34 +320,6 @@ export function FleetDashboard() {
   const qc = useQueryClient()
   const toast = useToastStore((s) => s.add)
 
-  const allIds = nodes?.items.map((n) => n.id) ?? []
-  const allSelected = allIds.length > 0 && allIds.every((id) => selected.has(id))
-  const someSelected = selected.size > 0
-
-  function toggleAll() {
-    if (allSelected) setSelected(new Set())
-    else setSelected(new Set(allIds))
-  }
-
-  function toggleOne(id: string) {
-    const next = new Set(selected)
-    next.has(id) ? next.delete(id) : next.add(id)
-    setSelected(next)
-  }
-
-  async function bulkDelete() {
-    setBulkDeleting(true)
-    let failed = 0
-    await Promise.allSettled([...selected].map(id =>
-      fleetApi.deleteNode(id).catch(() => { failed++ })
-    ))
-    setBulkDeleting(false)
-    setSelected(new Set())
-    qc.invalidateQueries({ queryKey: ['nodes'] })
-    qc.invalidateQueries({ queryKey: ['fleet-overview'] })
-    toast(failed ? `Deleted with ${failed} error(s)` : `Deleted ${selected.size} node(s)`, failed ? 'error' : 'success')
-  }
-
   const { data: overview, isLoading: ovLoading } = useQuery({
     queryKey: ['fleet-overview'],
     queryFn: fleetApi.overview,
@@ -374,6 +346,36 @@ export function FleetDashboard() {
     }),
     staleTime: 30_000,
   })
+
+  // Bulk select helpers — defined after nodes query so nodes is in scope
+  const allIds = nodes?.items.map((n) => n.id) ?? []
+  const allSelected = allIds.length > 0 && allIds.every((id) => selected.has(id))
+  const someSelected = selected.size > 0
+
+  function toggleAll() {
+    if (allSelected) setSelected(new Set())
+    else setSelected(new Set(allIds))
+  }
+
+  function toggleOne(id: string) {
+    const next = new Set(selected)
+    next.has(id) ? next.delete(id) : next.add(id)
+    setSelected(next)
+  }
+
+  async function bulkDelete() {
+    const count = selected.size
+    setBulkDeleting(true)
+    let failed = 0
+    await Promise.allSettled([...selected].map(id =>
+      fleetApi.deleteNode(id).catch(() => { failed++ })
+    ))
+    setBulkDeleting(false)
+    setSelected(new Set())
+    qc.invalidateQueries({ queryKey: ['nodes'] })
+    qc.invalidateQueries({ queryKey: ['fleet-overview'] })
+    toast(failed ? `Deleted with ${failed} error(s)` : `Deleted ${count} node(s)`, failed ? 'error' : 'success')
+  }
 
   return (
     <div className="space-y-6">
