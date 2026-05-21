@@ -53,23 +53,18 @@ class NodeDetailResponse(NodeListItem):
     @model_validator(mode="wrap")
     @classmethod
     def compute_ssh_flags(cls, data: Any, handler: Any) -> "NodeDetailResponse":
-        # Resolve has_ssh_password / has_ssh_key before Pydantic validates fields.
-        # data may be an ORM object (from_attributes=True) or a plain dict.
+        """Set has_ssh_password/has_ssh_key from ORM encrypted columns without exposing secrets."""
         if isinstance(data, dict):
             data.setdefault("has_ssh_password", bool(data.get("ssh_password_enc")))
             data.setdefault("has_ssh_key", bool(data.get("ssh_key_enc")))
-        else:
-            # ORM object — read enc fields directly; pass as-is (from_attributes handles the rest)
-            # We inject into the dict representation used by from_attributes
-            # by converting to dict and letting Pydantic re-validate from that.
-            pass
+            return handler(data)
+        # ORM object: build the model first, then use model_copy to set flags.
+        # object.__setattr__ doesn't work on frozen Pydantic v2 models.
         result = handler(data)
-        # For ORM objects, has_ssh_password/has_ssh_key default to False above;
-        # override them now from the ORM attributes.
-        if not isinstance(data, dict):
-            object.__setattr__(result, "has_ssh_password", bool(getattr(data, "ssh_password_enc", None)))
-            object.__setattr__(result, "has_ssh_key", bool(getattr(data, "ssh_key_enc", None)))
-        return result
+        return result.model_copy(update={
+            "has_ssh_password": bool(getattr(data, "ssh_password_enc", None)),
+            "has_ssh_key": bool(getattr(data, "ssh_key_enc", None)),
+        })
 
 
 class NodeCreateRequest(BaseModel):
