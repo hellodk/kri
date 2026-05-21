@@ -4,6 +4,7 @@ from datetime import UTC, datetime
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import func, select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -91,11 +92,25 @@ async def create_group(
     )
     from fleet_platform.core.audit import audit
     db.add(group)
-    await db.flush()
+    try:
+        await db.flush()
+    except IntegrityError:
+        await db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Group name already exists",
+        )
     await audit(db, actor=claims["email"], action="group.create",
                 resource_type="group", resource_id=group.id,
                 new_value={"name": group.name, "type": group.type})
-    await db.commit()
+    try:
+        await db.commit()
+    except IntegrityError:
+        await db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Group name already exists",
+        )
     await db.refresh(group)
     return _to_response(group, 0)
 
