@@ -14,10 +14,11 @@ test.describe('Fleet Dashboard', () => {
   // ── Stat cards ──────────────────────────────────────────────────────────────
 
   test('FLEET-01 four stat cards render', async ({ page }) => {
-    await expect(page.locator('text=Total Nodes')).toBeVisible()
-    await expect(page.locator('text=Online')).toBeVisible()
-    await expect(page.locator('text=Offline / Stale')).toBeVisible()
-    await expect(page.locator('text=Avg Drift Score')).toBeVisible()
+    // Target the uppercase card labels specifically (text-xs uppercase tracking-wide)
+    await expect(page.locator('.uppercase:has-text("Total Nodes")').first()).toBeVisible()
+    await expect(page.locator('.uppercase:has-text("Online")').first()).toBeVisible()
+    await expect(page.locator('.uppercase:has-text("Offline")').first()).toBeVisible()
+    await expect(page.locator('.uppercase:has-text("Avg Drift Score")').first()).toBeVisible()
   })
 
   // ── Node table ──────────────────────────────────────────────────────────────

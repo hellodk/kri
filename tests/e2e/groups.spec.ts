@@ -23,10 +23,11 @@ test.describe('Groups', () => {
 
   test('GRP-02 create static group appears in list', async ({ page }) => {
     const name = `E2E Static ${Date.now()}`
+    // "New Group" toggles an inline form — input has no placeholder, find by label
     await page.click('button:has-text("New Group")')
-    await page.fill('input[placeholder*="name"]', name)
-    // static type should be default
-    await page.click('button:has-text("Create")')
+    const nameInput = page.locator('label:has-text("Name") + input, label:has-text("Name") ~ input').first()
+    await nameInput.fill(name)
+    await page.click('button[type="submit"]:has-text("Create")')
     await expect(page.locator(`text=${name}`)).toBeVisible({ timeout: 6000 })
     await expect(page.locator('text=static').first()).toBeVisible()
   })

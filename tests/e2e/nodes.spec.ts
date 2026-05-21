@@ -35,11 +35,11 @@ test.describe('Node Detail', () => {
   })
 
   test('NODE-02 overview tab hardware card visible', async ({ page }) => {
-    await expect(page.locator('text=Hardware').or(page.locator('text=Model'))).toBeVisible()
+    await expect(page.locator('h3:has-text("Hardware")').first()).toBeVisible()
   })
 
   test('NODE-03 overview tab OS card visible', async ({ page }) => {
-    await expect(page.locator('text=OS').or(page.locator('text=Version'))).toBeVisible()
+    await expect(page.locator('h3:has-text("OS")').first()).toBeVisible()
   })
 
   test('NODE-09 add user tag appears in list', async ({ page }) => {

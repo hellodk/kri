@@ -1,10 +1,13 @@
 # fleet_platform/api/routes/ansible.py
+import re
 import secrets
 import uuid
 from datetime import UTC, datetime
 from pathlib import Path
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
+
+_MINION_ID_RE = re.compile(r'^[a-zA-Z0-9._-]{1,128}$')
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -37,6 +40,12 @@ async def bootstrap(
     db: AsyncSession = Depends(get_db),
     claims: dict = Depends(require_role("operator", "admin")),
 ):
+    if not _MINION_ID_RE.match(payload.minion_id):
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=f"Invalid minion_id '{payload.minion_id}': only [a-zA-Z0-9._-] allowed",
+        )
+
     result = await db.execute(
         select(Node).where(Node.minion_id == payload.minion_id)
     )

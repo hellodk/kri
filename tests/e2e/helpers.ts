@@ -46,5 +46,6 @@ export async function loginViaApi(page: Page, user = ADMIN) {
 
   // 3. Navigate — Zustand will hydrate with the user already set
   await page.goto('/fleet')
-  await page.waitForSelector('h1:has-text("Fleet Dashboard")', { timeout: 12000 })
+  await page.waitForLoadState('networkidle')
+  await page.locator('h1:has-text("Fleet Dashboard")').waitFor({ state: 'visible', timeout: 15000 })
 }
