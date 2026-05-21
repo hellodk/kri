@@ -204,16 +204,36 @@ async def list_nodes(
     status: str | None = None,
     tag: str | None = None,
     group_id: uuid.UUID | None = None,
+    search: str | None = None,
+    os_version: str | None = None,
+    drift_min: int | None = Query(default=None, ge=0),
+    drift_max: int | None = Query(default=None, ge=0),
     sort: str = "drift_score:desc",
     page: int = Query(default=1, ge=1),
     per_page: int = Query(default=25, ge=1, le=200),
     db: AsyncSession = Depends(get_db),
     _: dict = Depends(get_current_user),
 ):
+    from sqlalchemy import or_
     query = select(Node).options(selectinload(Node.tags))
 
     if status:
         query = query.where(Node.status == status)
+
+    if search:
+        pattern = f"%{search}%"
+        query = query.where(
+            or_(Node.hostname.ilike(pattern), Node.minion_id.ilike(pattern))
+        )
+
+    if os_version:
+        query = query.where(Node.os_version.ilike(f"%{os_version}%"))
+
+    if drift_min is not None:
+        query = query.where(Node.drift_score >= drift_min)
+
+    if drift_max is not None:
+        query = query.where(Node.drift_score <= drift_max)
 
     if tag:
         key, _, value = tag.partition(":")

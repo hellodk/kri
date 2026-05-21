@@ -17,13 +17,19 @@ from fleet_platform.core.auth import hash_password, require_role
 from fleet_platform.models.ansible_job import AnsibleJob
 from fleet_platform.models.node import Node
 from fleet_platform.schemas.ansible import BootstrapRequest, BootstrapResponse
+from fleet_platform.models.platform_setting import PlatformSetting
 from fleet_platform.schemas.playbook import (
     AnsibleJobResponse,
     PlaybookEntryResponse,
     PlaybookRunRequest,
     PlaybookRunResponse,
+    PlaybookSourceRequest,
+    PlaybookSourceResponse,
+    PlaybookSourceSyncResult,
+    PlaybookSourcesImportRequest,
 )
 from fleet_platform.services.playbook_discovery import discover_all
+from fleet_platform.services.playbook_sources import get_all_playbook_dirs, sync_all_git_sources
 from fleet_platform.workers.ansible_tasks import bootstrap_node
 from fleet_platform.workers.playbook_tasks import run_playbook
 
@@ -170,9 +176,19 @@ async def bootstrap_logs(
 
 @router.get("/playbooks", response_model=list[PlaybookEntryResponse])
 async def list_playbooks(
+    db: AsyncSession = Depends(get_db),
     _: dict = Depends(require_role("viewer", "operator", "admin")),
 ):
-    entries = discover_all(_PLAYBOOKS_DIR)
+    result = await db.execute(
+        select(PlatformSetting).where(PlatformSetting.key == "playbook_sources")
+    )
+    setting = result.scalar_one_or_none()
+    sources_json = setting.value if setting else None
+
+    all_dirs = get_all_playbook_dirs(sources_json, _PLAYBOOKS_DIR)
+    all_entries = []
+    for d in all_dirs:
+        all_entries.extend(discover_all(d))
     return [
         PlaybookEntryResponse(
             filename=e.filename,
@@ -181,8 +197,178 @@ async def list_playbooks(
             entry_type=e.entry_type,
             default_vars=e.default_vars,
         )
-        for e in entries
+        for e in all_entries
     ]
+
+
+@router.get("/sources", response_model=list[PlaybookSourceResponse])
+async def list_sources(
+    db: AsyncSession = Depends(get_db),
+    _: dict = Depends(require_role("viewer", "operator", "admin")),
+):
+    """List configured extra playbook sources."""
+    import json as _json
+    result = await db.execute(
+        select(PlatformSetting).where(PlatformSetting.key == "playbook_sources")
+    )
+    setting = result.scalar_one_or_none()
+    if not setting or not setting.value:
+        return []
+    try:
+        sources = _json.loads(setting.value)
+    except (ValueError, TypeError):
+        return []
+    return [
+        PlaybookSourceResponse(index=i, **{k: v for k, v in src.items()})
+        for i, src in enumerate(sources)
+    ]
+
+
+@router.post("/sources", response_model=PlaybookSourceResponse, status_code=201)
+async def add_source(
+    payload: PlaybookSourceRequest,
+    db: AsyncSession = Depends(get_db),
+    _: dict = Depends(require_role("operator", "admin")),
+):
+    """Add a new playbook source (local directory or git repository)."""
+    import json as _json
+    if payload.type == "local":
+        if not payload.path:
+            raise HTTPException(status_code=422, detail="path is required for local source")
+    elif payload.type == "git":
+        if not payload.url:
+            raise HTTPException(status_code=422, detail="url is required for git source")
+
+    result = await db.execute(
+        select(PlatformSetting).where(PlatformSetting.key == "playbook_sources")
+    )
+    setting = result.scalar_one_or_none()
+    sources = []
+    if setting and setting.value:
+        try:
+            sources = _json.loads(setting.value)
+        except (ValueError, TypeError):
+            sources = []
+
+    new_src: dict = {"type": payload.type}
+    if payload.type == "local":
+        new_src["path"] = payload.path
+    elif payload.type == "git":
+        new_src["url"] = payload.url
+        new_src["branch"] = payload.branch
+        if payload.local_path:
+            new_src["local_path"] = payload.local_path
+    if payload.label:
+        new_src["label"] = payload.label
+
+    sources.append(new_src)
+    new_index = len(sources) - 1
+
+    if setting:
+        setting.value = _json.dumps(sources)
+    else:
+        setting = PlatformSetting(key="playbook_sources", value=_json.dumps(sources))
+        db.add(setting)
+    await db.commit()
+
+    return PlaybookSourceResponse(index=new_index, **new_src)
+
+
+@router.delete("/sources/{index}", status_code=204)
+async def remove_source(
+    index: int,
+    db: AsyncSession = Depends(get_db),
+    _: dict = Depends(require_role("operator", "admin")),
+):
+    """Remove a playbook source by its index."""
+    import json as _json
+    result = await db.execute(
+        select(PlatformSetting).where(PlatformSetting.key == "playbook_sources")
+    )
+    setting = result.scalar_one_or_none()
+    if not setting or not setting.value:
+        raise HTTPException(status_code=404, detail="No sources configured")
+    try:
+        sources = _json.loads(setting.value)
+    except (ValueError, TypeError):
+        raise HTTPException(status_code=500, detail="Corrupt sources setting")
+    if index < 0 or index >= len(sources):
+        raise HTTPException(status_code=404, detail=f"Source index {index} not found")
+    sources.pop(index)
+    setting.value = _json.dumps(sources)
+    await db.commit()
+
+
+@router.post("/sources/sync", response_model=PlaybookSourceSyncResult)
+async def sync_sources(
+    db: AsyncSession = Depends(get_db),
+    _: dict = Depends(require_role("operator", "admin")),
+):
+    """Force-sync all configured git playbook sources."""
+    result = await db.execute(
+        select(PlatformSetting).where(PlatformSetting.key == "playbook_sources")
+    )
+    setting = result.scalar_one_or_none()
+    sources_json = setting.value if setting else None
+    sync_results = sync_all_git_sources(sources_json)
+    return PlaybookSourceSyncResult(results=sync_results)
+
+
+@router.post("/sources/import", response_model=dict)
+async def import_sources_csv(
+    payload: PlaybookSourcesImportRequest,
+    db: AsyncSession = Depends(get_db),
+    _: dict = Depends(require_role("operator", "admin")),
+):
+    """Bulk-import playbook sources from CSV text.
+
+    Format (one entry per line):
+        type, path/url, branch (for git; leave blank for local), label
+    Lines starting with '#' are treated as comments and ignored.
+    """
+    import json as _json
+    result = await db.execute(
+        select(PlatformSetting).where(PlatformSetting.key == "playbook_sources")
+    )
+    setting = result.scalar_one_or_none()
+    sources: list[dict] = []
+    if setting and setting.value:
+        try:
+            sources = _json.loads(setting.value)
+        except (ValueError, TypeError):
+            sources = []
+
+    added = 0
+    for raw_line in payload.csv.splitlines():
+        line = raw_line.strip()
+        if not line or line.startswith("#"):
+            continue
+        parts = [p.strip() for p in line.split(",")]
+        if len(parts) < 2:
+            continue
+        src_type = parts[0].lower()
+        if src_type not in ("local", "git"):
+            continue
+        new_src: dict = {"type": src_type}
+        if src_type == "local":
+            new_src["path"] = parts[1]
+        elif src_type == "git":
+            new_src["url"] = parts[1]
+            new_src["branch"] = parts[2] if len(parts) > 2 and parts[2] else "main"
+        if len(parts) > 3 and parts[3]:
+            new_src["label"] = parts[3]
+        sources.append(new_src)
+        added += 1
+
+    if setting:
+        setting.value = _json.dumps(sources)
+    else:
+        setting = PlatformSetting(key="playbook_sources", value=_json.dumps(sources))
+        db.add(setting)
+    if added:
+        await db.commit()
+
+    return {"added": added}
 
 
 @router.get("/playbooks/content")

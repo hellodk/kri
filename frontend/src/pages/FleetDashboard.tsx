@@ -290,14 +290,63 @@ function DeleteNodeDialog({ node, onClose }: { node: Node; onClose: () => void }
 export function FleetDashboard() {
   const [page, setPage] = useState(1)
   const [perPage, setPerPage] = useState(50)
+  const [search, setSearch] = useState('')
   const [statusFilter, setStatusFilter] = useState('')
+  const [osFilter, setOsFilter] = useState('')
+  const [tagFilter, setTagFilter] = useState('')
+  const [driftMin, setDriftMin] = useState('')
+  const [driftMax, setDriftMax] = useState('')
+  const [sort, setSort] = useState('drift_score:desc')
   const [showBootstrap, setShowBootstrap] = useState(false)
   const [showAddNode, setShowAddNode] = useState(false)
   const [editingNode, setEditingNode] = useState<Node | null>(null)
   const [deletingNode, setDeletingNode] = useState<Node | null>(null)
+  const [selected, setSelected] = useState<Set<string>>(new Set())
+  const [bulkDeleting, setBulkDeleting] = useState(false)
 
   const user = useAuthStore((s) => s.user)
   const canManage = user?.role === 'admin' || user?.role === 'operator'
+
+  const filters = { search, statusFilter, osFilter, tagFilter, driftMin, driftMax, sort }
+
+  function resetFilters() {
+    setSearch(''); setStatusFilter(''); setOsFilter('')
+    setTagFilter(''); setDriftMin(''); setDriftMax(''); setSort('drift_score:desc')
+    setPage(1)
+  }
+
+  const hasActiveFilters = search || statusFilter || osFilter || tagFilter || driftMin || driftMax
+
+  const qc = useQueryClient()
+  const toast = useToastStore((s) => s.add)
+
+  const allIds = nodes?.items.map((n) => n.id) ?? []
+  const allSelected = allIds.length > 0 && allIds.every((id) => selected.has(id))
+  const someSelected = selected.size > 0
+
+  function toggleAll() {
+    if (allSelected) setSelected(new Set())
+    else setSelected(new Set(allIds))
+  }
+
+  function toggleOne(id: string) {
+    const next = new Set(selected)
+    next.has(id) ? next.delete(id) : next.add(id)
+    setSelected(next)
+  }
+
+  async function bulkDelete() {
+    setBulkDeleting(true)
+    let failed = 0
+    await Promise.allSettled([...selected].map(id =>
+      fleetApi.deleteNode(id).catch(() => { failed++ })
+    ))
+    setBulkDeleting(false)
+    setSelected(new Set())
+    qc.invalidateQueries({ queryKey: ['nodes'] })
+    qc.invalidateQueries({ queryKey: ['fleet-overview'] })
+    toast(failed ? `Deleted with ${failed} error(s)` : `Deleted ${selected.size} node(s)`, failed ? 'error' : 'success')
+  }
 
   const { data: overview, isLoading: ovLoading } = useQuery({
     queryKey: ['fleet-overview'],
@@ -312,8 +361,17 @@ export function FleetDashboard() {
     isError,
     refetch,
   } = useQuery({
-    queryKey: ['nodes', page, perPage, statusFilter],
-    queryFn: () => fleetApi.nodes({ page, per_page: perPage, status: statusFilter || undefined }),
+    queryKey: ['nodes', page, perPage, filters],
+    queryFn: () => fleetApi.nodes({
+      page, per_page: perPage,
+      status: statusFilter || undefined,
+      search: search || undefined,
+      os_version: osFilter || undefined,
+      tag: tagFilter || undefined,
+      drift_min: driftMin ? parseInt(driftMin) : undefined,
+      drift_max: driftMax ? parseInt(driftMax) : undefined,
+      sort,
+    }),
     staleTime: 30_000,
   })
 
@@ -362,20 +420,75 @@ export function FleetDashboard() {
         </div>
       ) : null}
 
-      {/* Filter */}
-      <div className="flex items-center gap-3">
-        <label className="text-sm font-medium text-gray-600">Status:</label>
-        <select
-          value={statusFilter}
-          onChange={(e) => { setStatusFilter(e.target.value); setPage(1) }}
-          className="text-sm bg-white border border-gray-300 text-gray-900 rounded-lg px-3 py-1.5 focus:outline-none focus:border-brand-600"
-        >
-          <option value="">All</option>
-          <option value="online">Online</option>
-          <option value="offline">Offline</option>
-          <option value="stale">Stale</option>
-          <option value="unknown">Unknown</option>
-        </select>
+      {/* Filter bar */}
+      <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-4 space-y-3">
+        {/* Row 1: search + status + OS */}
+        <div className="flex flex-wrap items-center gap-3">
+          {/* Search */}
+          <div className="relative flex-1 min-w-[180px]">
+            <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><circle cx="11" cy="11" r="8"/><path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-4.35-4.35"/></svg>
+            <input
+              value={search}
+              onChange={(e) => { setSearch(e.target.value); setPage(1) }}
+              placeholder="Search hostname or minion ID…"
+              className="w-full pl-9 pr-3 py-1.5 border border-gray-300 text-sm text-gray-900 rounded-lg focus:outline-none focus:border-brand-600"
+            />
+          </div>
+
+          {/* Status */}
+          <select value={statusFilter} onChange={(e) => { setStatusFilter(e.target.value); setPage(1) }}
+            className="text-sm bg-white border border-gray-300 text-gray-900 rounded-lg px-3 py-1.5 focus:outline-none focus:border-brand-600">
+            <option value="">All statuses</option>
+            <option value="online">Online</option>
+            <option value="offline">Offline</option>
+            <option value="stale">Stale</option>
+            <option value="unknown">Unknown</option>
+          </select>
+
+          {/* OS Version */}
+          <input value={osFilter} onChange={(e) => { setOsFilter(e.target.value); setPage(1) }}
+            placeholder="OS (e.g. 14.4)"
+            className="w-36 px-3 py-1.5 border border-gray-300 text-sm text-gray-900 rounded-lg focus:outline-none focus:border-brand-600" />
+
+          {/* Tag filter */}
+          <input value={tagFilter} onChange={(e) => { setTagFilter(e.target.value); setPage(1) }}
+            placeholder="Tag key:value"
+            className="w-40 px-3 py-1.5 border border-gray-300 text-sm text-gray-900 rounded-lg focus:outline-none focus:border-brand-600" />
+        </div>
+
+        {/* Row 2: drift range + sort + reset */}
+        <div className="flex flex-wrap items-center gap-3">
+          <span className="text-sm text-gray-500 font-medium">Drift:</span>
+          <input value={driftMin} onChange={(e) => { setDriftMin(e.target.value); setPage(1) }}
+            placeholder="Min" type="number" min="0"
+            className="w-20 px-3 py-1.5 border border-gray-300 text-sm text-gray-900 rounded-lg focus:outline-none focus:border-brand-600" />
+          <span className="text-gray-400 text-sm">–</span>
+          <input value={driftMax} onChange={(e) => { setDriftMax(e.target.value); setPage(1) }}
+            placeholder="Max" type="number" min="0"
+            className="w-20 px-3 py-1.5 border border-gray-300 text-sm text-gray-900 rounded-lg focus:outline-none focus:border-brand-600" />
+
+          <div className="flex-1" />
+
+          {/* Sort */}
+          <select value={sort} onChange={(e) => { setSort(e.target.value); setPage(1) }}
+            className="text-sm bg-white border border-gray-300 text-gray-900 rounded-lg px-3 py-1.5 focus:outline-none focus:border-brand-600">
+            <option value="drift_score:desc">Drift ↓</option>
+            <option value="drift_score:asc">Drift ↑</option>
+            <option value="hostname:asc">Hostname A–Z</option>
+            <option value="hostname:desc">Hostname Z–A</option>
+            <option value="last_seen_at:desc">Last Seen ↓</option>
+            <option value="last_seen_at:asc">Last Seen ↑</option>
+            <option value="status:asc">Status A–Z</option>
+          </select>
+
+          {/* Reset */}
+          {hasActiveFilters && (
+            <button onClick={resetFilters}
+              className="text-sm text-gray-500 hover:text-gray-700 border border-gray-200 rounded-lg px-3 py-1.5 hover:bg-gray-50">
+              ✕ Clear filters
+            </button>
+          )}
+        </div>
       </div>
 
       {/* Node table */}
@@ -402,9 +515,32 @@ export function FleetDashboard() {
               </div>
             ) : (
               <>
+                {/* Bulk action bar */}
+                {someSelected && canManage && (
+                  <div className="flex items-center gap-3 px-4 py-2 bg-brand-50 border-b border-brand-200">
+                    <span className="text-sm font-medium text-brand-700">{selected.size} selected</span>
+                    <button
+                      onClick={bulkDelete}
+                      disabled={bulkDeleting}
+                      className="px-3 py-1 bg-red-600 text-white text-xs font-medium rounded-lg hover:bg-red-700 disabled:opacity-50"
+                    >
+                      {bulkDeleting ? 'Deleting…' : `Delete ${selected.size}`}
+                    </button>
+                    <button onClick={() => setSelected(new Set())}
+                      className="text-xs text-brand-600 hover:text-brand-800">
+                      Clear selection
+                    </button>
+                  </div>
+                )}
                 <table className="w-full text-sm">
                   <thead>
                     <tr className="bg-gray-50 border-b border-gray-200 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide">
+                      {canManage && (
+                        <th className="pl-4 py-3 w-8">
+                          <input type="checkbox" checked={allSelected} onChange={toggleAll}
+                            className="accent-brand-600 cursor-pointer" />
+                        </th>
+                      )}
                       <th className="px-4 py-3">Hostname</th>
                       <th className="px-4 py-3">Status</th>
                       <th className="px-4 py-3">OS</th>
@@ -416,7 +552,14 @@ export function FleetDashboard() {
                   </thead>
                   <tbody className="divide-y divide-gray-100">
                     {nodes?.items.map((node) => (
-                      <tr key={node.id} className="hover:bg-gray-50 transition-colors">
+                      <tr key={node.id} className={`hover:bg-gray-50 transition-colors ${selected.has(node.id) ? 'bg-brand-50/40' : ''}`}>
+                        {canManage && (
+                          <td className="pl-4 py-3 w-8">
+                            <input type="checkbox" checked={selected.has(node.id)}
+                              onChange={() => toggleOne(node.id)}
+                              className="accent-brand-600 cursor-pointer" />
+                          </td>
+                        )}
                         <td className="px-4 py-3 font-medium font-mono text-xs">
                           <Link to={`/nodes/${node.id}`} className="text-brand-600 hover:text-brand-700 hover:underline">
                             {node.hostname ?? node.minion_id}
@@ -455,18 +598,10 @@ export function FleetDashboard() {
                         {canManage && (
                           <td className="px-4 py-3 text-right">
                             <div className="flex items-center justify-end gap-2">
-                              <button
-                                onClick={() => setEditingNode(node)}
-                                className="text-xs text-brand-600 hover:text-brand-700 font-medium"
-                              >
-                                Edit
-                              </button>
-                              <button
-                                onClick={() => setDeletingNode(node)}
-                                className="text-xs text-red-500 hover:text-red-700 font-medium"
-                              >
-                                Delete
-                              </button>
+                              <button onClick={() => setEditingNode(node)}
+                                className="text-xs text-brand-600 hover:text-brand-700 font-medium">Edit</button>
+                              <button onClick={() => setDeletingNode(node)}
+                                className="text-xs text-red-500 hover:text-red-700 font-medium">Delete</button>
                             </div>
                           </td>
                         )}

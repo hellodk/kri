@@ -3,12 +3,20 @@ import type { FleetOverview, Node, NodeDetail, Paginated, Tag } from '../types'
 
 export const fleetApi = {
   overview: () => api.get<FleetOverview>('/api/v1/fleet/overview'),
-  nodes: (params: { page?: number; per_page?: number; status?: string; sort?: string }) => {
+  nodes: (params: {
+    page?: number; per_page?: number; status?: string; sort?: string;
+    search?: string; os_version?: string; drift_min?: number; drift_max?: number; tag?: string;
+  }) => {
     const q = new URLSearchParams()
-    if (params.page) q.set('page', String(params.page))
-    if (params.per_page) q.set('per_page', String(params.per_page))
-    if (params.status) q.set('status', params.status)
-    if (params.sort) q.set('sort', params.sort)
+    if (params.page)       q.set('page',       String(params.page))
+    if (params.per_page)   q.set('per_page',   String(params.per_page))
+    if (params.status)     q.set('status',     params.status)
+    if (params.sort)       q.set('sort',       params.sort)
+    if (params.search)     q.set('search',     params.search)
+    if (params.os_version) q.set('os_version', params.os_version)
+    if (params.tag)        q.set('tag',        params.tag)
+    if (params.drift_min != null) q.set('drift_min', String(params.drift_min))
+    if (params.drift_max != null) q.set('drift_max', String(params.drift_max))
     return api.get<Paginated<Node>>(`/api/v1/nodes?${q}`)
   },
   node: (id: string) => api.get<NodeDetail>(`/api/v1/nodes/${id}`),

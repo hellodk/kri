@@ -1,6 +1,7 @@
 # fleet_platform/schemas/playbook.py
 import uuid
 from datetime import datetime
+from typing import Any, Literal
 from pydantic import BaseModel
 
 
@@ -42,3 +43,30 @@ class AnsibleJobResponse(BaseModel):
     stdout: str | None
     rc: int | None
     created_at: datetime
+
+
+class PlaybookSourceRequest(BaseModel):
+    type: Literal["local", "git"]
+    path: str | None = None       # for local
+    url: str | None = None        # for git
+    branch: str = "main"          # for git
+    label: str | None = None      # display name
+    local_path: str | None = None  # override clone destination for git
+
+
+class PlaybookSourceResponse(BaseModel):
+    index: int
+    type: str
+    path: str | None = None
+    url: str | None = None
+    branch: str | None = None
+    label: str | None = None
+    local_path: str | None = None
+
+
+class PlaybookSourcesImportRequest(BaseModel):
+    csv: str
+
+
+class PlaybookSourceSyncResult(BaseModel):
+    results: list[dict[str, Any]]
