@@ -127,10 +127,13 @@ function SingleMode({ onClose }: { onClose: () => void }) {
     staleTime: Infinity,
   })
 
+  const [localLogs, setLocalLogs] = useState<string | null>(null)
+
   const bootstrapMutation = useMutation({
     mutationFn: () => ansibleApi.bootstrap(minionId, targetIp, sshUsername || undefined, sshPassword || undefined),
+    onMutate: () => { setLocalLogs('') },
     onSuccess: (data) => { setNodeId(data.node_id); setShowLogs(true); toast('Bootstrap started') },
-    onError: (e: Error) => toast(e.message, 'error'),
+    onError: (e: Error) => { setLocalLogs(null); toast(e.message, 'error') },
   })
 
   const { data: statusData } = useQuery({
@@ -160,8 +163,15 @@ function SingleMode({ onClose }: { onClose: () => void }) {
     queryKey: ['bootstrap-logs', nodeId],
     queryFn: () => ansibleApi.bootstrapLogs(nodeId!),
     enabled: showLogs && !!nodeId,
-    refetchInterval: showLogs && (status === 'pending' || status === 'bootstrapping') ? 5000 : false,
+    refetchInterval: showLogs && (status === 'pending' || status === 'bootstrapping') ? 2500 : false,
   })
+
+  // Keep localLogs in sync: once the query returns real data, promote it so clearing works
+  useEffect(() => {
+    if (logsData?.ansible_stdout !== undefined) {
+      setLocalLogs(logsData.ansible_stdout)
+    }
+  }, [logsData?.ansible_stdout])
 
   // Cancel mutation for stuck bootstraps — declared before any early returns (Rules of Hooks)
   const cancelMutation = useMutation({
@@ -181,7 +191,7 @@ function SingleMode({ onClose }: { onClose: () => void }) {
     if (preRef.current) {
       preRef.current.scrollTop = preRef.current.scrollHeight
     }
-  }, [logsData?.ansible_stdout])
+  }, [localLogs])
 
   // Detect stuck bootstrap — only if bootstrap_status is returned by backend
   const isStuckBootstrap = !nodeId &&
@@ -360,8 +370,8 @@ function SingleMode({ onClose }: { onClose: () => void }) {
           <div className="w-4 h-4 border-2 border-brand-600 border-t-transparent rounded-full animate-spin" />
         )}
       </div>
-      {status === 'bootstrapping' && logsData?.ansible_stdout && (() => {
-        const lastTask = logsData.ansible_stdout
+      {status === 'bootstrapping' && (localLogs ?? logsData?.ansible_stdout) && (() => {
+        const lastTask = (localLogs ?? logsData?.ansible_stdout ?? '')
           .split('\n')
           .filter((l) => /^TASK \[/.test(l))
           .pop()
@@ -430,8 +440,8 @@ function SingleMode({ onClose }: { onClose: () => void }) {
               ref={preRef}
               className="text-xs font-mono bg-gray-900 p-3 overflow-auto max-h-[42rem] whitespace-pre-wrap"
               dangerouslySetInnerHTML={{
-                __html: logsData.ansible_stdout
-                  ? colorizeAnsibleLog(logsData.ansible_stdout)
+                __html: (localLogs ?? logsData.ansible_stdout)
+                  ? colorizeAnsibleLog(localLogs ?? logsData.ansible_stdout ?? '')
                   : '<span class="text-gray-500">(no output captured yet — run in progress or not started)</span>',
               }}
             />

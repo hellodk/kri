@@ -153,6 +153,7 @@ def bootstrap_node(self, node_id: str, target_ip: str, ssh_username: str | None 
 
         node.bootstrap_status = "bootstrapping"
         node.bootstrap_ip = target_ip
+        node.bootstrap_logs = ""        # clear any previous run's logs
         node.bootstrap_error = None
         db.commit()
 

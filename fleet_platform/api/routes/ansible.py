@@ -85,6 +85,8 @@ async def bootstrap(
     else:
         node.bootstrap_status = "pending"
         node.bootstrap_ip = payload.target_ip
+        node.bootstrap_logs = ""        # clear previous run's logs
+        node.bootstrap_error = None     # clear previous error
 
     # Save SSH credentials to the node for future reuse
     if payload.ssh_username:
