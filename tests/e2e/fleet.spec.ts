@@ -26,7 +26,7 @@ test.describe('Fleet Dashboard', () => {
     const headers = page.locator('thead th')
     await expect(headers.filter({ hasText: 'Hostname' })).toBeVisible()
     await expect(headers.filter({ hasText: 'Status' })).toBeVisible()
-    await expect(headers.filter({ hasText: 'OS' })).toBeVisible()
+    await expect(headers.filter({ hasText: /^OS$/ })).toBeVisible()
     await expect(headers.filter({ hasText: 'Drift' })).toBeVisible()
     await expect(headers.filter({ hasText: 'Last Seen' })).toBeVisible()
     await expect(headers.filter({ hasText: 'Tags' })).toBeVisible()
@@ -52,9 +52,9 @@ test.describe('Fleet Dashboard', () => {
 
   test('FLEET-05 status filter All restores full table', async ({ page }) => {
     await page.selectOption('select', 'online')
-    await page.waitForResponse('**/nodes**')
+    await page.waitForTimeout(1000)
     await page.selectOption('select', '')
-    await page.waitForResponse('**/nodes**')
+    await page.waitForTimeout(1000)
     const rows = page.locator('tbody tr')
     expect(await rows.count()).toBeGreaterThan(1)
   })

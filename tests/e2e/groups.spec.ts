@@ -54,7 +54,7 @@ test.describe('Groups', () => {
     // Create group
     const grpRes = await request.post(`${API}/api/v1/groups`, {
       headers: { Authorization: `Bearer ${access_token}` },
-      data: { name: `API-GRP-${Date.now()}`, group_type: 'static' },
+      data: { name: `API-GRP-${Date.now()}`, type: 'static' },
     })
     expect(grpRes.status()).toBe(200)
     const { id: groupId } = await grpRes.json()
@@ -90,7 +90,7 @@ test.describe('Groups', () => {
     // Create group + add member
     const grpRes = await request.post(`${API}/api/v1/groups`, {
       headers: { Authorization: `Bearer ${access_token}` },
-      data: { name: `API-RM-${Date.now()}`, group_type: 'static' },
+      data: { name: `API-RM-${Date.now()}`, type: 'static' },
     })
     const { id: groupId } = await grpRes.json()
     const nodesRes = await request.get(`${API}/api/v1/nodes?per_page=1`, {

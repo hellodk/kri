@@ -25,7 +25,7 @@ test.describe('Playbooks', () => {
     const runBtn = page.locator('button:has-text("Run")').first()
     await expect(runBtn).toBeVisible({ timeout: 5000 })
     await runBtn.click()
-    await expect(page.locator('text=Run playbook?').or(page.locator('text=will run against'))).toBeVisible({ timeout: 3000 })
+    await expect(page.locator('text=Run playbook?').or(page.locator('text=will run against')).first()).toBeVisible({ timeout: 3000 })
   })
 
   test('PLAY-06 cancel confirmation closes dialog without running', async ({ page }) => {

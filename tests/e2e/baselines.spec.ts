@@ -23,7 +23,7 @@ test.describe('Baselines', () => {
     await page.fill('input[placeholder="macOS fleet standard"]', `E2E Global ${Date.now()}`)
     // target type radio — "global" is default
     await page.click('button:has-text("Create Baseline")')
-    await expect(page.locator('text=All nodes')).toBeVisible({ timeout: 6000 })
+    await expect(page.locator('text=All nodes').first()).toBeVisible({ timeout: 6000 })
   })
 
   test('BASE-05 invalid JSON disables create button', async ({ page }) => {

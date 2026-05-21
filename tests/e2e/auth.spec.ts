@@ -74,15 +74,18 @@ test.describe('Authentication', () => {
     expect(refreshed.refresh_token).not.toBe(refresh_token)
   })
 
+  // AUTH-07 runs last to avoid invalidating tokens shared within this test file
   test('AUTH-07 logout revokes refresh token', async ({ request }) => {
     const loginRes = await request.post(`${API}/auth/login`, {
       data: { email: ADMIN.email, password: ADMIN.password },
     })
     const { access_token, refresh_token } = await loginRes.json()
-    await request.post(`${API}/auth/logout`, {
+    const logoutRes = await request.post(`${API}/auth/logout`, {
       headers: { Authorization: `Bearer ${access_token}` },
       data: { refresh_token },
     })
+    // Some implementations return 200 or 204 on logout
+    expect([200, 204]).toContain(logoutRes.status())
     const afterLogout = await request.post(`${API}/auth/refresh`, {
       data: { refresh_token },
     })
