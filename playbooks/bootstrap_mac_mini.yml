@@ -180,14 +180,16 @@
       become: false
 
     # ── Push initial grains to kri Fleet Platform ─────────────────────────────
-    - name: Collect Salt grains as JSON
-      shell: "{{ brew_prefix }}/bin/salt-call --local grains.items --out=json --log-level=warning 2>/dev/null"
-      register: grains_result
+    # Use Ansible-gathered facts rather than salt-call (avoids sudo/config deps)
+    - name: Collect additional system info for grains
+      shell: |
+        sw_vers -productVersion 2>/dev/null || true
+      register: sw_vers_result
       changed_when: false
       become: false
       failed_when: false
 
-    - name: Push grains to kri ingest API
+    - name: Push Ansible facts as grains to kri ingest API
       uri:
         url: "{{ ingest_url }}/grains"
         method: POST
@@ -197,9 +199,23 @@
         body_format: json
         body:
           minion_id: "{{ minion_id }}"
-          grains: "{{ grains_result.stdout | from_json | json_query('local') }}"
+          grains:
+            id: "{{ minion_id }}"
+            host: "{{ ansible_hostname | default(minion_id) }}"
+            fqdn: "{{ ansible_fqdn | default(ansible_hostname) | default(minion_id) }}"
+            os: "MacOS"
+            os_family: "MacOS"
+            osfullname: "macOS"
+            osrelease: "{{ sw_vers_result.stdout | trim | default('') }}"
+            kernel: "Darwin"
+            kernelrelease: "{{ ansible_kernel | default('') }}"
+            cpuarch: "{{ ansible_architecture | default(uname_result.stdout | trim) }}"
+            num_cpus: "{{ ansible_processor_cores | default(0) }}"
+            mem_total: "{{ ansible_memtotal_mb | default(0) }}"
+            ip4_interfaces:
+              "{{ ansible_default_ipv4.interface | default('en0') }}":
+                - "{{ ansible_default_ipv4.address | default('') }}"
         status_code: [200, 201, 204]
         timeout: 30
-      when: grains_result.rc == 0 and grains_result.stdout != ''
       become: false
       failed_when: false
