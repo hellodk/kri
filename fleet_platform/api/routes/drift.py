@@ -17,6 +17,19 @@ from fleet_platform.schemas.drift import (
 )
 from fleet_platform.workers.drift_tasks import compute_drift
 
+# ---------------------------------------------------------------------------
+# helpers
+# ---------------------------------------------------------------------------
+
+def _pkg_name(pkg: dict) -> str:
+    """Normalise package dict to a name string."""
+    return (
+        pkg.get("name")
+        or pkg.get("package")
+        or pkg.get("pkg")
+        or ""
+    )
+
 router = APIRouter(prefix="/api/v1/drift")
 
 _SEVERITY_RANGES = {
@@ -76,6 +89,197 @@ async def list_drift(
         ))
 
     return PaginatedResponse(items=items, total=total, page=page, per_page=per_page)
+
+
+@router.get("/compare")
+async def compare_drift(
+    node_ids: str = Query(..., description="Comma-separated list of node UUIDs"),
+    db: AsyncSession = Depends(get_db),
+    _: dict = Depends(get_current_user),
+):
+    """Compare drift across 2+ nodes side-by-side.
+
+    Returns a matrix of package states keyed by node ID so the frontend can
+    render a comparison table without further API calls.
+    """
+    raw_ids = [s.strip() for s in node_ids.split(",") if s.strip()]
+    if len(raw_ids) < 1:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="Provide at least one node_id",
+        )
+    # Validate & de-dup
+    parsed_ids: list[uuid.UUID] = []
+    for raw in raw_ids:
+        try:
+            parsed_ids.append(uuid.UUID(raw))
+        except ValueError:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail=f"Invalid UUID: {raw}",
+            )
+    seen: set[uuid.UUID] = set()
+    unique_ids = [i for i in parsed_ids if not (i in seen or seen.add(i))]  # type: ignore[func-returns-value]
+
+    # Fetch nodes
+    nodes_result = await db.execute(select(Node).where(Node.id.in_(unique_ids)))
+    nodes = {n.id: n for n in nodes_result.scalars().all()}
+
+    # Fetch latest drift record + baseline for each node
+    node_data: dict[uuid.UUID, tuple[DriftRecord | None, DesiredStateBaseline | None]] = {}
+    for nid in unique_ids:
+        dr_result = await db.execute(
+            select(DriftRecord, DesiredStateBaseline)
+            .outerjoin(DesiredStateBaseline, DesiredStateBaseline.id == DriftRecord.baseline_id)
+            .where(DriftRecord.node_id == nid)
+            .order_by(DriftRecord.computed_at.desc())
+            .limit(1)
+        )
+        row = dr_result.first()
+        node_data[nid] = (row[0] if row else None, row[1] if row else None)
+
+    # Build the union of all package names across all nodes
+    # For each node we need: required (from baseline), installed (from drift lists)
+    # A package is "ok" if installed == expected, "mismatch" if diff version, "missing" if absent,
+    # "extra" if present but not in baseline, None if neither baseline nor drift knows about it.
+
+    def _baseline_pkgs(baseline: DesiredStateBaseline | None) -> dict[str, str | None]:
+        """Return {name: expected_version} from the baseline's state_json."""
+        if not baseline:
+            return {}
+        state = baseline.state_json or {}
+        pkgs = state.get("packages", {})
+        # state_json.packages may be a list [{name, version}] or a dict {required: [...]}
+        if isinstance(pkgs, dict):
+            required = pkgs.get("required", [])
+        elif isinstance(pkgs, list):
+            required = pkgs
+        else:
+            required = []
+        return {
+            _pkg_name(p): p.get("version") or p.get("required_version")
+            for p in required
+            if _pkg_name(p)
+        }
+
+    def _installed_pkgs(dr: DriftRecord | None) -> dict[str, str | None]:
+        """Build {name: installed_version} from the extra_packages list (everything installed)."""
+        if not dr:
+            return {}
+        installed: dict[str, str | None] = {}
+        # extra_packages contains packages that ARE installed
+        for p in (dr.extra_packages or []):
+            name = _pkg_name(p)
+            if name:
+                installed[name] = p.get("installed_version") or p.get("version")
+        # version_mismatches also have an installed version (actual)
+        for p in (dr.version_mismatches or []):
+            name = _pkg_name(p)
+            if name and name not in installed:
+                installed[name] = p.get("actual") or p.get("installed_version")
+        # packages NOT in missing_packages and NOT in extra_packages ARE installed at expected version
+        for p in (dr.missing_packages or []):
+            name = _pkg_name(p)
+            if name:
+                installed.pop(name, None)  # definitely not installed
+        return installed
+
+    # Gather all package names
+    all_pkg_names: set[str] = set()
+    for nid in unique_ids:
+        dr, baseline = node_data[nid]
+        all_pkg_names.update(_baseline_pkgs(baseline).keys())
+        all_pkg_names.update(_installed_pkgs(dr).keys())
+        for p in (dr.missing_packages if dr else []):
+            name = _pkg_name(p)
+            if name:
+                all_pkg_names.add(name)
+        for p in (dr.version_mismatches if dr else []):
+            name = _pkg_name(p)
+            if name:
+                all_pkg_names.add(name)
+
+    # Build the matrix
+    packages = []
+    drifted_node_ids: set[str] = set()
+    for pkg_name in sorted(all_pkg_names):
+        states: dict[str, dict] = {}
+        for nid in unique_ids:
+            dr, baseline = node_data[nid]
+            expected_pkgs = _baseline_pkgs(baseline)
+            expected_version = expected_pkgs.get(pkg_name)
+
+            # Check explicit missing
+            missing_names = {_pkg_name(p) for p in (dr.missing_packages if dr else [])}
+            # Check version mismatches
+            mismatch_map = {
+                _pkg_name(p): (p.get("actual"), p.get("expected") or p.get("required_version"))
+                for p in (dr.version_mismatches if dr else [])
+                if _pkg_name(p)
+            }
+            # Check extra (installed but not in baseline)
+            extra_map = {
+                _pkg_name(p): p.get("installed_version") or p.get("version")
+                for p in (dr.extra_packages if dr else [])
+                if _pkg_name(p)
+            }
+
+            nid_str = str(nid)
+            if pkg_name in missing_names:
+                states[nid_str] = {
+                    "installed": None,
+                    "expected": expected_version,
+                    "status": "missing",
+                }
+                drifted_node_ids.add(nid_str)
+            elif pkg_name in mismatch_map:
+                actual_v, exp_v = mismatch_map[pkg_name]
+                states[nid_str] = {
+                    "installed": actual_v,
+                    "expected": exp_v or expected_version,
+                    "status": "mismatch",
+                }
+                drifted_node_ids.add(nid_str)
+            elif pkg_name in extra_map:
+                # Extra: installed but not in baseline
+                states[nid_str] = {
+                    "installed": extra_map[pkg_name],
+                    "expected": None,
+                    "status": "extra",
+                }
+            elif expected_version is not None and dr is not None:
+                # Package is in baseline, not in missing/mismatch — so it's ok
+                states[nid_str] = {
+                    "installed": expected_version,
+                    "expected": expected_version,
+                    "status": "ok",
+                }
+            else:
+                states[nid_str] = {
+                    "installed": None,
+                    "expected": expected_version,
+                    "status": "unknown",
+                }
+
+        packages.append({"name": pkg_name, "states": states})
+
+    node_summaries = [
+        {
+            "id": str(nid),
+            "hostname": nodes[nid].hostname if nid in nodes else None,
+            "drift_score": nodes[nid].drift_score if nid in nodes else 0,
+        }
+        for nid in unique_ids
+    ]
+
+    return {
+        "nodes": node_summaries,
+        "packages": packages,
+        "summary": {
+            "total_packages": len(all_pkg_names),
+            "drifted_nodes": len(drifted_node_ids),
+        },
+    }
 
 
 @router.get("/{node_id}/latest", response_model=DriftRecordResponse)

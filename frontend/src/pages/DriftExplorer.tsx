@@ -23,7 +23,15 @@ export function DriftExplorer() {
 
   return (
     <div className="space-y-6">
-      <h1 className="text-2xl font-bold text-gray-900">Drift Explorer</h1>
+      <div className="flex items-center justify-between">
+        <h1 className="text-2xl font-bold text-gray-900">Drift Explorer</h1>
+        <Link
+          to="/drift/compare"
+          className="px-3 py-1.5 text-sm bg-brand-600 text-white rounded hover:bg-brand-700 flex items-center gap-1.5"
+        >
+          Compare nodes →
+        </Link>
+      </div>
       <div className="flex items-center gap-3">
         <label className="text-sm text-gray-600">Severity:</label>
         <select
