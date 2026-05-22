@@ -315,11 +315,14 @@ function PlaybookSourcesSection() {
   const [gitUrl, setGitUrl] = useState('')
   const [gitBranch, setGitBranch] = useState('main')
   const [gitLabel, setGitLabel] = useState('')
+  const [showCreds, setShowCreds] = useState(false)
+  const [gitToken, setGitToken] = useState('')
+  const [gitSshKey, setGitSshKey] = useState('')
 
   const [showCsv, setShowCsv] = useState(false)
   const [csvText, setCsvText] = useState('')
 
-  type ValidateState = { status: 'idle' } | { status: 'validating' } | { status: 'valid'; result: PlaybookSourceValidateResponse } | { status: 'invalid'; error: string }
+  type ValidateState = { status: 'idle' } | { status: 'validating' } | { status: 'valid'; result: PlaybookSourceValidateResponse } | { status: 'invalid'; error: string; logs?: string[] }
   const [localValidation, setLocalValidation] = useState<ValidateState>({ status: 'idle' })
   const [gitValidation, setGitValidation] = useState<ValidateState>({ status: 'idle' })
 
@@ -380,7 +383,7 @@ function PlaybookSourcesSection() {
       if (result.valid) {
         setLocalValidation({ status: 'valid', result })
       } else {
-        setLocalValidation({ status: 'invalid', error: result.error ?? 'Validation failed' })
+        setLocalValidation({ status: 'invalid', error: result.error ?? 'Validation failed', logs: result.logs })
       }
     } catch (e: any) {
       setLocalValidation({ status: 'invalid', error: e.message ?? 'Validation error' })
@@ -391,11 +394,17 @@ function PlaybookSourcesSection() {
     if (!gitUrl.trim()) return
     setGitValidation({ status: 'validating' })
     try {
-      const result = await playbookSourcesApi.validate({ type: 'git', url: gitUrl.trim(), branch: gitBranch || 'main' })
+      const result = await playbookSourcesApi.validate({
+        type: 'git',
+        url: gitUrl.trim(),
+        branch: gitBranch || 'main',
+        token: gitToken.trim() || undefined,
+        ssh_key: gitSshKey.trim() || undefined,
+      })
       if (result.valid) {
         setGitValidation({ status: 'valid', result })
       } else {
-        setGitValidation({ status: 'invalid', error: result.error ?? 'Validation failed' })
+        setGitValidation({ status: 'invalid', error: result.error ?? 'Validation failed', logs: result.logs })
       }
     } catch (e: any) {
       setGitValidation({ status: 'invalid', error: e.message ?? 'Validation error' })
@@ -408,29 +417,37 @@ function PlaybookSourcesSection() {
 
   function ValidationResult({ v }: { v: ValidateState }) {
     if (v.status === 'idle') return null
-    if (v.status === 'validating') return (
-      <div className="flex items-center gap-2 text-sm text-gray-500 animate-pulse">
-        <span>⏳</span> Validating…
-      </div>
-    )
-    if (v.status === 'invalid') return (
-      <div className="bg-red-50 border border-red-200 rounded-lg p-3 text-sm text-red-700">
-        ✗ {v.error}
-      </div>
-    )
-    // valid
-    const r = v.result
+
+    const logs: string[] = v.status === 'valid' ? (v.result.logs ?? []) : (v.status === 'invalid' ? (v.logs ?? []) : [])
+
     return (
-      <div className="bg-green-50 border border-green-200 rounded-lg p-3 space-y-2">
-        <p className="text-sm font-medium text-green-800">
-          ✓ {r.playbook_count} playbook{r.playbook_count !== 1 ? 's' : ''}, {r.role_count} role{r.role_count !== 1 ? 's' : ''} found
-        </p>
-        {r.warnings.length > 0 && r.warnings.map((w, i) => (
-          <p key={i} className="text-xs text-amber-700">⚠ {w}</p>
-        ))}
-        {r.entries.length > 0 && (
-          <div className="flex flex-wrap gap-1.5 pt-1">
-            {r.entries.map((e) => (
+      <div className="space-y-2">
+        {/* Terminal log panel */}
+        <div className="bg-gray-950 rounded-lg p-3 font-mono text-xs space-y-0.5 max-h-48 overflow-y-auto">
+          {v.status === 'validating' && (
+            <p className="text-gray-400 animate-pulse">⏳ Connecting…</p>
+          )}
+          {v.status !== 'validating' && logs.map((line, i) => (
+            <p key={i} className={
+              line.includes('✓') ? 'text-green-400' :
+              line.includes('✗') || line.includes('Error') ? 'text-red-400' :
+              line.includes('⚠') ? 'text-amber-400' :
+              'text-gray-300'
+            }>{line}</p>
+          ))}
+          {v.status === 'valid' && (
+            <p className="text-green-400 font-semibold mt-1">
+              ✓ Ready to add — {v.result.playbook_count} playbooks, {v.result.role_count} roles
+            </p>
+          )}
+          {v.status === 'invalid' && (
+            <p className="text-red-400 font-semibold mt-1">✗ {v.error}</p>
+          )}
+        </div>
+        {/* Entry badges for valid state */}
+        {v.status === 'valid' && v.result.entries.length > 0 && (
+          <div className="flex flex-wrap gap-1.5">
+            {v.result.entries.map((e) => (
               <span key={e.filename} className={`text-xs px-2 py-0.5 rounded font-mono border ${
                 e.entry_type === 'role'
                   ? 'bg-purple-50 text-purple-700 border-purple-200'
@@ -583,11 +600,45 @@ function PlaybookSourcesSection() {
               placeholder="Label (optional)"
               className={inputClass}
             />
+            {/* Private repo credentials toggle */}
+            <button
+              type="button"
+              onClick={() => setShowCreds(!showCreds)}
+              className="text-xs text-gray-500 hover:text-gray-700"
+            >
+              🔐 {showCreds ? 'Hide credentials' : 'Private repository? Add credentials'}
+            </button>
+            {showCreds && (
+              <div className="border border-gray-200 rounded-lg p-3 space-y-2 bg-gray-50">
+                <p className="text-xs text-gray-500 font-medium">One of: token OR SSH key (not both)</p>
+                <input
+                  type="password"
+                  value={gitToken}
+                  onChange={(e) => { setGitToken(e.target.value); setGitValidation({ status: 'idle' }) }}
+                  placeholder="Personal access token (GitHub/GitLab/etc.)"
+                  className="w-full px-3 py-1.5 border border-gray-300 rounded text-xs font-mono focus:outline-none"
+                />
+                <textarea
+                  value={gitSshKey}
+                  onChange={(e) => { setGitSshKey(e.target.value); setGitValidation({ status: 'idle' }) }}
+                  placeholder={"-----BEGIN OPENSSH PRIVATE KEY-----\n(paste SSH private key)"}
+                  rows={4}
+                  className="w-full px-3 py-1.5 border border-gray-300 rounded text-xs font-mono focus:outline-none"
+                />
+              </div>
+            )}
             <ValidationResult v={gitValidation} />
             <div className="flex gap-2 justify-end">
-              <button onClick={() => { setShowAddGit(false); setGitUrl(''); setGitBranch('main'); setGitLabel(''); setGitValidation({ status: 'idle' }) }} className={btnSecondary}>Cancel</button>
+              <button onClick={() => { setShowAddGit(false); setGitUrl(''); setGitBranch('main'); setGitLabel(''); setGitValidation({ status: 'idle' }); setShowCreds(false); setGitToken(''); setGitSshKey('') }} className={btnSecondary}>Cancel</button>
               <button
-                onClick={() => addMutation.mutate({ type: 'git', url: gitUrl.trim(), branch: gitBranch || 'main', label: gitLabel.trim() || undefined })}
+                onClick={() => addMutation.mutate({
+                  type: 'git',
+                  url: gitUrl.trim(),
+                  branch: gitBranch || 'main',
+                  label: gitLabel.trim() || undefined,
+                  token: gitToken.trim() || undefined,
+                  ssh_key: gitSshKey.trim() || undefined,
+                })}
                 disabled={gitValidation.status !== 'valid' || addMutation.isPending}
                 className={btnPrimary}
               >
