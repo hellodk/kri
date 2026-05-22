@@ -1,6 +1,10 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.backends.legacy:build"
+
 [project]
 name = "fleet-platform"
-version = "0.1.7"
+dynamic = ["version"]
 requires-python = ">=3.13"
 dependencies = [
     "fastapi>=0.115.0",
@@ -34,6 +38,11 @@ dev = [
     "pytest-cov>=6.0.0",
     "ruff>=0.8.0",
 ]
+
+# Version is read dynamically from the VERSION file — do not add it here.
+# Single source of truth: edit VERSION, everything else follows.
+[tool.setuptools.dynamic]
+version = {file = "VERSION"}
 
 [tool.ruff]
 line-length = 100
