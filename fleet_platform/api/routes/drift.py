@@ -66,19 +66,36 @@ async def list_drift(
     result = await db.execute(query.offset((page - 1) * per_page).limit(per_page))
     nodes = result.scalars().all()
 
-    items = []
-    for node in nodes:
+    # Single query: fetch the latest DriftRecord per node in one round-trip
+    # using a subquery that selects the max computed_at per node_id.
+    node_ids = [n.id for n in nodes]
+    latest_dr_map: dict[uuid.UUID, tuple] = {}  # node_id → (computed_at, baseline_name)
+    if node_ids:
+        # Subquery: max computed_at per node_id
+        latest_subq = (
+            select(
+                DriftRecord.node_id,
+                func.max(DriftRecord.computed_at).label("max_computed_at"),
+            )
+            .where(DriftRecord.node_id.in_(node_ids))
+            .group_by(DriftRecord.node_id)
+            .subquery()
+        )
         dr_result = await db.execute(
             select(DriftRecord, DesiredStateBaseline)
             .outerjoin(DesiredStateBaseline, DesiredStateBaseline.id == DriftRecord.baseline_id)
-            .where(DriftRecord.node_id == node.id)
-            .order_by(DriftRecord.computed_at.desc())
-            .limit(1)
+            .join(
+                latest_subq,
+                (DriftRecord.node_id == latest_subq.c.node_id)
+                & (DriftRecord.computed_at == latest_subq.c.max_computed_at),
+            )
         )
-        row = dr_result.first()
-        computed_at = row[0].computed_at if row else None
-        baseline_name = row[1].name if row and row[1] else None
+        for dr, baseline in dr_result:
+            latest_dr_map[dr.node_id] = (dr.computed_at, baseline.name if baseline else None)
 
+    items = []
+    for node in nodes:
+        computed_at, baseline_name = latest_dr_map.get(node.id, (None, None))
         items.append(DriftSummaryResponse(
             node_id=node.id,
             hostname=node.hostname,

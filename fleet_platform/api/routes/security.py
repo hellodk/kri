@@ -67,55 +67,82 @@ async def security_node_list(
     db: AsyncSession = Depends(get_db),
     _: dict = Depends(get_current_user),
 ):
-    """Per-node vulnerability and license summary."""
-    # Get all nodes that have SBOM scans
+    """Per-node vulnerability and license summary.
+
+    Uses 5 aggregate queries instead of 9 per-node queries (N+1 fix).
+    """
+    # Fetch all nodes
     result = await db.execute(select(Node))
     nodes = result.scalars().all()
 
+    # --- Aggregate query 1: vuln counts grouped by node_id + severity ---
+    vuln_rows = await db.execute(
+        select(
+            VulnerabilityFinding.node_id,
+            VulnerabilityFinding.severity,
+            func.count().label("cnt"),
+        )
+        .group_by(VulnerabilityFinding.node_id, VulnerabilityFinding.severity)
+    )
+    vuln_map: dict[str, dict[str, int]] = {}
+    for row in vuln_rows:
+        vuln_map.setdefault(str(row.node_id), {})[row.severity.lower()] = row.cnt
+
+    # --- Aggregate query 2: license risk counts grouped by node_id + risk ---
+    lic_rows = await db.execute(
+        select(
+            LicenseFinding.node_id,
+            LicenseFinding.risk,
+            func.count().label("cnt"),
+        )
+        .group_by(LicenseFinding.node_id, LicenseFinding.risk)
+    )
+    lic_map: dict[str, dict[str, int]] = {}
+    for row in lic_rows:
+        lic_map.setdefault(str(row.node_id), {})[row.risk] = row.cnt
+
+    # --- Aggregate query 3: last scan time per node ---
+    scan_rows = await db.execute(
+        select(
+            VulnerabilityFinding.node_id,
+            func.max(VulnerabilityFinding.scanned_at).label("last_scan"),
+        )
+        .group_by(VulnerabilityFinding.node_id)
+    )
+    scan_map: dict[str, object] = {str(row.node_id): row.last_scan for row in scan_rows}
+
+    # --- Aggregate query 4: which nodes have at least one SBOM scan ---
+    sbom_rows = await db.execute(
+        select(SBOMScan.node_id).distinct()
+    )
+    sbom_set: set[str] = {str(r.node_id) for r in sbom_rows}
+
+    # Build response without any per-node queries
     items = []
     for node in nodes:
-        # Vuln counts
-        vcounts = {}
-        for sev in ("CRITICAL", "HIGH", "MEDIUM", "LOW"):
-            r = await db.execute(
-                select(func.count()).select_from(VulnerabilityFinding)
-                .where(VulnerabilityFinding.node_id == node.id)
-                .where(VulnerabilityFinding.severity == sev)
-            )
-            vcounts[sev.lower()] = r.scalar_one()
-
-        # License risk counts
-        lcounts = {}
-        for risk in ("high", "medium", "unknown"):
-            r = await db.execute(
-                select(func.count()).select_from(LicenseFinding)
-                .where(LicenseFinding.node_id == node.id)
-                .where(LicenseFinding.risk == risk)
-            )
-            lcounts[risk] = r.scalar_one()
-
-        # Last scan
-        r = await db.execute(
-            select(func.max(VulnerabilityFinding.scanned_at))
-            .where(VulnerabilityFinding.node_id == node.id)
-        )
-        last_scan = r.scalar_one()
-
-        # Has SBOM?
-        has_sbom = await db.execute(
-            select(func.count()).select_from(SBOMScan)
-            .where(SBOMScan.node_id == node.id)
-        )
-        has_sbom_val = (has_sbom.scalar_one() or 0) > 0
+        nid = str(node.id)
+        vcounts = vuln_map.get(nid, {})
+        lcounts = lic_map.get(nid, {})
+        last_scan = scan_map.get(nid)
+        has_sbom_val = nid in sbom_set
 
         items.append({
-            "node_id": str(node.id),
+            "node_id": nid,
             "minion_id": node.minion_id,
             "hostname": node.hostname,
             "status": node.status,
             "has_sbom": has_sbom_val,
-            "vulnerabilities": vcounts,
-            "license_risks": lcounts,
+            "vulnerabilities": {
+                "critical": vcounts.get("critical", 0),
+                "high": vcounts.get("high", 0),
+                "medium": vcounts.get("medium", 0),
+                "low": vcounts.get("low", 0),
+            },
+            "license_risks": {
+                "high": lcounts.get("high", 0),
+                "medium": lcounts.get("medium", 0),
+                "unknown": lcounts.get("unknown", 0),
+            },
             "last_scanned_at": last_scan,
             "risk_level": (
                 "critical" if vcounts.get("critical", 0) > 0
