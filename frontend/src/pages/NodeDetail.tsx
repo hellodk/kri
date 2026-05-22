@@ -850,23 +850,66 @@ export function NodeDetail() {
               )}
 
               {/* Grain collection task status */}
-              {grainTaskId && grainTaskStatus && (
-                <div className={`p-3 rounded-lg border text-xs font-mono ${
-                  grainTaskStatus.state === 'SUCCESS' ? 'bg-emerald-50 border-emerald-200 text-emerald-800' :
-                  grainTaskStatus.state === 'FAILURE' ? 'bg-red-50 border-red-200 text-red-700' :
-                  'bg-brand-50 border-brand-200 text-brand-700'
-                }`}>
-                  <div className="flex items-center gap-2">
-                    {(grainTaskStatus.state === 'PENDING' || grainTaskStatus.state === 'STARTED') && (
-                      <div className="w-3 h-3 border-2 border-brand-600 border-t-transparent rounded-full animate-spin" />
+              {grainTaskId && grainTaskStatus && (() => {
+                // Derive actual outcome — Celery SUCCESS just means the task ran, not that it succeeded
+                const grainOutcome = (() => {
+                  if (grainTaskStatus.state === 'PENDING' || grainTaskStatus.state === 'STARTED') return 'running'
+                  if (grainTaskStatus.state === 'FAILURE') return 'failed'
+                  // Task completed — check the result payload
+                  const result = grainTaskStatus.result as Record<string, unknown> | null
+                  if (result && result.status === 'error') return 'failed'
+                  if (result && result.status === 'ok') return 'ok'
+                  return grainTaskStatus.state === 'SUCCESS' ? 'ok' : 'failed'
+                })()
+
+                function cleanGrainError(reason: string): string {
+                  return reason
+                    .split('\n')
+                    .filter((line: string) => !line.startsWith('Warning:') && !line.startsWith('debug1:') && line.trim())
+                    .join('\n')
+                    .trim() || reason // fallback to original if filtering removes everything
+                }
+
+                const result = grainTaskStatus.result as Record<string, unknown> | null
+                const httpStatus = result?.http_status as string | number | undefined
+                const reason = result?.reason as string | undefined
+
+                return (
+                  <div className={`p-3 rounded-lg border text-xs font-mono ${
+                    grainOutcome === 'ok' ? 'bg-emerald-50 border-emerald-200 text-emerald-800' :
+                    grainOutcome === 'failed' ? 'bg-red-50 border-red-200 text-red-700' :
+                    'bg-brand-50 border-brand-200 text-brand-700'
+                  }`}>
+                    <div className="flex items-center gap-2">
+                      {grainOutcome === 'running' && (
+                        <div className="w-3 h-3 border-2 border-brand-600 border-t-transparent rounded-full animate-spin" />
+                      )}
+                      <span className="font-semibold">
+                        {grainOutcome === 'running' && 'Grain collection: running…'}
+                        {grainOutcome === 'ok' && 'Grain collection: success'}
+                        {grainOutcome === 'failed' && 'Grain collection: failed'}
+                      </span>
+                      {grainOutcome === 'ok' && httpStatus != null && (
+                        <span className="ml-2 text-emerald-600 font-normal">HTTP {httpStatus}</span>
+                      )}
+                    </div>
+                    {grainOutcome === 'failed' && reason && (
+                      <div className="mt-2 space-y-1">
+                        <p className="font-semibold text-red-800 not-italic">Error:</p>
+                        <pre className="whitespace-pre-wrap text-red-700">{cleanGrainError(reason)}</pre>
+                        <p className="text-gray-500 font-sans not-italic mt-2">
+                          Grain collection requires SSH access to the node. Offline nodes cannot be reached.
+                        </p>
+                      </div>
                     )}
-                    <span className="font-semibold">Grain collection: {grainTaskStatus.state}</span>
+                    {grainOutcome === 'failed' && !reason && (
+                      <p className="text-gray-500 font-sans not-italic mt-1">
+                        Grain collection requires SSH access to the node. Offline nodes cannot be reached.
+                      </p>
+                    )}
                   </div>
-                  {grainTaskStatus.result != null && (
-                    <pre className="mt-1 whitespace-pre-wrap">{JSON.stringify(grainTaskStatus.result, null, 2)}</pre>
-                  )}
-                </div>
-              )}
+                )
+              })()}
             </div>
           )}
 
