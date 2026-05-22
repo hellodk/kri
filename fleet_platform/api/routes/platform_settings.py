@@ -7,7 +7,9 @@ from fleet_platform.core.auth import require_role
 from fleet_platform.schemas.ansible import PlatformSettingsResponse, PlatformSettingsUpdate
 from fleet_platform.services.platform_settings_svc import (
     SALT_MASTER, SSH_USERNAME, SSH_PASSWORD, ANSIBLE_ENDPOINT_URL, ANSIBLE_API_TOKEN,
-    PLAYBOOKS_DIR, PILLAR_DIR, KRI_API_URL, get_setting, set_setting,
+    PLAYBOOKS_DIR, PILLAR_DIR, KRI_API_URL,
+    CXONE_URL, CXONE_API_TOKEN, SONARQUBE_URL, SONARQUBE_TOKEN, LICENSE_POLICY,
+    get_setting, set_setting,
 )
 from fleet_platform.services.ssh_keypair import ensure_controller_keypair, get_controller_pubkey
 
@@ -28,6 +30,9 @@ async def get_settings(
         ansible_endpoint_url=await get_setting(db, ANSIBLE_ENDPOINT_URL),
         playbooks_dir=await get_setting(db, PLAYBOOKS_DIR),
         pillar_dir=await get_setting(db, PILLAR_DIR),
+        cxone_url=await get_setting(db, CXONE_URL),
+        sonarqube_url=await get_setting(db, SONARQUBE_URL),
+        license_policy=await get_setting(db, LICENSE_POLICY),
     )
 
 
@@ -54,6 +59,16 @@ async def update_settings(
         await set_setting(db, PLAYBOOKS_DIR, payload.playbooks_dir)
     if payload.pillar_dir is not None:
         await set_setting(db, PILLAR_DIR, payload.pillar_dir)
+    if payload.cxone_url is not None:
+        await set_setting(db, CXONE_URL, payload.cxone_url)
+    if payload.cxone_api_token:
+        await set_setting(db, CXONE_API_TOKEN, payload.cxone_api_token, encrypt=True)
+    if payload.sonarqube_url is not None:
+        await set_setting(db, SONARQUBE_URL, payload.sonarqube_url)
+    if payload.sonarqube_token:
+        await set_setting(db, SONARQUBE_TOKEN, payload.sonarqube_token, encrypt=True)
+    if payload.license_policy is not None:
+        await set_setting(db, LICENSE_POLICY, payload.license_policy)
     return PlatformSettingsResponse(
         salt_master_address=await get_setting(db, SALT_MASTER),
         kri_api_url=await get_setting(db, KRI_API_URL),
@@ -62,4 +77,7 @@ async def update_settings(
         ansible_endpoint_url=await get_setting(db, ANSIBLE_ENDPOINT_URL),
         playbooks_dir=await get_setting(db, PLAYBOOKS_DIR),
         pillar_dir=await get_setting(db, PILLAR_DIR),
+        cxone_url=await get_setting(db, CXONE_URL),
+        sonarqube_url=await get_setting(db, SONARQUBE_URL),
+        license_policy=await get_setting(db, LICENSE_POLICY),
     )

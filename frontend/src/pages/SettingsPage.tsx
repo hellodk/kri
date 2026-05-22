@@ -16,6 +16,11 @@ export function SettingsPage() {
   const [ansibleToken, setAnsibleToken] = useState('')
   const [playbooksDir, setPlaybooksDir] = useState('')
   const [pillarDir, setPillarDir] = useState('')
+  const [cxoneUrl, setCxoneUrl] = useState('')
+  const [cxoneToken, setCxoneToken] = useState('')
+  const [sonarUrl, setSonarUrl] = useState('')
+  const [sonarToken, setSonarToken] = useState('')
+  const [licensePolicy, setLicensePolicy] = useState('permissive')
 
   const { data, isLoading } = useQuery({
     queryKey: ['settings'],
@@ -30,6 +35,9 @@ export function SettingsPage() {
       if (data.ansible_endpoint_url) setAnsibleEndpoint(data.ansible_endpoint_url)
       if (data.playbooks_dir) setPlaybooksDir(data.playbooks_dir)
       if (data.pillar_dir) setPillarDir(data.pillar_dir)
+      if (data.cxone_url) setCxoneUrl(data.cxone_url)
+      if (data.sonarqube_url) setSonarUrl(data.sonarqube_url)
+      if (data.license_policy) setLicensePolicy(data.license_policy)
     }
   }, [data])
 
@@ -43,6 +51,11 @@ export function SettingsPage() {
       ansible_api_token: ansibleToken || undefined,
       playbooks_dir: playbooksDir || undefined,
       pillar_dir: pillarDir || undefined,
+      cxone_url: cxoneUrl || undefined,
+      cxone_api_token: cxoneToken || undefined,
+      sonarqube_url: sonarUrl || undefined,
+      sonarqube_token: sonarToken || undefined,
+      license_policy: licensePolicy || undefined,
     }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['settings'] })
@@ -237,6 +250,50 @@ export function SettingsPage() {
             placeholder="/srv/salt/pillar  (default)"
             className={monoInputClass} />
           <p className="text-xs text-gray-400 mt-1">Must be writable by the kri process.</p>
+        </div>
+      </div>
+
+      {/* Security Integrations */}
+      <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-6 space-y-4">
+        <div>
+          <h2 className="text-base font-semibold text-gray-900">Security Integrations</h2>
+          <p className="text-sm text-gray-500 mt-1">
+            Connect Checkmarx One (CxOne) and SonarQube for enhanced vulnerability and license scanning.
+          </p>
+        </div>
+        <div className="grid grid-cols-2 gap-4">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">CxOne URL</label>
+            <input type="text" value={cxoneUrl} onChange={e => setCxoneUrl(e.target.value)}
+              placeholder="https://us.cxone.net" className={inputClass} />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              CxOne API Token <span className="text-xs text-gray-400 font-normal">(encrypted)</span>
+            </label>
+            <input type="password" value={cxoneToken} onChange={e => setCxoneToken(e.target.value)}
+              placeholder="Leave blank to keep existing" className={inputClass} />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">SonarQube URL</label>
+            <input type="text" value={sonarUrl} onChange={e => setSonarUrl(e.target.value)}
+              placeholder="http://sonarqube.utilities.svc.cluster.local:9000" className={inputClass} />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              SonarQube Token <span className="text-xs text-gray-400 font-normal">(encrypted)</span>
+            </label>
+            <input type="password" value={sonarToken} onChange={e => setSonarToken(e.target.value)}
+              placeholder="Leave blank to keep existing" className={inputClass} />
+          </div>
+        </div>
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">License Policy</label>
+          <select value={licensePolicy} onChange={e => setLicensePolicy(e.target.value)} className={inputClass}>
+            <option value="permissive">Permissive - flag GPL only</option>
+            <option value="strict">Strict - flag GPL + LGPL + unknown</option>
+          </select>
+          <p className="text-xs text-gray-400 mt-1">Controls which licenses are flagged as "high risk" in the Security dashboard.</p>
         </div>
       </div>
 

@@ -9,6 +9,9 @@ export interface PlatformSettings {
   ansible_endpoint_url: string | null
   playbooks_dir: string | null
   pillar_dir: string | null
+  cxone_url: string | null
+  sonarqube_url: string | null
+  license_policy: string | null
 }
 
 export interface BootstrapResponse {
@@ -89,6 +92,11 @@ export const ansibleApi = {
     ansible_api_token?: string
     playbooks_dir?: string
     pillar_dir?: string
+    cxone_url?: string
+    cxone_api_token?: string
+    sonarqube_url?: string
+    sonarqube_token?: string
+    license_policy?: string
   }) => api.put<PlatformSettings>('/api/v1/settings', payload),
   bootstrap: (minion_id: string, target_ip: string, sshUsername?: string, sshPassword?: string) =>
     api.post<BootstrapResponse>('/api/v1/ansible/bootstrap', {

@@ -28,6 +28,11 @@ class PlatformSettingsUpdate(BaseModel):
     ansible_api_token: str | None = None
     playbooks_dir: str | None = None
     pillar_dir: str | None = None
+    cxone_url: str | None = None
+    cxone_api_token: str | None = None
+    sonarqube_url: str | None = None
+    sonarqube_token: str | None = None
+    license_policy: str | None = None
 
 
 class PlatformSettingsResponse(BaseModel):
@@ -40,3 +45,6 @@ class PlatformSettingsResponse(BaseModel):
     ansible_api_token: None = None
     playbooks_dir: str | None = None
     pillar_dir: str | None = None
+    cxone_url: str | None = None
+    sonarqube_url: str | None = None
+    license_policy: str | None = None

@@ -23,6 +23,11 @@ ANSIBLE_API_TOKEN = "ansible_api_token"
 PLAYBOOKS_DIR = "playbooks_dir"
 PILLAR_DIR = "pillar_dir"
 KRI_API_URL = "kri_api_url"
+CXONE_URL = "cxone_url"
+CXONE_API_TOKEN = "cxone_api_token"
+SONARQUBE_URL = "sonarqube_url"
+SONARQUBE_TOKEN = "sonarqube_token"
+LICENSE_POLICY = "license_policy"  # "permissive" | "strict"
 
 
 def _fernet_key() -> bytes:

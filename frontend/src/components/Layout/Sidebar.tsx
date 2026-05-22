@@ -10,6 +10,7 @@ const links = [
   { to: '/playbooks',  label: 'Playbooks',  icon: '▤' },
   { to: '/baselines',     label: 'Baselines',     icon: '◑' },
   { to: '/provisioning',  label: 'Provisioning',  icon: '⊡' },
+  { to: '/security',   label: 'Security',   icon: '⛨' },
   { to: '/audit',      label: 'Audit',      icon: '◎' },
   { to: '/settings',   label: 'Settings',   icon: '⚙' },
 ]

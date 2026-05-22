@@ -14,6 +14,7 @@ from fleet_platform.api.routes import (
     ansible, platform_settings
 )
 from fleet_platform.api.routes.provisioning import router as provisioning_router
+from fleet_platform.api.routes.security import router as security_router
 
 _log = get_logger(__name__)
 
@@ -63,6 +64,7 @@ def create_app() -> FastAPI:
     app.include_router(ansible.router, tags=["ansible"])
     app.include_router(platform_settings.router, tags=["settings"])
     app.include_router(provisioning_router, tags=["provisioning"])
+    app.include_router(security_router, tags=["security"])
 
     @app.exception_handler(Exception)
     async def unhandled_exception_handler(request: Request, exc: Exception):
