@@ -29,6 +29,7 @@ class NodeListItem(BaseModel):
     drift_score: int
     last_seen_at: datetime | None = None
     tags: list[TagResponse]
+    maintenance_mode: bool = False
 
     model_config = {"from_attributes": True}
 

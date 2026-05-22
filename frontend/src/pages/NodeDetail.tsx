@@ -145,7 +145,7 @@ export function NodeDetail() {
   })
   const vncEnabled = platformSettings?.vnc_enabled ?? false
 
-  const { data: nodeSecrets, refetch: refetchSecrets } = useQuery({
+  const { data: nodeSecrets } = useQuery({
     queryKey: ['node-secrets', nodeId],
     queryFn: () => nodeSecretsApi.list(nodeId!),
     staleTime: 30_000,
@@ -206,6 +206,16 @@ export function NodeDetail() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['node', nodeId] })
       toast('Bootstrap cancelled')
+    },
+    onError: (e: Error) => toast(e.message, 'error'),
+  })
+
+  const maintenanceMutation = useMutation({
+    mutationFn: (enabled: boolean) => fleetApi.maintenanceMode(nodeId!, enabled),
+    onSuccess: (_, enabled) => {
+      qc.invalidateQueries({ queryKey: ['node', nodeId] })
+      qc.invalidateQueries({ queryKey: ['nodes'] })
+      toast(enabled ? 'Node entered maintenance mode' : 'Node exited maintenance mode')
     },
     onError: (e: Error) => toast(e.message, 'error'),
   })
@@ -276,6 +286,11 @@ export function NodeDetail() {
             </h1>
             <StatusBadge status={node.status} />
             <DriftBadge score={node.drift_score} />
+            {node.maintenance_mode && (
+              <span className="text-xs px-1.5 py-0.5 rounded bg-amber-100 text-amber-700 border border-amber-200 font-medium">
+                ⚙ Maintenance
+              </span>
+            )}
           </div>
           <p className="text-sm text-gray-500 mt-1">
             {node.ip_address ?? 'IP unknown'} ·{' '}
@@ -285,6 +300,22 @@ export function NodeDetail() {
           </p>
         </div>
         <div className="flex items-center gap-2">
+          <button
+            onClick={() => maintenanceMutation.mutate(!node.maintenance_mode)}
+            disabled={maintenanceMutation.isPending}
+            className={`px-3 py-2 text-sm font-medium rounded-lg border shadow-sm disabled:opacity-50 transition-colors ${
+              node.maintenance_mode
+                ? 'bg-amber-100 text-amber-700 border-amber-300 hover:bg-amber-200'
+                : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'
+            }`}
+            title={node.maintenance_mode ? 'Exit maintenance mode' : 'Enter maintenance mode'}
+          >
+            {maintenanceMutation.isPending
+              ? '…'
+              : node.maintenance_mode
+              ? '⚙ Exit Maintenance'
+              : '⚙ Maintenance'}
+          </button>
           <button
             onClick={() => setShowSSH(true)}
             disabled={node.status !== 'online'}

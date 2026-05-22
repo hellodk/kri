@@ -5,6 +5,7 @@ import uuid
 from datetime import UTC, datetime
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
+from pydantic import BaseModel
 from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -421,3 +422,41 @@ async def delete_node_tag(
     await audit(db, actor=claims["email"], action="node.tag.delete",
                 resource_type="node", resource_id=node_id, old_value=old_value)
     await db.commit()
+
+
+class MaintenanceModeRequest(BaseModel):
+    enabled: bool
+
+
+@router.patch("/{node_id}/maintenance", response_model=NodeDetailResponse)
+async def set_maintenance_mode(
+    node_id: uuid.UUID,
+    payload: MaintenanceModeRequest,
+    db: AsyncSession = Depends(get_db),
+    claims: dict = Depends(require_role("operator", "admin")),
+):
+    result = await db.execute(
+        select(Node).options(selectinload(Node.tags)).where(Node.id == node_id)
+    )
+    node = result.scalar_one_or_none()
+    if not node:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Node not found")
+
+    old_value = {"maintenance_mode": node.maintenance_mode}
+    node.maintenance_mode = payload.enabled
+
+    await audit(
+        db,
+        actor=claims["email"],
+        action="node.maintenance.set",
+        resource_type="node",
+        resource_id=node_id,
+        old_value=old_value,
+        new_value={"maintenance_mode": payload.enabled},
+    )
+    await db.commit()
+    result2 = await db.execute(
+        select(Node).options(selectinload(Node.tags)).where(Node.id == node_id)
+    )
+    node = result2.scalar_one()
+    return NodeDetailResponse.model_validate(node)

@@ -33,4 +33,6 @@ export const fleetApi = {
     api.post<Tag>(`/api/v1/nodes/${nodeId}/tags`, { key, value }),
   removeTag: (nodeId: string, key: string) =>
     api.delete(`/api/v1/nodes/${nodeId}/tags/${key}`),
+  maintenanceMode: (nodeId: string, enabled: boolean) =>
+    api.patch<NodeDetail>(`/api/v1/nodes/${nodeId}/maintenance`, { enabled }),
 }
