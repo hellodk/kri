@@ -626,8 +626,8 @@ export function NodeDetail() {
     { id: 'sbom', label: 'SBOM' },
     { id: 'executions', label: 'Executions' },
     { id: 'bootstrap-history', label: 'Bootstrap History' },
-    { id: 'secrets', label: 'Secrets 🔑' },
-    ...(isMacOSNode(node) ? [{ id: 'ios' as Tab, label: '🍎 iOS' }] : []),
+    { id: 'secrets', label: 'Secrets' },
+    ...(isMacOSNode(node) ? [{ id: 'ios' as Tab, label: 'iOS' }] : []),
   ]
 
   const chartData = driftHistory?.items
@@ -655,7 +655,7 @@ export function NodeDetail() {
             )}
           </div>
           <p className="text-sm text-gray-500 mt-1">
-            {node.ip_address ?? 'IP unknown'} ·{' '}
+            {node.ip_address ?? node.bootstrap_ip ?? 'IP unknown'} ·{' '}
             {node.last_seen_at
               ? `Last seen ${formatDistanceToNow(new Date(node.last_seen_at), { addSuffix: true })}`
               : 'Never seen'}

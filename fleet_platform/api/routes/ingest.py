@@ -87,8 +87,20 @@ def _extract_node_updates(grains: dict) -> dict:
             None,
         )
 
+    # Hostname resolution priority:
+    # 1. `host` grain — the actual short machine name (uname -n), always reliable
+    # 2. `fqdn` grain — only if it is NOT a reverse-DNS artefact (.ip6.arpa /
+    #    .in-addr.arpa) which Salt/Ansible produces when PTR lookup returns the
+    #    Tailscale IPv6 record instead of the real name
+    # 3. `id` grain — the minion ID, always present as a last resort
+    raw_host = grains.get("host") or ""
+    raw_fqdn = grains.get("fqdn") or ""
+    fqdn_valid = raw_fqdn and not raw_fqdn.lower().endswith((".ip6.arpa", ".in-addr.arpa"))
+
+    hostname = raw_host or (raw_fqdn if fqdn_valid else None) or grains.get("id")
+
     return {
-        "hostname": grains.get("fqdn") or grains.get("id"),
+        "hostname": hostname,
         "ip_address": ip,
         "os_version": grains.get("osrelease"),
         "os_build": grains.get("osbuild"),
@@ -167,7 +179,16 @@ async def ingest_grains(
     updates = _extract_node_updates(payload.grains)
     updates["last_seen_at"] = now
     for key, value in updates.items():
+        # Never overwrite an existing ip_address with None — grains may not carry
+        # a valid IP (e.g. Ansible gather_subset:min omits network facts).
+        # Keep bootstrap_ip as the authoritative fallback.
+        if key == "ip_address" and value is None:
+            continue
         setattr(node, key, value)
+
+    # Seed ip_address from bootstrap_ip if it has never been set
+    if not node.ip_address and node.bootstrap_ip:
+        node.ip_address = node.bootstrap_ip
 
     db.add(NodeFact(
         node_id=node.id,

@@ -2,6 +2,7 @@ import { useState, useMemo } from 'react'
 import { Link } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { fleetApi } from '../api/fleet'
+import { groupsApi } from '../api/groups'
 import { api } from '../api/client'
 import { iosTrackingApi } from '../api/iosTracking'
 import { useAuthStore } from '../stores/authStore'
@@ -27,38 +28,43 @@ function AddNodeModal({ onClose }: { onClose: () => void }) {
   const [minionId, setMinionId] = useState('')
   const [hostname, setHostname] = useState('')
   const [ipAddress, setIpAddress] = useState('')
+  const [groupId, setGroupId] = useState('')
+
+  const { data: groups } = useQuery({
+    queryKey: ['groups-for-add-node'],
+    queryFn: () => groupsApi.list({ per_page: 100 }),
+    staleTime: 60_000,
+  })
 
   const mutation = useMutation({
-    mutationFn: () =>
-      fleetApi.createNode({
+    mutationFn: async () => {
+      const node = await fleetApi.createNode({
         minion_id: minionId.trim(),
         hostname: hostname.trim() || undefined,
         ip_address: ipAddress.trim() || undefined,
-      }),
+      })
+      await groupsApi.addMember(groupId, node.id)
+      return node
+    },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['nodes'] })
       qc.invalidateQueries({ queryKey: ['fleet-overview'] })
-      toast('Node added successfully')
+      toast('Node added and assigned to group')
       onClose()
     },
     onError: (e: Error) => toast(e.message, 'error'),
   })
 
+  const canSubmit = minionId.trim() && groupId && !mutation.isPending
+
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
       <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md flex flex-col">
-        {/* Header */}
         <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200">
           <h2 className="text-lg font-bold text-gray-900">Add Node</h2>
-          <button
-            onClick={onClose}
-            className="flex items-center justify-center w-8 h-8 rounded-lg text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-colors text-lg"
-          >
-            ×
-          </button>
+          <button onClick={onClose} className="w-8 h-8 rounded-lg text-gray-400 hover:text-gray-600 hover:bg-gray-100 text-lg">×</button>
         </div>
 
-        {/* Body */}
         <div className="px-6 py-5 space-y-4">
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -71,6 +77,25 @@ function AddNodeModal({ onClose }: { onClose: () => void }) {
               placeholder="mac-mini-01"
               className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm text-gray-900 focus:outline-none focus:border-brand-600"
             />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Group <span className="text-red-500">*</span>
+            </label>
+            <select
+              required
+              value={groupId}
+              onChange={(e) => setGroupId(e.target.value)}
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm text-gray-900 focus:outline-none focus:border-brand-600 bg-white"
+            >
+              <option value="">Select a group…</option>
+              {(groups?.items ?? []).filter(g => g.type === 'static').map(g => (
+                <option key={g.id} value={g.id}>{g.name}</option>
+              ))}
+            </select>
+            {(groups?.items ?? []).filter(g => g.type === 'static').length === 0 && (
+              <p className="text-xs text-amber-600 mt-1">No static groups yet — <a href="/groups" className="underline">create one first</a>.</p>
+            )}
           </div>
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -96,23 +121,17 @@ function AddNodeModal({ onClose }: { onClose: () => void }) {
           </div>
         </div>
 
-        {/* Footer */}
-        <div className="px-6 py-4 border-t border-gray-200">
-          <div className="flex gap-3">
-            <button
-              onClick={onClose}
-              className="flex-1 py-2.5 border border-gray-300 text-gray-700 rounded-lg text-sm font-medium hover:bg-gray-50"
-            >
-              Cancel
-            </button>
-            <button
-              disabled={!minionId.trim() || mutation.isPending}
-              onClick={() => mutation.mutate()}
-              className="flex-1 py-2.5 bg-brand-600 text-white rounded-lg text-sm font-medium hover:bg-brand-700 disabled:opacity-50"
-            >
-              {mutation.isPending ? 'Adding…' : 'Add Node'}
-            </button>
-          </div>
+        <div className="px-6 py-4 border-t border-gray-200 flex gap-3">
+          <button onClick={onClose} className="flex-1 py-2.5 border border-gray-300 text-gray-700 rounded-lg text-sm font-medium hover:bg-gray-50">
+            Cancel
+          </button>
+          <button
+            disabled={!canSubmit}
+            onClick={() => mutation.mutate()}
+            className="flex-1 py-2.5 bg-brand-600 text-white rounded-lg text-sm font-medium hover:bg-brand-700 disabled:opacity-50"
+          >
+            {mutation.isPending ? 'Adding…' : 'Add Node'}
+          </button>
         </div>
       </div>
     </div>
@@ -125,7 +144,7 @@ function EditNodeModal({ node, onClose }: { node: Node; onClose: () => void }) {
   const qc = useQueryClient()
   const toast = useToastStore((s) => s.add)
   const [hostname, setHostname] = useState(node.hostname ?? '')
-  const [ipAddress, setIpAddress] = useState(node.ip_address ?? '')
+  const [ipAddress, setIpAddress] = useState(node.ip_address ?? node.bootstrap_ip ?? '')
   const [hardwareModel, setHardwareModel] = useState(node.hardware_model ?? '')
   const [osVersion, setOsVersion] = useState(node.os_version ?? '')
   const [authMode, setAuthMode] = useState<'password' | 'key'>(node.ssh_auth_mode ?? 'password')
@@ -613,7 +632,7 @@ export function FleetDashboard() {
                 : 'bg-white text-gray-600 border-gray-300 hover:bg-gray-50'
             }`}
           >
-            🍎 macOS
+            macOS
           </button>
         </div>
 
@@ -772,8 +791,8 @@ export function FleetDashboard() {
                           <Link to={`/nodes/${node.id}`} className="text-brand-600 hover:text-brand-700 hover:underline">
                             {node.hostname ?? node.minion_id}
                           </Link>
-                          {node.ip_address && (
-                            <p className="text-gray-400 font-normal mt-0.5">{node.ip_address}</p>
+                          {(node.ip_address ?? node.bootstrap_ip) && (
+                            <p className="text-gray-400 font-normal mt-0.5">{node.ip_address ?? node.bootstrap_ip}</p>
                           )}
                         </td>
                         <td className="px-4 py-3">

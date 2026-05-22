@@ -28,6 +28,7 @@ export const groupsApi = {
     if (params?.per_page) q.set('per_page', String(params.per_page))
     return api.get<Paginated<Node>>(`/api/v1/groups/${id}/nodes?${q}`)
   },
+  delete: (groupId: string) => api.delete(`/api/v1/groups/${groupId}`),
   addMember: (groupId: string, nodeId: string) =>
     api.post(`/api/v1/groups/${groupId}/members`, { node_id: nodeId }),
   removeMember: (groupId: string, nodeId: string) =>

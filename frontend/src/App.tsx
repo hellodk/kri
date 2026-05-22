@@ -22,7 +22,7 @@ import { AuditPage } from './pages/AuditPage'
 import { SaltKeysPage } from './pages/SaltKeysPage'
 import { SaltOpsPage } from './pages/SaltOpsPage'
 import { AlertsPage } from './pages/AlertsPage'
-import { DashboardPage } from './pages/DashboardPage'
+import { Navigate } from 'react-router-dom'
 import { saltKeysApi } from './api/saltKeys'
 import { useSaltKeysStore } from './stores/saltKeysStore'
 import { useToastStore } from './stores/toastStore'
@@ -88,7 +88,7 @@ export default function App() {
               </AuthGuard>
             }
           >
-            <Route index element={<DashboardPage />} />
+            <Route index element={<Navigate to="/fleet" replace />} />
             <Route path="/fleet" element={<FleetDashboard />} />
             <Route path="/nodes/:nodeId" element={<NodeDetail />} />
             <Route path="/drift" element={<DriftExplorer />} />

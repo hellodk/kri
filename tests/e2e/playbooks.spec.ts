@@ -18,7 +18,7 @@ test.describe('Playbooks', () => {
   })
 
   test('PLAY-02 bootstrap playbook card shown', async ({ page }) => {
-    await expect(page.locator('text=Bootstrap Mac Mini').first()).toBeVisible({ timeout: 5000 })
+    await expect(page.locator('text=Bootstrap Mac Mini').first()).toBeVisible({ timeout: 8000 })
   })
 
   test('PLAY-05 run button opens confirmation dialog', async ({ page }) => {

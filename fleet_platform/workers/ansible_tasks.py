@@ -493,3 +493,21 @@ def collect_node_grains(self, node_id: str) -> dict:
             return {"status": "error", "reason": "ssh timeout"}
         except Exception as e:
             return {"status": "error", "reason": str(e)[:200]}
+
+
+@celery_app.task(
+    name="fleet_platform.workers.ansible_tasks.refresh_all_node_grains",
+    queue="maintenance",
+)
+def refresh_all_node_grains() -> dict:
+    """Periodic: trigger grain collection for all bootstrapped online nodes."""
+    with get_sync_db() as db:
+        rows = db.execute(
+            select(Node).where(Node.bootstrap_status == "completed")
+        ).scalars().all()
+        node_ids = [str(n.id) for n in rows if n.bootstrap_ip]
+
+    for nid in node_ids:
+        collect_node_grains.delay(nid)
+
+    return {"queued": len(node_ids)}

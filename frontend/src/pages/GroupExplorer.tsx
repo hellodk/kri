@@ -22,6 +22,11 @@ export function GroupExplorer() {
     staleTime: 30_000,
   })
 
+  const deleteMutation = useMutation({
+    mutationFn: (groupId: string) => groupsApi.delete(groupId),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['groups'] }),
+  })
+
   const createMutation = useMutation({
     mutationFn: () =>
       groupsApi.create({
@@ -110,6 +115,7 @@ export function GroupExplorer() {
                   <th className="px-4 py-3">Type</th>
                   <th className="px-4 py-3">Members</th>
                   <th className="px-4 py-3">Created</th>
+                  <th className="px-4 py-3 w-16"></th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100">
@@ -126,6 +132,19 @@ export function GroupExplorer() {
                     </td>
                     <td className="px-4 py-3 text-gray-600">{g.member_count}</td>
                     <td className="px-4 py-3 text-gray-500">{format(new Date(g.created_at), 'PP')}</td>
+                    <td className="px-4 py-3 text-right">
+                      <button
+                        onClick={() => {
+                          if (confirm(`Delete group "${g.name}"? This cannot be undone.`)) {
+                            deleteMutation.mutate(g.id)
+                          }
+                        }}
+                        disabled={deleteMutation.isPending}
+                        className="text-xs text-red-500 hover:text-red-700 font-medium disabled:opacity-50"
+                      >
+                        Delete
+                      </button>
+                    </td>
                   </tr>
                 ))}
               </tbody>

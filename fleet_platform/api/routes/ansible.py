@@ -15,7 +15,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from fleet_platform.api.deps import get_db
 from fleet_platform.api.limiter import limiter
-from fleet_platform.core.auth import hash_password, require_role
+from fleet_platform.core.auth import get_current_user, hash_password, require_role
 from fleet_platform.services.platform_settings_svc import encrypt_secret
 from fleet_platform.models.ansible_job import AnsibleJob
 from fleet_platform.models.node import Node
@@ -1073,3 +1073,21 @@ async def update_playbook_file(
     target.parent.mkdir(parents=True, exist_ok=True)
     target.write_text(content)
     return {"path": path, "size": target.stat().st_size, "saved": True}
+
+
+@router.get("/tasks/{task_id}")
+async def get_task_status(
+    task_id: str,
+    _: dict = Depends(get_current_user),
+):
+    """Return Celery task state + result for any queued task."""
+    from celery.result import AsyncResult
+    from fleet_platform.workers.celery_app import celery_app
+    result = AsyncResult(task_id, app=celery_app)
+    payload: dict = {"task_id": task_id, "state": result.state}
+    if result.ready():
+        try:
+            payload["result"] = result.result if not isinstance(result.result, Exception) else str(result.result)
+        except Exception:
+            payload["result"] = None
+    return payload

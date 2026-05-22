@@ -83,6 +83,21 @@ services:
       retries: 3
       start_period: 10s
 
+  beat:
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile.api
+    command: ["uv", "run", "celery", "-A", "fleet_platform.workers.celery_app", "beat", "--loglevel", "info"]
+    restart: unless-stopped
+    env_file: ../.env.docker
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    volumes:
+      - salt-pillar:/srv/salt/pillar
+
   frontend:
     build:
       context: ..

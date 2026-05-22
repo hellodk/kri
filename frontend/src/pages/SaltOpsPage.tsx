@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { useQuery, useMutation } from '@tanstack/react-query'
+import { useQuery } from '@tanstack/react-query'
 import { saltOpsApi, type SaltState } from '../api/saltOps'
 import { fleetApi } from '../api/fleet'
 import { api } from '../api/client'

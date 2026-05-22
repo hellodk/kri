@@ -3,7 +3,6 @@ import { useFilterStore } from '../../stores/filterStore'
 import { useSaltKeysStore } from '../../stores/saltKeysStore'
 
 const links = [
-  { to: '/',           label: 'Dashboard',   icon: '◈', end: true },
   { to: '/fleet',      label: 'Fleet',       icon: '⬡' },
   { to: '/drift',      label: 'Drift',       icon: '◑' },
   { to: '/sbom',       label: 'SBOM',        icon: '◉' },
@@ -13,10 +12,10 @@ const links = [
   { to: '/baselines',  label: 'Baselines',   icon: '◑' },
   { to: '/provisioning', label: 'Provisioning', icon: '⊡' },
   { to: '/security',   label: 'Security',    icon: '⛨' },
-{ to: '/salt-ops',   label: 'Salt Ops',    icon: '⚡' },
-  { to: '/salt-keys',  label: 'Minion Keys', icon: '🔑' },
+  { to: '/salt-ops',   label: 'Salt Ops',    icon: '▹' },
+  { to: '/salt-keys',  label: 'Minion Keys', icon: '⊗' },
   { to: '/audit',      label: 'Audit',       icon: '◎' },
-  { to: '/alerts',     label: 'Alerts',      icon: '🔔' },
+  { to: '/alerts',     label: 'Alerts',      icon: '◭' },
   { to: '/settings',   label: 'Settings',    icon: '⚙' },
 ]
 
@@ -44,7 +43,7 @@ export function Sidebar() {
 
       {/* Nav */}
       <ul className="flex-1 py-4 px-2 space-y-0.5">
-        {links.map(({ to, label, icon, end }) => {
+        {links.map(({ to, label, icon }) => {
           const isSaltKeys = to === '/salt-keys'
           const badge = isSaltKeys && pendingCount > 0
 
@@ -52,7 +51,6 @@ export function Sidebar() {
             <li key={to}>
               <NavLink
                 to={to}
-                end={end}
                 title={!open ? label : undefined}
                 className={({ isActive }) =>
                   `group relative flex items-center gap-3 rounded-lg text-sm font-medium transition-all duration-150 ${
