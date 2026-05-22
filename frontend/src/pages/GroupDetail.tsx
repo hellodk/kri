@@ -9,12 +9,16 @@ import { Skeleton } from '../components/Skeleton'
 import { ErrorState } from '../components/ErrorState'
 import { Pagination } from '../components/Pagination'
 import { useToastStore } from '../stores/toastStore'
+import { formatDistanceToNow } from 'date-fns'
+
+type GroupTab = 'Members' | 'Drift' | 'SSH'
 
 export function GroupDetail() {
   const { groupId } = useParams<{ groupId: string }>()
   const [page, setPage] = useState(1)
   const [showAddNode, setShowAddNode] = useState(false)
   const [addNodeId, setAddNodeId] = useState('')
+  const [activeTab, setActiveTab] = useState<GroupTab>('Members')
   const qc = useQueryClient()
   const toast = useToastStore((s) => s.add)
 
@@ -38,6 +42,13 @@ export function GroupDetail() {
     queryFn: () => groupsApi.members(groupId!, { page, per_page: 25 }),
     enabled: !!groupId,
     staleTime: 30_000,
+  })
+
+  const { data: allMembers, isLoading: allMembersLoading } = useQuery({
+    queryKey: ['group-members-all', groupId],
+    queryFn: () => groupsApi.members(groupId!, { page: 1, per_page: 200 }),
+    enabled: !!groupId && activeTab === 'Drift',
+    staleTime: 60_000,
   })
 
   const { data: creds, isLoading: credsLoading } = useQuery<GroupCredentials>({
@@ -158,8 +169,81 @@ export function GroupDetail() {
         </div>
       )}
 
+      {/* Tab bar */}
+      <div className="flex border-b border-gray-200">
+        {(['Members', 'Drift', 'SSH'] as GroupTab[]).map(tab => (
+          <button key={tab} onClick={() => setActiveTab(tab)}
+            className={`px-4 py-2.5 text-sm font-medium border-b-2 -mb-px transition-colors ${
+              activeTab === tab
+                ? 'border-brand-600 text-brand-700'
+                : 'border-transparent text-gray-500 hover:text-gray-700'
+            }`}
+          >
+            {tab}
+          </button>
+        ))}
+      </div>
+
+      {/* Drift tab */}
+      {activeTab === 'Drift' && (
+        <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
+          {allMembersLoading ? (
+            <Skeleton rows={5} />
+          ) : (() => {
+            const driftNodes = [...(allMembers?.items ?? [])].sort((a, b) => (b.drift_score ?? 0) - (a.drift_score ?? 0))
+            const drifted = driftNodes.filter(n => (n.drift_score ?? 0) > 5)
+            return (
+              <>
+                <div className="px-4 py-3 border-b border-gray-200 flex items-center justify-between">
+                  <span className="text-sm font-semibold text-gray-700">Drift Summary</span>
+                  <span className="text-xs text-gray-500">
+                    {drifted.length} of {driftNodes.length} nodes drifted (score &gt; 5)
+                  </span>
+                </div>
+                {driftNodes.length === 0 ? (
+                  <div className="px-4 py-12 text-center text-gray-400 text-sm">No members to show drift for.</div>
+                ) : (
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="bg-gray-50 border-b border-gray-200 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide">
+                        <th className="px-4 py-3">Node</th>
+                        <th className="px-4 py-3">Drift Score</th>
+                        <th className="px-4 py-3">Severity</th>
+                        <th className="px-4 py-3">Last Seen</th>
+                        <th className="px-4 py-3 w-24"></th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-100">
+                      {driftNodes.map(n => (
+                        <tr key={n.id} className="hover:bg-gray-50 transition-colors">
+                          <td className="px-4 py-3">
+                            <Link to={`/nodes/${n.id}`} className="text-brand-600 hover:underline font-medium">
+                              {n.hostname ?? n.minion_id}
+                            </Link>
+                          </td>
+                          <td className="px-4 py-3 font-mono text-sm text-gray-700">{n.drift_score ?? 0}</td>
+                          <td className="px-4 py-3"><DriftBadge score={n.drift_score} /></td>
+                          <td className="px-4 py-3 text-gray-400 text-xs">
+                            {n.last_seen_at ? formatDistanceToNow(new Date(n.last_seen_at), { addSuffix: true }) : '—'}
+                          </td>
+                          <td className="px-4 py-3 text-right">
+                            <Link to={`/nodes/${n.id}`} className="text-xs text-brand-600 hover:text-brand-700 font-medium">
+                              View Drift →
+                            </Link>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                )}
+              </>
+            )
+          })()}
+        </div>
+      )}
+
       {/* SSH Credentials card */}
-      <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
+      {activeTab === 'SSH' && <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
         <div className="px-4 py-3 border-b border-gray-200">
           <p className="text-sm font-semibold text-gray-700">SSH Credentials</p>
           <p className="text-xs text-gray-400 mt-0.5">
@@ -312,10 +396,10 @@ export function GroupDetail() {
             </div>
           </div>
         )}
-      </div>
+      </div>}
 
       {/* Members table */}
-      <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
+      {activeTab === 'Members' && <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
         <div className="px-4 py-3 border-b border-gray-200 flex items-center justify-between">
           <span className="text-sm font-semibold text-gray-700">
             Members <span className="text-gray-400 font-normal">({group.member_count})</span>
@@ -405,7 +489,7 @@ export function GroupDetail() {
             )}
           </>
         )}
-      </div>
+      </div>}
     </div>
   )
 }

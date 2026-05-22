@@ -41,6 +41,7 @@ services:
         condition: service_healthy
     volumes:
       - salt-pillar:/srv/salt/pillar
+      - /home/dk/Documents/git/pulse:/mnt/pulse:ro   # host playbook repos
 
   worker:
     build:
@@ -58,6 +59,7 @@ services:
       - salt-pillar:/srv/salt/pillar
       - ~/.ssh:/root/.ssh:ro
       - ~/.kri:/root/.kri:ro
+      - /home/dk/Documents/git/pulse:/mnt/pulse:ro   # host playbook repos
 
   salt-master:
     image: saltstack/salt:latest

@@ -109,11 +109,12 @@ export function PlaybookDrawer({
     staleTime: 30_000,
   })
 
-  const { data: fileData, isLoading: fileLoading } = useQuery({
+  const { data: fileData, isLoading: fileLoading, isError: fileError, error: fileErrorObj } = useQuery({
     queryKey: ['playbook-file-content', selectedNode?.path],
     queryFn: () => ansibleApi.getFileContent(selectedNode!.path),
     enabled: !!selectedNode && selectedNode.exists !== false,
     staleTime: 0,
+    retry: false,
   })
 
   const saveMutation = useMutation({
@@ -241,6 +242,29 @@ export function PlaybookDrawer({
                 <div className="flex-1 overflow-hidden">
                   {fileLoading ? (
                     <div className="flex items-center justify-center h-full text-sm text-gray-400">Loading…</div>
+                  ) : fileError ? (
+                    <div className="flex items-center justify-center h-full">
+                      <div className="text-center space-y-2">
+                        <p className="text-amber-500 text-sm font-medium">
+                          <span className="mr-1">⚠</span>
+                          File not found in playbooks directory
+                        </p>
+                        <code className="text-xs text-gray-400 font-mono block">{selectedNode?.path}</code>
+                        <p className="text-xs text-gray-400">
+                          {(fileErrorObj as any)?.message ?? 'Could not load file content'}
+                        </p>
+                      </div>
+                    </div>
+                  ) : !fileLoading && !displayContent && selectedNode?.exists !== false ? (
+                    <div className="flex items-center justify-center h-full">
+                      <div className="text-center space-y-2">
+                        <p className="text-amber-500 text-sm gap-2">
+                          <span>⚠</span>
+                          <span> File not found: </span>
+                          <code className="font-mono">{selectedNode?.path}</code>
+                        </p>
+                      </div>
+                    </div>
                   ) : (
                     <textarea
                       className="w-full h-full resize-none font-mono text-xs p-4 focus:outline-none bg-gray-950 text-green-300 leading-relaxed"

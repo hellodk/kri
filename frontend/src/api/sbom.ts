@@ -13,4 +13,6 @@ export const sbomApi = {
   },
   search: (q: string) =>
     api.get<SBOMSearchResult[]>(`/api/v1/sbom/search?q=${encodeURIComponent(q)}`),
+  browse: () =>
+    api.get<SBOMSearchResult[]>('/api/v1/sbom/browse'),
 }

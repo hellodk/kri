@@ -43,5 +43,12 @@ export const baselinesApi = {
     target_id?: string
     state_json: object
   }) => api.post<Baseline>('/api/v1/baselines', { ...payload, git_commit_sha: 'manual' }),
+  update: (id: string, payload: {
+    name?: string
+    description?: string
+    target_type?: string
+    target_id?: string
+    state_json?: object
+  }) => api.patch<Baseline>(`/api/v1/baselines/${id}`, payload),
   capture: (nodeId: string) => api.get<CaptureResult>(`/api/v1/baselines/capture/${nodeId}`),
 }

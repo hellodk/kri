@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { api } from '../api/client'
 import { baselinesApi, type Baseline, type CaptureResult } from '../api/baselines'
 import { groupsApi } from '../api/groups'
 import { fleetApi } from '../api/fleet'
@@ -35,6 +36,23 @@ function buildStateJson(required: PkgRow[], forbidden: PkgRow[], services: SvcRo
       required_stopped: services.filter(s => s.name.trim() && s.state === 'stopped').map(s => s.name.trim()),
     },
   }
+}
+
+function parseStateJson(stateJson: any): { required: PkgRow[], forbidden: PkgRow[], services: SvcRow[] } {
+  const pkgs = stateJson?.packages ?? {}
+  const required = (pkgs.required ?? []).map((p: any) => ({
+    name: p.name ?? '',
+    version: (p.version ?? '').replace('>=', ''),
+    enforce: !!(p.version),
+  }))
+  const forbidden = (pkgs.forbidden ?? []).map((p: any) => ({
+    name: p.name ?? '',
+    version: '',
+    enforce: false,
+  }))
+  const svcRunning = (stateJson?.services?.required_running ?? []).map((s: string) => ({ name: s, state: 'running' as const }))
+  const svcStopped = (stateJson?.services?.required_stopped ?? []).map((s: string) => ({ name: s, state: 'stopped' as const }))
+  return { required, forbidden, services: [...svcRunning, ...svcStopped] }
 }
 
 // ─── Capture mode ─────────────────────────────────────────────────────────────
@@ -186,6 +204,13 @@ function ManualMode({
   services: SvcRow[]; setServices: (s: SvcRow[]) => void
 }) {
   const inputClass = 'px-3 py-1.5 border border-gray-300 rounded-lg text-sm focus:outline-none focus:border-brand-600'
+  const [focusedPkgIdx, setFocusedPkgIdx] = useState<number | null>(null)
+
+  const { data: suggestions = [] } = useQuery({
+    queryKey: ['common-packages'],
+    queryFn: () => api.get<Array<{name: string; version: string; node_count: number}>>('/api/v1/baselines/common-packages'),
+    staleTime: 5 * 60_000,
+  })
 
   return (
     <div className="space-y-6">
@@ -196,27 +221,54 @@ function ManualMode({
           <span className="text-xs text-gray-400">must be installed for zero drift</span>
         </div>
         <div className="space-y-2">
-          {required.map((row, i) => (
-            <div key={i} className="flex gap-2 items-center">
-              <input
-                value={row.name}
-                onChange={e => setRequired(required.map((r, j) => j === i ? { ...r, name: e.target.value } : r))}
-                placeholder="package name"
-                className={`${inputClass} flex-1`}
-              />
-              <span className="text-gray-400 text-sm">≥</span>
-              <input
-                value={row.version}
-                onChange={e => setRequired(required.map((r, j) => j === i ? { ...r, version: e.target.value } : r))}
-                placeholder="version (optional)"
-                className={`${inputClass} w-36`}
-              />
-              <button
-                onClick={() => setRequired(required.filter((_, j) => j !== i))}
-                className="text-gray-400 hover:text-red-500 text-lg leading-none flex-shrink-0"
-              >×</button>
-            </div>
-          ))}
+          {required.map((row, i) => {
+            const matches = row.name.trim().length > 0
+              ? suggestions.filter(s => s.name.toLowerCase().startsWith(row.name.toLowerCase()) && s.name !== row.name).slice(0, 6)
+              : []
+            const showDropdown = focusedPkgIdx === i && matches.length > 0
+            return (
+              <div key={i} className="relative">
+                <div className="flex gap-2 items-center">
+                  <input
+                    value={row.name}
+                    onChange={e => setRequired(required.map((r, j) => j === i ? { ...r, name: e.target.value } : r))}
+                    onFocus={() => setFocusedPkgIdx(i)}
+                    onBlur={() => setTimeout(() => setFocusedPkgIdx(null), 150)}
+                    placeholder="package name"
+                    className={`${inputClass} flex-1`}
+                  />
+                  <span className="text-gray-400 text-sm">≥</span>
+                  <input
+                    value={row.version}
+                    onChange={e => setRequired(required.map((r, j) => j === i ? { ...r, version: e.target.value } : r))}
+                    placeholder="version (optional)"
+                    className={`${inputClass} w-36`}
+                  />
+                  <button
+                    onClick={() => setRequired(required.filter((_, j) => j !== i))}
+                    className="text-gray-400 hover:text-red-500 text-lg leading-none flex-shrink-0"
+                  >×</button>
+                </div>
+                {showDropdown && (
+                  <div className="absolute z-10 left-0 top-full mt-0.5 w-80 bg-white border border-gray-200 rounded-lg shadow-lg overflow-hidden">
+                    {matches.map(s => (
+                      <button
+                        key={s.name}
+                        onMouseDown={() => {
+                          setRequired(required.map((r, j) => j === i ? { ...r, name: s.name, version: s.version || r.version } : r))
+                          setFocusedPkgIdx(null)
+                        }}
+                        className="flex items-center justify-between w-full px-3 py-1.5 hover:bg-brand-50 text-left"
+                      >
+                        <span className="text-sm font-mono text-gray-800">{s.name}</span>
+                        <span className="text-xs text-gray-400 ml-2 shrink-0">{s.version} · {s.node_count} nodes</span>
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )
+          })}
         </div>
         <button
           onClick={() => setRequired([...required, { name: '', version: '', enforce: false }])}
@@ -293,25 +345,30 @@ function ManualMode({
   )
 }
 
-// ─── Create modal ─────────────────────────────────────────────────────────────
+// ─── Create/Edit modal ─────────────────────────────────────────────────────────
 
-function CreateBaselineModal({ onClose }: { onClose: () => void }) {
+function CreateBaselineModal({ onClose, existing }: { onClose: () => void; existing?: Baseline }) {
   const qc = useQueryClient()
   const toast = useToastStore((s) => s.add)
 
-  // Mode
-  const [mode, setMode] = useState<'choose' | 'capture' | 'manual'>('choose')
+  const isEdit = !!existing
 
-  // Shared state
-  const [name, setName] = useState('')
-  const [description, setDescription] = useState('')
-  const [targetType, setTargetType] = useState<'global' | 'group' | 'node'>('global')
-  const [targetId, setTargetId] = useState('')
+  // Mode: when editing, skip directly to manual
+  const [mode, setMode] = useState<'choose' | 'capture' | 'manual'>(isEdit ? 'manual' : 'choose')
 
-  // Package/service state (shared between modes)
-  const [required, setRequired] = useState<PkgRow[]>([])
-  const [forbidden, setForbidden] = useState<PkgRow[]>([])
-  const [services, setServices] = useState<SvcRow[]>([])
+  // Shared state — pre-fill from existing if editing
+  const [name, setName] = useState(existing?.name ?? '')
+  const [description, setDescription] = useState(existing?.description ?? '')
+  const [targetType, setTargetType] = useState<'global' | 'group' | 'node'>(
+    (existing?.target_type as 'global' | 'group' | 'node') ?? 'global'
+  )
+  const [targetId, setTargetId] = useState(existing?.target_id ?? '')
+
+  // Package/service state — parse from existing state_json if editing
+  const parsedInitial = existing ? parseStateJson((existing as any).state_json ?? {}) : null
+  const [required, setRequired] = useState<PkgRow[]>(parsedInitial?.required ?? [])
+  const [forbidden, setForbidden] = useState<PkgRow[]>(parsedInitial?.forbidden ?? [])
+  const [services, setServices] = useState<SvcRow[]>(parsedInitial?.services ?? [])
 
   const { data: groups } = useQuery({
     queryKey: ['groups-for-baseline'],
@@ -330,16 +387,22 @@ function CreateBaselineModal({ onClose }: { onClose: () => void }) {
   const hasContent = required.some(r => r.name.trim()) || forbidden.some(f => f.name.trim()) || services.some(s => s.name.trim())
 
   const createMutation = useMutation({
-    mutationFn: () => baselinesApi.create({
-      name,
-      description: description || undefined,
-      target_type: targetType,
-      target_id: targetId || undefined,
-      state_json: stateJson,
-    }),
+    mutationFn: () => isEdit
+      ? baselinesApi.update(existing!.id, {
+          name,
+          description: description || undefined,
+          state_json: stateJson,
+        })
+      : baselinesApi.create({
+          name,
+          description: description || undefined,
+          target_type: targetType,
+          target_id: targetId || undefined,
+          state_json: stateJson,
+        }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['baselines'] })
-      toast('Baseline created')
+      toast(isEdit ? 'Baseline updated' : 'Baseline created')
       onClose()
     },
     onError: (e: Error) => toast(e.message, 'error'),
@@ -357,7 +420,7 @@ function CreateBaselineModal({ onClose }: { onClose: () => void }) {
               <button onClick={() => setMode('choose')} className="text-gray-400 hover:text-gray-600 text-sm">← Back</button>
             )}
             <h2 className="text-lg font-bold text-gray-900">
-              {mode === 'choose' ? 'New Baseline' : mode === 'capture' ? '📸 Capture from Node' : '✏️ Build Manually'}
+              {isEdit ? `Edit Baseline` : mode === 'choose' ? 'New Baseline' : mode === 'capture' ? '📸 Capture from Node' : '✏️ Build Manually'}
             </h2>
           </div>
           <button onClick={onClose} className="w-8 h-8 flex items-center justify-center rounded-lg text-gray-400 hover:text-gray-600 hover:bg-gray-100 text-lg">×</button>
@@ -478,7 +541,7 @@ function CreateBaselineModal({ onClose }: { onClose: () => void }) {
               onClick={() => createMutation.mutate()}
               className="flex-1 py-2.5 bg-brand-600 text-white rounded-lg text-sm font-medium hover:bg-brand-700 disabled:opacity-50"
             >
-              {createMutation.isPending ? 'Creating…' : 'Create Baseline'}
+              {createMutation.isPending ? (isEdit ? 'Saving…' : 'Creating…') : (isEdit ? 'Save Changes' : 'Create Baseline')}
             </button>
           </div>
         )}
@@ -532,6 +595,7 @@ export function BaselinesPage() {
   const [page, setPage] = useState(1)
   const [showCreate, setShowCreate] = useState(false)
   const [selected, setSelected] = useState<Baseline | null>(null)
+  const [editTarget, setEditTarget] = useState<Baseline | null>(null)
 
   const { data, isLoading, isError, refetch } = useQuery({
     queryKey: ['baselines', page],
@@ -592,7 +656,7 @@ export function BaselinesPage() {
                 <th className="px-4 py-3">Applies to</th>
                 <th className="px-4 py-3">Version</th>
                 <th className="px-4 py-3">Created</th>
-                <th className="px-4 py-3 w-20"></th>
+                <th className="px-4 py-3 w-28"></th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">
@@ -616,10 +680,16 @@ export function BaselinesPage() {
                     {formatDistanceToNow(new Date(b.created_at), { addSuffix: true })}
                   </td>
                   <td className="px-4 py-3 text-right">
-                    <button onClick={() => setSelected(b)}
-                      className="text-xs text-brand-600 hover:text-brand-700 font-medium">
-                      View
-                    </button>
+                    <div className="flex items-center justify-end gap-3">
+                      <button onClick={() => setEditTarget(b)}
+                        className="text-xs text-amber-600 hover:text-amber-700 font-medium">
+                        Edit
+                      </button>
+                      <button onClick={() => setSelected(b)}
+                        className="text-xs text-brand-600 hover:text-brand-700 font-medium">
+                        View
+                      </button>
+                    </div>
                   </td>
                 </tr>
               ))}
@@ -632,6 +702,7 @@ export function BaselinesPage() {
       )}
 
       {showCreate && <CreateBaselineModal onClose={() => setShowCreate(false)} />}
+      {editTarget && <CreateBaselineModal existing={editTarget} onClose={() => setEditTarget(null)} />}
       {selected && <BaselineDetail baseline={selected} onClose={() => setSelected(null)} />}
     </div>
   )

@@ -61,6 +61,42 @@ async def capture_node_state(
     }
 
 
+@router.get("/common-packages")
+async def common_packages(
+    limit: int = Query(default=50, ge=1, le=200),
+    db: AsyncSession = Depends(get_db),
+    _: dict = Depends(get_current_user),
+):
+    """Return the most frequently installed packages across all fleet nodes."""
+    from fleet_platform.models.sbom import SBOMComponent, SBOMScan
+    from sqlalchemy import func as _func
+
+    # Count how many distinct nodes have each package (from latest SBOM per node)
+    latest_scans = (
+        select(_func.max(SBOMScan.scanned_at).label("max_at"), SBOMScan.node_id)
+        .group_by(SBOMScan.node_id)
+        .subquery()
+    )
+    result = await db.execute(
+        select(
+            SBOMComponent.name,
+            SBOMComponent.version,
+            _func.count(_func.distinct(SBOMComponent.node_id)).label("node_count"),
+        )
+        .join(SBOMScan, SBOMComponent.scan_id == SBOMScan.id)
+        .join(
+            latest_scans,
+            (SBOMScan.node_id == latest_scans.c.node_id) &
+            (SBOMScan.scanned_at == latest_scans.c.max_at),
+        )
+        .group_by(SBOMComponent.name, SBOMComponent.version)
+        .order_by(_func.count(_func.distinct(SBOMComponent.node_id)).desc())
+        .limit(limit)
+    )
+    rows = result.all()
+    return [{"name": r.name, "version": r.version or "", "node_count": r.node_count} for r in rows]
+
+
 @router.get("", response_model=PaginatedResponse[BaselineResponse])
 async def list_baselines(
     page: int = Query(default=1, ge=1),

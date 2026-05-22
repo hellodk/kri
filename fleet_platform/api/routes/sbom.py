@@ -67,6 +67,48 @@ async def search_sbom(
     ]
 
 
+@router.get("/browse", response_model=list[SBOMSearchResult])
+async def browse_sbom(
+    limit: int = Query(default=100, ge=1, le=500),
+    db: AsyncSession = Depends(get_db),
+    _: dict = Depends(get_current_user),
+):
+    """Return all packages from the latest SBOM scan per node."""
+    latest_scan = (
+        select(func.max(SBOMScan.scanned_at).label("max_at"), SBOMScan.node_id)
+        .group_by(SBOMScan.node_id)
+        .subquery()
+    )
+    result = await db.execute(
+        select(SBOMComponent, SBOMScan, Node)
+        .join(SBOMScan, SBOMComponent.scan_id == SBOMScan.id)
+        .join(Node, SBOMComponent.node_id == Node.id)
+        .join(
+            latest_scan,
+            and_(
+                SBOMScan.node_id == latest_scan.c.node_id,
+                SBOMScan.scanned_at == latest_scan.c.max_at,
+            ),
+        )
+        .order_by(SBOMComponent.name.asc())
+        .limit(limit)
+    )
+    rows = result.all()
+    return [
+        SBOMSearchResult(
+            name=r.SBOMComponent.name,
+            version=r.SBOMComponent.version,
+            purl=r.SBOMComponent.purl,
+            component_type=r.SBOMComponent.component_type,
+            hostname=r.Node.hostname or r.Node.minion_id,
+            node_id=r.Node.id,
+            scan_id=r.SBOMScan.id,
+            scanned_at=r.SBOMScan.scanned_at,
+        )
+        for r in rows
+    ]
+
+
 @router.get("/{node_id}/latest", response_model=SBOMScanResponse)
 async def get_latest_scan(
     node_id: uuid.UUID,
