@@ -1,0 +1,37 @@
+#!/usr/bin/env bash
+# Auto-increment patch version on every commit.
+# Install: git config core.hooksPath .githooks
+set -e
+
+ROOT="$(git rev-parse --show-toplevel)"
+VERSION_FILE="$ROOT/VERSION"
+
+[ -f "$VERSION_FILE" ] || exit 0
+
+current=$(cat "$VERSION_FILE")
+IFS='.' read -r major minor patch <<< "$current"
+patch=$((patch + 1))
+new_version="${major}.${minor}.${patch}"
+echo "$new_version" > "$VERSION_FILE"
+git add "$VERSION_FILE"
+
+# Sync pyproject.toml
+PYPROJECT="$ROOT/pyproject.toml"
+if [ -f "$PYPROJECT" ] && grep -q '^version' "$PYPROJECT"; then
+  sed -i "s/^version = \"[^\"]*\"/version = \"${new_version}\"/" "$PYPROJECT"
+  git add "$PYPROJECT"
+fi
+
+# Sync frontend/package.json
+PKG="$ROOT/frontend/package.json"
+if [ -f "$PKG" ] && command -v node &>/dev/null; then
+  node -e "
+    const fs = require('fs');
+    const p = JSON.parse(fs.readFileSync('$PKG', 'utf8'));
+    p.version = '$new_version';
+    fs.writeFileSync('$PKG', JSON.stringify(p, null, 2) + '\n');
+  "
+  git add "$PKG"
+fi
+
+echo "Version bumped to ${new_version}"

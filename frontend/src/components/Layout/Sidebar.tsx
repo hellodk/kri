@@ -27,7 +27,12 @@ export function Sidebar() {
         <div className="w-8 h-8 rounded-lg bg-brand-600 flex items-center justify-center flex-shrink-0 shadow-lg shadow-brand-600/40">
           <span className="text-white font-black text-sm tracking-tighter">k</span>
         </div>
-        {open && <span className="text-white font-bold text-xl tracking-tight">kri</span>}
+        {open && (
+          <div className="flex flex-col leading-none">
+            <span className="text-white font-bold text-xl tracking-tight">kri</span>
+            <span className="text-white/30 text-[10px] font-mono tracking-wide mt-0.5">v{__APP_VERSION__}</span>
+          </div>
+        )}
       </div>
 
       {/* Nav */}
@@ -58,12 +63,6 @@ export function Sidebar() {
         ))}
       </ul>
 
-      {/* Footer */}
-      {open && (
-        <div className="px-5 py-4 border-t border-white/10">
-          <span className="text-white/20 text-xs font-mono">kri v0.1.0</span>
-        </div>
-      )}
     </nav>
   )
 }

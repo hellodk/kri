@@ -40,4 +40,14 @@ class Settings(BaseSettings):
 
 settings = Settings()
 
-VERSION = "0.1.0"
+def _read_version() -> str:
+    from pathlib import Path
+    for candidate in [
+        Path(__file__).parent.parent.parent / "VERSION",  # repo root
+        Path("/app/VERSION"),                              # Docker container
+    ]:
+        if candidate.exists():
+            return candidate.read_text().strip()
+    return "0.0.0"
+
+VERSION = _read_version()

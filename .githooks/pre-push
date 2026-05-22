@@ -1,0 +1,27 @@
+#!/usr/bin/env bash
+# Block pushes that contain likely secrets.
+# Install: git config core.hooksPath .githooks
+set -e
+
+SECRET_PATTERNS=(
+  'BEGIN RSA PRIVATE'
+  'BEGIN OPENSSH PRIVATE'
+  'BEGIN EC PRIVATE'
+  'AKIA[0-9A-Z]{16}'
+  'password\s*=\s*["'"'"'][^"'"'"']{10,}'
+)
+
+while read -r local_ref local_sha remote_ref remote_sha; do
+  [ "$local_sha" = "0000000000000000000000000000000000000000" ] && continue
+  range="${remote_sha}..${local_sha}"
+  [ "$remote_sha" = "0000000000000000000000000000000000000000" ] && range="$local_sha"
+
+  for pattern in "${SECRET_PATTERNS[@]}"; do
+    if git log -p "$range" 2>/dev/null | grep -qiE "$pattern"; then
+      echo "ERROR: Possible secret detected (pattern: $pattern)"
+      echo "Push blocked. Review with: git log -p $range"
+      exit 1
+    fi
+  done
+done
+exit 0
