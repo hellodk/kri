@@ -1,6 +1,7 @@
 # fleet_platform/api/routes/ansible.py
 import re
 import secrets
+import subprocess
 import uuid
 from datetime import UTC, datetime
 from pathlib import Path
@@ -28,6 +29,8 @@ from fleet_platform.schemas.playbook import (
     PlaybookSourceRequest,
     PlaybookSourceResponse,
     PlaybookSourceSyncResult,
+    PlaybookSourceValidateRequest,
+    PlaybookSourceValidateResponse,
     PlaybookSourcesImportRequest,
 )
 from fleet_platform.services.playbook_discovery import discover_all
@@ -317,6 +320,219 @@ async def list_sources(
     ]
 
 
+@router.post("/sources/validate", response_model=PlaybookSourceValidateResponse)
+async def validate_source(
+    payload: PlaybookSourceValidateRequest,
+    _: dict = Depends(require_role("operator", "admin")),
+):
+    """Validate a playbook source without saving it. Returns scan results."""
+    import asyncio
+    import os
+    import tempfile
+
+    warnings: list[str] = []
+    logs: list[str] = []
+
+    if payload.type == "local":
+        if not payload.path:
+            return PlaybookSourceValidateResponse(valid=False, error="path is required for local source", logs=logs)
+
+        logs.append("[1/2] Checking path...")
+        path = Path(payload.path).expanduser().resolve()
+
+        if not path.exists():
+            logs.append(f"[1/2] ✗ Path does not exist: {path}")
+            return PlaybookSourceValidateResponse(valid=False, error=f"Path does not exist: {path}", logs=logs)
+        if not path.is_dir():
+            logs.append(f"[1/2] ✗ Not a directory: {path}")
+            return PlaybookSourceValidateResponse(valid=False, error=f"Not a directory: {path}", logs=logs)
+        if not os.access(path, os.R_OK | os.X_OK):
+            logs.append(f"[1/2] ✗ Directory is not readable: {path}")
+            return PlaybookSourceValidateResponse(valid=False, error=f"Directory is not readable: {path}", logs=logs)
+        logs.append(f"[1/2] ✓ Path exists and is readable: {path}")
+
+        logs.append("[2/2] Scanning for Ansible playbooks and roles...")
+        try:
+            entries = await asyncio.to_thread(discover_all, path)
+        except Exception as e:
+            logs.append(f"[2/2] ✗ Scan failed: {e}")
+            return PlaybookSourceValidateResponse(valid=False, error=f"Scan failed: {e}", logs=logs)
+
+        if not entries:
+            warnings.append("No playbooks or roles found in this directory.")
+            logs.append("[2/2] ⚠ No playbooks or roles found in this directory.")
+        else:
+            playbooks = [e for e in entries if e.entry_type == "playbook"]
+            roles = [e for e in entries if e.entry_type == "role"]
+            logs.append(f"[2/2] ✓ Found {len(playbooks)} playbooks, {len(roles)} roles")
+
+        playbooks = [e for e in entries if e.entry_type == "playbook"]
+        roles = [e for e in entries if e.entry_type == "role"]
+        return PlaybookSourceValidateResponse(
+            valid=True,
+            warnings=warnings,
+            playbook_count=len(playbooks),
+            role_count=len(roles),
+            logs=logs,
+            entries=[
+                PlaybookEntryResponse(
+                    filename=e.filename,
+                    name=e.name,
+                    description=e.description,
+                    entry_type=e.entry_type,
+                    default_vars=e.default_vars,
+                    lint_errors=e.lint_errors,
+                )
+                for e in entries
+            ],
+        )
+
+    elif payload.type == "git":
+        if not payload.url:
+            return PlaybookSourceValidateResponse(valid=False, error="url is required for git source", logs=logs)
+
+        raw_url = payload.url.strip()
+        branch = payload.branch or "main"
+
+        # Build authenticated URL if token provided
+        url = raw_url
+        if payload.token:
+            # Strip existing scheme and prepend token
+            import re as _re
+            scheme_match = _re.match(r'^(https?://)(.+)$', raw_url)
+            if scheme_match:
+                url = f"{scheme_match.group(1)}{payload.token}@{scheme_match.group(2)}"
+            else:
+                url = raw_url  # SSH or unknown scheme — leave as-is
+
+        # Build SSH env if ssh_key provided
+        ssh_env: dict | None = None
+        _ssh_key_file = None
+        if payload.ssh_key:
+            _ssh_key_file = tempfile.NamedTemporaryFile(mode='w', suffix='.pem', delete=False, prefix='kri-ssh-')
+            _ssh_key_file.write(payload.ssh_key)
+            _ssh_key_file.flush()
+            os.chmod(_ssh_key_file.name, 0o600)
+            _ssh_key_file.close()
+            ssh_env = {
+                **os.environ,
+                "GIT_SSH_COMMAND": f"ssh -i {_ssh_key_file.name} -o StrictHostKeyChecking=no",
+            }
+
+        try:
+            # Step 1: ls-remote — fast, non-destructive connectivity check
+            logs.append("[1/3] Testing connectivity to repository...")
+            if payload.token:
+                logs.append("[1/3] Authenticating with personal access token...")
+            elif payload.ssh_key:
+                logs.append("[1/3] Authenticating with SSH key...")
+
+            try:
+                ls_result = await asyncio.to_thread(
+                    lambda: subprocess.run(
+                        ["git", "ls-remote", "--exit-code", "--heads", url, f"refs/heads/{branch}"],
+                        capture_output=True,
+                        timeout=20,
+                        env=ssh_env,
+                    )
+                )
+                if ls_result.returncode != 0:
+                    # Branch might exist but ls-remote filtering missed it — try without filter
+                    ls_result2 = await asyncio.to_thread(
+                        lambda: subprocess.run(
+                            ["git", "ls-remote", "--exit-code", url],
+                            capture_output=True,
+                            timeout=20,
+                            env=ssh_env,
+                        )
+                    )
+                    if ls_result2.returncode != 0:
+                        err = ls_result2.stderr.decode(errors="replace").strip()
+                        logs.append(f"[1/3] ✗ Cannot access repository: {err or 'connection refused or repo not found'}")
+                        return PlaybookSourceValidateResponse(
+                            valid=False,
+                            error=f"Cannot access git repository: {err or 'connection refused or repo not found'}",
+                            logs=logs,
+                        )
+                    warnings.append(f"Branch '{branch}' not found — will use default branch.")
+                    logs.append(f"[1/3] ⚠ Branch '{branch}' not found — will use default branch")
+                    branch = "HEAD"
+                else:
+                    logs.append("[1/3] ✓ Repository reachable")
+            except Exception as e:
+                logs.append(f"[1/3] ✗ git ls-remote failed: {e}")
+                return PlaybookSourceValidateResponse(valid=False, error=f"git ls-remote failed: {e}", logs=logs)
+
+            # Step 2: shallow clone to temp dir and scan
+            logs.append("[2/3] Shallow clone (depth=1)...")
+            with tempfile.TemporaryDirectory(prefix="kri-validate-") as tmpdir:
+                clone_cmd = ["git", "clone", "--depth=1", "--single-branch"]
+                if branch != "HEAD":
+                    clone_cmd += ["--branch", branch]
+                clone_cmd += [url, tmpdir]
+
+                try:
+                    clone_result = await asyncio.to_thread(
+                        lambda: subprocess.run(clone_cmd, capture_output=True, timeout=60, env=ssh_env)
+                    )
+                    if clone_result.returncode != 0:
+                        err = clone_result.stderr.decode(errors="replace").strip()
+                        logs.append(f"[2/3] ✗ Clone failed: {err[:200]}")
+                        return PlaybookSourceValidateResponse(
+                            valid=False,
+                            error=f"Clone failed: {err[:300]}",
+                            logs=logs,
+                        )
+                    logs.append("[2/3] ✓ Clone complete")
+                except Exception as e:
+                    logs.append(f"[2/3] ✗ Clone error: {e}")
+                    return PlaybookSourceValidateResponse(valid=False, error=f"Clone error: {e}", logs=logs)
+
+                logs.append("[3/3] Scanning for Ansible playbooks and roles...")
+                try:
+                    entries = await asyncio.to_thread(discover_all, Path(tmpdir))
+                except Exception as e:
+                    logs.append(f"[3/3] ✗ Scan failed: {e}")
+                    return PlaybookSourceValidateResponse(valid=False, error=f"Scan failed: {e}", logs=logs)
+
+            playbooks = [e for e in entries if e.entry_type == "playbook"]
+            roles = [e for e in entries if e.entry_type == "role"]
+
+            if not entries:
+                warnings.append("No playbooks or roles found in this repository.")
+                logs.append("[3/3] ⚠ No playbooks or roles found in this repository.")
+            else:
+                logs.append(f"[3/3] ✓ Found {len(playbooks)} playbooks, {len(roles)} roles")
+
+            return PlaybookSourceValidateResponse(
+                valid=True,
+                warnings=warnings,
+                playbook_count=len(playbooks),
+                role_count=len(roles),
+                logs=logs,
+                entries=[
+                    PlaybookEntryResponse(
+                        filename=e.filename,
+                        name=e.name,
+                        description=e.description,
+                        entry_type=e.entry_type,
+                        default_vars=e.default_vars,
+                        lint_errors=e.lint_errors,
+                    )
+                    for e in entries
+                ],
+            )
+        finally:
+            # Clean up temp SSH key file if created
+            if _ssh_key_file is not None:
+                try:
+                    os.unlink(_ssh_key_file.name)
+                except OSError:
+                    pass
+
+    return PlaybookSourceValidateResponse(valid=False, error=f"Unknown source type: {payload.type}", logs=logs)
+
+
 @router.post("/sources", response_model=PlaybookSourceResponse, status_code=201)
 async def add_source(
     payload: PlaybookSourceRequest,
@@ -324,13 +540,33 @@ async def add_source(
     _: dict = Depends(require_role("operator", "admin")),
 ):
     """Add a new playbook source (local directory or git repository)."""
+    import asyncio
     import json as _json
+    import os
+
     if payload.type == "local":
         if not payload.path:
             raise HTTPException(status_code=422, detail="path is required for local source")
+        p = Path(payload.path).expanduser().resolve()
+        if not p.exists():
+            raise HTTPException(status_code=422, detail=f"Path does not exist: {p}")
+        if not p.is_dir():
+            raise HTTPException(status_code=422, detail=f"Not a directory: {p}")
+        if not os.access(p, os.R_OK | os.X_OK):
+            raise HTTPException(status_code=422, detail=f"Directory is not readable: {p}")
     elif payload.type == "git":
         if not payload.url:
             raise HTTPException(status_code=422, detail="url is required for git source")
+        url = payload.url.strip()
+        ls = await asyncio.to_thread(
+            lambda: subprocess.run(
+                ["git", "ls-remote", "--exit-code", url],
+                capture_output=True, timeout=20,
+            )
+        )
+        if ls.returncode != 0:
+            err = ls.stderr.decode(errors="replace").strip()
+            raise HTTPException(status_code=422, detail=f"Cannot access git repository: {err[:200] or 'connection refused'}")
 
     result = await db.execute(
         select(PlatformSetting).where(PlatformSetting.key == "playbook_sources")
@@ -351,6 +587,10 @@ async def add_source(
         new_src["branch"] = payload.branch
         if payload.local_path:
             new_src["local_path"] = payload.local_path
+        if payload.token:
+            new_src["token_enc"] = encrypt_secret(payload.token)
+        if payload.ssh_key:
+            new_src["ssh_key_enc"] = encrypt_secret(payload.ssh_key)
     if payload.label:
         new_src["label"] = payload.label
 

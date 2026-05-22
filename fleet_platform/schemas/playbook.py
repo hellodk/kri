@@ -53,6 +53,8 @@ class PlaybookSourceRequest(BaseModel):
     branch: str = "main"          # for git
     label: str | None = None      # display name
     local_path: str | None = None  # override clone destination for git
+    ssh_key: str | None = None    # PEM private key content for private repos
+    token: str | None = None      # Personal access token / GitHub token
 
 
 class PlaybookSourceResponse(BaseModel):
@@ -71,3 +73,22 @@ class PlaybookSourcesImportRequest(BaseModel):
 
 class PlaybookSourceSyncResult(BaseModel):
     results: list[dict[str, Any]]
+
+
+class PlaybookSourceValidateRequest(BaseModel):
+    type: Literal["local", "git"]
+    path: str | None = None
+    url: str | None = None
+    branch: str = "main"
+    ssh_key: str | None = None    # PEM private key content for private repos
+    token: str | None = None      # Personal access token / GitHub token
+
+
+class PlaybookSourceValidateResponse(BaseModel):
+    valid: bool
+    error: str | None = None
+    warnings: list[str] = []
+    playbook_count: int = 0
+    role_count: int = 0
+    entries: list[PlaybookEntryResponse] = []
+    logs: list[str] = []

@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { ansibleApi } from '../api/ansible'
-import { playbookSourcesApi, type PlaybookSource } from '../api/playbookSources'
+import { playbookSourcesApi, type PlaybookSource, type PlaybookSourceValidateResponse } from '../api/playbookSources'
 import { useToastStore } from '../stores/toastStore'
 
 export function SettingsPage() {
@@ -288,7 +288,7 @@ export function SettingsPage() {
 // Playbook Sources sub-section (self-contained, uses its own queries)
 // ---------------------------------------------------------------------------
 
-function TypeBadge({ type }: { type: string }) {
+function SourceTypeBadge({ type }: { type: string }) {
   if (type === 'git') {
     return (
       <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-purple-100 text-purple-700">
@@ -307,20 +307,21 @@ function PlaybookSourcesSection() {
   const qc = useQueryClient()
   const toast = useToastStore((s) => s.add)
 
-  // Form state — add local
   const [showAddLocal, setShowAddLocal] = useState(false)
   const [localPath, setLocalPath] = useState('')
   const [localLabel, setLocalLabel] = useState('')
 
-  // Form state — add git
   const [showAddGit, setShowAddGit] = useState(false)
   const [gitUrl, setGitUrl] = useState('')
   const [gitBranch, setGitBranch] = useState('main')
   const [gitLabel, setGitLabel] = useState('')
 
-  // CSV import
   const [showCsv, setShowCsv] = useState(false)
   const [csvText, setCsvText] = useState('')
+
+  type ValidateState = { status: 'idle' } | { status: 'validating' } | { status: 'valid'; result: PlaybookSourceValidateResponse } | { status: 'invalid'; error: string }
+  const [localValidation, setLocalValidation] = useState<ValidateState>({ status: 'idle' })
+  const [gitValidation, setGitValidation] = useState<ValidateState>({ status: 'idle' })
 
   const { data: sources = [], isLoading } = useQuery({
     queryKey: ['playbook-sources'],
@@ -332,9 +333,9 @@ function PlaybookSourcesSection() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['playbook-sources'] })
       qc.invalidateQueries({ queryKey: ['playbooks'] })
-      toast('Source added')
-      setLocalPath(''); setLocalLabel(''); setShowAddLocal(false)
-      setGitUrl(''); setGitBranch('main'); setGitLabel(''); setShowAddGit(false)
+      toast('Source added — playbooks refreshed')
+      setLocalPath(''); setLocalLabel(''); setShowAddLocal(false); setLocalValidation({ status: 'idle' })
+      setGitUrl(''); setGitBranch('main'); setGitLabel(''); setShowAddGit(false); setGitValidation({ status: 'idle' })
     },
     onError: (e: Error) => toast(e.message, 'error'),
   })
@@ -353,8 +354,8 @@ function PlaybookSourcesSection() {
     mutationFn: playbookSourcesApi.sync,
     onSuccess: (data) => {
       qc.invalidateQueries({ queryKey: ['playbooks'] })
-      const ok = data.results.filter((r) => r.status === 'ok').length
-      const err = data.results.filter((r) => r.status === 'error').length
+      const ok = data.results.filter((r: any) => r.status === 'ok').length
+      const err = data.results.filter((r: any) => r.status === 'error').length
       toast(err > 0 ? `Sync: ${ok} ok, ${err} failed` : `Synced ${ok} git source(s)`, err > 0 ? 'error' : undefined)
     },
     onError: (e: Error) => toast(e.message, 'error'),
@@ -371,19 +372,78 @@ function PlaybookSourcesSection() {
     onError: (e: Error) => toast(e.message, 'error'),
   })
 
-  function handleAddLocal() {
+  async function validateLocal() {
     if (!localPath.trim()) return
-    addMutation.mutate({ type: 'local', path: localPath.trim(), label: localLabel.trim() || undefined })
+    setLocalValidation({ status: 'validating' })
+    try {
+      const result = await playbookSourcesApi.validate({ type: 'local', path: localPath.trim() })
+      if (result.valid) {
+        setLocalValidation({ status: 'valid', result })
+      } else {
+        setLocalValidation({ status: 'invalid', error: result.error ?? 'Validation failed' })
+      }
+    } catch (e: any) {
+      setLocalValidation({ status: 'invalid', error: e.message ?? 'Validation error' })
+    }
   }
 
-  function handleAddGit() {
+  async function validateGit() {
     if (!gitUrl.trim()) return
-    addMutation.mutate({ type: 'git', url: gitUrl.trim(), branch: gitBranch.trim() || 'main', label: gitLabel.trim() || undefined })
+    setGitValidation({ status: 'validating' })
+    try {
+      const result = await playbookSourcesApi.validate({ type: 'git', url: gitUrl.trim(), branch: gitBranch || 'main' })
+      if (result.valid) {
+        setGitValidation({ status: 'valid', result })
+      } else {
+        setGitValidation({ status: 'invalid', error: result.error ?? 'Validation failed' })
+      }
+    } catch (e: any) {
+      setGitValidation({ status: 'invalid', error: e.message ?? 'Validation error' })
+    }
   }
 
-  const inputClass = 'w-full px-3 py-2 border border-gray-300 rounded-lg text-sm text-gray-900 focus:outline-none focus:border-brand-600 font-mono'
+  const inputClass = 'flex-1 px-3 py-2 border border-gray-300 rounded-lg text-sm text-gray-900 focus:outline-none focus:border-brand-600 font-mono'
   const btnPrimary = 'px-4 py-2 bg-brand-600 text-white text-sm rounded-lg font-medium hover:bg-brand-700 disabled:opacity-50'
-  const btnSecondary = 'px-4 py-2 bg-white border border-gray-300 text-gray-700 text-sm rounded-lg font-medium hover:bg-gray-50'
+  const btnSecondary = 'px-4 py-2 bg-white border border-gray-300 text-gray-700 text-sm rounded-lg font-medium hover:bg-gray-50 disabled:opacity-50'
+
+  function ValidationResult({ v }: { v: ValidateState }) {
+    if (v.status === 'idle') return null
+    if (v.status === 'validating') return (
+      <div className="flex items-center gap-2 text-sm text-gray-500 animate-pulse">
+        <span>⏳</span> Validating…
+      </div>
+    )
+    if (v.status === 'invalid') return (
+      <div className="bg-red-50 border border-red-200 rounded-lg p-3 text-sm text-red-700">
+        ✗ {v.error}
+      </div>
+    )
+    // valid
+    const r = v.result
+    return (
+      <div className="bg-green-50 border border-green-200 rounded-lg p-3 space-y-2">
+        <p className="text-sm font-medium text-green-800">
+          ✓ {r.playbook_count} playbook{r.playbook_count !== 1 ? 's' : ''}, {r.role_count} role{r.role_count !== 1 ? 's' : ''} found
+        </p>
+        {r.warnings.length > 0 && r.warnings.map((w, i) => (
+          <p key={i} className="text-xs text-amber-700">⚠ {w}</p>
+        ))}
+        {r.entries.length > 0 && (
+          <div className="flex flex-wrap gap-1.5 pt-1">
+            {r.entries.map((e) => (
+              <span key={e.filename} className={`text-xs px-2 py-0.5 rounded font-mono border ${
+                e.entry_type === 'role'
+                  ? 'bg-purple-50 text-purple-700 border-purple-200'
+                  : 'bg-brand-50 text-brand-700 border-brand-200'
+              }`}>
+                {e.lint_errors?.length ? '⚠ ' : ''}{e.name}
+              </span>
+            ))}
+          </div>
+        )}
+      </div>
+    )
+  }
 
   return (
     <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-6 space-y-5">
@@ -391,27 +451,22 @@ function PlaybookSourcesSection() {
         <div>
           <h2 className="text-base font-semibold text-gray-900">Playbook Sources</h2>
           <p className="text-sm text-gray-500 mt-0.5">
-            Additional directories and git repositories to scan for playbooks.
-            The built-in <code className="text-xs bg-gray-100 px-1 rounded">playbooks/</code> directory is always included.
+            Additional directories and git repositories scanned for playbooks and roles.
+            Each source is validated and scanned before being added.
           </p>
         </div>
         {(sources as PlaybookSource[]).some((s) => s.type === 'git') && (
-          <button
-            onClick={() => syncMutation.mutate()}
-            disabled={syncMutation.isPending}
-            className={btnSecondary}
-            title="Pull latest changes for all git sources"
-          >
-            {syncMutation.isPending ? 'Syncing…' : 'Sync All'}
+          <button onClick={() => syncMutation.mutate()} disabled={syncMutation.isPending} className={btnSecondary}>
+            {syncMutation.isPending ? 'Syncing…' : 'Sync All Git'}
           </button>
         )}
       </div>
 
-      {/* Built-in source (read-only) */}
+      {/* Built-in source */}
       <div className="flex items-center gap-3 px-3 py-2.5 bg-gray-50 border border-gray-200 rounded-lg">
         <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-gray-200 text-gray-600">built-in</span>
         <span className="text-sm font-mono text-gray-700 flex-1">playbooks/</span>
-        <span className="text-xs text-gray-400 italic">always active, cannot be removed</span>
+        <span className="text-xs text-gray-400 italic">always active</span>
       </div>
 
       {/* Configured sources */}
@@ -420,138 +475,155 @@ function PlaybookSourcesSection() {
       ) : (sources as PlaybookSource[]).length === 0 ? (
         <p className="text-sm text-gray-400">No additional sources configured.</p>
       ) : (
-        <ul className="space-y-2">
-          {(sources as PlaybookSource[]).map((src) => (
-            <li key={src.index} className="flex items-center gap-3 px-3 py-2.5 border border-gray-200 rounded-lg">
-              <TypeBadge type={src.type} />
-              <span className="text-sm font-mono text-gray-800 flex-1 truncate">
-                {src.type === 'local' ? src.path : src.url}
+        <div className="space-y-2">
+          {(sources as PlaybookSource[]).map((src, i) => (
+            <div key={i} className="flex items-center gap-3 px-3 py-2.5 border border-gray-200 rounded-lg">
+              <SourceTypeBadge type={src.type} />
+              <span className="text-sm font-mono text-gray-700 flex-1 truncate">
+                {src.label ? <span className="text-gray-900 font-medium mr-2">{src.label}</span> : null}
+                {src.path ?? src.url}
+                {src.branch && src.branch !== 'main' && <span className="ml-2 text-gray-400">@{src.branch}</span>}
               </span>
-              {src.type === 'git' && src.branch && (
-                <span className="text-xs text-gray-400">branch: {src.branch}</span>
-              )}
-              {src.label && (
-                <span className="text-xs text-gray-500 italic">{src.label}</span>
-              )}
               <button
-                onClick={() => removeMutation.mutate(src.index)}
+                onClick={() => removeMutation.mutate(i)}
                 disabled={removeMutation.isPending}
-                className="ml-auto text-gray-400 hover:text-red-500 transition-colors disabled:opacity-50"
                 title="Remove source"
-              >
-                <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                </svg>
-              </button>
-            </li>
+                className="text-gray-400 hover:text-red-500 transition-colors text-lg leading-none"
+              >×</button>
+            </div>
           ))}
-        </ul>
+        </div>
       )}
 
-      {/* Action buttons */}
-      <div className="flex flex-wrap gap-2">
-        <button onClick={() => { setShowAddLocal(!showAddLocal); setShowAddGit(false); setShowCsv(false) }} className={btnSecondary}>
-          + Add Local Directory
-        </button>
-        <button onClick={() => { setShowAddGit(!showAddGit); setShowAddLocal(false); setShowCsv(false) }} className={btnSecondary}>
-          + Add Git Repository
-        </button>
-        <button onClick={() => { setShowCsv(!showCsv); setShowAddLocal(false); setShowAddGit(false) }} className={btnSecondary}>
-          CSV Import
-        </button>
+      {/* Add local directory */}
+      <div className="space-y-2">
+        {!showAddLocal ? (
+          <button onClick={() => setShowAddLocal(true)} className="text-sm text-brand-600 hover:text-brand-700 font-medium">
+            + Add local directory
+          </button>
+        ) : (
+          <div className="border border-gray-200 rounded-xl p-4 space-y-3">
+            <p className="text-sm font-semibold text-gray-700">Add local directory</p>
+            <div className="flex gap-2">
+              <input
+                type="text"
+                value={localPath}
+                onChange={(e) => { setLocalPath(e.target.value); setLocalValidation({ status: 'idle' }) }}
+                placeholder="/path/to/playbooks"
+                className={inputClass}
+              />
+              <button
+                onClick={validateLocal}
+                disabled={!localPath.trim() || localValidation.status === 'validating'}
+                className={btnSecondary}
+              >
+                {localValidation.status === 'validating' ? 'Checking…' : 'Validate'}
+              </button>
+            </div>
+            <input
+              type="text"
+              value={localLabel}
+              onChange={(e) => setLocalLabel(e.target.value)}
+              placeholder="Label (optional)"
+              className={inputClass}
+            />
+            <ValidationResult v={localValidation} />
+            <div className="flex gap-2 justify-end">
+              <button onClick={() => { setShowAddLocal(false); setLocalPath(''); setLocalLabel(''); setLocalValidation({ status: 'idle' }) }} className={btnSecondary}>Cancel</button>
+              <button
+                onClick={() => addMutation.mutate({ type: 'local', path: localPath.trim(), label: localLabel.trim() || undefined })}
+                disabled={localValidation.status !== 'valid' || addMutation.isPending}
+                className={btnPrimary}
+              >
+                {addMutation.isPending ? 'Adding…' : 'Add Source'}
+              </button>
+            </div>
+          </div>
+        )}
       </div>
 
-      {/* Add local form */}
-      {showAddLocal && (
-        <div className="border border-blue-200 bg-blue-50 rounded-lg p-4 space-y-3">
-          <h3 className="text-sm font-semibold text-blue-900">Add Local Directory</h3>
-          <div>
-            <label className="block text-xs font-medium text-gray-700 mb-1">Absolute path</label>
-            <input type="text" value={localPath} onChange={(e) => setLocalPath(e.target.value)}
-              placeholder="/opt/custom-playbooks"
-              className={inputClass} />
+      {/* Add git repository */}
+      <div className="space-y-2">
+        {!showAddGit ? (
+          <button onClick={() => setShowAddGit(true)} className="text-sm text-brand-600 hover:text-brand-700 font-medium">
+            + Add git repository
+          </button>
+        ) : (
+          <div className="border border-gray-200 rounded-xl p-4 space-y-3">
+            <p className="text-sm font-semibold text-gray-700">Add git repository</p>
+            <div className="flex gap-2">
+              <input
+                type="text"
+                value={gitUrl}
+                onChange={(e) => { setGitUrl(e.target.value); setGitValidation({ status: 'idle' }) }}
+                placeholder="https://github.com/org/ansible-playbooks.git"
+                className={inputClass}
+              />
+            </div>
+            <div className="flex gap-2">
+              <input
+                type="text"
+                value={gitBranch}
+                onChange={(e) => { setGitBranch(e.target.value); setGitValidation({ status: 'idle' }) }}
+                placeholder="Branch (default: main)"
+                className={inputClass}
+              />
+              <button
+                onClick={validateGit}
+                disabled={!gitUrl.trim() || gitValidation.status === 'validating'}
+                className={btnSecondary}
+              >
+                {gitValidation.status === 'validating' ? 'Checking…' : 'Validate & Clone'}
+              </button>
+            </div>
+            <input
+              type="text"
+              value={gitLabel}
+              onChange={(e) => setGitLabel(e.target.value)}
+              placeholder="Label (optional)"
+              className={inputClass}
+            />
+            <ValidationResult v={gitValidation} />
+            <div className="flex gap-2 justify-end">
+              <button onClick={() => { setShowAddGit(false); setGitUrl(''); setGitBranch('main'); setGitLabel(''); setGitValidation({ status: 'idle' }) }} className={btnSecondary}>Cancel</button>
+              <button
+                onClick={() => addMutation.mutate({ type: 'git', url: gitUrl.trim(), branch: gitBranch || 'main', label: gitLabel.trim() || undefined })}
+                disabled={gitValidation.status !== 'valid' || addMutation.isPending}
+                className={btnPrimary}
+              >
+                {addMutation.isPending ? 'Adding…' : 'Add Source'}
+              </button>
+            </div>
           </div>
-          <div>
-            <label className="block text-xs font-medium text-gray-700 mb-1">Label (optional)</label>
-            <input type="text" value={localLabel} onChange={(e) => setLocalLabel(e.target.value)}
-              placeholder="Custom Playbooks"
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm text-gray-900 focus:outline-none focus:border-brand-600" />
-          </div>
-          <div className="flex gap-2">
-            <button onClick={handleAddLocal} disabled={!localPath.trim() || addMutation.isPending} className={btnPrimary}>
-              {addMutation.isPending ? 'Adding…' : 'Add'}
-            </button>
-            <button onClick={() => setShowAddLocal(false)} className={btnSecondary}>Cancel</button>
-          </div>
-        </div>
-      )}
-
-      {/* Add git form */}
-      {showAddGit && (
-        <div className="border border-purple-200 bg-purple-50 rounded-lg p-4 space-y-3">
-          <h3 className="text-sm font-semibold text-purple-900">Add Git Repository</h3>
-          <div>
-            <label className="block text-xs font-medium text-gray-700 mb-1">Repository URL</label>
-            <input type="text" value={gitUrl} onChange={(e) => setGitUrl(e.target.value)}
-              placeholder="https://github.com/org/playbooks.git"
-              className={inputClass} />
-          </div>
-          <div>
-            <label className="block text-xs font-medium text-gray-700 mb-1">Branch</label>
-            <input type="text" value={gitBranch} onChange={(e) => setGitBranch(e.target.value)}
-              placeholder="main"
-              className={inputClass} />
-          </div>
-          <div>
-            <label className="block text-xs font-medium text-gray-700 mb-1">Label (optional)</label>
-            <input type="text" value={gitLabel} onChange={(e) => setGitLabel(e.target.value)}
-              placeholder="Org Playbooks"
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm text-gray-900 focus:outline-none focus:border-brand-600" />
-          </div>
-          <p className="text-xs text-gray-500">
-            The repository will be cloned to <code className="bg-white px-1 rounded">/tmp/kri-git/&lt;repo-name&gt;</code> on first use.
-          </p>
-          <div className="flex gap-2">
-            <button onClick={handleAddGit} disabled={!gitUrl.trim() || addMutation.isPending} className={btnPrimary}>
-              {addMutation.isPending ? 'Adding…' : 'Add'}
-            </button>
-            <button onClick={() => setShowAddGit(false)} className={btnSecondary}>Cancel</button>
-          </div>
-        </div>
-      )}
+        )}
+      </div>
 
       {/* CSV import */}
-      {showCsv && (
-        <div className="border border-gray-200 bg-gray-50 rounded-lg p-4 space-y-3">
-          <h3 className="text-sm font-semibold text-gray-900">CSV Bulk Import</h3>
-          <p className="text-xs text-gray-500">
-            One entry per line: <code className="bg-white px-1 rounded">type, path/url, branch (git only), label</code>
-            <br />Lines starting with <code className="bg-white px-1 rounded">#</code> are ignored.
-          </p>
-          <div className="text-xs text-gray-400 font-mono bg-white border border-gray-200 rounded p-2 space-y-0.5">
-            <div># type, path/url, branch, label</div>
-            <div>local, /opt/custom-playbooks, , Custom Playbooks</div>
-            <div>git, https://github.com/org/plays.git, main, Org Playbooks</div>
+      <div className="space-y-2">
+        {!showCsv ? (
+          <button onClick={() => setShowCsv(true)} className="text-sm text-gray-500 hover:text-gray-700 font-medium">
+            + Import via CSV
+          </button>
+        ) : (
+          <div className="border border-gray-200 rounded-xl p-4 space-y-3">
+            <p className="text-sm font-semibold text-gray-700">Import sources from CSV</p>
+            <p className="text-xs text-gray-400">Format: <code>type,path_or_url,branch,label</code> — one per line. Branch and label are optional.</p>
+            <textarea
+              value={csvText}
+              onChange={(e) => setCsvText(e.target.value)}
+              placeholder={`local,/path/to/playbooks,,My Playbooks\ngit,https://github.com/org/repo.git,main,Shared Roles`}
+              className="w-full h-24 px-3 py-2 border border-gray-300 rounded-lg text-xs font-mono focus:outline-none focus:border-brand-600"
+            />
+            <p className="text-xs text-amber-600">⚠ CSV import validates sources but skips inaccessible ones rather than failing.</p>
+            <div className="flex gap-2 justify-end">
+              <button onClick={() => { setShowCsv(false); setCsvText('') }} className={btnSecondary}>Cancel</button>
+              <button onClick={() => importMutation.mutate(csvText)} disabled={!csvText.trim() || importMutation.isPending} className={btnPrimary}>
+                {importMutation.isPending ? 'Importing…' : 'Import'}
+              </button>
+            </div>
           </div>
-          <textarea
-            value={csvText}
-            onChange={(e) => setCsvText(e.target.value)}
-            rows={6}
-            placeholder="local, /opt/custom-playbooks, , Custom Playbooks&#10;git, https://github.com/org/plays.git, main, Org Playbooks"
-            className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm font-mono text-gray-900 focus:outline-none focus:border-brand-600 resize-y"
-          />
-          <div className="flex gap-2">
-            <button
-              onClick={() => importMutation.mutate(csvText)}
-              disabled={!csvText.trim() || importMutation.isPending}
-              className={btnPrimary}
-            >
-              {importMutation.isPending ? 'Importing…' : 'Import'}
-            </button>
-            <button onClick={() => setShowCsv(false)} className={btnSecondary}>Cancel</button>
-          </div>
-        </div>
-      )}
+        )}
+      </div>
     </div>
   )
 }
