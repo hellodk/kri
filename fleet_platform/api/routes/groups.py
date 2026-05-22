@@ -3,6 +3,7 @@ import uuid
 from datetime import UTC, datetime
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
+from pydantic import BaseModel
 from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -16,6 +17,7 @@ from fleet_platform.schemas.common import PaginatedResponse
 from fleet_platform.schemas.fleet import NodeListItem
 from fleet_platform.schemas.group import GroupCreate, GroupMemberAdd, GroupResponse, GroupUpdate
 from fleet_platform.services.group_resolver import resolve_dynamic_group, validate_predicate
+from fleet_platform.services.platform_settings_svc import encrypt_secret
 
 router = APIRouter(prefix="/api/v1/groups")
 
@@ -248,3 +250,75 @@ async def remove_group_member(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Member not found")
     await db.delete(member)
     await db.commit()
+
+
+# ─── Group credential endpoints ────────────────────────────────────────────────
+
+class GroupCredentialsUpdate(BaseModel):
+    ssh_username: str | None = None
+    ssh_password: str | None = None   # plaintext, encrypted on save
+    ssh_auth_mode: str | None = None  # "password" | "key"
+    ssh_key: str | None = None        # plaintext key, encrypted on save
+    session_max_mins: int | None = None
+    session_retention_days: int | None = None
+
+
+@router.patch("/{group_id}/credentials", response_model=dict)
+async def update_group_credentials(
+    group_id: uuid.UUID,
+    payload: GroupCredentialsUpdate,
+    db: AsyncSession = Depends(get_db),
+    claims: dict = Depends(require_role("operator", "admin")),
+):
+    """Set SSH credentials for a group. All node members inherit these unless overridden."""
+    result = await db.execute(select(Group).where(Group.id == group_id))
+    group = result.scalar_one_or_none()
+    if not group:
+        raise HTTPException(status_code=404, detail="Group not found")
+
+    if payload.ssh_username is not None:
+        group.ssh_username = payload.ssh_username
+    if payload.ssh_password is not None:
+        group.ssh_password_enc = encrypt_secret(payload.ssh_password) if payload.ssh_password else None
+    if payload.ssh_auth_mode is not None:
+        group.ssh_auth_mode = payload.ssh_auth_mode
+    if payload.ssh_key is not None:
+        group.ssh_key_enc = encrypt_secret(payload.ssh_key) if payload.ssh_key else None
+    if payload.session_max_mins is not None:
+        group.session_max_mins = payload.session_max_mins
+    if payload.session_retention_days is not None:
+        group.session_retention_days = payload.session_retention_days
+
+    await db.commit()
+    return {
+        "group_id": str(group_id),
+        "ssh_username": group.ssh_username,
+        "has_ssh_password": bool(group.ssh_password_enc),
+        "has_ssh_key": bool(group.ssh_key_enc),
+        "ssh_auth_mode": group.ssh_auth_mode,
+        "session_max_mins": group.session_max_mins,
+        "session_retention_days": group.session_retention_days,
+    }
+
+
+@router.get("/{group_id}/credentials", response_model=dict)
+async def get_group_credentials(
+    group_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+    _: dict = Depends(require_role("operator", "admin")),
+):
+    """Get credential metadata for a group (never returns secrets)."""
+    result = await db.execute(select(Group).where(Group.id == group_id))
+    group = result.scalar_one_or_none()
+    if not group:
+        raise HTTPException(status_code=404, detail="Group not found")
+    return {
+        "group_id": str(group_id),
+        "ssh_username": group.ssh_username,
+        "has_ssh_password": bool(group.ssh_password_enc),
+        "has_ssh_key": bool(group.ssh_key_enc),
+        "ssh_auth_mode": group.ssh_auth_mode or "password",
+        "session_max_mins": group.session_max_mins,
+        "session_retention_days": group.session_retention_days,
+        "credential_source": "group",
+    }

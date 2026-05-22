@@ -1,6 +1,17 @@
 import { api } from './client'
 import type { Group, Node, Paginated } from '../types'
 
+export interface GroupCredentials {
+  group_id: string
+  ssh_username: string | null
+  has_ssh_password: boolean
+  has_ssh_key: boolean
+  ssh_auth_mode: string
+  session_max_mins: number
+  session_retention_days: number
+  credential_source: string
+}
+
 export const groupsApi = {
   list: (params?: { page?: number; per_page?: number }) => {
     const q = new URLSearchParams()
@@ -21,4 +32,17 @@ export const groupsApi = {
     api.post(`/api/v1/groups/${groupId}/members`, { node_id: nodeId }),
   removeMember: (groupId: string, nodeId: string) =>
     api.delete(`/api/v1/groups/${groupId}/members/${nodeId}`),
+  getCredentials: (groupId: string) =>
+    api.get<GroupCredentials>(`/api/v1/groups/${groupId}/credentials`),
+  updateCredentials: (
+    groupId: string,
+    payload: {
+      ssh_username?: string | null
+      ssh_password?: string | null
+      ssh_auth_mode?: string | null
+      ssh_key?: string | null
+      session_max_mins?: number | null
+      session_retention_days?: number | null
+    },
+  ) => api.patch<GroupCredentials>(`/api/v1/groups/${groupId}/credentials`, payload),
 }

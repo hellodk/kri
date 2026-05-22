@@ -204,9 +204,21 @@ function EditNodeModal({ node, onClose }: { node: Node; onClose: () => void }) {
             />
           </div>
 
+          {/* Group membership notice */}
+          <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 flex items-start gap-2">
+            <span className="text-amber-500 text-base mt-0.5">⚠</span>
+            <p className="text-xs text-amber-700">
+              This node must be added to a group before bootstrapping. Go to{' '}
+              <a href="/groups" className="underline font-medium">Groups</a> to assign it and configure SSH credentials.
+            </p>
+          </div>
+
           {/* SSH Access */}
           <div className="border-t border-gray-100 pt-4 space-y-3">
-            <p className="text-sm font-semibold text-gray-700">SSH Access</p>
+            <p className="text-sm font-semibold text-gray-700">SSH Access (Node-level Override)</p>
+            <p className="text-xs text-gray-400">
+              Leave blank to inherit from the node's primary group. Node-level credentials take precedence over group credentials.
+            </p>
 
             {/* Auth mode toggle */}
             <div className="flex gap-3">

@@ -1,7 +1,7 @@
 import uuid
 from datetime import datetime
 
-from sqlalchemy import DateTime, ForeignKey, String, Text
+from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, String, Text
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -23,6 +23,14 @@ class Group(Base, TimestampMixin):
         ForeignKey("users.id", ondelete="SET NULL"),
         nullable=True,
     )
+
+    # SSH credentials (inherited by all group member nodes unless overridden at node level)
+    ssh_username: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    ssh_password_enc: Mapped[str | None] = mapped_column(Text, nullable=True)
+    ssh_auth_mode: Mapped[str] = mapped_column(String(10), default="password")
+    ssh_key_enc: Mapped[str | None] = mapped_column(Text, nullable=True)
+    session_max_mins: Mapped[int] = mapped_column(Integer, default=60)
+    session_retention_days: Mapped[int] = mapped_column(Integer, default=30)
 
 
 class GroupMember(Base):

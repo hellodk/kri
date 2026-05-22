@@ -37,6 +37,7 @@ from fleet_platform.services.playbook_discovery import discover_all
 from fleet_platform.services.playbook_sources import get_all_playbook_dirs, sync_all_git_sources
 from fleet_platform.workers.ansible_tasks import bootstrap_node
 from fleet_platform.workers.playbook_tasks import run_playbook
+from fleet_platform.services.credential_resolver import node_has_group
 
 router = APIRouter(prefix="/api/v1/ansible")
 
@@ -90,6 +91,14 @@ async def bootstrap(
         node.bootstrap_ip = payload.target_ip
         node.bootstrap_logs = ""        # clear previous run's logs
         node.bootstrap_error = None     # clear previous error
+
+    # Enforce: node must belong to at least one group before bootstrapping
+    if not await node_has_group(node.id, db):
+        raise HTTPException(
+            status_code=400,
+            detail="Node must belong to at least one group before bootstrapping. "
+                   "Add the node to a group first, then configure group SSH credentials."
+        )
 
     # Save SSH credentials to the node for future reuse
     if payload.ssh_username:
