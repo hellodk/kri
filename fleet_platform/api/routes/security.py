@@ -220,7 +220,10 @@ async def integration_status(
     )
 
     # Trivy
-    trivy_ok = subprocess.run(["trivy", "--version"], capture_output=True).returncode == 0
+    try:
+        trivy_ok = subprocess.run(["trivy", "--version"], capture_output=True, timeout=5).returncode == 0
+    except (FileNotFoundError, subprocess.TimeoutExpired):
+        trivy_ok = False
 
     # CxOne
     cxone_url = await get_setting(db, CXONE_URL)

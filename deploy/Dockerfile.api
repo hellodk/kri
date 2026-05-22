@@ -1,9 +1,11 @@
 FROM python:3.13-slim AS base
 WORKDIR /app
 
-# System deps for psycopg, ansible-runner, git
+# System deps for psycopg, ansible-runner, git, and Trivy vulnerability scanner
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    gcc libpq-dev git openssh-client \
+    gcc libpq-dev git openssh-client curl wget \
+    && curl -sfL https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/install.sh \
+       | sh -s -- -b /usr/local/bin \
     && rm -rf /var/lib/apt/lists/*
 
 # Install uv for fast dependency install
