@@ -178,6 +178,9 @@ async def security_node_detail(
     }
 
 
+_VALID_SCANNERS = {"trivy", "cxone", "sonarqube"}
+
+
 @router.post("/scan/{node_id}", status_code=202)
 async def trigger_node_scan(
     node_id: uuid.UUID,
@@ -186,6 +189,8 @@ async def trigger_node_scan(
     _: dict = Depends(require_role("operator", "admin")),
 ):
     """Trigger a vulnerability/license scan for a specific node."""
+    if scanner not in _VALID_SCANNERS:
+        raise HTTPException(status_code=422, detail=f"Invalid scanner '{scanner}'. Must be one of: {sorted(_VALID_SCANNERS)}")
     from fleet_platform.workers.security_tasks import scan_node_security
     result = await db.execute(select(Node).where(Node.id == node_id))
     node = result.scalar_one_or_none()
@@ -202,6 +207,8 @@ async def trigger_fleet_scan(
     _: dict = Depends(require_role("operator", "admin")),
 ):
     """Trigger vulnerability/license scans for all nodes."""
+    if scanner not in _VALID_SCANNERS:
+        raise HTTPException(status_code=422, detail=f"Invalid scanner '{scanner}'. Must be one of: {sorted(_VALID_SCANNERS)}")
     from fleet_platform.workers.security_tasks import scan_all_nodes
     task = scan_all_nodes.delay(scanner=scanner)
     return {"task_id": task.id, "scanner": scanner, "status": "queued"}
