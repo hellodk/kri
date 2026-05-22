@@ -71,7 +71,7 @@ services:
       - ./salt-master.conf:/etc/salt/master.d/kri.conf:ro
       - ../salt/states:/srv/salt/states:ro
     healthcheck:
-      test: ["CMD", "pgrep", "-x", "salt-master"]
+      test: ["CMD", "pgrep", "-f", "salt-master MainProcess"]
       interval: 30s
       timeout: 5s
       retries: 3
