@@ -31,12 +31,13 @@ test.describe('Node Detail', () => {
   test('NODE-01 header shows hostname, status badge, drift badge', async ({ page }) => {
     await expect(page.locator('h1')).toBeVisible()
     // StatusBadge and DriftBadge are rendered as spans/divs with status text
-    await expect(
-      page.locator('text=online')
-        .or(page.locator('text=offline'))
-        .or(page.locator('text=stale'))
-        .or(page.locator('text=unknown'))
-    ).toBeVisible()
+    // Use .first() to avoid strict-mode violation when the header area shows
+    // multiple status-like elements (e.g. maintenance mode badge)
+    const statusLocator = page.locator('text=online')
+      .or(page.locator('text=offline'))
+      .or(page.locator('text=stale'))
+      .or(page.locator('text=unknown'))
+    await expect(statusLocator.first()).toBeVisible()
   })
 
   test('NODE-02 overview tab hardware card visible', async ({ page }) => {

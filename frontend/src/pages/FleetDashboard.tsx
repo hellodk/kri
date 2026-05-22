@@ -714,7 +714,7 @@ export function FleetDashboard() {
                   </thead>
                   <tbody className="divide-y divide-gray-100">
                     {nodes?.items.map((node) => (
-                      <tr key={node.id} className={`hover:bg-gray-50 transition-colors ${selected.has(node.id) ? 'bg-brand-50/40' : ''}`}>
+                      <tr key={node.id} data-testid={node.minion_id} className={`hover:bg-gray-50 transition-colors ${selected.has(node.id) ? 'bg-brand-50/40' : ''}`}>
                         {canManage && (
                           <td className="pl-4 py-3 w-8">
                             <input type="checkbox" checked={selected.has(node.id)}
