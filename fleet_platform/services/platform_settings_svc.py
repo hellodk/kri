@@ -72,3 +72,34 @@ async def set_setting(db: AsyncSession, key: str, value: str, encrypt: bool = Fa
     else:
         db.add(PlatformSetting(key=key, value=stored_value, is_encrypted=encrypt))
     await db.commit()
+
+
+# Map from env-var name → (setting_key, is_encrypted)
+# Only non-secret settings belong here — secrets must be set via the UI.
+_ENV_DEFAULTS: list[tuple[str, str]] = [
+    ("KRI_API_URL",          KRI_API_URL),
+    ("SALT_MASTER_ADDRESS",  SALT_MASTER),
+    ("PLAYBOOKS_DIR",        PLAYBOOKS_DIR),
+    ("PILLAR_DIR",           PILLAR_DIR),
+    ("SSH_BOOTSTRAP_USERNAME", SSH_USERNAME),
+]
+
+
+async def seed_settings_from_env(db: AsyncSession) -> None:
+    """Upsert platform settings from environment variables if the DB row is absent.
+
+    Called once at API startup.  Existing DB values always take priority — this
+    only fills in rows that are completely missing (e.g. after a DB wipe).
+    """
+    import os
+    for env_key, setting_key in _ENV_DEFAULTS:
+        value = os.environ.get(env_key, "").strip()
+        if not value:
+            continue
+        result = await db.execute(
+            select(PlatformSetting).where(PlatformSetting.key == setting_key)
+        )
+        row = result.scalar_one_or_none()
+        if row is None:
+            db.add(PlatformSetting(key=setting_key, value=value, is_encrypted=False))
+    await db.commit()

@@ -21,6 +21,11 @@ _log = get_logger(__name__)
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     configure_logging()
+    # Seed non-secret platform settings from env vars (fills gaps after DB wipe)
+    from fleet_platform.db.session import AsyncSessionLocal
+    from fleet_platform.services.platform_settings_svc import seed_settings_from_env
+    async with AsyncSessionLocal() as db:
+        await seed_settings_from_env(db)
     yield
 
 
