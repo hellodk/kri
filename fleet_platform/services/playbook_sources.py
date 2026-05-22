@@ -1,11 +1,21 @@
 """Manage external playbook sources (extra dirs + git repos)."""
 import json
 import logging
+import os
 import subprocess
 from pathlib import Path
 from typing import Any
 
 logger = logging.getLogger(__name__)
+
+# Git repo cache stored under ~/.kri/git-repos (not /tmp) to survive restarts
+# and avoid temp-directory security warnings (CWE-377).
+_GIT_CACHE_DIR = Path(os.environ.get("KRI_GIT_CACHE", str(Path.home() / ".kri" / "git-repos")))
+
+
+def _default_clone_path(url: str) -> str:
+    repo_name = url.rstrip("/").split("/")[-1].replace(".git", "")
+    return str(_GIT_CACHE_DIR / repo_name)
 
 
 def _sync_git_source(url: str, branch: str, local_path: str) -> Path:
@@ -51,10 +61,7 @@ def get_all_playbook_dirs(settings_value: str | None, builtin_dir: Path) -> list
                 p = _sync_git_source(
                     url=src["url"],
                     branch=src.get("branch", "main"),
-                    local_path=src.get(
-                        "local_path",
-                        f"/tmp/kri-git/{src['url'].split('/')[-1].replace('.git', '')}",
-                    ),
+                    local_path=src.get("local_path") or _default_clone_path(src["url"]),
                 )
                 dirs.append(p)
             except Exception as e:
@@ -76,10 +83,7 @@ def sync_all_git_sources(settings_value: str | None) -> list[dict[str, Any]]:
             continue
         url = src.get("url", "")
         branch = src.get("branch", "main")
-        local_path = src.get(
-            "local_path",
-            f"/tmp/kri-git/{url.split('/')[-1].replace('.git', '')}",
-        )
+        local_path = src.get("local_path") or _default_clone_path(url)
         try:
             _sync_git_source(url=url, branch=branch, local_path=local_path)
             results.append({"index": i, "url": url, "status": "ok"})

@@ -59,6 +59,24 @@ services:
       - ~/.ssh:/root/.ssh:ro
       - ~/.kri:/root/.kri:ro
 
+  salt-master:
+    image: saltstack/salt:latest
+    restart: unless-stopped
+    command: salt-master
+    ports:
+      - "4505:4505"   # ZeroMQ publisher  — minions subscribe for events
+      - "4506:4506"   # ZeroMQ request/reply — minions send results here
+    volumes:
+      - salt-pillar:/srv/salt/pillar
+      - ./salt-master.conf:/etc/salt/master.d/kri.conf:ro
+      - ../salt/states:/srv/salt/states:ro
+    healthcheck:
+      test: ["CMD", "salt-run", "manage.status"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
+
   frontend:
     build:
       context: ..

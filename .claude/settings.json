@@ -58,7 +58,7 @@
       "Bash(node *)",
       "Bash(NODE_PATH=* *)",
       "Bash(gh *)",
-      "Bash(source /home/dk/Documents/git/kri/.venv/bin/activate*)",
+      "Bash(source *)",
       "Bash(./scripts/kri.sh *)",
       "Bash(/home/dk/Documents/git/kri/scripts/kri.sh *)",
       "mcp__plugin_playwright_playwright__browser_navigate",
