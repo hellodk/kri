@@ -196,6 +196,31 @@ cmd_dev_stop() {
   echo ""
 }
 
+# ── Deploy (full rebuild + restart) ──────────────────────────────────────────
+
+cmd_deploy() {
+  local service="${2:-}"
+  echo ""
+  echo "  kri deploy${service:+ ($service)}"
+  echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+  local version
+  version=$(cat "$REPO_DIR/VERSION" 2>/dev/null || echo "?")
+
+  if [[ -n "$service" ]]; then
+    echo "  Building $service → v$version"
+    docker compose -f "$COMPOSE_FILE" build "$service"
+    docker compose -f "$COMPOSE_FILE" up -d "$service"
+  else
+    echo "  Building all services → v$version"
+    docker compose -f "$COMPOSE_FILE" build
+    docker compose -f "$COMPOSE_FILE" up -d
+  fi
+
+  echo ""
+  ok "Deployed v$version →  http://localhost"
+  echo ""
+}
+
 # ── Seed ──────────────────────────────────────────────────────────────────────
 
 cmd_seed() {
@@ -233,20 +258,23 @@ case "${1:-help}" in
   stop)     cmd_stop ;;
   status)   cmd_status ;;
   restart)  cmd_restart ;;
+  deploy)   cmd_deploy "$@" ;;
   logs)     cmd_logs "$@" ;;
   seed)     cmd_seed ;;
   dev)      cmd_dev ;;
   dev-stop) cmd_dev_stop ;;
   test)     cmd_test "$@" ;;
   *)
-    echo "Usage: $(basename "$0") {start|stop|restart|status|logs [service]|seed|dev|dev-stop|test [grep-pattern]}"
+    echo "Usage: $(basename "$0") {start|stop|restart|status|deploy [service]|logs [service]|seed|dev|dev-stop|test [grep-pattern]}"
     echo ""
-    echo "  start      — build and start all services in Docker"
-    echo "  stop       — stop all Docker services"
-    echo "  restart    — stop then start"
-    echo "  status     — show Docker Compose service status"
-    echo "  logs [svc] — tail logs for all or a specific service"
-    echo "  seed       — create default users (admin@fleet.local / changeme)"
+    echo "  start            — build and start all services in Docker"
+    echo "  stop             — stop all Docker services"
+    echo "  restart          — stop then start"
+    echo "  status           — show Docker Compose service status"
+    echo "  deploy           — rebuild ALL images and redeploy (stamps current version)"
+    echo "  deploy <svc>     — rebuild and redeploy a single service (api|worker|frontend|salt-master)"
+    echo "  logs [svc]       — tail logs for all or a specific service"
+    echo "  seed             — create default users (admin@fleet.local / changeme)"
     echo "  dev        — local dev: host uvicorn + celery + vite (infra in Docker)"
     echo "  dev-stop   — stop local dev processes + infra"
     echo "  test       — run Playwright E2E suite against running stack"
