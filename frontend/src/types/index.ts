@@ -28,6 +28,8 @@ export interface Node {
   last_seen_at: string | null
   tags: Tag[]
   maintenance_mode: boolean
+  xcode_version?: string | null
+  macos_version?: string | null
   // SSH credential metadata (present when loaded via detail endpoint)
   ssh_username?: string | null
   ssh_auth_mode?: 'password' | 'key'

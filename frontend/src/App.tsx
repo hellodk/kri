@@ -22,7 +22,6 @@ import { AuditPage } from './pages/AuditPage'
 import { SaltKeysPage } from './pages/SaltKeysPage'
 import { SaltOpsPage } from './pages/SaltOpsPage'
 import { AlertsPage } from './pages/AlertsPage'
-import { IOSTrackingPage } from './pages/IOSTrackingPage'
 import { DashboardPage } from './pages/DashboardPage'
 import { saltKeysApi } from './api/saltKeys'
 import { useSaltKeysStore } from './stores/saltKeysStore'
@@ -43,11 +42,13 @@ const queryClient = new QueryClient({
 function SaltKeyWatcher() {
   const setPendingCount = useSaltKeysStore((s) => s.setPendingCount)
   const toast = useToastStore((s) => s.add)
-  const user = useAuthStore((s) => s.user)
+  // Use a stable primitive (id string) not the whole user object —
+  // persist middleware creates a new object reference on every render.
+  const userId = useAuthStore((s) => s.user?.id as string | undefined)
   const prevCount = useRef(0)
 
   useEffect(() => {
-    if (!user) return
+    if (!userId) return
 
     async function poll() {
       try {
@@ -66,7 +67,9 @@ function SaltKeyWatcher() {
     poll()
     const id = setInterval(poll, 30_000)
     return () => clearInterval(id)
-  }, [user, setPendingCount, toast])
+    // setPendingCount and toast are stable Zustand refs — intentionally omitted
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [userId])
 
   return null
 }
@@ -103,8 +106,7 @@ export default function App() {
             <Route path="/salt-keys" element={<SaltKeysPage />} />
             <Route path="/salt-ops" element={<SaltOpsPage />} />
             <Route path="/alerts" element={<AlertsPage />} />
-            <Route path="/ios" element={<IOSTrackingPage />} />
-            <Route path="/settings" element={<SettingsPage />} />
+<Route path="/settings" element={<SettingsPage />} />
           </Route>
         </Routes>
       </BrowserRouter>

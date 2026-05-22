@@ -30,6 +30,8 @@ class NodeListItem(BaseModel):
     last_seen_at: datetime | None = None
     tags: list[TagResponse]
     maintenance_mode: bool = False
+    xcode_version: str | None = None
+    macos_version: str | None = None
 
     model_config = {"from_attributes": True}
 

@@ -1,8 +1,9 @@
-import { useState } from 'react'
+import { useState, useMemo } from 'react'
 import { Link } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { fleetApi } from '../api/fleet'
 import { api } from '../api/client'
+import { iosTrackingApi } from '../api/iosTracking'
 import { useAuthStore } from '../stores/authStore'
 import { useToastStore } from '../stores/toastStore'
 import { StatusBadge } from '../components/StatusBadge'
@@ -11,8 +12,12 @@ import { Skeleton } from '../components/Skeleton'
 import { ErrorState } from '../components/ErrorState'
 import { Pagination } from '../components/Pagination'
 import { BootstrapModal } from './BootstrapModal'
-import { formatDistanceToNow } from 'date-fns'
+import { formatDistanceToNow, differenceInDays, parseISO } from 'date-fns'
 import type { Node } from '../types'
+
+function isMacOSNode(node: Node): boolean {
+  return !!(node.macos_version || node.xcode_version)
+}
 
 // ─── Add Node modal ────────────────────────────────────────────────────────────
 
@@ -374,6 +379,7 @@ export function FleetDashboard() {
   const [bulkScanning, setBulkScanning] = useState(false)
   const [bulkApplying, setBulkApplying] = useState(false)
   const [showSaltStateDropdown, setShowSaltStateDropdown] = useState(false)
+  const [macosOnly, setMacosOnly] = useState(false)
 
   const user = useAuthStore((s) => s.user)
   const canManage = user?.role === 'admin' || user?.role === 'operator'
@@ -383,10 +389,11 @@ export function FleetDashboard() {
   function resetFilters() {
     setSearch(''); setStatusFilter(''); setOsFilter('')
     setTagFilter(''); setDriftMin(''); setDriftMax(''); setSort('drift_score:desc')
+    setMacosOnly(false)
     setPage(1)
   }
 
-  const hasActiveFilters = search || statusFilter || osFilter || tagFilter || driftMin || driftMax
+  const hasActiveFilters = search || statusFilter || osFilter || tagFilter || driftMin || driftMax || macosOnly
 
   const qc = useQueryClient()
   const toast = useToastStore((s) => s.add)
@@ -424,6 +431,26 @@ export function FleetDashboard() {
     staleTime: 60_000,
     enabled: showSaltStateDropdown,
   })
+
+  const { data: expiringCertsData } = useQuery({
+    queryKey: ['ios-expiring-certs-fleet'],
+    queryFn: () => iosTrackingApi.getExpiringCerts(60),
+    staleTime: 300_000,
+    enabled: macosOnly,
+  })
+
+  const certUrgency = useMemo(() => {
+    const map = new Map<string, 'critical' | 'warning' | 'ok'>()
+    for (const cert of expiringCertsData?.items ?? []) {
+      const d = differenceInDays(parseISO(cert.expiry_date), new Date())
+      const level = d < 30 ? 'critical' : d < 60 ? 'warning' : 'ok'
+      const prev = map.get(cert.node_id)
+      if (!prev || prev === 'ok' || (prev === 'warning' && level === 'critical')) {
+        map.set(cert.node_id, level)
+      }
+    }
+    return map
+  }, [expiringCertsData])
 
   // Bulk select helpers — defined after nodes query so nodes is in scope
   const allIds = nodes?.items.map((n) => n.id) ?? []
@@ -576,6 +603,18 @@ export function FleetDashboard() {
           <input value={tagFilter} onChange={(e) => { setTagFilter(e.target.value); setPage(1) }}
             placeholder="Tag key:value"
             className="w-40 px-3 py-1.5 border border-gray-300 text-sm text-gray-900 rounded-lg focus:outline-none focus:border-brand-600" />
+
+          {/* macOS toggle */}
+          <button
+            onClick={() => { setMacosOnly((v) => !v); setPage(1) }}
+            className={`px-3 py-1.5 text-sm rounded-lg border font-medium transition-colors ${
+              macosOnly
+                ? 'bg-gray-900 text-white border-gray-900'
+                : 'bg-white text-gray-600 border-gray-300 hover:bg-gray-50'
+            }`}
+          >
+            🍎 macOS
+          </button>
         </div>
 
         {/* Row 2: drift range + sort + reset */}
@@ -694,6 +733,11 @@ export function FleetDashboard() {
                     </button>
                   </div>
                 )}
+                {(() => {
+                  const displayedNodes = macosOnly
+                    ? (nodes?.items ?? []).filter(isMacOSNode)
+                    : (nodes?.items ?? [])
+                  return (
                 <table className="w-full text-sm">
                   <thead>
                     <tr className="bg-gray-50 border-b border-gray-200 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide">
@@ -709,11 +753,13 @@ export function FleetDashboard() {
                       <th className="px-4 py-3">Drift</th>
                       <th className="px-4 py-3">Last Seen</th>
                       <th className="px-4 py-3">Tags</th>
+                      {macosOnly && <th className="px-4 py-3">Xcode</th>}
+                      {macosOnly && <th className="px-4 py-3">Certs</th>}
                       {canManage && <th className="px-4 py-3 w-24"></th>}
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-100">
-                    {nodes?.items.map((node) => (
+                    {displayedNodes.map((node) => (
                       <tr key={node.id} data-testid={node.minion_id} className={`hover:bg-gray-50 transition-colors ${selected.has(node.id) ? 'bg-brand-50/40' : ''}`}>
                         {canManage && (
                           <td className="pl-4 py-3 w-8">
@@ -762,6 +808,21 @@ export function FleetDashboard() {
                             ))}
                           </div>
                         </td>
+                        {macosOnly && (
+                          <td className="px-4 py-2 font-mono text-xs text-gray-600">
+                            {node.xcode_version ?? '—'}
+                          </td>
+                        )}
+                        {macosOnly && (
+                          <td className="px-4 py-2">
+                            {(() => {
+                              const urgency = certUrgency.get(node.id)
+                              if (!urgency) return <span className="text-gray-300 text-xs">—</span>
+                              const cls = urgency === 'critical' ? 'bg-red-500' : urgency === 'warning' ? 'bg-amber-400' : 'bg-emerald-500'
+                              return <span className={`w-2 h-2 rounded-full ${cls} inline-block`} title={urgency} />
+                            })()}
+                          </td>
+                        )}
                         {canManage && (
                           <td className="px-4 py-3 text-right">
                             <div className="flex items-center justify-end gap-2">
@@ -776,6 +837,8 @@ export function FleetDashboard() {
                     ))}
                   </tbody>
                 </table>
+                  )
+                })()}
                 {nodes && (
                   <Pagination page={page} total={nodes.total} perPage={nodes.per_page} onPage={setPage} onPerPage={(n) => { setPerPage(n); setPage(1) }} />
                 )}
