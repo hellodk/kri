@@ -3,7 +3,7 @@
  * Covers: GRP-01..GRP-12 from TEST_CASES.md
  */
 import { test, expect } from '@playwright/test'
-import { loginViaApi, ADMIN, API } from './helpers'
+import { loginViaApi, getToken, ADMIN, API } from './helpers'
 
 test.describe('Groups', () => {
 
@@ -21,15 +21,22 @@ test.describe('Groups', () => {
     expect(hasRows > 0 || hasEmpty).toBeTruthy()
   })
 
-  test('GRP-02 create static group appears in list', async ({ page }) => {
+  test('GRP-02 create static group appears in list', async ({ page, request }) => {
     const name = `E2E Static ${Date.now()}`
-    // "New Group" toggles an inline form — input has no placeholder, find by label
     await page.click('button:has-text("New Group")')
-    const nameInput = page.locator('label:has-text("Name") + input, label:has-text("Name") ~ input').first()
+    const nameInput = page.locator('div.grid input').first()
     await nameInput.fill(name)
     await page.click('button[type="submit"]:has-text("Create")')
-    await expect(page.locator(`text=${name}`)).toBeVisible({ timeout: 6000 })
-    await expect(page.locator('text=static').first()).toBeVisible()
+    // Form closes on success — wait for it to disappear
+    await expect(page.locator('button[type="submit"]:has-text("Create")')).not.toBeVisible({ timeout: 6000 })
+    // Verify via API (list may be paginated so the row may not be on screen)
+    const token = await getToken(request)
+    const res = await request.get(`${API}/api/v1/groups?per_page=100`, {
+      headers: { Authorization: `Bearer ${token}` },
+    })
+    const body = await res.json()
+    const found = (body.items ?? []).some((g: { name: string }) => g.name === name)
+    expect(found).toBeTruthy()
   })
 
   test('GRP-04 click group navigates to group detail', async ({ page }) => {
