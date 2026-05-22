@@ -1,10 +1,13 @@
 """Alert evaluation and delivery service."""
 from __future__ import annotations
 
+import ipaddress
 import json
+import socket
 import urllib.request
 from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING
+from urllib.parse import urlparse
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -15,6 +18,30 @@ from fleet_platform.models.security import VulnerabilityFinding
 
 if TYPE_CHECKING:
     pass
+
+
+def _validate_webhook_url(url: str) -> None:
+    """Raise ValueError if the webhook URL is unsafe (SSRF protection).
+
+    Blocks:
+    - Non-HTTP/HTTPS schemes
+    - Private, loopback, and link-local IP ranges (RFC 1918, 127.0.0.0/8, 169.254.0.0/16)
+    """
+    parsed = urlparse(url)
+    if parsed.scheme not in ("http", "https"):
+        raise ValueError(f"Invalid webhook URL scheme: {parsed.scheme!r}. Only http/https allowed.")
+    hostname = parsed.hostname
+    if not hostname:
+        raise ValueError("Webhook URL has no hostname.")
+    try:
+        resolved_ip = ipaddress.ip_address(socket.gethostbyname(hostname))
+        if resolved_ip.is_private or resolved_ip.is_loopback or resolved_ip.is_link_local:
+            raise ValueError(
+                f"Webhook URL resolves to a private/loopback/link-local address ({resolved_ip}). "
+                "Only public internet URLs are allowed."
+            )
+    except socket.gaierror:
+        pass  # DNS resolution failed — let urlopen fail naturally
 
 
 async def evaluate_alerts(db: AsyncSession) -> None:
@@ -225,6 +252,7 @@ async def _deliver_alert(rule: AlertRule, alert_event: AlertEvent, db: AsyncSess
     delivered_any = False
     for webhook in webhooks:
         try:
+            _validate_webhook_url(webhook.url)
             if webhook.type == "slack":
                 payload = {"text": f"\U0001f6a8 *kri alert*: {alert_event.message}"}
             else:

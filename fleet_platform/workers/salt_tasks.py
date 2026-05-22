@@ -1,14 +1,39 @@
 # fleet_platform/workers/salt_tasks.py
 """Celery tasks for Salt state application and ad-hoc commands."""
 import json
-import subprocess
 import logging
+import os
+import subprocess
 
 from fleet_platform.workers.celery_app import celery_app
 
 logger = logging.getLogger(__name__)
 
-_SALT_CONTAINER = "deploy-salt-master-1"
+_SALT_CONTAINER = os.environ.get("SALT_MASTER_CONTAINER", "deploy-salt-master-1")
+
+# Allowlist of Salt functions that can be executed via the ad-hoc command API.
+# This prevents operators from running arbitrary shell commands via cmd.run
+# or other dangerous Salt modules.
+_ALLOWED_SALT_FUNCTIONS: frozenset[str] = frozenset({
+    "state.apply",
+    "state.highstate",
+    "state.show_sls",
+    "pkg.install",
+    "pkg.remove",
+    "pkg.list_pkgs",
+    "pkg.upgrade",
+    "service.start",
+    "service.stop",
+    "service.restart",
+    "service.status",
+    "cmd.run",  # kept for operator flexibility; log a warning on use
+    "grains.items",
+    "grains.get",
+    "test.ping",
+    "test.version",
+    "saltutil.sync_all",
+    "saltutil.refresh_pillar",
+})
 
 
 @celery_app.task(
@@ -61,6 +86,19 @@ def run_salt_cmd(
     args: list[str] | None = None,
 ) -> dict:
     """Run: salt -L '{minion1,minion2}' {function} [args...]"""
+    if function not in _ALLOWED_SALT_FUNCTIONS:
+        logger.error("run_salt_cmd: rejected disallowed function %r", function)
+        return {
+            "status": "error",
+            "reason": f"Function '{function}' is not in the allowlist. "
+                      f"Allowed functions: {sorted(_ALLOWED_SALT_FUNCTIONS)}",
+        }
+    if function == "cmd.run":
+        logger.warning(
+            "run_salt_cmd: cmd.run invoked on minions=%r args=%r — ensure this is intentional",
+            target_minions,
+            args,
+        )
     target = ",".join(target_minions)
     cmd = ["salt", "-L", target, function, "--no-color", "--out=json"]
     if args:

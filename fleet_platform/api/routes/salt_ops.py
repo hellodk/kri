@@ -87,7 +87,15 @@ async def run_cmd(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             detail="minion_ids must not be empty",
         )
-    from fleet_platform.workers.salt_tasks import run_salt_cmd
+    from fleet_platform.workers.salt_tasks import _ALLOWED_SALT_FUNCTIONS, run_salt_cmd
+    if payload.function not in _ALLOWED_SALT_FUNCTIONS:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=(
+                f"Function '{payload.function}' is not in the allowlist. "
+                f"Allowed functions: {sorted(_ALLOWED_SALT_FUNCTIONS)}"
+            ),
+        )
     task = run_salt_cmd.delay(
         function=payload.function,
         target_minions=payload.minion_ids,

@@ -15,6 +15,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from fleet_platform.api.deps import get_db
 from fleet_platform.core.auth import get_current_user, require_role
 from fleet_platform.models.alert import AlertEvent, AlertRule, WebhookConfig
+from fleet_platform.services.alert_svc import _validate_webhook_url
 
 router = APIRouter(prefix="/api/v1/alerts")
 
@@ -136,6 +137,10 @@ async def create_webhook(
 ):
     if body.type not in ("slack", "generic"):
         raise HTTPException(status_code=422, detail="type must be 'slack' or 'generic'")
+    try:
+        _validate_webhook_url(body.url)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc))
     webhook = WebhookConfig(
         name=body.name,
         url=body.url,
@@ -210,6 +215,11 @@ async def test_webhook(
     webhook = result.scalar_one_or_none()
     if not webhook:
         raise HTTPException(status_code=404, detail="Webhook not found")
+
+    try:
+        _validate_webhook_url(webhook.url)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc))
 
     if webhook.type == "slack":
         payload: dict[str, Any] = {"text": "\U0001f6a8 *kri alert*: This is a test alert from kri fleet platform"}
