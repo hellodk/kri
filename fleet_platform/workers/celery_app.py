@@ -15,6 +15,8 @@ celery_app = Celery(
         "fleet_platform.workers.playbook_tasks",
         "fleet_platform.workers.security_tasks",
         "fleet_platform.workers.salt_tasks",
+        "fleet_platform.workers.alert_tasks",
+        "fleet_platform.workers.ios_tasks",
     ],
 )
 
@@ -48,6 +50,14 @@ celery_app.conf.update(
         "refresh-all-node-grains": {
             "task": "fleet_platform.workers.ansible_tasks.refresh_all_node_grains",
             "schedule": crontab(hour="*/6", minute=0),
+        },
+        "run-alert-evaluation": {
+            "task": "fleet_platform.workers.alert_tasks.run_alert_evaluation",
+            "schedule": 300,
+        },
+        "check-jenkins-agents": {
+            "task": "fleet_platform.workers.ios_tasks.check_all_jenkins_agents",
+            "schedule": 300,
         },
     },
 )

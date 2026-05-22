@@ -22,6 +22,8 @@ from fleet_platform.api.routes.salt_keys import router as salt_keys_router
 from fleet_platform.api.routes.node_secrets import router as node_secrets_router
 from fleet_platform.api.routes.group_secrets import router as group_secrets_router
 from fleet_platform.api.routes.salt_ops import router as salt_ops_router
+from fleet_platform.api.routes.alerts import router as alerts_router
+from fleet_platform.api.routes.ios_tracking import router as ios_tracking_router
 
 _log = get_logger(__name__)
 
@@ -79,6 +81,8 @@ def create_app() -> FastAPI:
     app.include_router(node_secrets_router, tags=["node-secrets"])
     app.include_router(group_secrets_router, tags=["group-secrets"])
     app.include_router(salt_ops_router, tags=["salt-ops"])
+    app.include_router(alerts_router, tags=["alerts"])
+    app.include_router(ios_tracking_router, tags=["ios"])
 
     @app.exception_handler(Exception)
     async def unhandled_exception_handler(request: Request, exc: Exception):

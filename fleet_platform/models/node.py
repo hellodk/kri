@@ -42,6 +42,12 @@ class Node(Base, TimestampMixin):
     ssh_auth_mode: Mapped[str] = mapped_column(String(10), default="password")  # "password" | "key"
     ssh_key_enc: Mapped[str | None] = mapped_column(Text, nullable=True)
 
+    maintenance_mode: Mapped[bool] = mapped_column(default=False, nullable=False)
+
+    # iOS-specific tracking fields (added by migration 017)
+    xcode_version: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    macos_version: Mapped[str | None] = mapped_column(String(32), nullable=True)
+
     tags: Mapped[list["Tag"]] = relationship(
         "Tag", back_populates="node", cascade="all, delete-orphan"
     )

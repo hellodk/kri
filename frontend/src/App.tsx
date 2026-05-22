@@ -1,5 +1,5 @@
 import { useEffect, useRef } from 'react'
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
+import { BrowserRouter, Routes, Route } from 'react-router-dom'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { AuthGuard } from './components/AuthGuard'
 import { Layout } from './components/Layout/Layout'
@@ -21,6 +21,9 @@ import { SecurityPage } from './pages/SecurityPage'
 import { AuditPage } from './pages/AuditPage'
 import { SaltKeysPage } from './pages/SaltKeysPage'
 import { SaltOpsPage } from './pages/SaltOpsPage'
+import { AlertsPage } from './pages/AlertsPage'
+import { IOSTrackingPage } from './pages/IOSTrackingPage'
+import { DashboardPage } from './pages/DashboardPage'
 import { saltKeysApi } from './api/saltKeys'
 import { useSaltKeysStore } from './stores/saltKeysStore'
 import { useToastStore } from './stores/toastStore'
@@ -82,7 +85,7 @@ export default function App() {
               </AuthGuard>
             }
           >
-            <Route index element={<Navigate to="/fleet" replace />} />
+            <Route index element={<DashboardPage />} />
             <Route path="/fleet" element={<FleetDashboard />} />
             <Route path="/nodes/:nodeId" element={<NodeDetail />} />
             <Route path="/drift" element={<DriftExplorer />} />
@@ -99,6 +102,8 @@ export default function App() {
             <Route path="/audit" element={<AuditPage />} />
             <Route path="/salt-keys" element={<SaltKeysPage />} />
             <Route path="/salt-ops" element={<SaltOpsPage />} />
+            <Route path="/alerts" element={<AlertsPage />} />
+            <Route path="/ios" element={<IOSTrackingPage />} />
             <Route path="/settings" element={<SettingsPage />} />
           </Route>
         </Routes>

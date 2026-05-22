@@ -177,6 +177,10 @@ async def ingest_grains(
 
     await _upsert_system_tags(db, node, payload.grains, now)
 
+    # Update iOS-specific tracking fields from grains (before commit)
+    from fleet_platform.services.ios_tracking_svc import update_node_from_grains
+    await update_node_from_grains(node.id, payload.grains, db)
+
     await db.commit()
     compute_drift.delay(str(node.id))
 
