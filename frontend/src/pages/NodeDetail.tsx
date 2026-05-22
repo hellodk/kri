@@ -38,8 +38,15 @@ export function NodeDetail() {
   const [tagKey, setTagKey] = useState('')
   const [tagValue, setTagValue] = useState('')
   const [collectingGrains, setCollectingGrains] = useState(false)
+  const [grainTaskId, setGrainTaskId] = useState<string | null>(null)
+  const [showRebootstrap, setShowRebootstrap] = useState(false)
+  const [rebootstrapIp, setRebootstrapIp] = useState('')
+  const [rebootstrapping, setRebootstrapping] = useState(false)
   const [showSSH, setShowSSH] = useState(false)
   const [showVNC, setShowVNC] = useState(false)
+  const [sbomFilter, setSbomFilter] = useState('')
+  const [selectedScanId, setSelectedScanId] = useState<string | null>(null)
+  const [triggeringScan, setTriggeringScan] = useState(false)
   const qc = useQueryClient()
   const toast = useToastStore((s) => s.add)
 
@@ -64,18 +71,44 @@ export function NodeDetail() {
     enabled: !!nodeId && tab === 'drift',
   })
 
-  const { data: sbomScan } = useQuery({
-    queryKey: ['sbom-latest', nodeId],
-    queryFn: () => sbomApi.latestScan(nodeId!),
+  const { data: sbomScanHistory } = useQuery({
+    queryKey: ['sbom-scans', nodeId],
+    queryFn: () => sbomApi.scans(nodeId!, { per_page: 50 }),
     staleTime: 300_000,
     enabled: !!nodeId && tab === 'sbom',
   })
 
+  const activeScanId = selectedScanId ?? sbomScanHistory?.items[0]?.id
+  const activeScan = sbomScanHistory?.items.find((s) => s.id === activeScanId) ?? sbomScanHistory?.items[0]
+
   const { data: components } = useQuery({
-    queryKey: ['sbom-components', nodeId, sbomScan?.id, compPage],
-    queryFn: () => sbomApi.components(nodeId!, sbomScan!.id, { page: compPage, per_page: 100 }),
+    queryKey: ['sbom-components', nodeId, activeScanId, compPage],
+    queryFn: () => sbomApi.components(nodeId!, activeScanId!, { page: compPage, per_page: 200 }),
     staleTime: 300_000,
-    enabled: !!sbomScan?.id,
+    enabled: !!activeScanId,
+  })
+
+  const { data: nodeVulns } = useQuery({
+    queryKey: ['node-vulns', nodeId],
+    queryFn: () => api.get<{ vulnerabilities: Array<{ package_name: string; severity: string; cve_id: string }> }>(`/api/v1/security/nodes/${nodeId}`),
+    staleTime: 300_000,
+    enabled: !!nodeId && tab === 'sbom',
+  })
+
+  const vulnsByPkg = (nodeVulns?.vulnerabilities ?? []).reduce<Record<string, string[]>>((acc, v) => {
+    if (!acc[v.package_name]) acc[v.package_name] = []
+    acc[v.package_name].push(v.severity)
+    return acc
+  }, {})
+
+  const { data: grainTaskStatus } = useQuery({
+    queryKey: ['grain-task', grainTaskId],
+    queryFn: () => api.get<{ task_id: string; state: string; result?: unknown }>(`/api/v1/ansible/tasks/${grainTaskId}`),
+    enabled: !!grainTaskId,
+    refetchInterval: (q) => {
+      const state = q.state.data?.state
+      return state === 'PENDING' || state === 'STARTED' ? 2000 : false
+    },
   })
 
   const { data: executions } = useQuery({
@@ -145,15 +178,36 @@ export function NodeDetail() {
   async function collectGrains() {
     if (!nodeId) return
     setCollectingGrains(true)
+    setGrainTaskId(null)
     try {
-      await api.post(`/api/v1/ansible/nodes/${nodeId}/collect-grains`)
-      toast('Grain collection queued — refreshing in 5s…')
-      setTimeout(() => refetch(), 5000)
+      const resp = await api.post<{ task_id: string }>(`/api/v1/ansible/nodes/${nodeId}/collect-grains`)
+      setGrainTaskId(resp.task_id)
+      toast('Grain collection queued')
+      setTimeout(() => refetch(), 8000)
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : 'Failed to queue grain collection'
       toast(msg, 'error')
     } finally {
       setCollectingGrains(false)
+    }
+  }
+
+  async function rebootstrap() {
+    if (!node || !rebootstrapIp.trim()) return
+    setRebootstrapping(true)
+    try {
+      await api.post('/api/v1/ansible/bootstrap', {
+        minion_id: node.minion_id,
+        target_ip: rebootstrapIp.trim(),
+      })
+      toast('Re-bootstrap queued')
+      setShowRebootstrap(false)
+      setTimeout(() => refetch(), 3000)
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : 'Re-bootstrap failed'
+      toast(msg, 'error')
+    } finally {
+      setRebootstrapping(false)
     }
   }
 
@@ -277,12 +331,28 @@ export function NodeDetail() {
                 <h3 className="font-semibold text-gray-700">Bootstrap Status</h3>
                 <div className="flex items-center gap-2">
                   {node.bootstrap_status === 'completed' && (
+                    <>
+                      <button
+                        onClick={() => collectGrains()}
+                        disabled={collectingGrains}
+                        className="px-3 py-1.5 bg-brand-600 hover:bg-brand-700 text-white text-sm rounded-lg disabled:opacity-50"
+                      >
+                        {collectingGrains ? 'Collecting…' : 'Collect Grains Now'}
+                      </button>
+                      <button
+                        onClick={() => { setRebootstrapIp(node.bootstrap_ip ?? node.ip_address ?? ''); setShowRebootstrap(true) }}
+                        className="px-3 py-1.5 text-sm rounded-lg border border-amber-300 bg-amber-50 text-amber-700 hover:bg-amber-100"
+                      >
+                        Re-bootstrap
+                      </button>
+                    </>
+                  )}
+                  {(node.bootstrap_status === 'failed') && (
                     <button
-                      onClick={() => collectGrains()}
-                      disabled={collectingGrains}
-                      className="px-3 py-1.5 bg-brand-600 hover:bg-brand-700 text-white text-sm rounded-lg disabled:opacity-50"
+                      onClick={() => { setRebootstrapIp(node.bootstrap_ip ?? node.ip_address ?? ''); setShowRebootstrap(true) }}
+                      className="px-3 py-1.5 text-sm rounded-lg border border-amber-300 bg-amber-50 text-amber-700 hover:bg-amber-100"
                     >
-                      {collectingGrains ? 'Collecting…' : 'Collect Grains Now'}
+                      Retry bootstrap
                     </button>
                   )}
                   {(node.bootstrap_status === 'bootstrapping' || node.bootstrap_status === 'pending') && (
@@ -296,6 +366,33 @@ export function NodeDetail() {
                   )}
                 </div>
               </div>
+
+              {/* Re-bootstrap inline form */}
+              {showRebootstrap && (
+                <div className="p-3 bg-amber-50 border border-amber-200 rounded-lg space-y-2">
+                  <p className="text-xs text-amber-700 font-medium">This will re-run the bootstrap playbook. Existing node data is preserved.</p>
+                  <div className="flex gap-2">
+                    <input
+                      type="text"
+                      value={rebootstrapIp}
+                      onChange={(e) => setRebootstrapIp(e.target.value)}
+                      placeholder="Target IP address"
+                      className="flex-1 text-sm border border-amber-300 rounded px-2 py-1 bg-white focus:outline-none focus:ring-2 focus:ring-amber-400"
+                    />
+                    <button
+                      onClick={rebootstrap}
+                      disabled={rebootstrapping || !rebootstrapIp.trim()}
+                      className="px-3 py-1 text-sm bg-amber-600 text-white rounded hover:bg-amber-700 disabled:opacity-50"
+                    >
+                      {rebootstrapping ? 'Queuing…' : 'Confirm'}
+                    </button>
+                    <button onClick={() => setShowRebootstrap(false)} className="px-3 py-1 text-sm border border-gray-300 rounded hover:bg-gray-50">
+                      Cancel
+                    </button>
+                  </div>
+                </div>
+              )}
+
               <div className={`flex items-center gap-3 p-3 rounded-lg border ${BOOTSTRAP_STATUS_STYLE[node.bootstrap_status]?.bg ?? 'bg-gray-50 border-gray-200'}`}>
                 <span className={`text-sm font-semibold ${BOOTSTRAP_STATUS_STYLE[node.bootstrap_status]?.colour ?? 'text-gray-600'}`}>
                   {BOOTSTRAP_STATUS_STYLE[node.bootstrap_status]?.label ?? node.bootstrap_status}
@@ -321,6 +418,25 @@ export function NodeDetail() {
                     {node.bootstrap_logs}
                   </pre>
                 </details>
+              )}
+
+              {/* Grain collection task status */}
+              {grainTaskId && grainTaskStatus && (
+                <div className={`p-3 rounded-lg border text-xs font-mono ${
+                  grainTaskStatus.state === 'SUCCESS' ? 'bg-emerald-50 border-emerald-200 text-emerald-800' :
+                  grainTaskStatus.state === 'FAILURE' ? 'bg-red-50 border-red-200 text-red-700' :
+                  'bg-brand-50 border-brand-200 text-brand-700'
+                }`}>
+                  <div className="flex items-center gap-2">
+                    {(grainTaskStatus.state === 'PENDING' || grainTaskStatus.state === 'STARTED') && (
+                      <div className="w-3 h-3 border-2 border-brand-600 border-t-transparent rounded-full animate-spin" />
+                    )}
+                    <span className="font-semibold">Grain collection: {grainTaskStatus.state}</span>
+                  </div>
+                  {grainTaskStatus.result != null && (
+                    <pre className="mt-1 whitespace-pre-wrap">{JSON.stringify(grainTaskStatus.result, null, 2)}</pre>
+                  )}
+                </div>
               )}
             </div>
           )}
@@ -408,42 +524,200 @@ export function NodeDetail() {
               {computeMutation.isPending ? 'Queuing…' : 'Trigger Drift Compute'}
             </button>
           </div>
-          {latestDrift && (
-            <div className="bg-white rounded-lg border border-gray-200 p-4 space-y-4">
-              <div className="flex items-center gap-4">
-                <div>
-                  <p className="text-xs text-gray-500 uppercase">Drift Score</p>
-                  <p className="text-3xl font-bold text-gray-900">{latestDrift.drift_score}</p>
-                </div>
-                <div>
-                  <p className="text-xs text-gray-500 uppercase">Severity</p>
-                  <p className="text-lg font-semibold capitalize">{latestDrift.severity}</p>
-                </div>
-                <div>
-                  <p className="text-xs text-gray-500 uppercase">Baseline</p>
-                  <p className="text-sm">{latestDrift.baseline_name ?? '—'}</p>
-                </div>
-              </div>
-              {[
-                { title: 'Missing Packages', items: latestDrift.missing_packages },
-                { title: 'Extra Packages', items: latestDrift.extra_packages },
-                { title: 'Version Mismatches', items: latestDrift.version_mismatches },
-              ].map(({ title, items }) =>
-                items.length > 0 ? (
-                  <div key={title}>
-                    <h4 className="text-sm font-medium text-gray-700 mb-2">{title}</h4>
-                    <ul className="text-sm bg-gray-50 rounded p-3 space-y-1">
-                      {items.map((item, i) => (
-                        <li key={i} className="font-mono text-gray-700">
-                          {JSON.stringify(item)}
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-                ) : null
-              )}
+
+          {/* No drift record yet — but check for no baseline first */}
+          {!latestDrift && (
+            <div className="bg-amber-50 border border-amber-200 rounded-lg p-4 text-sm text-amber-800">
+              No baseline assigned — create one in{' '}
+              <a href="/baselines" className="underline font-medium">Baselines</a>{' '}
+              to start tracking drift.
             </div>
           )}
+
+          {latestDrift && (() => {
+            const missing = latestDrift.missing_packages ?? []
+            const extra = latestDrift.extra_packages ?? []
+            const mismatches = latestDrift.version_mismatches ?? []
+            const totalDrifted = missing.length + mismatches.length + extra.length
+            const isClean = latestDrift.drift_score === 0 && latestDrift.baseline_name != null
+
+            return (
+              <div className="space-y-4">
+                {/* Score header */}
+                <div className="bg-white rounded-lg border border-gray-200 p-4">
+                  <div className="flex items-center gap-6 flex-wrap">
+                    <div>
+                      <p className="text-xs text-gray-500 uppercase">Drift Score</p>
+                      <p className="text-3xl font-bold text-gray-900">{latestDrift.drift_score}</p>
+                    </div>
+                    <div>
+                      <p className="text-xs text-gray-500 uppercase">Severity</p>
+                      <p className="text-lg font-semibold capitalize">{latestDrift.severity}</p>
+                    </div>
+                    <div>
+                      <p className="text-xs text-gray-500 uppercase">Baseline</p>
+                      <p className="text-sm">{latestDrift.baseline_name ?? '—'}</p>
+                    </div>
+                    <div>
+                      <p className="text-xs text-gray-500 uppercase">Computed</p>
+                      <p className="text-sm">{format(new Date(latestDrift.computed_at), 'PP p')}</p>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Compliance banner or summary chips */}
+                {isClean ? (
+                  <div className="flex items-center gap-2 bg-emerald-50 border border-emerald-200 rounded-lg p-3 text-emerald-800 text-sm font-medium">
+                    <span className="text-base">✓</span>
+                    <span>In compliance — all packages match the baseline.</span>
+                  </div>
+                ) : (
+                  <div className="flex flex-wrap gap-2 items-center">
+                    <span className="text-sm text-gray-600 font-medium">{totalDrifted} packages drifted</span>
+                    {missing.length > 0 && (
+                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-700 border border-red-200">
+                        <span className="w-2 h-2 rounded-full bg-red-500 inline-block" />
+                        {missing.length} missing
+                      </span>
+                    )}
+                    {mismatches.length > 0 && (
+                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-amber-100 text-amber-700 border border-amber-200">
+                        <span className="w-2 h-2 rounded-full bg-amber-500 inline-block" />
+                        {mismatches.length} version mismatch{mismatches.length !== 1 ? 'es' : ''}
+                      </span>
+                    )}
+                    {extra.length > 0 && (
+                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-700 border border-blue-200">
+                        <span className="w-2 h-2 rounded-full bg-blue-500 inline-block" />
+                        {extra.length} extra
+                      </span>
+                    )}
+                  </div>
+                )}
+
+                {/* Missing packages */}
+                {missing.length > 0 && (
+                  <div className="bg-white rounded-lg border border-red-200 overflow-hidden">
+                    <div className="flex items-center gap-2 px-4 py-2 bg-red-50 border-b border-red-200">
+                      <span className="w-2.5 h-2.5 rounded-full bg-red-500" />
+                      <h4 className="text-sm font-semibold text-red-800">Missing Packages</h4>
+                      <span className="ml-auto text-xs text-red-600">Expected by baseline but not installed</span>
+                    </div>
+                    <table className="w-full text-sm">
+                      <thead>
+                        <tr className="text-xs text-gray-500 uppercase border-b border-gray-100 bg-gray-50">
+                          <th className="px-4 py-2 text-left font-medium">Package</th>
+                          <th className="px-4 py-2 text-left font-medium">Expected Version</th>
+                          <th className="px-4 py-2 text-left font-medium">Severity Hint</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-gray-50">
+                        {missing.map((pkg, i) => (
+                          <tr key={i} className="hover:bg-red-50/30">
+                            <td className="px-4 py-2 font-mono font-medium text-gray-900">{pkg.name}</td>
+                            <td className="px-4 py-2 font-mono text-gray-600">{pkg.required_version ?? '—'}</td>
+                            <td className="px-4 py-2">
+                              <span className="text-xs px-1.5 py-0.5 rounded bg-red-100 text-red-700 font-medium">required</span>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+
+                {/* Version mismatches */}
+                {mismatches.length > 0 && (
+                  <div className="bg-white rounded-lg border border-amber-200 overflow-hidden">
+                    <div className="flex items-center gap-2 px-4 py-2 bg-amber-50 border-b border-amber-200">
+                      <span className="w-2.5 h-2.5 rounded-full bg-amber-500" />
+                      <h4 className="text-sm font-semibold text-amber-800">Version Mismatches</h4>
+                      <span className="ml-auto text-xs text-amber-600">Package present but wrong version</span>
+                    </div>
+                    <table className="w-full text-sm">
+                      <thead>
+                        <tr className="text-xs text-gray-500 uppercase border-b border-gray-100 bg-gray-50">
+                          <th className="px-4 py-2 text-left font-medium">Package</th>
+                          <th className="px-4 py-2 text-left font-medium">Installed</th>
+                          <th className="px-4 py-2 text-left font-medium">Expected</th>
+                          <th className="px-4 py-2 text-left font-medium">Δ</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-gray-50">
+                        {mismatches.map((pkg, i) => (
+                          <tr key={i} className="hover:bg-amber-50/30">
+                            <td className="px-4 py-2 font-mono font-medium text-gray-900">{pkg.name}</td>
+                            <td className="px-4 py-2 font-mono text-amber-700">{pkg.actual ?? '—'}</td>
+                            <td className="px-4 py-2 font-mono text-gray-600">{pkg.expected ?? '—'}</td>
+                            <td className="px-4 py-2 text-xs text-gray-400 font-mono">
+                              {pkg.actual && pkg.expected ? `${pkg.actual} → ${pkg.expected}` : '—'}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+
+                {/* Extra packages */}
+                {extra.length > 0 && (
+                  <div className="bg-white rounded-lg border border-blue-200 overflow-hidden">
+                    <div className="flex items-center gap-2 px-4 py-2 bg-blue-50 border-b border-blue-200">
+                      <span className="w-2.5 h-2.5 rounded-full bg-blue-500" />
+                      <h4 className="text-sm font-semibold text-blue-800">Extra Packages</h4>
+                      <span className="ml-auto text-xs text-blue-600">Installed but not in baseline</span>
+                    </div>
+                    <table className="w-full text-sm">
+                      <thead>
+                        <tr className="text-xs text-gray-500 uppercase border-b border-gray-100 bg-gray-50">
+                          <th className="px-4 py-2 text-left font-medium">Package</th>
+                          <th className="px-4 py-2 text-left font-medium">Installed Version</th>
+                          <th className="px-4 py-2 text-left font-medium">Note</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-gray-50">
+                        {extra.map((pkg, i) => (
+                          <tr key={i} className="hover:bg-blue-50/30">
+                            <td className="px-4 py-2 font-mono font-medium text-gray-900">{pkg.name}</td>
+                            <td className="px-4 py-2 font-mono text-gray-600">{pkg.installed_version ?? '—'}</td>
+                            <td className="px-4 py-2 text-xs text-gray-400">not in baseline</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+
+                {/* Service drift */}
+                {(latestDrift.service_drift ?? []).length > 0 && (
+                  <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
+                    <div className="flex items-center gap-2 px-4 py-2 bg-gray-50 border-b border-gray-200">
+                      <h4 className="text-sm font-semibold text-gray-700">Service Drift</h4>
+                    </div>
+                    <table className="w-full text-sm">
+                      <thead>
+                        <tr className="text-xs text-gray-500 uppercase border-b border-gray-100 bg-gray-50">
+                          <th className="px-4 py-2 text-left font-medium">Service</th>
+                          <th className="px-4 py-2 text-left font-medium">Expected</th>
+                          <th className="px-4 py-2 text-left font-medium">Actual</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-gray-50">
+                        {latestDrift.service_drift.map((svc, i) => (
+                          <tr key={i} className="hover:bg-gray-50">
+                            <td className="px-4 py-2 font-mono font-medium text-gray-900">{svc.name}</td>
+                            <td className="px-4 py-2 text-gray-600">{svc.expected}</td>
+                            <td className="px-4 py-2 text-red-600">{svc.actual}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </div>
+            )
+          })()}
+
           {chartData && chartData.length > 0 && (
             <div className="bg-white rounded-lg border border-gray-200 p-4">
               <h4 className="text-sm font-medium text-gray-700 mb-3">Drift History (30 days)</h4>
@@ -462,22 +736,75 @@ export function NodeDetail() {
 
       {tab === 'sbom' && (
         <div className="space-y-4">
-          {sbomScan ? (
+          {/* Header: scan selector + trigger */}
+          <div className="flex items-center gap-3 flex-wrap">
+            {(sbomScanHistory?.items.length ?? 0) > 0 ? (
+              <select
+                className="text-sm border border-gray-300 rounded px-2 py-1 bg-white"
+                value={activeScanId ?? ''}
+                onChange={(e) => { setSelectedScanId(e.target.value); setCompPage(1) }}
+              >
+                {sbomScanHistory!.items.map((s, i) => (
+                  <option key={s.id} value={s.id}>
+                    {format(new Date(s.scanned_at), 'PP p')}{i === 0 ? ' (latest)' : ''}
+                  </option>
+                ))}
+              </select>
+            ) : null}
+            <button
+              className="ml-auto text-sm px-3 py-1.5 rounded bg-brand-600 text-white hover:bg-brand-700 disabled:opacity-50"
+              disabled={triggeringScan}
+              onClick={async () => {
+                setTriggeringScan(true)
+                try {
+                  await api.post(`/api/v1/security/scan/${nodeId}?scanner=trivy`, {})
+                  toast('SBOM scan queued', 'success')
+                  setTimeout(() => qc.invalidateQueries({ queryKey: ['sbom-scans', nodeId] }), 5000)
+                } catch {
+                  toast('Failed to queue scan', 'error')
+                } finally {
+                  setTriggeringScan(false)
+                }
+              }}
+            >
+              {triggeringScan ? 'Queuing…' : '⟳ Scan now'}
+            </button>
+          </div>
+
+          {activeScan ? (
             <>
+              {/* Scan metadata */}
               <div className="bg-white rounded-lg border border-gray-200 p-4 flex gap-8 text-sm">
                 <div>
                   <p className="text-gray-500">Scanned</p>
-                  <p className="font-medium">{format(new Date(sbomScan.scanned_at), 'PPpp')}</p>
+                  <p className="font-medium">{format(new Date(activeScan.scanned_at), 'PPpp')}</p>
                 </div>
                 <div>
-                  <p className="text-gray-500">Syft</p>
-                  <p className="font-medium">{sbomScan.syft_version ?? '—'}</p>
+                  <p className="text-gray-500">Format</p>
+                  <p className="font-medium">{activeScan.format ?? 'cyclonedx'}</p>
                 </div>
                 <div>
                   <p className="text-gray-500">Components</p>
-                  <p className="font-medium">{sbomScan.component_count ?? '—'}</p>
+                  <p className="font-medium">{activeScan.component_count ?? '—'}</p>
                 </div>
+                {Object.keys(vulnsByPkg).length > 0 && (
+                  <div>
+                    <p className="text-gray-500">With CVEs</p>
+                    <p className="font-medium text-red-600">{Object.keys(vulnsByPkg).length}</p>
+                  </div>
+                )}
               </div>
+
+              {/* Search */}
+              <input
+                type="search"
+                placeholder="Filter packages…"
+                value={sbomFilter}
+                onChange={(e) => { setSbomFilter(e.target.value); setCompPage(1) }}
+                className="w-full text-sm border border-gray-300 rounded px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-brand-500"
+              />
+
+              {/* Component table */}
               <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
                 <table className="w-full text-sm">
                   <thead>
@@ -486,26 +813,55 @@ export function NodeDetail() {
                       <th className="px-4 py-3">Version</th>
                       <th className="px-4 py-3">Type</th>
                       <th className="px-4 py-3">Licenses</th>
+                      <th className="px-4 py-3">CVEs</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-100">
-                    {components?.items.map((c) => (
-                      <tr key={c.id} className="hover:bg-gray-50">
-                        <td className="px-4 py-2 font-mono text-xs">{c.name}</td>
-                        <td className="px-4 py-2 text-gray-600">{c.version ?? '—'}</td>
-                        <td className="px-4 py-2 text-gray-600">{c.component_type ?? '—'}</td>
-                        <td className="px-4 py-2 text-gray-600">{c.licenses.join(', ') || '—'}</td>
-                      </tr>
-                    ))}
+                    {(components?.items ?? [])
+                      .filter((c) => !sbomFilter || c.name.toLowerCase().includes(sbomFilter.toLowerCase()))
+                      .map((c) => {
+                        const sevs = vulnsByPkg[c.name] ?? []
+                        const hasCrit = sevs.includes('CRITICAL')
+                        const hasHigh = sevs.includes('HIGH')
+                        return (
+                          <tr key={c.id} className="hover:bg-gray-50">
+                            <td className="px-4 py-2 font-mono text-xs">
+                              {c.purl ? (
+                                <span title={c.purl}>{c.name}</span>
+                              ) : c.name}
+                            </td>
+                            <td className="px-4 py-2 text-gray-600">{c.version ?? '—'}</td>
+                            <td className="px-4 py-2 text-gray-600">{c.component_type ?? '—'}</td>
+                            <td className="px-4 py-2 text-gray-600">{c.licenses.join(', ') || '—'}</td>
+                            <td className="px-4 py-2">
+                              {sevs.length > 0 ? (
+                                <span className={`text-xs px-2 py-0.5 rounded font-medium ${
+                                  hasCrit ? 'bg-red-100 text-red-700' :
+                                  hasHigh ? 'bg-orange-100 text-orange-700' :
+                                  'bg-yellow-100 text-yellow-700'
+                                }`}>
+                                  {sevs.length} {hasCrit ? 'CRITICAL' : hasHigh ? 'HIGH' : 'MEDIUM/LOW'}
+                                </span>
+                              ) : (
+                                <span className="text-gray-300 text-xs">—</span>
+                              )}
+                            </td>
+                          </tr>
+                        )
+                      })}
                   </tbody>
                 </table>
-                {components && (
+                {components && !sbomFilter && (
                   <Pagination page={compPage} total={components.total} perPage={components.per_page} onPage={setCompPage} />
                 )}
               </div>
             </>
           ) : (
-            <p className="text-gray-500 text-sm">No SBOM scans yet for this node.</p>
+            <div className="text-center py-12 text-gray-500 text-sm">
+              <p className="text-2xl mb-2">📦</p>
+              <p>No SBOM scans yet.</p>
+              <p className="text-xs mt-1">Click "Scan now" to trigger a Trivy scan.</p>
+            </div>
           )}
         </div>
       )}
