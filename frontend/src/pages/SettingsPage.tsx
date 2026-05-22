@@ -75,310 +75,341 @@ export function SettingsPage() {
       ? `http://${master}/api/v1/ingest/grains`
       : null
 
+  const TABS = ['General', 'Bootstrap', 'Remote Access', 'Integrations', 'Advanced'] as const
+  type Tab = typeof TABS[number]
+  const [activeTab, setActiveTab] = useState<Tab>('General')
+
   if (isLoading) return <div className="p-6 text-gray-500">Loading…</div>
 
   const inputClass = 'w-full px-3 py-2 border border-gray-300 rounded-lg text-sm text-gray-900 focus:outline-none focus:border-brand-600'
   const monoInputClass = inputClass + ' font-mono'
 
   return (
-    <div className="space-y-8 max-w-2xl">
+    <div className="space-y-6 max-w-2xl">
       <div>
         <h1 className="text-2xl font-bold text-gray-900">Settings</h1>
-        <p className="text-gray-500 mt-1">Configure the kri fleet platform — Salt master, SSH credentials, and Ansible integration.</p>
+        <p className="text-gray-500 mt-1">Configure the kri fleet platform.</p>
       </div>
 
-      <div className="flex items-center gap-3">
-        <div className="h-px flex-1 bg-gray-200" />
-        <span className="text-xs font-semibold text-gray-400 uppercase tracking-wide">Required</span>
-        <div className="h-px flex-1 bg-gray-200" />
-      </div>
-
-      {/* kri External URL */}
-      <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-6 space-y-4">
-        <div>
-          <h2 className="text-base font-semibold text-gray-900">kri External URL</h2>
-          <p className="text-sm text-gray-500 mt-1">
-            The URL that Mac Minis use to call back to this kri server. Used to build the ingest endpoint
-            that Salt minions POST grain data to. Must be reachable from all managed nodes — use the
-            Tailscale IP or a LAN address, not <code className="text-xs bg-gray-100 px-1 rounded">localhost</code>.
-          </p>
-        </div>
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">kri server URL</label>
-          <input
-            type="text"
-            value={kriApiUrl}
-            onChange={(e) => setKriApiUrl(e.target.value)}
-            placeholder="http://100.89.50.27  or  http://kri.fleet.local"
-            className={monoInputClass}
-          />
-          <p className="text-xs text-gray-400 mt-1">Include the scheme (<code>http://</code> or <code>https://</code>). No trailing slash. Port is optional — omit for standard ports 80/443.</p>
-        </div>
-        {computedIngestUrl && (
-          <div className="bg-gray-50 border border-gray-200 rounded-lg px-3 py-2 flex items-center gap-2">
-            <span className="text-xs text-gray-400 shrink-0">Computed ingest URL:</span>
-            <code className="text-xs font-mono text-brand-700 truncate">{computedIngestUrl}</code>
-          </div>
-        )}
-      </div>
-
-      {/* Salt Master */}
-      <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-6 space-y-4">
-        <div>
-          <h2 className="text-base font-semibold text-gray-900">Salt Master</h2>
-          <p className="text-sm text-gray-500 mt-1">
-            Hostname or IP of the Salt master. Written into <code className="text-xs bg-gray-100 px-1 rounded">/etc/salt/minion</code> on each node during bootstrap.
-            If you are not running a dedicated Salt master, set this to the same address as the kri External URL above.
-          </p>
-        </div>
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">Master address (IP or DNS, no port)</label>
-          <input
-            type="text"
-            value={master}
-            onChange={(e) => setMaster(e.target.value)}
-            placeholder="100.89.50.27  or  salt.fleet.local"
-            className={monoInputClass}
-          />
-          <p className="text-xs text-gray-400 mt-1">Salt minions connect to this on port 4505/4506.</p>
-        </div>
-      </div>
-
-      {/* SSH Bootstrap credentials */}
-      <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-6 space-y-4">
-        <div>
-          <h2 className="text-base font-semibold text-gray-900">Default SSH Bootstrap Credentials</h2>
-          <p className="text-sm text-gray-500 mt-1">
-            Used as fallback when a node has no per-node SSH credentials set. Per-node credentials
-            (set in <strong>Edit Node</strong>) always take priority over these global defaults.
-          </p>
-        </div>
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">macOS admin username</label>
-          <input type="text" value={username} onChange={(e) => setUsername(e.target.value)}
-            placeholder="localadmin" className={inputClass} />
-        </div>
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">
-            macOS admin password
-            <span className="ml-2 text-xs font-normal text-gray-400">(stored encrypted, not shown after save)</span>
-          </label>
-          <div className="relative">
-            <input
-              type={showPassword ? 'text' : 'password'}
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              placeholder="Leave blank to keep existing"
-              className={inputClass + ' pr-16'}
-            />
-            <button type="button" onClick={() => setShowPassword(!showPassword)}
-              className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 p-1">
-              {showPassword ? (
-                <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.543 7a10.025 10.025 0 01-4.132 4.411m0 0L21 21" />
-                </svg>
-              ) : (
-                <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
-                </svg>
-              )}
-            </button>
-          </div>
-        </div>
-      </div>
-
-      {/* Remote Access Features */}
-      <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-6 space-y-4">
-        <div>
-          <h2 className="text-base font-semibold text-gray-900">Remote Access</h2>
-          <p className="text-sm text-gray-500 mt-1">
-            Control which remote access methods are available to operators.
-            Changes take effect immediately after saving.
-          </p>
-        </div>
-
-        <div className="flex items-center justify-between py-3 border-b border-gray-100">
-          <div>
-            <p className="text-sm font-medium text-gray-900">WebSSH Terminal</p>
-            <p className="text-xs text-gray-500 mt-0.5">
-              Browser-based SSH with keystroke recording and command blocking.
-              Always enabled — cannot be disabled.
-            </p>
-          </div>
-          <span className="text-xs bg-emerald-100 text-emerald-700 px-2 py-0.5 rounded font-medium">Always on</span>
-        </div>
-
-        <div className="flex items-center justify-between py-3">
-          <div>
-            <p className="text-sm font-medium text-gray-900">VNC Screen Share</p>
-            <p className="text-xs text-gray-500 mt-0.5">
-              Full graphical desktop access via browser (noVNC). Requires Screen Sharing
-              to be enabled on the Mac Mini (done automatically during bootstrap).
-              Sessions are logged but <strong>cannot be command-blocked</strong> — pixel stream only.
-            </p>
-          </div>
-          <button
-            type="button"
-            onClick={() => setVncEnabled(!vncEnabled)}
-            className={`relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 focus:outline-none ${
-              vncEnabled ? 'bg-brand-600' : 'bg-gray-300'
+      {/* Tab bar */}
+      <div className="flex border-b border-gray-200">
+        {TABS.map(tab => (
+          <button key={tab} onClick={() => setActiveTab(tab)}
+            className={`px-4 py-2.5 text-sm font-medium border-b-2 -mb-px transition-colors ${
+              activeTab === tab
+                ? 'border-brand-600 text-brand-700'
+                : 'border-transparent text-gray-500 hover:text-gray-700'
             }`}
-            role="switch"
-            aria-checked={vncEnabled}
           >
-            <span
-              className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ${
-                vncEnabled ? 'translate-x-5' : 'translate-x-0'
-              }`}
-            />
+            {tab}
           </button>
-        </div>
-
-        {vncEnabled && (
-          <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 text-xs text-amber-700">
-            VNC sessions are recorded but commands cannot be blocked (graphical pixel stream).
-            Ensure your security policy allows unfiltered screen access before enabling.
-          </div>
-        )}
+        ))}
       </div>
 
-      {/* Controller SSH public key */}
-      <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-6 space-y-3">
-        <div>
-          <h2 className="text-base font-semibold text-gray-900">Controller SSH Public Key</h2>
-          <p className="text-sm text-gray-500 mt-1">
-            Auto-generated key deployed to all Mac Minis during bootstrap via{' '}
-            <code className="text-xs bg-gray-100 px-1 rounded">authorized_key</code>. After bootstrap, kri uses this key for all future SSH connections — no password needed.
-          </p>
-        </div>
-        {data?.controller_pubkey ? (
-          <div className="relative">
-            <pre className="text-xs font-mono bg-gray-50 border border-gray-200 rounded-lg p-3 overflow-x-auto text-gray-700 whitespace-pre-wrap break-all">
-              {data.controller_pubkey}
-            </pre>
-            <button
-              onClick={() => { navigator.clipboard.writeText(data.controller_pubkey!); toast('Copied') }}
-              className="absolute top-2 right-2 text-xs text-gray-400 hover:text-gray-600 bg-white border border-gray-200 rounded px-2 py-0.5"
-            >
-              Copy
-            </button>
+      {/* General tab */}
+      {activeTab === 'General' && (
+        <div className="space-y-6">
+          {/* kri External URL */}
+          <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-6 space-y-4">
+            <div>
+              <h2 className="text-base font-semibold text-gray-900">kri External URL</h2>
+              <p className="text-sm text-gray-500 mt-1">
+                The URL that Mac Minis use to call back to this kri server. Used to build the ingest endpoint
+                that Salt minions POST grain data to. Must be reachable from all managed nodes — use the
+                Tailscale IP or a LAN address, not <code className="text-xs bg-gray-100 px-1 rounded">localhost</code>.
+              </p>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">kri server URL</label>
+              <input
+                type="text"
+                value={kriApiUrl}
+                onChange={(e) => setKriApiUrl(e.target.value)}
+                placeholder="http://100.89.50.27  or  http://kri.fleet.local"
+                className={monoInputClass}
+              />
+              <p className="text-xs text-gray-400 mt-1">Include the scheme (<code>http://</code> or <code>https://</code>). No trailing slash.</p>
+            </div>
+            {computedIngestUrl && (
+              <div className="bg-gray-50 border border-gray-200 rounded-lg px-3 py-2 flex items-center gap-2">
+                <span className="text-xs text-gray-400 shrink-0">Computed ingest URL:</span>
+                <code className="text-xs font-mono text-brand-700 truncate">{computedIngestUrl}</code>
+              </div>
+            )}
           </div>
-        ) : (
-          <p className="text-sm text-amber-700 bg-amber-50 border border-amber-200 rounded-lg p-3">
-            No keypair generated yet. Save settings once to generate the controller keypair.
-          </p>
-        )}
-      </div>
 
-      <div className="flex items-center gap-3">
-        <div className="h-px flex-1 bg-gray-200" />
-        <span className="text-xs font-semibold text-gray-400 uppercase tracking-wide">Optional / Advanced</span>
-        <div className="h-px flex-1 bg-gray-200" />
-      </div>
-
-      {/* Playbooks directory */}
-      <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-6 space-y-4">
-        <div>
-          <h2 className="text-base font-semibold text-gray-900">Playbooks Directory</h2>
-          <p className="text-sm text-gray-500 mt-1">Override the directory kri scans for Ansible playbooks and roles.</p>
-        </div>
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">Path to playbooks &amp; roles</label>
-          <input type="text" value={playbooksDir} onChange={(e) => setPlaybooksDir(e.target.value)}
-            placeholder="/home/user/my-playbooks  (default: <repo>/playbooks)"
-            className={monoInputClass} />
-          <p className="text-xs text-gray-400 mt-1">
-            Roles must be in a <code>roles/</code> subdirectory. Leave blank to use the built-in <code>playbooks/</code> folder.
-          </p>
-        </div>
-      </div>
-
-      {/* Pillar directory */}
-      <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-6 space-y-4">
-        <div>
-          <h2 className="text-base font-semibold text-gray-900">Salt Pillar Directory</h2>
-          <p className="text-sm text-gray-500 mt-1">
-            kri writes a per-node <code className="text-xs bg-gray-100 px-1 rounded">&lt;minion_id&gt;.sls</code> file here before every bootstrap. The Salt master reads from this directory to provide each minion with its ingest URL and node token.
-          </p>
-        </div>
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">Path to Salt pillar directory</label>
-          <input type="text" value={pillarDir} onChange={(e) => setPillarDir(e.target.value)}
-            placeholder="/srv/salt/pillar  (default)"
-            className={monoInputClass} />
-          <p className="text-xs text-gray-400 mt-1">Must be writable by the kri process.</p>
-        </div>
-      </div>
-
-      {/* Security Integrations */}
-      <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-6 space-y-4">
-        <div>
-          <h2 className="text-base font-semibold text-gray-900">Security Integrations</h2>
-          <p className="text-sm text-gray-500 mt-1">
-            Connect Checkmarx One (CxOne) and SonarQube for enhanced vulnerability and license scanning.
-          </p>
-        </div>
-        <div className="grid grid-cols-2 gap-4">
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">CxOne URL</label>
-            <input type="text" value={cxoneUrl} onChange={e => setCxoneUrl(e.target.value)}
-              placeholder="https://us.cxone.net" className={inputClass} />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              CxOne API Token <span className="text-xs text-gray-400 font-normal">(encrypted)</span>
-            </label>
-            <input type="password" value={cxoneToken} onChange={e => setCxoneToken(e.target.value)}
-              placeholder="Leave blank to keep existing" className={inputClass} />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">SonarQube URL</label>
-            <input type="text" value={sonarUrl} onChange={e => setSonarUrl(e.target.value)}
-              placeholder="http://sonarqube.utilities.svc.cluster.local:9000" className={inputClass} />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              SonarQube Token <span className="text-xs text-gray-400 font-normal">(encrypted)</span>
-            </label>
-            <input type="password" value={sonarToken} onChange={e => setSonarToken(e.target.value)}
-              placeholder="Leave blank to keep existing" className={inputClass} />
+          {/* Salt Master */}
+          <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-6 space-y-4">
+            <div>
+              <h2 className="text-base font-semibold text-gray-900">Salt Master</h2>
+              <p className="text-sm text-gray-500 mt-1">
+                Hostname or IP of the Salt master. Written into <code className="text-xs bg-gray-100 px-1 rounded">/etc/salt/minion</code> on each node during bootstrap.
+              </p>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Master address (IP or DNS, no port)</label>
+              <input
+                type="text"
+                value={master}
+                onChange={(e) => setMaster(e.target.value)}
+                placeholder="100.89.50.27  or  salt.fleet.local"
+                className={monoInputClass}
+              />
+              <p className="text-xs text-gray-400 mt-1">Salt minions connect to this on port 4505/4506.</p>
+            </div>
           </div>
         </div>
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">License Policy</label>
-          <select value={licensePolicy} onChange={e => setLicensePolicy(e.target.value)} className={inputClass}>
-            <option value="permissive">Permissive - flag GPL only</option>
-            <option value="strict">Strict - flag GPL + LGPL + unknown</option>
-          </select>
-          <p className="text-xs text-gray-400 mt-1">Controls which licenses are flagged as "high risk" in the Security dashboard.</p>
-        </div>
-      </div>
+      )}
 
-      {/* External Ansible endpoint */}
-      <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-6 space-y-4">
-        <div>
-          <h2 className="text-base font-semibold text-gray-900">External Ansible Endpoint</h2>
-          <p className="text-sm text-gray-500 mt-1">
-            Configure an AWX or Ansible Tower endpoint. When set, kri sends playbook jobs to this endpoint instead of running <code className="text-xs bg-gray-100 px-1 rounded">ansible-runner</code> locally.
-          </p>
-        </div>
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">Endpoint URL</label>
-          <input type="text" value={ansibleEndpoint} onChange={(e) => setAnsibleEndpoint(e.target.value)}
-            placeholder="https://awx.example.com" className={inputClass} />
-          <p className="text-xs text-gray-400 mt-1">Leave blank to use local ansible-runner.</p>
-        </div>
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">
-            API Token <span className="ml-2 text-xs font-normal text-gray-400">(stored encrypted)</span>
-          </label>
-          <input type="password" value={ansibleToken} onChange={(e) => setAnsibleToken(e.target.value)}
-            placeholder="Leave blank to keep existing" className={inputClass} />
-        </div>
-      </div>
+      {/* Bootstrap tab */}
+      {activeTab === 'Bootstrap' && (
+        <div className="space-y-6">
+          {/* SSH Bootstrap credentials */}
+          <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-6 space-y-4">
+            <div>
+              <h2 className="text-base font-semibold text-gray-900">Default SSH Bootstrap Credentials</h2>
+              <p className="text-sm text-gray-500 mt-1">
+                Used as fallback when a node has no per-node SSH credentials set.
+              </p>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">macOS admin username</label>
+              <input type="text" value={username} onChange={(e) => setUsername(e.target.value)}
+                placeholder="localadmin" className={inputClass} />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                macOS admin password
+                <span className="ml-2 text-xs font-normal text-gray-400">(stored encrypted, not shown after save)</span>
+              </label>
+              <div className="relative">
+                <input
+                  type={showPassword ? 'text' : 'password'}
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  placeholder="Leave blank to keep existing"
+                  className={inputClass + ' pr-16'}
+                />
+                <button type="button" onClick={() => setShowPassword(!showPassword)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 p-1">
+                  {showPassword ? (
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.543 7a10.025 10.025 0 01-4.132 4.411m0 0L21 21" />
+                    </svg>
+                  ) : (
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                    </svg>
+                  )}
+                </button>
+              </div>
+            </div>
+          </div>
 
-      <div className="flex justify-end">
+          {/* Controller SSH public key */}
+          <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-6 space-y-3">
+            <div>
+              <h2 className="text-base font-semibold text-gray-900">Controller SSH Public Key</h2>
+              <p className="text-sm text-gray-500 mt-1">
+                Auto-generated key deployed to all Mac Minis during bootstrap via{' '}
+                <code className="text-xs bg-gray-100 px-1 rounded">authorized_key</code>.
+              </p>
+            </div>
+            {data?.controller_pubkey ? (
+              <div className="relative">
+                <pre className="text-xs font-mono bg-gray-50 border border-gray-200 rounded-lg p-3 overflow-x-auto text-gray-700 whitespace-pre-wrap break-all">
+                  {data.controller_pubkey}
+                </pre>
+                <button
+                  onClick={() => { navigator.clipboard.writeText(data.controller_pubkey!); toast('Copied') }}
+                  className="absolute top-2 right-2 text-xs text-gray-400 hover:text-gray-600 bg-white border border-gray-200 rounded px-2 py-0.5"
+                >
+                  Copy
+                </button>
+              </div>
+            ) : (
+              <p className="text-sm text-amber-700 bg-amber-50 border border-amber-200 rounded-lg p-3">
+                No keypair generated yet. Save settings once to generate the controller keypair.
+              </p>
+            )}
+          </div>
+
+          {/* Pillar directory */}
+          <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-6 space-y-4">
+            <div>
+              <h2 className="text-base font-semibold text-gray-900">Salt Pillar Directory</h2>
+              <p className="text-sm text-gray-500 mt-1">
+                kri writes a per-node <code className="text-xs bg-gray-100 px-1 rounded">&lt;minion_id&gt;.sls</code> file here before every bootstrap.
+              </p>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Path to Salt pillar directory</label>
+              <input type="text" value={pillarDir} onChange={(e) => setPillarDir(e.target.value)}
+                placeholder="/srv/salt/pillar  (default)"
+                className={monoInputClass} />
+              <p className="text-xs text-gray-400 mt-1">Must be writable by the kri process.</p>
+            </div>
+          </div>
+
+          {/* Playbooks directory */}
+          <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-6 space-y-4">
+            <div>
+              <h2 className="text-base font-semibold text-gray-900">Playbooks Directory</h2>
+              <p className="text-sm text-gray-500 mt-1">Override the directory kri scans for Ansible playbooks and roles.</p>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Path to playbooks &amp; roles</label>
+              <input type="text" value={playbooksDir} onChange={(e) => setPlaybooksDir(e.target.value)}
+                placeholder="/home/user/my-playbooks  (default: <repo>/playbooks)"
+                className={monoInputClass} />
+              <p className="text-xs text-gray-400 mt-1">
+                Roles must be in a <code>roles/</code> subdirectory.
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Remote Access tab */}
+      {activeTab === 'Remote Access' && (
+        <div className="space-y-6">
+          <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-6 space-y-4">
+            <div>
+              <h2 className="text-base font-semibold text-gray-900">Remote Access</h2>
+              <p className="text-sm text-gray-500 mt-1">
+                Control which remote access methods are available to operators.
+                Changes take effect immediately after saving.
+              </p>
+            </div>
+
+            <div className="flex items-center justify-between py-3 border-b border-gray-100">
+              <div>
+                <p className="text-sm font-medium text-gray-900">WebSSH Terminal</p>
+                <p className="text-xs text-gray-500 mt-0.5">
+                  Browser-based SSH with keystroke recording and command blocking.
+                  Always enabled — cannot be disabled.
+                </p>
+              </div>
+              <span className="text-xs bg-emerald-100 text-emerald-700 px-2 py-0.5 rounded font-medium">Always on</span>
+            </div>
+
+            <div className="flex items-center justify-between py-3">
+              <div>
+                <p className="text-sm font-medium text-gray-900">VNC Screen Share</p>
+                <p className="text-xs text-gray-500 mt-0.5">
+                  Full graphical desktop access via browser (noVNC). Requires Screen Sharing
+                  to be enabled on the Mac Mini. Sessions are logged but <strong>cannot be command-blocked</strong>.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setVncEnabled(!vncEnabled)}
+                className={`relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 focus:outline-none ${
+                  vncEnabled ? 'bg-brand-600' : 'bg-gray-300'
+                }`}
+                role="switch"
+                aria-checked={vncEnabled}
+              >
+                <span
+                  className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ${
+                    vncEnabled ? 'translate-x-5' : 'translate-x-0'
+                  }`}
+                />
+              </button>
+            </div>
+
+            {vncEnabled && (
+              <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 text-xs text-amber-700">
+                VNC sessions are recorded but commands cannot be blocked (graphical pixel stream).
+                Ensure your security policy allows unfiltered screen access before enabling.
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Integrations tab */}
+      {activeTab === 'Integrations' && (
+        <div className="space-y-6">
+          {/* Security Integrations */}
+          <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-6 space-y-4">
+            <div>
+              <h2 className="text-base font-semibold text-gray-900">Security Integrations</h2>
+              <p className="text-sm text-gray-500 mt-1">
+                Connect Checkmarx One (CxOne) and SonarQube for enhanced vulnerability and license scanning.
+              </p>
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">CxOne URL</label>
+                <input type="text" value={cxoneUrl} onChange={e => setCxoneUrl(e.target.value)}
+                  placeholder="https://us.cxone.net" className={inputClass} />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  CxOne API Token <span className="text-xs text-gray-400 font-normal">(encrypted)</span>
+                </label>
+                <input type="password" value={cxoneToken} onChange={e => setCxoneToken(e.target.value)}
+                  placeholder="Leave blank to keep existing" className={inputClass} />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">SonarQube URL</label>
+                <input type="text" value={sonarUrl} onChange={e => setSonarUrl(e.target.value)}
+                  placeholder="http://sonarqube.utilities.svc.cluster.local:9000" className={inputClass} />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  SonarQube Token <span className="text-xs text-gray-400 font-normal">(encrypted)</span>
+                </label>
+                <input type="password" value={sonarToken} onChange={e => setSonarToken(e.target.value)}
+                  placeholder="Leave blank to keep existing" className={inputClass} />
+              </div>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">License Policy</label>
+              <select value={licensePolicy} onChange={e => setLicensePolicy(e.target.value)} className={inputClass}>
+                <option value="permissive">Permissive - flag GPL only</option>
+                <option value="strict">Strict - flag GPL + LGPL + unknown</option>
+              </select>
+              <p className="text-xs text-gray-400 mt-1">Controls which licenses are flagged as "high risk" in the Security dashboard.</p>
+            </div>
+          </div>
+
+          {/* External Ansible endpoint */}
+          <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-6 space-y-4">
+            <div>
+              <h2 className="text-base font-semibold text-gray-900">External Ansible Endpoint</h2>
+              <p className="text-sm text-gray-500 mt-1">
+                Configure an AWX or Ansible Tower endpoint. When set, kri sends playbook jobs to this endpoint instead of running <code className="text-xs bg-gray-100 px-1 rounded">ansible-runner</code> locally.
+              </p>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Endpoint URL</label>
+              <input type="text" value={ansibleEndpoint} onChange={(e) => setAnsibleEndpoint(e.target.value)}
+                placeholder="https://awx.example.com" className={inputClass} />
+              <p className="text-xs text-gray-400 mt-1">Leave blank to use local ansible-runner.</p>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                API Token <span className="ml-2 text-xs font-normal text-gray-400">(stored encrypted)</span>
+              </label>
+              <input type="password" value={ansibleToken} onChange={(e) => setAnsibleToken(e.target.value)}
+                placeholder="Leave blank to keep existing" className={inputClass} />
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Advanced tab */}
+      {activeTab === 'Advanced' && (
+        <div className="space-y-6">
+          <PlaybookSourcesSection />
+        </div>
+      )}
+
+      {/* Save button — always visible */}
+      <div className="flex justify-end pt-2">
         <button
           onClick={() => saveMutation.mutate()}
           disabled={saveMutation.isPending}
@@ -387,14 +418,6 @@ export function SettingsPage() {
           {saveMutation.isPending ? 'Saving…' : 'Save Settings'}
         </button>
       </div>
-
-      <div className="flex items-center gap-3">
-        <div className="h-px flex-1 bg-gray-200" />
-        <span className="text-xs font-semibold text-gray-400 uppercase tracking-wide">Playbook Sources</span>
-        <div className="h-px flex-1 bg-gray-200" />
-      </div>
-
-      <PlaybookSourcesSection />
     </div>
   )
 }

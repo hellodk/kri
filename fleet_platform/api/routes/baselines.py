@@ -120,3 +120,32 @@ async def get_baseline(
     if not baseline:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Baseline not found")
     return BaselineResponse.model_validate(baseline)
+
+
+@router.patch("/{baseline_id}", response_model=BaselineResponse)
+async def update_baseline(
+    baseline_id: uuid.UUID,
+    payload: dict,
+    db: AsyncSession = Depends(get_db),
+    claims: dict = Depends(require_role("operator", "admin")),
+):
+    from fleet_platform.core.audit import audit
+    result = await db.execute(
+        select(DesiredStateBaseline).where(DesiredStateBaseline.id == baseline_id)
+    )
+    baseline = result.scalar_one_or_none()
+    if not baseline:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Baseline not found")
+    if "name" in payload:
+        baseline.name = payload["name"]
+    if "state_json" in payload:
+        baseline.state_json = payload["state_json"]
+        baseline.version = baseline.version + 1
+    if "description" in payload:
+        baseline.description = payload["description"]
+    await audit(db, actor=claims["email"], action="baseline.update",
+                resource_type="baseline", resource_id=baseline_id,
+                new_value={"name": baseline.name})
+    await db.commit()
+    await db.refresh(baseline)
+    return BaselineResponse.model_validate(baseline)

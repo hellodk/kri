@@ -17,6 +17,7 @@ from fleet_platform.api.routes.provisioning import router as provisioning_router
 from fleet_platform.api.routes.security import router as security_router
 from fleet_platform.api.routes.webssh import router as webssh_router
 from fleet_platform.api.routes.vnc import router as vnc_router
+from fleet_platform.api.routes.audit import router as audit_router
 
 _log = get_logger(__name__)
 
@@ -69,6 +70,7 @@ def create_app() -> FastAPI:
     app.include_router(security_router, tags=["security"])
     app.include_router(webssh_router, tags=["webssh"])
     app.include_router(vnc_router, tags=["vnc"])
+    app.include_router(audit_router, tags=["audit"])
 
     @app.exception_handler(Exception)
     async def unhandled_exception_handler(request: Request, exc: Exception):
