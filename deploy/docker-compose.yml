@@ -68,6 +68,7 @@ services:
       - "4506:4506"   # ZeroMQ request/reply — minions send results here
     volumes:
       - salt-pillar:/srv/salt/pillar
+      - salt-master-pki:/etc/salt/pki/master   # persist accepted minion keys across restarts
       - ./salt-master.conf:/etc/salt/master.d/kri.conf:ro
       - ../salt/states:/srv/salt/states:ro
     healthcheck:
@@ -93,3 +94,4 @@ volumes:
   pgdata:
   redisdata:
   salt-pillar:
+  salt-master-pki:
