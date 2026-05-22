@@ -21,6 +21,7 @@ export function SettingsPage() {
   const [sonarUrl, setSonarUrl] = useState('')
   const [sonarToken, setSonarToken] = useState('')
   const [licensePolicy, setLicensePolicy] = useState('permissive')
+  const [vncEnabled, setVncEnabled] = useState(false)
 
   const { data, isLoading } = useQuery({
     queryKey: ['settings'],
@@ -38,6 +39,7 @@ export function SettingsPage() {
       if (data.cxone_url) setCxoneUrl(data.cxone_url)
       if (data.sonarqube_url) setSonarUrl(data.sonarqube_url)
       if (data.license_policy) setLicensePolicy(data.license_policy)
+      if (data.vnc_enabled !== undefined) setVncEnabled(data.vnc_enabled)
     }
   }, [data])
 
@@ -56,6 +58,7 @@ export function SettingsPage() {
       sonarqube_url: sonarUrl || undefined,
       sonarqube_token: sonarToken || undefined,
       license_policy: licensePolicy || undefined,
+      vnc_enabled: vncEnabled,
     }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['settings'] })
@@ -183,6 +186,61 @@ export function SettingsPage() {
             </button>
           </div>
         </div>
+      </div>
+
+      {/* Remote Access Features */}
+      <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-6 space-y-4">
+        <div>
+          <h2 className="text-base font-semibold text-gray-900">Remote Access</h2>
+          <p className="text-sm text-gray-500 mt-1">
+            Control which remote access methods are available to operators.
+            Changes take effect immediately after saving.
+          </p>
+        </div>
+
+        <div className="flex items-center justify-between py-3 border-b border-gray-100">
+          <div>
+            <p className="text-sm font-medium text-gray-900">WebSSH Terminal</p>
+            <p className="text-xs text-gray-500 mt-0.5">
+              Browser-based SSH with keystroke recording and command blocking.
+              Always enabled — cannot be disabled.
+            </p>
+          </div>
+          <span className="text-xs bg-emerald-100 text-emerald-700 px-2 py-0.5 rounded font-medium">Always on</span>
+        </div>
+
+        <div className="flex items-center justify-between py-3">
+          <div>
+            <p className="text-sm font-medium text-gray-900">VNC Screen Share</p>
+            <p className="text-xs text-gray-500 mt-0.5">
+              Full graphical desktop access via browser (noVNC). Requires Screen Sharing
+              to be enabled on the Mac Mini (done automatically during bootstrap).
+              Sessions are logged but <strong>cannot be command-blocked</strong> — pixel stream only.
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={() => setVncEnabled(!vncEnabled)}
+            className={`relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 focus:outline-none ${
+              vncEnabled ? 'bg-brand-600' : 'bg-gray-300'
+            }`}
+            role="switch"
+            aria-checked={vncEnabled}
+          >
+            <span
+              className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ${
+                vncEnabled ? 'translate-x-5' : 'translate-x-0'
+              }`}
+            />
+          </button>
+        </div>
+
+        {vncEnabled && (
+          <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 text-xs text-amber-700">
+            VNC sessions are recorded but commands cannot be blocked (graphical pixel stream).
+            Ensure your security policy allows unfiltered screen access before enabling.
+          </div>
+        )}
       </div>
 
       {/* Controller SSH public key */}

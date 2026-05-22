@@ -33,6 +33,7 @@ class PlatformSettingsUpdate(BaseModel):
     sonarqube_url: str | None = None
     sonarqube_token: str | None = None
     license_policy: str | None = None
+    vnc_enabled: bool = False
 
 
 class PlatformSettingsResponse(BaseModel):
@@ -48,3 +49,4 @@ class PlatformSettingsResponse(BaseModel):
     cxone_url: str | None = None
     sonarqube_url: str | None = None
     license_policy: str | None = None
+    vnc_enabled: bool = False

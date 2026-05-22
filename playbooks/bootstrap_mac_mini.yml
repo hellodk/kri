@@ -179,6 +179,15 @@
       delay: 5
       become: false
 
+    # ── Enable macOS Screen Sharing (VNC) ─────────────────────────────────────
+    - name: Enable macOS Screen Sharing (VNC on port 5900)
+      shell: |
+        /bin/launchctl load -w /System/Library/LaunchDaemons/com.apple.screensharing.plist 2>/dev/null || true
+        /usr/bin/defaults write /var/db/RealVNC/vncserver Enabled -bool true 2>/dev/null || true
+      become: true
+      failed_when: false
+      changed_when: false
+
     # ── Push initial grains to kri Fleet Platform ─────────────────────────────
     # Uses Ansible-gathered facts + live system commands (no salt-call, no sudo needed)
 

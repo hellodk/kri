@@ -12,6 +12,7 @@ export interface PlatformSettings {
   cxone_url: string | null
   sonarqube_url: string | null
   license_policy: string | null
+  vnc_enabled?: boolean
 }
 
 export interface BootstrapResponse {
@@ -97,6 +98,7 @@ export const ansibleApi = {
     sonarqube_url?: string
     sonarqube_token?: string
     license_policy?: string
+    vnc_enabled?: boolean
   }) => api.put<PlatformSettings>('/api/v1/settings', payload),
   bootstrap: (minion_id: string, target_ip: string, sshUsername?: string, sshPassword?: string) =>
     api.post<BootstrapResponse>('/api/v1/ansible/bootstrap', {

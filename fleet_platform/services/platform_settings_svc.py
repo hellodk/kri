@@ -28,6 +28,7 @@ CXONE_API_TOKEN = "cxone_api_token"
 SONARQUBE_URL = "sonarqube_url"
 SONARQUBE_TOKEN = "sonarqube_token"
 LICENSE_POLICY = "license_policy"  # "permissive" | "strict"
+VNC_ENABLED = "vnc_enabled"  # "true" | "false"
 
 
 def _fernet_key() -> bytes:

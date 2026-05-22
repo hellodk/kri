@@ -12,6 +12,7 @@ import { Skeleton } from '../components/Skeleton'
 import { ErrorState } from '../components/ErrorState'
 import { Pagination } from '../components/Pagination'
 import { WebSSHTerminal } from '../components/WebSSHTerminal'
+import { VNCViewer } from '../components/VNCViewer'
 import { formatDistanceToNow, format } from 'date-fns'
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts'
 import { useToastStore } from '../stores/toastStore'
@@ -38,6 +39,7 @@ export function NodeDetail() {
   const [tagValue, setTagValue] = useState('')
   const [collectingGrains, setCollectingGrains] = useState(false)
   const [showSSH, setShowSSH] = useState(false)
+  const [showVNC, setShowVNC] = useState(false)
   const qc = useQueryClient()
   const toast = useToastStore((s) => s.add)
 
@@ -96,6 +98,13 @@ export function NodeDetail() {
     staleTime: 60_000,
     enabled: !!nodeId && !!expandedRunId,
   })
+
+  const { data: platformSettings } = useQuery({
+    queryKey: ['settings'],
+    queryFn: ansibleApi.getSettings,
+    staleTime: 60_000,
+  })
+  const vncEnabled = platformSettings?.vnc_enabled ?? false
 
   const addTagMutation = useMutation({
     mutationFn: () => fleetApi.addTag(nodeId!, tagKey, tagValue),
@@ -194,6 +203,16 @@ export function NodeDetail() {
           >
             SSH
           </button>
+          {vncEnabled && (
+            <button
+              onClick={() => setShowVNC(true)}
+              disabled={node.status !== 'online'}
+              className="px-4 py-2 bg-purple-600 text-white text-sm font-medium rounded-lg hover:bg-purple-700 disabled:opacity-40 shadow-sm font-mono"
+              title={node.status !== 'online' ? 'Node must be online' : 'Open VNC screen share'}
+            >
+              VNC
+            </button>
+          )}
           <Link to="/fleet" className="text-sm text-brand-600 hover:underline">← Fleet</Link>
         </div>
       </div>
@@ -538,6 +557,14 @@ export function NodeDetail() {
           nodeId={node.id}
           nodeName={node.hostname ?? node.minion_id}
           onClose={() => setShowSSH(false)}
+        />
+      )}
+
+      {showVNC && (
+        <VNCViewer
+          nodeId={node.id}
+          nodeName={node.hostname ?? node.minion_id}
+          onClose={() => setShowVNC(false)}
         />
       )}
 

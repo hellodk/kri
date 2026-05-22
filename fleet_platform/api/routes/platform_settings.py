@@ -9,6 +9,7 @@ from fleet_platform.services.platform_settings_svc import (
     SALT_MASTER, SSH_USERNAME, SSH_PASSWORD, ANSIBLE_ENDPOINT_URL, ANSIBLE_API_TOKEN,
     PLAYBOOKS_DIR, PILLAR_DIR, KRI_API_URL,
     CXONE_URL, CXONE_API_TOKEN, SONARQUBE_URL, SONARQUBE_TOKEN, LICENSE_POLICY,
+    VNC_ENABLED,
     get_setting, set_setting,
 )
 from fleet_platform.services.ssh_keypair import ensure_controller_keypair, get_controller_pubkey
@@ -22,6 +23,8 @@ async def get_settings(
     _: dict = Depends(require_role("admin")),
 ):
     ensure_controller_keypair()
+    vnc_enabled_raw = await get_setting(db, VNC_ENABLED)
+    vnc_enabled = vnc_enabled_raw == "true"
     return PlatformSettingsResponse(
         salt_master_address=await get_setting(db, SALT_MASTER),
         kri_api_url=await get_setting(db, KRI_API_URL),
@@ -33,6 +36,7 @@ async def get_settings(
         cxone_url=await get_setting(db, CXONE_URL),
         sonarqube_url=await get_setting(db, SONARQUBE_URL),
         license_policy=await get_setting(db, LICENSE_POLICY),
+        vnc_enabled=vnc_enabled,
     )
 
 
@@ -69,6 +73,10 @@ async def update_settings(
         await set_setting(db, SONARQUBE_TOKEN, payload.sonarqube_token, encrypt=True)
     if payload.license_policy is not None:
         await set_setting(db, LICENSE_POLICY, payload.license_policy)
+    if payload.vnc_enabled is not None:
+        await set_setting(db, VNC_ENABLED, "true" if payload.vnc_enabled else "false")
+    vnc_enabled_raw = await get_setting(db, VNC_ENABLED)
+    vnc_enabled = vnc_enabled_raw == "true"
     return PlatformSettingsResponse(
         salt_master_address=await get_setting(db, SALT_MASTER),
         kri_api_url=await get_setting(db, KRI_API_URL),
@@ -80,4 +88,5 @@ async def update_settings(
         cxone_url=await get_setting(db, CXONE_URL),
         sonarqube_url=await get_setting(db, SONARQUBE_URL),
         license_policy=await get_setting(db, LICENSE_POLICY),
+        vnc_enabled=vnc_enabled,
     )
