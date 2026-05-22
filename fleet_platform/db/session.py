@@ -8,6 +8,8 @@ from sqlalchemy.orm import Session, sessionmaker
 from fleet_platform.core.config import settings
 
 # ── Async engine — used by FastAPI request handlers ──────────────────
+_DB_OPTS = {"options": "-c timescaledb.telemetry_level=off"}
+
 engine = create_async_engine(
     settings.database_url,
     echo=settings.is_development,
@@ -15,6 +17,7 @@ engine = create_async_engine(
     max_overflow=20,
     pool_timeout=30,
     pool_pre_ping=True,
+    connect_args=_DB_OPTS,
 )
 
 AsyncSessionLocal = async_sessionmaker(
@@ -31,6 +34,7 @@ sync_engine = create_engine(
     max_overflow=10,
     pool_timeout=30,
     pool_pre_ping=True,
+    connect_args=_DB_OPTS,
 )
 
 SyncSessionLocal = sessionmaker(sync_engine, expire_on_commit=False)
