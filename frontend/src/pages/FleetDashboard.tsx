@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { fleetApi } from '../api/fleet'
+import { api } from '../api/client'
 import { useAuthStore } from '../stores/authStore'
 import { useToastStore } from '../stores/toastStore'
 import { StatusBadge } from '../components/StatusBadge'
@@ -369,6 +370,10 @@ export function FleetDashboard() {
   const [deletingNode, setDeletingNode] = useState<Node | null>(null)
   const [selected, setSelected] = useState<Set<string>>(new Set())
   const [bulkDeleting, setBulkDeleting] = useState(false)
+  const [bulkGraining, setBulkGraining] = useState(false)
+  const [bulkScanning, setBulkScanning] = useState(false)
+  const [bulkApplying, setBulkApplying] = useState(false)
+  const [showSaltStateDropdown, setShowSaltStateDropdown] = useState(false)
 
   const user = useAuthStore((s) => s.user)
   const canManage = user?.role === 'admin' || user?.role === 'operator'
@@ -413,6 +418,13 @@ export function FleetDashboard() {
     staleTime: 30_000,
   })
 
+  const { data: saltStatesData } = useQuery({
+    queryKey: ['salt-states'],
+    queryFn: () => api.get<{ states: Array<{ name: string; path: string }> }>('/api/v1/salt/states'),
+    staleTime: 60_000,
+    enabled: showSaltStateDropdown,
+  })
+
   // Bulk select helpers — defined after nodes query so nodes is in scope
   const allIds = nodes?.items.map((n) => n.id) ?? []
   const allSelected = allIds.length > 0 && allIds.every((id) => selected.has(id))
@@ -441,6 +453,48 @@ export function FleetDashboard() {
     qc.invalidateQueries({ queryKey: ['nodes'] })
     qc.invalidateQueries({ queryKey: ['fleet-overview'] })
     toast(failed ? `Deleted with ${failed} error(s)` : `Deleted ${count} node(s)`, failed ? 'error' : 'success')
+  }
+
+  async function bulkCollectGrains() {
+    setBulkGraining(true)
+    const ids = [...selected]
+    for (let i = 0; i < ids.length; i++) {
+      try {
+        await api.post(`/api/v1/ansible/nodes/${ids[i]}/collect-grains`)
+        if (i < ids.length - 1) await new Promise((r) => setTimeout(r, 500))
+      } catch { /* continue */ }
+    }
+    setBulkGraining(false)
+    toast(`Queued grain collection for ${ids.length} node(s)`)
+  }
+
+  async function bulkTriggerSBOM() {
+    setBulkScanning(true)
+    const ids = [...selected]
+    for (let i = 0; i < ids.length; i++) {
+      try {
+        await api.post(`/api/v1/security/scan/${ids[i]}?scanner=trivy`, {})
+        if (i < ids.length - 1) await new Promise((r) => setTimeout(r, 500))
+      } catch { /* continue */ }
+    }
+    setBulkScanning(false)
+    toast(`Queued SBOM scan for ${ids.length} node(s)`)
+  }
+
+  async function bulkApplySaltState(state: string) {
+    if (!state) return
+    setBulkApplying(true)
+    const selectedNodes = nodes?.items.filter((n) => selected.has(n.id)) ?? []
+    const minionIds = selectedNodes.map((n) => n.minion_id)
+    try {
+      await api.post('/api/v1/salt/apply', { minion_ids: minionIds, state })
+      toast(`Applied state '${state}' to ${minionIds.length} node(s)`)
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : 'Failed to apply state'
+      toast(msg, 'error')
+    }
+    setBulkApplying(false)
+    setShowSaltStateDropdown(false)
   }
 
   return (
@@ -585,8 +639,48 @@ export function FleetDashboard() {
               <>
                 {/* Bulk action bar */}
                 {someSelected && canManage && (
-                  <div className="flex items-center gap-3 px-4 py-2 bg-brand-50 border-b border-brand-200">
+                  <div className="flex items-center flex-wrap gap-2 px-4 py-2 bg-brand-50 border-b border-brand-200">
                     <span className="text-sm font-medium text-brand-700">{selected.size} selected</span>
+                    <button
+                      onClick={bulkCollectGrains}
+                      disabled={bulkGraining}
+                      className="px-3 py-1 bg-brand-600 text-white text-xs font-medium rounded-lg hover:bg-brand-700 disabled:opacity-50"
+                    >
+                      {bulkGraining ? 'Collecting…' : 'Collect Grains'}
+                    </button>
+                    <button
+                      onClick={bulkTriggerSBOM}
+                      disabled={bulkScanning}
+                      className="px-3 py-1 bg-purple-600 text-white text-xs font-medium rounded-lg hover:bg-purple-700 disabled:opacity-50"
+                    >
+                      {bulkScanning ? 'Queuing…' : 'SBOM Scan'}
+                    </button>
+                    <div className="relative">
+                      <button
+                        onClick={() => setShowSaltStateDropdown(!showSaltStateDropdown)}
+                        className="px-3 py-1 bg-emerald-600 text-white text-xs font-medium rounded-lg hover:bg-emerald-700"
+                      >
+                        Apply Salt State ▾
+                      </button>
+                      {showSaltStateDropdown && (
+                        <div className="absolute left-0 top-full mt-1 z-30 bg-white border border-gray-200 rounded-lg shadow-lg min-w-[200px] py-1">
+                          {(saltStatesData?.states ?? []).length === 0 ? (
+                            <p className="px-3 py-2 text-xs text-gray-400">No states found</p>
+                          ) : (
+                            (saltStatesData?.states ?? []).map((s) => (
+                              <button
+                                key={s.name}
+                                onClick={() => bulkApplySaltState(s.name)}
+                                disabled={bulkApplying}
+                                className="w-full text-left px-3 py-1.5 text-xs text-gray-700 hover:bg-gray-50 font-mono disabled:opacity-50"
+                              >
+                                {s.name}
+                              </button>
+                            ))
+                          )}
+                        </div>
+                      )}
+                    </div>
                     <button
                       onClick={bulkDelete}
                       disabled={bulkDeleting}
@@ -594,8 +688,8 @@ export function FleetDashboard() {
                     >
                       {bulkDeleting ? 'Deleting…' : `Delete ${selected.size}`}
                     </button>
-                    <button onClick={() => setSelected(new Set())}
-                      className="text-xs text-brand-600 hover:text-brand-800">
+                    <button onClick={() => { setSelected(new Set()); setShowSaltStateDropdown(false) }}
+                      className="text-xs text-brand-600 hover:text-brand-800 ml-1">
                       Clear selection
                     </button>
                   </div>
@@ -637,7 +731,12 @@ export function FleetDashboard() {
                           )}
                         </td>
                         <td className="px-4 py-3">
-                          <StatusBadge status={node.status} />
+                          <div className="flex items-center gap-1.5 flex-wrap">
+                            <StatusBadge status={node.status} />
+                            {node.maintenance_mode && (
+                              <span className="text-xs px-1.5 py-0.5 rounded bg-amber-100 text-amber-700 border border-amber-200">⚙ Maint.</span>
+                            )}
+                          </div>
                         </td>
                         <td className="px-4 py-3 text-gray-600">{node.os_version ?? '—'}</td>
                         <td className="px-4 py-3">
