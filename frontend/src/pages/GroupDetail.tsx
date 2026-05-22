@@ -3,6 +3,7 @@ import { useParams, Link } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { groupsApi, type GroupCredentials } from '../api/groups'
 import { fleetApi } from '../api/fleet'
+import { groupSecretsApi } from '../api/groupSecrets'
 import { StatusBadge } from '../components/StatusBadge'
 import { DriftBadge } from '../components/DriftBadge'
 import { Skeleton } from '../components/Skeleton'
@@ -11,7 +12,7 @@ import { Pagination } from '../components/Pagination'
 import { useToastStore } from '../stores/toastStore'
 import { formatDistanceToNow } from 'date-fns'
 
-type GroupTab = 'Members' | 'Drift' | 'SSH'
+type GroupTab = 'Members' | 'Drift' | 'SSH' | 'Secrets'
 
 export function GroupDetail() {
   const { groupId } = useParams<{ groupId: string }>()
@@ -30,6 +31,11 @@ export function GroupDetail() {
   const [sessionMaxMins, setSessionMaxMins] = useState('')
   const [sessionRetentionDays, setSessionRetentionDays] = useState('')
   const [credFormInit, setCredFormInit] = useState(false)
+  // Secrets tab state
+  const [secretKey, setSecretKey] = useState('')
+  const [secretValue, setSecretValue] = useState('')
+  const [secretDesc, setSecretDesc] = useState('')
+  const [secretShowValue, setSecretShowValue] = useState(false)
 
   const { data: group, isLoading: gLoading, isError: gError } = useQuery({
     queryKey: ['group', groupId],
@@ -116,6 +122,35 @@ export function GroupDetail() {
     onError: (e: Error) => toast(e.message, 'error'),
   })
 
+  const { data: groupSecrets } = useQuery({
+    queryKey: ['group-secrets', groupId],
+    queryFn: () => groupSecretsApi.list(groupId!),
+    staleTime: 30_000,
+    enabled: !!groupId && activeTab === 'Secrets',
+  })
+
+  const addGroupSecretMutation = useMutation({
+    mutationFn: () =>
+      groupSecretsApi.upsert(groupId!, secretKey.trim(), secretValue, secretDesc.trim() || undefined),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['group-secrets', groupId] })
+      setSecretKey('')
+      setSecretValue('')
+      setSecretDesc('')
+      toast('Secret saved')
+    },
+    onError: (e: Error) => toast(e.message, 'error'),
+  })
+
+  const deleteGroupSecretMutation = useMutation({
+    mutationFn: (key: string) => groupSecretsApi.delete(groupId!, key),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['group-secrets', groupId] })
+      toast('Secret deleted')
+    },
+    onError: (e: Error) => toast(e.message, 'error'),
+  })
+
   if (gLoading) return <Skeleton rows={4} />
   if (gError || !group) return <ErrorState message="Group not found" />
 
@@ -171,7 +206,7 @@ export function GroupDetail() {
 
       {/* Tab bar */}
       <div className="flex border-b border-gray-200">
-        {(['Members', 'Drift', 'SSH'] as GroupTab[]).map(tab => (
+        {(['Members', 'Drift', 'SSH', 'Secrets'] as GroupTab[]).map(tab => (
           <button key={tab} onClick={() => setActiveTab(tab)}
             className={`px-4 py-2.5 text-sm font-medium border-b-2 -mb-px transition-colors ${
               activeTab === tab
@@ -398,6 +433,120 @@ export function GroupDetail() {
         )}
       </div>}
 
+      {/* Secrets section */}
+      {activeTab === 'Secrets' && (
+        <div className="space-y-4">
+          <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 flex items-start gap-3">
+            <span className="text-amber-500 text-lg mt-0.5">ℹ</span>
+            <p className="text-sm text-amber-800">
+              These secrets are available to all group members as{' '}
+              <code className="font-mono bg-amber-100 px-1 rounded">{'{{ pillar[\'key\'] }}'}</code>{' '}
+              in Salt states.
+            </p>
+          </div>
+
+          <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
+            <div className="px-4 py-3 border-b border-gray-200">
+              <p className="text-sm font-semibold text-gray-700">Group Secrets</p>
+              <p className="text-xs text-gray-400 mt-0.5">Values are write-only and never displayed.</p>
+            </div>
+            {!groupSecrets || groupSecrets.length === 0 ? (
+              <div className="px-4 py-8 text-center text-gray-400 text-sm">No secrets stored for this group.</div>
+            ) : (
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="bg-gray-50 border-b border-gray-200 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide">
+                    <th className="px-4 py-3">Key</th>
+                    <th className="px-4 py-3">Description</th>
+                    <th className="px-4 py-3">Last Updated</th>
+                    <th className="px-4 py-3 w-20"></th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-100">
+                  {groupSecrets.map((s) => (
+                    <tr key={s.key} className="hover:bg-gray-50">
+                      <td className="px-4 py-3 font-mono font-medium text-gray-900">{s.key}</td>
+                      <td className="px-4 py-3 text-gray-500 text-xs">{s.description ?? '—'}</td>
+                      <td className="px-4 py-3 text-gray-400 text-xs">
+                        {new Date(s.updated_at).toLocaleString()}
+                      </td>
+                      <td className="px-4 py-3 text-right">
+                        <button
+                          onClick={() => deleteGroupSecretMutation.mutate(s.key)}
+                          disabled={deleteGroupSecretMutation.isPending}
+                          className="text-xs text-red-600 hover:text-red-700 font-medium disabled:opacity-50"
+                        >
+                          Delete
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
+          </div>
+
+          <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-4 space-y-3">
+            <p className="text-sm font-semibold text-gray-700">Add / Update Secret</p>
+            <form
+              onSubmit={(e) => { e.preventDefault(); addGroupSecretMutation.mutate() }}
+              className="space-y-3"
+            >
+              <div className="flex gap-3 flex-wrap">
+                <div className="flex-1 min-w-32">
+                  <label className="block text-xs text-gray-500 mb-1">Key</label>
+                  <input
+                    value={secretKey}
+                    onChange={(e) => setSecretKey(e.target.value)}
+                    placeholder="e.g. jenkins_url"
+                    required
+                    className="w-full text-sm border border-gray-300 rounded px-2 py-1.5 font-mono focus:outline-none focus:ring-2 focus:ring-brand-400"
+                  />
+                </div>
+                <div className="flex-1 min-w-40">
+                  <label className="block text-xs text-gray-500 mb-1">Value</label>
+                  <div className="relative">
+                    <input
+                      type={secretShowValue ? 'text' : 'password'}
+                      value={secretValue}
+                      onChange={(e) => setSecretValue(e.target.value)}
+                      placeholder="Secret value"
+                      required
+                      className="w-full text-sm border border-gray-300 rounded px-2 py-1.5 pr-16 focus:outline-none focus:ring-2 focus:ring-brand-400"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setSecretShowValue((v) => !v)}
+                      className="absolute right-2 top-1/2 -translate-y-1/2 text-xs text-gray-400 hover:text-gray-600"
+                    >
+                      {secretShowValue ? 'Hide' : 'Show'}
+                    </button>
+                  </div>
+                </div>
+                <div className="flex-1 min-w-32">
+                  <label className="block text-xs text-gray-500 mb-1">Description (optional)</label>
+                  <input
+                    value={secretDesc}
+                    onChange={(e) => setSecretDesc(e.target.value)}
+                    placeholder="Brief description"
+                    className="w-full text-sm border border-gray-300 rounded px-2 py-1.5 focus:outline-none focus:ring-2 focus:ring-brand-400"
+                  />
+                </div>
+              </div>
+              <div className="flex justify-end">
+                <button
+                  type="submit"
+                  disabled={addGroupSecretMutation.isPending || !secretKey.trim() || !secretValue}
+                  className="px-4 py-2 bg-brand-600 text-white text-sm rounded-lg hover:bg-brand-700 disabled:opacity-50 font-medium"
+                >
+                  {addGroupSecretMutation.isPending ? 'Saving…' : 'Save Secret'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
       {/* Members table */}
       {activeTab === 'Members' && <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
         <div className="px-4 py-3 border-b border-gray-200 flex items-center justify-between">
@@ -464,6 +613,9 @@ export function GroupDetail() {
                       <Link to={`/nodes/${n.id}`} className="text-brand-600 hover:underline font-medium">
                         {n.hostname ?? n.minion_id}
                       </Link>
+                      {n.ip_address && (
+                        <p className="text-xs text-gray-400 mt-0.5 font-mono">{n.ip_address}</p>
+                      )}
                     </td>
                     <td className="px-4 py-3"><StatusBadge status={n.status} /></td>
                     <td className="px-4 py-3"><DriftBadge score={n.drift_score} /></td>
