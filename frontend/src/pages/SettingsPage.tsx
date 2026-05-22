@@ -22,6 +22,7 @@ export function SettingsPage() {
   const [sonarToken, setSonarToken] = useState('')
   const [licensePolicy, setLicensePolicy] = useState('permissive')
   const [vncEnabled, setVncEnabled] = useState(false)
+  const [timezone, setTimezone] = useState(() => localStorage.getItem('kri_timezone') ?? '')
 
   const { data, isLoading } = useQuery({
     queryKey: ['settings'],
@@ -156,6 +157,45 @@ export function SettingsPage() {
                 className={monoInputClass}
               />
               <p className="text-xs text-gray-400 mt-1">Salt minions connect to this on port 4505/4506.</p>
+            </div>
+          </div>
+
+          {/* Display Timezone */}
+          <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-6 space-y-4">
+            <div>
+              <h2 className="text-base font-semibold text-gray-900">Display Timezone</h2>
+              <p className="text-sm text-gray-500 mt-1">
+                Controls how timestamps are displayed throughout the dashboard. Stored in your browser — not synced to the server.
+              </p>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Timezone</label>
+              <select
+                value={timezone}
+                onChange={(e) => {
+                  const tz = e.target.value
+                  setTimezone(tz)
+                  if (tz) {
+                    localStorage.setItem('kri_timezone', tz)
+                  } else {
+                    localStorage.removeItem('kri_timezone')
+                  }
+                  toast('Timezone updated')
+                }}
+                className={inputClass}
+              >
+                <option value="">Browser default ({Intl.DateTimeFormat().resolvedOptions().timeZone})</option>
+                <option value="UTC">UTC</option>
+                <option value="America/Los_Angeles">US/Pacific (America/Los_Angeles)</option>
+                <option value="America/New_York">US/Eastern (America/New_York)</option>
+                <option value="America/Chicago">US/Central (America/Chicago)</option>
+                <option value="Europe/London">Europe/London</option>
+                <option value="Europe/Amsterdam">Europe/Amsterdam</option>
+                <option value="Asia/Kolkata">Asia/Kolkata (IST)</option>
+                <option value="Asia/Singapore">Asia/Singapore</option>
+                <option value="Australia/Sydney">Australia/Sydney</option>
+              </select>
+              <p className="text-xs text-gray-400 mt-1">Changes apply immediately — no save needed.</p>
             </div>
           </div>
         </div>
