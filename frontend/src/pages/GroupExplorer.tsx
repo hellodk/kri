@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { groupsApi } from '../api/groups'
+import { useToastStore } from '../stores/toastStore'
 import { Skeleton } from '../components/Skeleton'
 import { ErrorState } from '../components/ErrorState'
 import { Pagination } from '../components/Pagination'
@@ -14,7 +15,10 @@ export function GroupExplorer() {
   const [description, setDescription] = useState('')
   const [type, setType] = useState<'static' | 'dynamic'>('static')
   const [predicate, setPredicate] = useState('{"and": []}')
+  const [selected, setSelected] = useState<Set<string>>(new Set())
+  const [bulkDeleting, setBulkDeleting] = useState(false)
   const qc = useQueryClient()
+  const toast = useToastStore((s) => s.add)
 
   const { data, isLoading, isError, refetch } = useQuery({
     queryKey: ['groups', page],
@@ -43,6 +47,34 @@ export function GroupExplorer() {
       setPredicate('{"and": []}')
     },
   })
+
+  // Bulk select helpers
+  const allIds = data?.items.map((g) => g.id) ?? []
+  const allSelected = allIds.length > 0 && allIds.every((id) => selected.has(id))
+  const someSelected = allIds.some((id) => selected.has(id))
+  const indeterminate = someSelected && !allSelected
+
+  function toggleAll() {
+    if (allSelected) setSelected(new Set())
+    else setSelected(new Set(allIds))
+  }
+
+  function toggleOne(id: string) {
+    const next = new Set(selected)
+    next.has(id) ? next.delete(id) : next.add(id)
+    setSelected(next)
+  }
+
+  async function bulkDelete() {
+    const count = selected.size
+    if (!confirm(`Delete ${count} group${count === 1 ? '' : 's'}? This cannot be undone.`)) return
+    setBulkDeleting(true)
+    await Promise.all([...selected].map((id) => groupsApi.delete(id)))
+    setBulkDeleting(false)
+    setSelected(new Set())
+    qc.invalidateQueries({ queryKey: ['groups'] })
+    toast(`Deleted ${count} group${count === 1 ? '' : 's'}`)
+  }
 
   return (
     <div className="space-y-6">
@@ -108,9 +140,38 @@ export function GroupExplorer() {
           <ErrorState message="Failed to load groups" retry={refetch} />
         ) : (
           <>
+            {/* Bulk action bar */}
+            {selected.size > 0 && (
+              <div className="flex items-center flex-wrap gap-2 px-4 py-2 bg-red-50 border-b border-red-200">
+                <span className="text-sm font-medium text-red-700">{selected.size} group{selected.size === 1 ? '' : 's'} selected</span>
+                <button
+                  onClick={bulkDelete}
+                  disabled={bulkDeleting}
+                  className="px-3 py-1 bg-red-600 text-white text-xs font-medium rounded-lg hover:bg-red-700 disabled:opacity-50"
+                >
+                  {bulkDeleting ? 'Deleting…' : 'Delete selected'}
+                </button>
+                <button
+                  onClick={() => setSelected(new Set())}
+                  className="text-xs text-red-600 hover:text-red-800 ml-1"
+                >
+                  Clear selection
+                </button>
+              </div>
+            )}
+
             <table className="w-full text-sm">
               <thead>
                 <tr className="bg-gray-50 border-b border-gray-200 text-left text-xs text-gray-500 uppercase">
+                  <th className="pl-4 py-3 w-8">
+                    <input
+                      type="checkbox"
+                      checked={allSelected}
+                      ref={(el) => { if (el) el.indeterminate = indeterminate }}
+                      onChange={toggleAll}
+                      className="accent-brand-600 cursor-pointer"
+                    />
+                  </th>
                   <th className="px-4 py-3">Name</th>
                   <th className="px-4 py-3">Type</th>
                   <th className="px-4 py-3">Members</th>
@@ -120,7 +181,15 @@ export function GroupExplorer() {
               </thead>
               <tbody className="divide-y divide-gray-100">
                 {data?.items.map((g) => (
-                  <tr key={g.id} className="hover:bg-gray-50">
+                  <tr key={g.id} className={`hover:bg-gray-50 ${selected.has(g.id) ? 'bg-red-50/40' : ''}`}>
+                    <td className="pl-4 py-3 w-8">
+                      <input
+                        type="checkbox"
+                        checked={selected.has(g.id)}
+                        onChange={() => toggleOne(g.id)}
+                        className="accent-brand-600 cursor-pointer"
+                      />
+                    </td>
                     <td className="px-4 py-3">
                       <Link to={`/groups/${g.id}`} className="text-brand-600 hover:underline font-medium">{g.name}</Link>
                       {g.description && <p className="text-xs text-gray-400">{g.description}</p>}
@@ -139,7 +208,7 @@ export function GroupExplorer() {
                             deleteMutation.mutate(g.id)
                           }
                         }}
-                        disabled={deleteMutation.isPending}
+                        disabled={deleteMutation.isPending || bulkDeleting}
                         className="text-xs text-red-500 hover:text-red-700 font-medium disabled:opacity-50"
                       >
                         Delete
