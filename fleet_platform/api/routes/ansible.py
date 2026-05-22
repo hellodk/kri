@@ -5,7 +5,7 @@ import uuid
 from datetime import UTC, datetime
 from pathlib import Path
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
+from fastapi import APIRouter, Body, Depends, HTTPException, Query, Request, status
 from sqlalchemy import func
 
 _MINION_ID_RE = re.compile(r'^[a-zA-Z0-9._-]{1,128}$')
@@ -597,3 +597,85 @@ async def get_ansible_job(
         rc=job.rc,
         created_at=job.created_at,
     )
+
+
+@router.get("/files")
+async def list_playbook_files(
+    db: AsyncSession = Depends(get_db),
+    _: dict = Depends(require_role("operator", "admin")),
+):
+    """Return the full recursive file tree of the playbooks directory."""
+    from fleet_platform.services.platform_settings_svc import get_playbooks_dir
+    playbooks_dir = await get_playbooks_dir(db)
+
+    def _walk(path: Path, rel: str = "") -> list[dict]:
+        items = []
+        try:
+            entries = sorted(path.iterdir(), key=lambda p: (p.is_file(), p.name))
+        except PermissionError:
+            return items
+        for entry in entries:
+            entry_rel = f"{rel}/{entry.name}".lstrip("/")
+            if entry.name.startswith(".") or entry.name == "__pycache__":
+                continue
+            if entry.is_dir():
+                items.append({
+                    "name": entry.name,
+                    "path": entry_rel,
+                    "type": "dir",
+                    "children": _walk(entry, entry_rel),
+                })
+            else:
+                items.append({
+                    "name": entry.name,
+                    "path": entry_rel,
+                    "type": "file",
+                    "size": entry.stat().st_size,
+                    "ext": entry.suffix.lstrip("."),
+                })
+        return items
+
+    return {"root": str(playbooks_dir), "tree": _walk(playbooks_dir)}
+
+
+@router.get("/files/content")
+async def get_playbook_file(
+    path: str = Query(..., description="Relative path within playbooks dir"),
+    db: AsyncSession = Depends(get_db),
+    _: dict = Depends(require_role("operator", "admin")),
+):
+    """Return the content of a file in the playbooks directory."""
+    from fleet_platform.services.platform_settings_svc import get_playbooks_dir
+    playbooks_dir = await get_playbooks_dir(db)
+    target = (playbooks_dir / path).resolve()
+    # Security: must remain inside playbooks_dir
+    if not str(target).startswith(str(playbooks_dir.resolve())):
+        raise HTTPException(status_code=400, detail="Path traversal not allowed")
+    if not target.exists() or not target.is_file():
+        raise HTTPException(status_code=404, detail="File not found")
+    try:
+        content = target.read_text(errors="replace")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+    return {"path": path, "content": content, "size": target.stat().st_size}
+
+
+@router.put("/files/content")
+async def update_playbook_file(
+    path: str = Query(..., description="Relative path within playbooks dir"),
+    payload: dict = Body(...),
+    db: AsyncSession = Depends(get_db),
+    claims: dict = Depends(require_role("admin")),
+):
+    """Write content to a file in the playbooks directory. Admin only."""
+    from fleet_platform.services.platform_settings_svc import get_playbooks_dir
+    playbooks_dir = await get_playbooks_dir(db)
+    target = (playbooks_dir / path).resolve()
+    if not str(target).startswith(str(playbooks_dir.resolve())):
+        raise HTTPException(status_code=400, detail="Path traversal not allowed")
+    content = payload.get("content", "")
+    if not isinstance(content, str):
+        raise HTTPException(status_code=422, detail="content must be a string")
+    target.parent.mkdir(parents=True, exist_ok=True)
+    target.write_text(content)
+    return {"path": path, "size": target.stat().st_size, "saved": True}

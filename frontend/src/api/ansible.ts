@@ -55,6 +55,15 @@ export interface BootstrapHistoryResponse {
   per_page: number
 }
 
+export interface FileNode {
+  name: string
+  path: string
+  type: 'file' | 'dir'
+  size?: number
+  ext?: string
+  children?: FileNode[]
+}
+
 export const ansibleApi = {
   getSettings: () => api.get<PlatformSettings>('/api/v1/settings'),
   updateSettings: (payload: {
@@ -88,4 +97,7 @@ export const ansibleApi = {
     api.get<{ filename: string; content: string }>(`/api/v1/ansible/playbooks/content?filename=${encodeURIComponent(filename)}`),
   collectGrains: (nodeId: string) =>
     api.post<{ task_id: string; node_id: string; status: string }>(`/api/v1/ansible/nodes/${nodeId}/collect-grains`),
+  listFiles: () => api.get<{root: string, tree: FileNode[]}>('/api/v1/ansible/files'),
+  getFileContent: (path: string) => api.get<{path: string, content: string, size: number}>(`/api/v1/ansible/files/content?path=${encodeURIComponent(path)}`),
+  updateFileContent: (path: string, content: string) => api.put<{path: string, saved: boolean}>(`/api/v1/ansible/files/content?path=${encodeURIComponent(path)}`, { content }),
 }

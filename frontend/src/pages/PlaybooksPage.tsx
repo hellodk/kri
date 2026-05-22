@@ -7,10 +7,12 @@ import type { PlatformSettings } from '../api/ansible'
 import { Skeleton } from '../components/Skeleton'
 import { ErrorState } from '../components/ErrorState'
 import { PlaybookRunModal } from './PlaybookRunModal'
+import { PlaybookFileBrowser } from '../components/PlaybookFileBrowser'
 
 export function PlaybooksPage() {
   const [selected, setSelected] = useState<PlaybookEntry | null>(null)
   const [pendingRun, setPendingRun] = useState<PlaybookEntry | null>(null)
+  const [activeTab, setActiveTab] = useState<'playbooks' | 'files'>('playbooks')
 
   const { data, isLoading, isError, refetch } = useQuery({
     queryKey: ['playbooks'],
@@ -36,7 +38,25 @@ export function PlaybooksPage() {
         </p>
       </div>
 
-      {isLoading ? (
+      <div className="flex border-b border-gray-200">
+        {(['playbooks', 'files'] as const).map((tab) => (
+          <button
+            key={tab}
+            onClick={() => setActiveTab(tab)}
+            className={`px-4 py-2 text-sm font-medium border-b-2 -mb-px transition-colors ${
+              activeTab === tab
+                ? 'border-brand-600 text-brand-700'
+                : 'border-transparent text-gray-500 hover:text-gray-700'
+            }`}
+          >
+            {tab === 'files' ? '📁 Files' : '▶ Playbooks & Roles'}
+          </button>
+        ))}
+      </div>
+
+      {activeTab === 'files' ? (
+        <PlaybookFileBrowser />
+      ) : isLoading ? (
         <Skeleton rows={4} />
       ) : isError ? (
         <ErrorState message="Failed to load playbooks" retry={refetch} />
