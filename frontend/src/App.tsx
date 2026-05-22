@@ -20,6 +20,7 @@ import { ProvisioningPage } from './pages/ProvisioningPage'
 import { SecurityPage } from './pages/SecurityPage'
 import { AuditPage } from './pages/AuditPage'
 import { SaltKeysPage } from './pages/SaltKeysPage'
+import { SaltOpsPage } from './pages/SaltOpsPage'
 import { saltKeysApi } from './api/saltKeys'
 import { useSaltKeysStore } from './stores/saltKeysStore'
 import { useToastStore } from './stores/toastStore'
@@ -97,6 +98,7 @@ export default function App() {
             <Route path="/security" element={<SecurityPage />} />
             <Route path="/audit" element={<AuditPage />} />
             <Route path="/salt-keys" element={<SaltKeysPage />} />
+            <Route path="/salt-ops" element={<SaltOpsPage />} />
             <Route path="/settings" element={<SettingsPage />} />
           </Route>
         </Routes>

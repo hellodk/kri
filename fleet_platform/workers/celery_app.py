@@ -14,6 +14,7 @@ celery_app = Celery(
         "fleet_platform.workers.ansible_tasks",
         "fleet_platform.workers.playbook_tasks",
         "fleet_platform.workers.security_tasks",
+        "fleet_platform.workers.salt_tasks",
     ],
 )
 
@@ -43,6 +44,10 @@ celery_app.conf.update(
         "cleanup-old-bootstrap-runs": {
             "task": "fleet_platform.workers.maintenance.cleanup_old_bootstrap_runs",
             "schedule": crontab(hour=3, minute=0),
+        },
+        "refresh-all-node-grains": {
+            "task": "fleet_platform.workers.ansible_tasks.refresh_all_node_grains",
+            "schedule": crontab(hour="*/6", minute=0),
         },
     },
 )

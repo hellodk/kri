@@ -1,0 +1,7 @@
+# Salt pillar top file — managed by kri (auto-regenerated)
+# Do not edit manually; use kri Node Secrets / Group Secrets UI
+base:
+  '*':
+    - common
+  'mm3':
+    - mm3

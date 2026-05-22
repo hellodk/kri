@@ -41,7 +41,9 @@ services:
         condition: service_healthy
     volumes:
       - salt-pillar:/srv/salt/pillar
+      - salt-master-pki:/etc/salt/pki/master   # read/write minion keys via API
       - /home/dk/Documents/git/pulse:/mnt/pulse:ro   # host playbook repos
+      - ../salt/states:/srv/salt/states:ro
 
   worker:
     build:
@@ -60,6 +62,7 @@ services:
       - ~/.ssh:/root/.ssh:ro
       - ~/.kri:/root/.kri:ro
       - /home/dk/Documents/git/pulse:/mnt/pulse:ro   # host playbook repos
+      - /var/run/docker.sock:/var/run/docker.sock
 
   salt-master:
     image: saltstack/salt:latest
