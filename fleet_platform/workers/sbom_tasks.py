@@ -56,6 +56,83 @@ def index_sbom(self, node_id: str, file_path: str) -> dict:
 
 
 @celery_app.task(
+    name="fleet_platform.workers.sbom_tasks.index_sbom_from_grains",
+    bind=True,
+    max_retries=3,
+    queue="sbom",
+    autoretry_for=(Exception,),
+    retry_backoff=True,
+)
+def index_sbom_from_grains(self, node_id: str) -> dict:
+    """Build an SBOM from package data in the latest grain facts and index it."""
+    from datetime import UTC, datetime
+    from fleet_platform.models.facts import NodeFact
+
+    node_uuid = _uuid.UUID(node_id)
+
+    with get_sync_db() as db:
+        fact = db.execute(
+            select(NodeFact)
+            .where(NodeFact.node_id == node_uuid)
+            .order_by(NodeFact.collected_at.desc())
+            .limit(1)
+        ).scalar_one_or_none()
+
+        if not fact:
+            return {"status": "no_facts"}
+
+        grains = fact.grains
+        # Merge all package sources: Salt pkgs, Homebrew, pip
+        pkgs: dict[str, str] = {}
+        for key in ("pkgs", "brew_pkgs", "pip_pkgs"):
+            val = grains.get(key)
+            if isinstance(val, dict):
+                pkgs.update(val)
+
+        if not pkgs:
+            return {"status": "no_packages"}
+
+        # Build minimal CycloneDX-compatible structure for SBOMParser
+        components = [
+            {
+                "name": name,
+                "version": str(ver) if ver else None,
+                "type": "library",
+                "purl": f"pkg:brew/{name}@{ver}" if ver else f"pkg:brew/{name}",
+                "licenses": [],
+                "cpes": [],
+            }
+            for name, ver in pkgs.items()
+        ]
+
+        cyclonedx = {
+            "bomFormat": "CycloneDX",
+            "specVersion": "1.4",
+            "metadata": {
+                "timestamp": datetime.now(UTC).isoformat(),
+                "tools": [{"name": "kri-grain-ingest", "version": "1"}],
+            },
+            "components": components,
+        }
+
+        parser = SBOMParser()
+        scan, parsed_components = parser.parse_cyclonedx(node_id, cyclonedx)
+
+        db.add(scan)
+        db.flush()
+        if parsed_components:
+            db.bulk_insert_mappings(
+                SBOMComponent,
+                [{"scan_id": scan.id, "node_id": node_uuid, **c} for c in parsed_components],
+            )
+        db.commit()
+        scan_id = scan.id
+
+    archive_old_scans.delay(node_id=node_id, keep_count=3)
+    return {"status": "indexed", "node_id": node_id, "component_count": len(parsed_components)}
+
+
+@celery_app.task(
     name="fleet_platform.workers.sbom_tasks.archive_old_scans",
     bind=True,
     max_retries=3,

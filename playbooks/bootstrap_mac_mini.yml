@@ -180,16 +180,47 @@
       become: false
 
     # ── Push initial grains to kri Fleet Platform ─────────────────────────────
-    # Use Ansible-gathered facts rather than salt-call (avoids sudo/config deps)
-    - name: Collect additional system info for grains
-      shell: |
-        sw_vers -productVersion 2>/dev/null || true
+    # Uses Ansible-gathered facts + live system commands (no salt-call, no sudo needed)
+
+    - name: Collect macOS version
+      shell: sw_vers -productVersion 2>/dev/null || true
       register: sw_vers_result
       changed_when: false
       become: false
       failed_when: false
 
-    - name: Push Ansible facts as grains to kri ingest API
+    - name: Collect CPU core count
+      shell: sysctl -n hw.logicalcpu 2>/dev/null || echo "0"
+      register: cpu_cores_result
+      changed_when: false
+      become: false
+      failed_when: false
+
+    - name: Collect RAM in MB
+      shell: "python3 -c \"import subprocess; r=subprocess.run(['sysctl','-n','hw.memsize'],capture_output=True,text=True); print(int(r.stdout.strip())//1024//1024)\" 2>/dev/null || echo '0'"
+      register: ram_mb_result
+      changed_when: false
+      become: false
+      failed_when: false
+
+    - name: Collect installed Homebrew packages
+      shell: "{{ brew_prefix }}/bin/brew list --versions 2>/dev/null || true"
+      register: brew_list_result
+      changed_when: false
+      become: false
+      become_user: "{{ brew_user }}"
+      environment:
+        PATH: "{{ brew_prefix }}/bin:/usr/local/bin:/usr/bin:/bin"
+        HOME: "/Users/{{ brew_user }}"
+      failed_when: false
+
+    - name: Parse brew packages into dict
+      set_fact:
+        brew_pkgs: "{{ brew_pkgs | default({}) | combine({item.split()[0]: item.split()[1] | default('')}) }}"
+      loop: "{{ brew_list_result.stdout_lines | default([]) | select('match', '^[a-zA-Z].*') | list }}"
+      when: brew_list_result.rc == 0 and brew_list_result.stdout != ''
+
+    - name: Push Ansible facts + packages as grains to kri ingest API
       uri:
         url: "{{ ingest_url }}/grains"
         method: POST
@@ -210,11 +241,12 @@
             kernel: "Darwin"
             kernelrelease: "{{ ansible_kernel | default('') }}"
             cpuarch: "{{ ansible_architecture | default(uname_result.stdout | trim) }}"
-            num_cpus: "{{ ansible_processor_cores | default(0) }}"
-            mem_total: "{{ ansible_memtotal_mb | default(0) }}"
+            num_cpus: "{{ cpu_cores_result.stdout | trim | int | default(0) }}"
+            mem_total: "{{ ram_mb_result.stdout | trim | int | default(0) }}"
             ip4_interfaces:
               "{{ ansible_default_ipv4.interface | default('en0') }}":
                 - "{{ ansible_default_ipv4.address | default('') }}"
+            brew_pkgs: "{{ brew_pkgs | default({}) }}"
         status_code: [200, 201, 204]
         timeout: 30
       become: false

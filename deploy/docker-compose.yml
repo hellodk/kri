@@ -46,7 +46,7 @@ services:
     build:
       context: ..
       dockerfile: deploy/Dockerfile.api
-    command: ["uv", "run", "celery", "-A", "fleet_platform.workers.celery_app", "worker", "--queues", "default,maintenance", "--concurrency", "2", "--loglevel", "info"]
+    command: ["uv", "run", "celery", "-A", "fleet_platform.workers.celery_app", "worker", "--queues", "default,maintenance,drift,sbom", "--concurrency", "4", "--loglevel", "info"]
     restart: unless-stopped
     env_file: ../.env.docker
     depends_on:

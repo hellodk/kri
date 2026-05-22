@@ -180,6 +180,15 @@ async def ingest_grains(
     await db.commit()
     compute_drift.delay(str(node.id))
 
+    # Auto-trigger SBOM indexing when grains contain package data
+    grains = payload.grains
+    has_packages = bool(
+        grains.get("pkgs") or grains.get("brew_pkgs") or grains.get("pip_pkgs")
+    )
+    if has_packages:
+        from fleet_platform.workers.sbom_tasks import index_sbom_from_grains
+        index_sbom_from_grains.delay(str(node.id))
+
     return {"status": "ok", "node_id": str(node.id)}
 
 

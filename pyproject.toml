@@ -1,6 +1,6 @@
 [build-system]
 requires = ["setuptools>=61"]
-build-backend = "setuptools.backends.legacy:build"
+build-backend = "setuptools.build_meta"
 
 [project]
 name = "fleet-platform"
@@ -38,6 +38,10 @@ dev = [
     "pytest-cov>=6.0.0",
     "ruff>=0.8.0",
 ]
+
+# Only package fleet_platform — exclude playbooks/ and other top-level dirs.
+[tool.setuptools.packages.find]
+include = ["fleet_platform*"]
 
 # Version is read dynamically from the VERSION file — do not add it here.
 # Single source of truth: edit VERSION, everything else follows.
