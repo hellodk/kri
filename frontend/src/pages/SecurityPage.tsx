@@ -247,6 +247,47 @@ function NodeSecurityDrawer({ nodeId, onClose }: { nodeId: string; onClose: () =
   )
 }
 
+// ── Types for PAM sessions ────────────────────────────────────────────────────
+
+interface SSHSessionRow {
+  id: string
+  node_id: string
+  user_id: string | null
+  started_at: string
+  ended_at: string | null
+  source_ip: string | null
+  credential_source: string
+  status: string
+  alert_count: number
+  target_ip: string | null
+  ssh_user: string | null
+}
+
+interface SecurityEventRow {
+  id: string
+  session_id: string | null
+  node_id: string | null
+  event_type: string
+  command: string | null
+  severity: string
+  detail: string | null
+  created_at: string
+}
+
+const EVENT_SEVERITY_COLORS: Record<string, string> = {
+  critical: 'bg-red-100 text-red-800 border-red-200',
+  warning: 'bg-amber-100 text-amber-800 border-amber-200',
+  info: 'bg-blue-50 text-blue-700 border-blue-200',
+}
+
+const SESSION_STATUS_COLORS: Record<string, string> = {
+  active: 'bg-emerald-100 text-emerald-800',
+  closed: 'bg-gray-100 text-gray-600',
+  killed: 'bg-red-100 text-red-800',
+  timed_out: 'bg-amber-100 text-amber-700',
+  blocked: 'bg-orange-100 text-orange-800',
+}
+
 // ── Main page ─────────────────────────────────────────────────────────────────
 
 export function SecurityPage() {
@@ -258,6 +299,19 @@ export function SecurityPage() {
     queryKey: ['security-dashboard'],
     queryFn: () => api.get<any>('/api/v1/security/dashboard'),
     staleTime: 60_000,
+  })
+
+  const { data: activeSessions } = useQuery({
+    queryKey: ['ssh-sessions-active'],
+    queryFn: () => api.get<{ items: SSHSessionRow[] }>('/api/v1/ssh/sessions?status=active&limit=20'),
+    refetchInterval: 10_000,
+  })
+
+  const { data: recentEvents } = useQuery({
+    queryKey: ['security-events-recent'],
+    queryFn: () => api.get<{ items: SecurityEventRow[] }>('/api/v1/ssh/events?limit=20'),
+    staleTime: 30_000,
+    refetchInterval: 30_000,
   })
 
   const { data: nodes, isLoading: nodesLoading } = useQuery({
@@ -437,6 +491,108 @@ export function SecurityPage() {
               ))}
             </tbody>
           </table>
+        )}
+      </div>
+
+      {/* Active PAM Sessions */}
+      <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
+        <div className="px-5 py-3 border-b border-gray-100 bg-gray-50 flex items-center justify-between">
+          <h2 className="text-sm font-semibold text-gray-700">Active SSH Sessions (PAM)</h2>
+          <span className="text-xs text-gray-400">
+            {activeSessions?.items.filter(s => s.status === 'active').length ?? 0} live
+          </span>
+        </div>
+        {!activeSessions?.items.length ? (
+          <div className="flex items-center justify-center h-16 text-gray-400 text-sm">
+            No active sessions
+          </div>
+        ) : (
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="text-left text-xs font-semibold text-gray-500 uppercase tracking-wide bg-gray-50 border-b border-gray-100">
+                <th className="px-4 py-3">Node ID</th>
+                <th className="px-4 py-3">SSH User</th>
+                <th className="px-4 py-3">Source IP</th>
+                <th className="px-4 py-3">Credentials</th>
+                <th className="px-4 py-3">Started</th>
+                <th className="px-4 py-3">Status</th>
+                <th className="px-4 py-3 text-red-600">Alerts</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-gray-100">
+              {activeSessions.items.map(s => (
+                <tr key={s.id} className="hover:bg-gray-50 transition-colors">
+                  <td className="px-4 py-2 font-mono text-xs text-gray-700">
+                    {s.target_ip ?? s.node_id.slice(0, 8)}
+                  </td>
+                  <td className="px-4 py-2 font-mono text-xs">{s.ssh_user ?? '—'}</td>
+                  <td className="px-4 py-2 text-xs text-gray-500">{s.source_ip ?? '—'}</td>
+                  <td className="px-4 py-2 text-xs text-gray-500">{s.credential_source}</td>
+                  <td className="px-4 py-2 text-xs text-gray-400">
+                    {new Date(s.started_at).toLocaleTimeString()}
+                  </td>
+                  <td className="px-4 py-2">
+                    <span className={`text-xs px-2 py-0.5 rounded font-medium ${SESSION_STATUS_COLORS[s.status] ?? 'bg-gray-100 text-gray-600'}`}>
+                      {s.status}
+                    </span>
+                  </td>
+                  <td className="px-4 py-2 text-center">
+                    {s.alert_count > 0 ? (
+                      <span className="text-xs font-bold text-red-600">{s.alert_count}</span>
+                    ) : (
+                      <span className="text-xs text-gray-300">0</span>
+                    )}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+      </div>
+
+      {/* Recent Security Events */}
+      <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
+        <div className="px-5 py-3 border-b border-gray-100 bg-gray-50 flex items-center justify-between">
+          <h2 className="text-sm font-semibold text-gray-700">Security Event Feed</h2>
+          <button
+            onClick={() => qc.invalidateQueries({ queryKey: ['security-events-recent'] })}
+            className="text-xs text-brand-600 hover:text-brand-700"
+          >
+            Refresh
+          </button>
+        </div>
+        {!recentEvents?.items.length ? (
+          <div className="flex items-center justify-center h-16 text-gray-400 text-sm">
+            No security events recorded
+          </div>
+        ) : (
+          <div className="divide-y divide-gray-100">
+            {recentEvents.items.map(ev => (
+              <div key={ev.id} className="px-4 py-2.5 flex items-start gap-3 hover:bg-gray-50">
+                <span
+                  className={`shrink-0 text-xs px-2 py-0.5 rounded border font-medium mt-0.5 ${
+                    EVENT_SEVERITY_COLORS[ev.severity] ?? EVENT_SEVERITY_COLORS.info
+                  }`}
+                >
+                  {ev.event_type}
+                </span>
+                <div className="flex-1 min-w-0">
+                  {ev.command && (
+                    <p className="text-xs font-mono text-gray-800 truncate">{ev.command}</p>
+                  )}
+                  {ev.detail && !ev.command && (
+                    <p className="text-xs text-gray-500 truncate">{ev.detail}</p>
+                  )}
+                  {ev.node_id && (
+                    <p className="text-xs text-gray-400 mt-0.5">{ev.node_id.slice(0, 8)}</p>
+                  )}
+                </div>
+                <span className="shrink-0 text-xs text-gray-400">
+                  {new Date(ev.created_at).toLocaleTimeString()}
+                </span>
+              </div>
+            ))}
+          </div>
         )}
       </div>
 

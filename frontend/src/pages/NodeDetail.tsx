@@ -11,6 +11,7 @@ import { DriftBadge } from '../components/DriftBadge'
 import { Skeleton } from '../components/Skeleton'
 import { ErrorState } from '../components/ErrorState'
 import { Pagination } from '../components/Pagination'
+import { WebSSHTerminal } from '../components/WebSSHTerminal'
 import { formatDistanceToNow, format } from 'date-fns'
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts'
 import { useToastStore } from '../stores/toastStore'
@@ -36,6 +37,7 @@ export function NodeDetail() {
   const [tagKey, setTagKey] = useState('')
   const [tagValue, setTagValue] = useState('')
   const [collectingGrains, setCollectingGrains] = useState(false)
+  const [showSSH, setShowSSH] = useState(false)
   const qc = useQueryClient()
   const toast = useToastStore((s) => s.add)
 
@@ -183,7 +185,17 @@ export function NodeDetail() {
               : 'Never seen'}
           </p>
         </div>
-        <Link to="/fleet" className="text-sm text-brand-600 hover:underline">← Fleet</Link>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => setShowSSH(true)}
+            disabled={node.status !== 'online'}
+            className="px-4 py-2 bg-emerald-600 text-white text-sm font-medium rounded-lg hover:bg-emerald-700 disabled:opacity-40 shadow-sm font-mono"
+            title={node.status !== 'online' ? 'Node must be online' : 'Open SSH terminal'}
+          >
+            SSH
+          </button>
+          <Link to="/fleet" className="text-sm text-brand-600 hover:underline">← Fleet</Link>
+        </div>
       </div>
 
       <div className="border-b border-gray-200 flex gap-1">
@@ -519,6 +531,14 @@ export function NodeDetail() {
             <Pagination page={execPage} total={executions.total} perPage={executions.per_page} onPage={setExecPage} />
           )}
         </div>
+      )}
+
+      {showSSH && (
+        <WebSSHTerminal
+          nodeId={node.id}
+          nodeName={node.hostname ?? node.minion_id}
+          onClose={() => setShowSSH(false)}
+        />
       )}
 
       {tab === 'bootstrap-history' && (
