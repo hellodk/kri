@@ -9,6 +9,8 @@ from fleet_platform.models.execution import ExecutionJob, ExecutionResult
 from fleet_platform.models.audit import AuditEvent
 from fleet_platform.models.platform_setting import PlatformSetting
 from fleet_platform.models.ansible_job import AnsibleJob
+from fleet_platform.models.node_secret import NodeSecret
+from fleet_platform.models.group_secret import GroupSecret
 
 __all__ = [
     "Base", "TimestampMixin",
@@ -22,4 +24,6 @@ __all__ = [
     "AuditEvent",
     "PlatformSetting",
     "AnsibleJob",
+    "NodeSecret",
+    "GroupSecret",
 ]

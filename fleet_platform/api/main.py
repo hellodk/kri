@@ -18,6 +18,10 @@ from fleet_platform.api.routes.security import router as security_router
 from fleet_platform.api.routes.webssh import router as webssh_router
 from fleet_platform.api.routes.vnc import router as vnc_router
 from fleet_platform.api.routes.audit import router as audit_router
+from fleet_platform.api.routes.salt_keys import router as salt_keys_router
+from fleet_platform.api.routes.node_secrets import router as node_secrets_router
+from fleet_platform.api.routes.group_secrets import router as group_secrets_router
+from fleet_platform.api.routes.salt_ops import router as salt_ops_router
 
 _log = get_logger(__name__)
 
@@ -49,7 +53,7 @@ def create_app() -> FastAPI:
         CORSMiddleware,
         allow_origins=[settings.frontend_origin],
         allow_credentials=True,
-        allow_methods=["GET", "POST", "PATCH", "DELETE"],
+        allow_methods=["GET", "POST", "PATCH", "PUT", "DELETE"],
         allow_headers=["Authorization", "Content-Type", "X-Node-Token"],
     )
 
@@ -71,6 +75,10 @@ def create_app() -> FastAPI:
     app.include_router(webssh_router, tags=["webssh"])
     app.include_router(vnc_router, tags=["vnc"])
     app.include_router(audit_router, tags=["audit"])
+    app.include_router(salt_keys_router, tags=["salt"])
+    app.include_router(node_secrets_router, tags=["node-secrets"])
+    app.include_router(group_secrets_router, tags=["group-secrets"])
+    app.include_router(salt_ops_router, tags=["salt-ops"])
 
     @app.exception_handler(Exception)
     async def unhandled_exception_handler(request: Request, exc: Exception):
