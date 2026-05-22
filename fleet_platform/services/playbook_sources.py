@@ -13,6 +13,40 @@ logger = logging.getLogger(__name__)
 _GIT_CACHE_DIR = Path(os.environ.get("KRI_GIT_CACHE", str(Path.home() / ".kri" / "git-repos")))
 
 
+def _translate_path(host_path: str) -> str:
+    """Translate a host-side path to its container equivalent using PLAYBOOK_PATH_MAP.
+
+    The env var format is ``host_prefix:container_prefix`` with multiple
+    entries separated by commas, e.g.::
+
+        PLAYBOOK_PATH_MAP=/home/dk/Documents/git/pulse:/mnt/pulse,/data:/mnt/data
+
+    The first matching prefix wins.  If no mapping matches the path is
+    returned unchanged.
+    """
+    raw_map = os.environ.get("PLAYBOOK_PATH_MAP", "").strip()
+    if not raw_map:
+        return host_path
+
+    for entry in raw_map.split(","):
+        entry = entry.strip()
+        if not entry or ":" not in entry:
+            continue
+        # Split on the *first* colon only so Windows-style paths survive
+        colon_idx = entry.index(":")
+        host_prefix = entry[:colon_idx]
+        container_prefix = entry[colon_idx + 1:]
+        if host_path.startswith(host_prefix):
+            translated = container_prefix + host_path[len(host_prefix):]
+            logger.debug(
+                "playbook path translated: %s → %s (map entry: %s:%s)",
+                host_path, translated, host_prefix, container_prefix,
+            )
+            return translated
+
+    return host_path
+
+
 def _default_clone_path(url: str) -> str:
     repo_name = url.rstrip("/").split("/")[-1].replace(".git", "")
     return str(_GIT_CACHE_DIR / repo_name)
@@ -51,11 +85,20 @@ def get_all_playbook_dirs(settings_value: str | None, builtin_dir: Path) -> list
     for src in sources:
         src_type = src.get("type", "local")
         if src_type == "local":
-            p = Path(src.get("path", ""))
+            raw = src.get("path", "")
+            translated = _translate_path(raw)
+            p = Path(translated)
             if p.is_dir():
                 dirs.append(p)
             else:
-                logger.warning("playbook source path does not exist: %s", p)
+                # Log both the original and translated paths to ease debugging
+                if raw != translated:
+                    logger.warning(
+                        "playbook source path does not exist: %s (translated from host path: %s)",
+                        p, raw,
+                    )
+                else:
+                    logger.warning("playbook source path does not exist: %s", p)
         elif src_type == "git":
             try:
                 p = _sync_git_source(

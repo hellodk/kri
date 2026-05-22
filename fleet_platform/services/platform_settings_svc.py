@@ -61,10 +61,15 @@ async def get_setting(db: AsyncSession, key: str) -> str | None:
 
 
 async def get_playbooks_dir(db: AsyncSession) -> Path:
-    """Return the configured playbooks directory, falling back to repo default."""
+    """Return the configured playbooks directory, falling back to repo default.
+
+    Applies PLAYBOOK_PATH_MAP translation so host-side paths resolve correctly
+    inside Docker containers where volumes are mounted at different prefixes.
+    """
+    from fleet_platform.services.playbook_sources import _translate_path
     custom = await get_setting(db, PLAYBOOKS_DIR)
     if custom:
-        return Path(custom)
+        return Path(_translate_path(custom))
     return _DEFAULT_PLAYBOOKS_DIR
 
 

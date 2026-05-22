@@ -267,7 +267,7 @@ export function SettingsPage() {
                 Roles must be in a <code>roles/</code> subdirectory.
               </p>
               <p className="text-xs text-gray-400 mt-1">
-                Docker deployment: host paths are mounted at <code>/mnt/</code> — e.g. <code>/home/dk/Documents/git/pulse/ansible</code> is available as <code>/mnt/pulse/ansible</code>.
+                Paths are auto-translated inside Docker: <code>/home/dk/Documents/git/pulse</code> → <code>/mnt/pulse</code>. Enter the host path; kri maps it automatically.
               </p>
             </div>
           </div>
