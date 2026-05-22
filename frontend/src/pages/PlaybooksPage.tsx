@@ -7,12 +7,12 @@ import type { PlatformSettings } from '../api/ansible'
 import { Skeleton } from '../components/Skeleton'
 import { ErrorState } from '../components/ErrorState'
 import { PlaybookRunModal } from './PlaybookRunModal'
-import { PlaybookFileBrowser } from '../components/PlaybookFileBrowser'
+import { PlaybookDrawer } from '../components/PlaybookDrawer'
 
 export function PlaybooksPage() {
   const [selected, setSelected] = useState<PlaybookEntry | null>(null)
   const [pendingRun, setPendingRun] = useState<PlaybookEntry | null>(null)
-  const [activeTab, setActiveTab] = useState<'playbooks' | 'files'>('playbooks')
+  const [openPlaybook, setOpenPlaybook] = useState<PlaybookEntry | null>(null)
 
   const { data, isLoading, isError, refetch } = useQuery({
     queryKey: ['playbooks'],
@@ -34,29 +34,11 @@ export function PlaybooksPage() {
       <div>
         <h1 className="text-2xl font-bold text-gray-900">Playbooks</h1>
         <p className="text-gray-500 mt-1 text-sm">
-          Run Ansible playbooks and roles. Click <strong>View YAML</strong> to inspect content and runtime configuration before running.
+          Run Ansible playbooks and roles. Click <strong>Files</strong> to explore the dependency tree and edit files inline.
         </p>
       </div>
 
-      <div className="flex border-b border-gray-200">
-        {(['playbooks', 'files'] as const).map((tab) => (
-          <button
-            key={tab}
-            onClick={() => setActiveTab(tab)}
-            className={`px-4 py-2 text-sm font-medium border-b-2 -mb-px transition-colors ${
-              activeTab === tab
-                ? 'border-brand-600 text-brand-700'
-                : 'border-transparent text-gray-500 hover:text-gray-700'
-            }`}
-          >
-            {tab === 'files' ? '📁 Files' : '▶ Playbooks & Roles'}
-          </button>
-        ))}
-      </div>
-
-      {activeTab === 'files' ? (
-        <PlaybookFileBrowser />
-      ) : isLoading ? (
+      {isLoading ? (
         <Skeleton rows={4} />
       ) : isError ? (
         <ErrorState message="Failed to load playbooks" retry={refetch} />
@@ -67,7 +49,13 @@ export function PlaybooksPage() {
               <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wide">Playbooks</h2>
               <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
                 {playbooks.map((p) => (
-                  <PlaybookCard key={p.filename} entry={p} settings={settings ?? null} onRun={() => setPendingRun(p)} />
+                  <PlaybookCard
+                    key={p.filename}
+                    entry={p}
+                    settings={settings ?? null}
+                    onRun={() => setPendingRun(p)}
+                    onExplore={() => setOpenPlaybook(p)}
+                  />
                 ))}
               </div>
             </section>
@@ -78,7 +66,13 @@ export function PlaybooksPage() {
               <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wide">Roles</h2>
               <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
                 {roles.map((r) => (
-                  <PlaybookCard key={r.filename} entry={r} settings={settings ?? null} onRun={() => setPendingRun(r)} />
+                  <PlaybookCard
+                    key={r.filename}
+                    entry={r}
+                    settings={settings ?? null}
+                    onRun={() => setPendingRun(r)}
+                    onExplore={() => setOpenPlaybook(r)}
+                  />
                 ))}
               </div>
             </section>
@@ -115,6 +109,8 @@ export function PlaybooksPage() {
       )}
 
       {selected && <PlaybookRunModal playbook={selected} onClose={() => setSelected(null)} />}
+
+      {openPlaybook && <PlaybookDrawer playbook={openPlaybook} onClose={() => setOpenPlaybook(null)} />}
     </div>
   )
 }
@@ -123,21 +119,13 @@ function PlaybookCard({
   entry,
   settings,
   onRun,
+  onExplore,
 }: {
   entry: PlaybookEntry
   settings: PlatformSettings | null
   onRun: () => void
+  onExplore: () => void
 }) {
-  const [showYaml, setShowYaml] = useState(false)
-  const [showConfig, setShowConfig] = useState(false)
-
-  const { data: yamlData, isLoading: yamlLoading } = useQuery({
-    queryKey: ['playbook-content', entry.filename],
-    queryFn: () => ansibleApi.playbookContent(entry.filename),
-    enabled: showYaml,
-    staleTime: 5 * 60_000,
-  })
-
   const varCount = Object.keys(entry.default_vars).length
 
   const kriApiUrl = settings?.kri_api_url ?? null
@@ -178,6 +166,8 @@ function PlaybookCard({
       value: settings?.pillar_dir ?? '/srv/salt/pillar (default)',
     },
   ]
+  // configRows is kept for future use (e.g. tooltip or info panel)
+  void configRows
 
   return (
     <div className="bg-white rounded-xl border border-gray-200 shadow-sm flex flex-col hover:border-brand-300 transition-colors">
@@ -223,76 +213,20 @@ function PlaybookCard({
         )}
       </div>
 
-      {/* YAML viewer */}
-      {showYaml && (
-        <div className="border-t border-gray-100">
-          {/* Tab bar */}
-          <div className="flex border-b border-gray-100">
-            <button
-              onClick={() => setShowConfig(false)}
-              className={`flex-1 px-3 py-2 text-xs font-medium transition-colors ${
-                !showConfig ? 'text-brand-700 border-b-2 border-brand-600 bg-brand-50/40' : 'text-gray-500 hover:text-gray-700'
-              }`}
-            >
-              YAML
-            </button>
-            <button
-              onClick={() => setShowConfig(true)}
-              className={`flex-1 px-3 py-2 text-xs font-medium transition-colors ${
-                showConfig ? 'text-brand-700 border-b-2 border-brand-600 bg-brand-50/40' : 'text-gray-500 hover:text-gray-700'
-              }`}
-            >
-              Runtime Config
-            </button>
-          </div>
-
-          {!showConfig ? (
-            <div className="max-h-72 overflow-auto bg-gray-950 rounded-b-none">
-              {yamlLoading ? (
-                <p className="text-xs text-gray-400 p-4">Loading…</p>
-              ) : yamlData ? (
-                <pre className="text-xs font-mono text-green-300 p-4 whitespace-pre overflow-x-auto leading-relaxed">
-                  {yamlData.content}
-                </pre>
-              ) : (
-                <p className="text-xs text-red-400 p-4">Failed to load YAML</p>
-              )}
-            </div>
-          ) : (
-            <div className="max-h-72 overflow-auto bg-gray-50 p-3 space-y-1.5">
-              <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">
-                Variables injected by kri at runtime
-              </p>
-              {configRows.map((row) => (
-                <div key={row.label} className="flex gap-2 text-xs">
-                  <span className="font-mono text-gray-500 w-44 shrink-0">{row.label}</span>
-                  <span className={`font-mono truncate ${row.warn ? 'text-amber-600' : 'text-gray-800'}`}>
-                    {row.value}
-                  </span>
-                </div>
-              ))}
-              <p className="text-xs text-gray-400 pt-2 border-t border-gray-200 mt-2">
-                Per-node SSH credentials override the default SSH user when set on a node.
-              </p>
-            </div>
-          )}
-        </div>
-      )}
-
       {/* Footer actions */}
       <div className="px-5 pb-5 pt-3 flex gap-2 border-t border-gray-100 mt-auto">
         <button
-          onClick={() => { setShowYaml(!showYaml); if (showYaml) setShowConfig(false) }}
+          onClick={onExplore}
           className="flex-1 px-3 py-2 border border-gray-200 text-gray-600 text-xs font-medium rounded-lg hover:bg-gray-50"
         >
-          {showYaml ? 'Hide' : 'View YAML'}
+          🗂 Files
         </button>
         <button
           onClick={onRun}
           disabled={entry.lint_errors.length > 0}
           className="flex-1 px-3 py-2 bg-brand-600 text-white text-xs font-medium rounded-lg hover:bg-brand-700 shadow-sm disabled:opacity-40 disabled:cursor-not-allowed"
         >
-          Run
+          ▶ Run
         </button>
       </div>
     </div>

@@ -64,6 +64,20 @@ export interface FileNode {
   children?: FileNode[]
 }
 
+export interface PlaybookTreeNode {
+  type: 'playbook' | 'role' | 'tasks' | 'handlers' | 'defaults' | 'vars' | 'template' | 'file' | 'meta' | 'include'
+  path: string
+  label: string
+  exists: boolean
+  task_name?: string
+  children?: PlaybookTreeNode[]
+}
+
+export interface PlaybookTree {
+  filename: string
+  nodes: PlaybookTreeNode[]
+}
+
 export const ansibleApi = {
   getSettings: () => api.get<PlatformSettings>('/api/v1/settings'),
   updateSettings: (payload: {
@@ -100,4 +114,5 @@ export const ansibleApi = {
   listFiles: () => api.get<{root: string, tree: FileNode[]}>('/api/v1/ansible/files'),
   getFileContent: (path: string) => api.get<{path: string, content: string, size: number}>(`/api/v1/ansible/files/content?path=${encodeURIComponent(path)}`),
   updateFileContent: (path: string, content: string) => api.put<{path: string, saved: boolean}>(`/api/v1/ansible/files/content?path=${encodeURIComponent(path)}`, { content }),
+  playbookTree: (filename: string) => api.get<PlaybookTree>(`/api/v1/ansible/playbooks/tree?filename=${encodeURIComponent(filename)}`),
 }

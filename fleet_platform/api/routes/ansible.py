@@ -733,6 +733,151 @@ async def get_playbook_content(
     return {"filename": filename, "content": content}
 
 
+@router.get("/playbooks/tree")
+async def get_playbook_tree(
+    filename: str = Query(..., description="Playbook filename or role name"),
+    db: AsyncSession = Depends(get_db),
+    _: dict = Depends(require_role("operator", "admin")),
+):
+    """Return the dependency tree of a playbook/role in execution order."""
+    import yaml as _yaml
+
+    from fleet_platform.services.platform_settings_svc import get_playbooks_dir
+    playbooks_dir = await get_playbooks_dir(db)
+
+    # Determine if this is a playbook file or a role directory
+    playbook_path = playbooks_dir / filename
+    roles_dir = playbooks_dir / "roles"
+
+    def _file_node(rel_path: str, label: str, node_type: str, task_name: str | None = None) -> dict:
+        abs_path = playbooks_dir / rel_path
+        return {
+            "type": node_type,
+            "path": rel_path,
+            "label": label,
+            "exists": abs_path.exists(),
+            "task_name": task_name,
+        }
+
+    def _walk_role(role_name: str) -> dict | None:
+        role_path = roles_dir / role_name
+        if not role_path.is_dir():
+            return None
+
+        children = []
+        # Standard Ansible role directory order
+        for subdir, node_type, label_prefix in [
+            ("tasks", "tasks", "tasks/"),
+            ("handlers", "handlers", "handlers/"),
+            ("defaults", "defaults", "defaults/"),
+            ("vars", "vars", "vars/"),
+            ("templates", "template", "templates/"),
+            ("files", "file", "files/"),
+            ("meta", "meta", "meta/"),
+        ]:
+            subpath = role_path / subdir
+            if subpath.is_dir():
+                for f in sorted(subpath.iterdir()):
+                    if f.is_file() and not f.name.startswith("."):
+                        rel = str(f.relative_to(playbooks_dir))
+                        children.append(_file_node(rel, f"{label_prefix}{f.name}", node_type))
+
+        return {
+            "type": "role",
+            "path": f"roles/{role_name}",
+            "label": role_name,
+            "exists": True,
+            "children": children,
+        }
+
+    def _extract_templates_from_tasks(tasks: list) -> list[dict]:
+        """Find template: tasks and return the .j2 file references."""
+        nodes = []
+        if not isinstance(tasks, list):
+            return nodes
+        for task in tasks:
+            if not isinstance(task, dict):
+                continue
+            task_name = task.get("name", "")
+            # template module
+            for key in ("template", "ansible.builtin.template"):
+                tmpl = task.get(key)
+                if isinstance(tmpl, dict):
+                    src = tmpl.get("src", "")
+                    if src:
+                        # src is relative to role's templates/ or playbook's templates/
+                        for candidate in [f"templates/{src}", src]:
+                            if (playbooks_dir / candidate).exists():
+                                nodes.append(_file_node(candidate, src, "template", task_name))
+                                break
+                        else:
+                            nodes.append(_file_node(f"templates/{src}", src, "template", task_name))
+            # include_tasks / import_tasks
+            for key in ("include_tasks", "import_tasks", "ansible.builtin.include_tasks", "ansible.builtin.import_tasks"):
+                inc = task.get(key)
+                if isinstance(inc, str):
+                    nodes.append(_file_node(inc, inc, "include", task_name))
+                elif isinstance(inc, dict) and "file" in inc:
+                    f = inc["file"]
+                    nodes.append(_file_node(f, f, "include", task_name))
+        return nodes
+
+    nodes: list[dict] = []
+
+    if playbook_path.exists() and playbook_path.is_file():
+        # It's a playbook .yml file
+        nodes.append(_file_node(filename, filename, "playbook"))
+
+        try:
+            with open(playbook_path) as f:
+                plays = _yaml.safe_load(f) or []
+        except Exception:
+            plays = []
+
+        seen_paths: set[str] = {filename}
+
+        for play in (plays if isinstance(plays, list) else []):
+            if not isinstance(play, dict):
+                continue
+
+            # vars_files
+            for vf in play.get("vars_files", []):
+                if isinstance(vf, str) and vf not in seen_paths:
+                    seen_paths.add(vf)
+                    nodes.append(_file_node(vf, vf, "vars"))
+
+            # roles
+            for role in play.get("roles", []):
+                role_name = role if isinstance(role, str) else role.get("role", role.get("name", ""))
+                if role_name:
+                    role_node = _walk_role(role_name)
+                    if role_node:
+                        nodes.append(role_node)
+
+            # tasks (top-level)
+            task_nodes = _extract_templates_from_tasks(play.get("tasks", []))
+            for tn in task_nodes:
+                if tn["path"] not in seen_paths:
+                    seen_paths.add(tn["path"])
+                    nodes.append(tn)
+
+            # handlers
+            for handler in play.get("handlers", []):
+                pass  # inline handlers don't have separate files unless notify
+
+    elif filename and not filename.endswith(".yml"):
+        # Treat as a role name
+        role_node = _walk_role(filename)
+        if role_node:
+            nodes.append(role_node)
+        else:
+            raise HTTPException(status_code=404, detail=f"Playbook or role '{filename}' not found")
+    else:
+        raise HTTPException(status_code=404, detail=f"Playbook '{filename}' not found")
+
+    return {"filename": filename, "nodes": nodes}
+
+
 @router.post("/playbooks/run", response_model=PlaybookRunResponse, status_code=202)
 async def run_playbook_endpoint(
     payload: PlaybookRunRequest,
