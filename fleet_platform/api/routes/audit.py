@@ -26,6 +26,20 @@ class AuditEventResponse(BaseModel):
 
     model_config = {"from_attributes": True}
 
+    @classmethod
+    def _from_orm(cls, obj):
+        """Build response from ORM object, coercing INET → str."""
+        ip = obj.ip_address
+        return cls(
+            id=obj.id,
+            event_at=obj.event_at,
+            actor=obj.actor,
+            action=obj.action,
+            resource_type=obj.resource_type,
+            resource_id=obj.resource_id,
+            ip_address=str(ip) if ip is not None else None,
+        )
+
 
 @router.get("", response_model=PaginatedResponse[AuditEventResponse])
 async def list_audit_logs(
@@ -54,7 +68,7 @@ async def list_audit_logs(
     events = result.scalars().all()
 
     return PaginatedResponse(
-        items=[AuditEventResponse.model_validate(e) for e in events],
+        items=[AuditEventResponse._from_orm(e) for e in events],
         total=total,
         page=page,
         per_page=per_page,
