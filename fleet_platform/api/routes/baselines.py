@@ -14,6 +14,53 @@ from fleet_platform.schemas.drift import BaselineCreate, BaselineResponse
 router = APIRouter(prefix="/api/v1/baselines")
 
 
+@router.get("/capture/{node_id}")
+async def capture_node_state(
+    node_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+    _: dict = Depends(require_role("operator", "admin")),
+):
+    """Return the latest grain facts for a node, formatted for baseline capture."""
+    from fleet_platform.models.facts import NodeFact
+    result = await db.execute(
+        select(NodeFact)
+        .where(NodeFact.node_id == node_id)
+        .order_by(NodeFact.collected_at.desc())
+        .limit(1)
+    )
+    fact = result.scalar_one_or_none()
+    if not fact:
+        raise HTTPException(status_code=404, detail="No grain facts found for this node — bootstrap it first")
+
+    grains = fact.grains
+    pkgs: dict[str, str] = {}
+    for key in ("pkgs", "brew_pkgs", "pip_pkgs"):
+        val = grains.get(key)
+        if isinstance(val, dict):
+            pkgs.update(val)
+
+    packages = [
+        {"name": name, "version": str(ver) if ver else None}
+        for name, ver in sorted(pkgs.items())
+    ]
+
+    services = list(grains.get("services") or [])
+
+    from fleet_platform.models.node import Node
+    node_result = await db.execute(select(Node).where(Node.id == node_id))
+    node = node_result.scalar_one_or_none()
+
+    return {
+        "node_id": str(node_id),
+        "hostname": node.hostname if node else None,
+        "minion_id": node.minion_id if node else str(node_id),
+        "package_count": len(packages),
+        "packages": packages,
+        "services": services,
+        "collected_at": fact.collected_at.isoformat() if fact.collected_at else None,
+    }
+
+
 @router.get("", response_model=PaginatedResponse[BaselineResponse])
 async def list_baselines(
     page: int = Query(default=1, ge=1),

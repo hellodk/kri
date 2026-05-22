@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { baselinesApi, type Baseline } from '../api/baselines'
+import { baselinesApi, type Baseline, type CaptureResult } from '../api/baselines'
 import { groupsApi } from '../api/groups'
 import { fleetApi } from '../api/fleet'
 import { useToastStore } from '../stores/toastStore'
@@ -15,13 +15,282 @@ const TARGET_LABELS: Record<string, string> = {
   node:   'Node',
 }
 
-const STARTER_STATE = {
-  packages: [
-    { name: 'salt', version: null },
-  ],
-  services: [
-    { name: 'salt-minion', expected: 'running' },
-  ],
+// ─── Baseline form types ──────────────────────────────────────────────────────
+
+interface PkgRow { name: string; version: string; enforce: boolean }
+interface SvcRow { name: string; state: 'running' | 'stopped' }
+
+function buildStateJson(required: PkgRow[], forbidden: PkgRow[], services: SvcRow[]) {
+  return {
+    packages: {
+      required: required
+        .filter(p => p.name.trim())
+        .map(p => ({ name: p.name.trim(), ...(p.enforce && p.version.trim() ? { version: `>=${p.version.trim()}` } : {}) })),
+      forbidden: forbidden
+        .filter(p => p.name.trim())
+        .map(p => ({ name: p.name.trim() })),
+    },
+    services: {
+      required_running: services.filter(s => s.name.trim() && s.state === 'running').map(s => s.name.trim()),
+      required_stopped: services.filter(s => s.name.trim() && s.state === 'stopped').map(s => s.name.trim()),
+    },
+  }
+}
+
+// ─── Capture mode ─────────────────────────────────────────────────────────────
+
+function CaptureMode({
+  required, setRequired, forbidden, services,
+}: {
+  required: PkgRow[]
+  setRequired: (rows: PkgRow[]) => void
+  forbidden: PkgRow[]
+  services: SvcRow[]
+}) {
+  const { data: nodes } = useQuery({
+    queryKey: ['nodes-for-capture'],
+    queryFn: () => fleetApi.nodes({ per_page: 200 }),
+    staleTime: 30_000,
+  })
+  const [nodeId, setNodeId] = useState('')
+  const [captured, setCaptured] = useState<CaptureResult | null>(null)
+  const [loading, setLoading] = useState(false)
+  const [err, setErr] = useState<string | null>(null)
+
+  async function doCapture() {
+    if (!nodeId) return
+    setLoading(true); setErr(null)
+    try {
+      const result = await baselinesApi.capture(nodeId)
+      setCaptured(result)
+      // Pre-populate required packages (all selected, no version enforcement)
+      setRequired(result.packages.map(p => ({ name: p.name, version: p.version ?? '', enforce: false })))
+    } catch (e: unknown) {
+      setErr(e instanceof Error ? e.message : 'Failed to capture node state')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const onlineNodes = nodes?.items.filter(n => n.status === 'online') ?? []
+
+  return (
+    <div className="space-y-4">
+      <div className="flex gap-2">
+        <select
+          value={nodeId}
+          onChange={e => { setNodeId(e.target.value); setCaptured(null) }}
+          className="flex-1 px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:border-brand-600"
+        >
+          <option value="">Select a live node…</option>
+          {onlineNodes.map(n => (
+            <option key={n.id} value={n.id}>
+              {n.hostname ?? n.minion_id}
+            </option>
+          ))}
+        </select>
+        <button
+          onClick={doCapture}
+          disabled={!nodeId || loading}
+          className="px-4 py-2 bg-brand-600 text-white text-sm rounded-lg font-medium hover:bg-brand-700 disabled:opacity-50 whitespace-nowrap"
+        >
+          {loading ? 'Loading…' : '📸 Snapshot'}
+        </button>
+      </div>
+
+      {err && <p className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg p-3">{err}</p>}
+
+      {captured && (
+        <div className="space-y-3">
+          <div className="flex items-center justify-between">
+            <p className="text-sm font-medium text-gray-700">
+              {captured.package_count} packages found on <span className="font-semibold">{captured.hostname ?? captured.minion_id}</span>
+            </p>
+            <div className="flex gap-2">
+              <button
+                onClick={() => setRequired(required.map(r => ({ ...r, enforce: true })))}
+                className="text-xs text-brand-600 hover:text-brand-700"
+              >Check all versions</button>
+              <span className="text-gray-300">·</span>
+              <button
+                onClick={() => setRequired(required.map(r => ({ ...r, enforce: false })))}
+                className="text-xs text-gray-500 hover:text-gray-700"
+              >Presence only</button>
+            </div>
+          </div>
+
+          <div className="border border-gray-200 rounded-xl overflow-hidden">
+            <div className="max-h-64 overflow-y-auto divide-y divide-gray-100">
+              {required.map((row, i) => (
+                <div key={captured.packages[i]?.name ?? i} className="flex items-center gap-3 px-3 py-2 hover:bg-gray-50">
+                  <input
+                    type="checkbox"
+                    checked={row.name !== ''}
+                    onChange={e => {
+                      if (!e.target.checked) {
+                        setRequired(required.map((r, j) => j === i ? { ...r, name: '' } : r))
+                      } else {
+                        setRequired(required.map((r, j) => j === i ? { ...r, name: captured.packages[i].name } : r))
+                      }
+                    }}
+                    className="accent-brand-600 flex-shrink-0"
+                  />
+                  <span className="text-sm font-mono text-gray-800 flex-1 truncate">
+                    {captured.packages[i].name}
+                  </span>
+                  <span className="text-xs text-gray-400 font-mono w-20 text-right flex-shrink-0">
+                    {captured.packages[i].version ?? '—'}
+                  </span>
+                  <label className="flex items-center gap-1.5 flex-shrink-0">
+                    <input
+                      type="checkbox"
+                      checked={row.enforce}
+                      disabled={!row.name}
+                      onChange={e => setRequired(required.map((r, j) => j === i ? { ...r, enforce: e.target.checked } : r))}
+                      className="accent-brand-600"
+                    />
+                    <span className="text-xs text-gray-500">pin version</span>
+                  </label>
+                </div>
+              ))}
+            </div>
+          </div>
+          <p className="text-xs text-gray-400">
+            Unchecked packages are ignored. "Pin version" enforces <code>&gt;=version</code> in drift checks.
+          </p>
+        </div>
+      )}
+
+      {!captured && !loading && !err && (
+        <div className="border-2 border-dashed border-gray-200 rounded-xl p-8 text-center text-gray-400">
+          <p className="text-2xl mb-2">📸</p>
+          <p className="text-sm">Select a node and click Snapshot to load its installed packages</p>
+        </div>
+      )}
+
+      {/* Suppress unused-variable warnings — forbidden/services passed for summary badge */}
+      {forbidden.length + services.length > 1_000_000 && null}
+    </div>
+  )
+}
+
+// ─── Manual mode ──────────────────────────────────────────────────────────────
+
+function ManualMode({
+  required, setRequired,
+  forbidden, setForbidden,
+  services, setServices,
+}: {
+  required: PkgRow[]; setRequired: (r: PkgRow[]) => void
+  forbidden: PkgRow[]; setForbidden: (r: PkgRow[]) => void
+  services: SvcRow[]; setServices: (s: SvcRow[]) => void
+}) {
+  const inputClass = 'px-3 py-1.5 border border-gray-300 rounded-lg text-sm focus:outline-none focus:border-brand-600'
+
+  return (
+    <div className="space-y-6">
+      {/* Required packages */}
+      <div>
+        <div className="flex items-center justify-between mb-2">
+          <label className="text-sm font-semibold text-gray-700">Required packages</label>
+          <span className="text-xs text-gray-400">must be installed for zero drift</span>
+        </div>
+        <div className="space-y-2">
+          {required.map((row, i) => (
+            <div key={i} className="flex gap-2 items-center">
+              <input
+                value={row.name}
+                onChange={e => setRequired(required.map((r, j) => j === i ? { ...r, name: e.target.value } : r))}
+                placeholder="package name"
+                className={`${inputClass} flex-1`}
+              />
+              <span className="text-gray-400 text-sm">≥</span>
+              <input
+                value={row.version}
+                onChange={e => setRequired(required.map((r, j) => j === i ? { ...r, version: e.target.value } : r))}
+                placeholder="version (optional)"
+                className={`${inputClass} w-36`}
+              />
+              <button
+                onClick={() => setRequired(required.filter((_, j) => j !== i))}
+                className="text-gray-400 hover:text-red-500 text-lg leading-none flex-shrink-0"
+              >×</button>
+            </div>
+          ))}
+        </div>
+        <button
+          onClick={() => setRequired([...required, { name: '', version: '', enforce: false }])}
+          className="mt-2 text-sm text-brand-600 hover:text-brand-700 font-medium"
+        >+ Add required package</button>
+      </div>
+
+      {/* Forbidden packages */}
+      <div>
+        <div className="flex items-center justify-between mb-2">
+          <label className="text-sm font-semibold text-gray-700">Forbidden packages</label>
+          <span className="text-xs text-gray-400">must NOT be installed</span>
+        </div>
+        <div className="space-y-2">
+          {forbidden.map((row, i) => (
+            <div key={i} className="flex gap-2 items-center">
+              <input
+                value={row.name}
+                onChange={e => setForbidden(forbidden.map((r, j) => j === i ? { ...r, name: e.target.value } : r))}
+                placeholder="package name"
+                className={`${inputClass} flex-1`}
+              />
+              <button
+                onClick={() => setForbidden(forbidden.filter((_, j) => j !== i))}
+                className="text-gray-400 hover:text-red-500 text-lg leading-none"
+              >×</button>
+            </div>
+          ))}
+        </div>
+        <button
+          onClick={() => setForbidden([...forbidden, { name: '', version: '', enforce: false }])}
+          className="mt-2 text-sm text-brand-600 hover:text-brand-700 font-medium"
+        >+ Add forbidden package</button>
+      </div>
+
+      {/* Services */}
+      <div>
+        <div className="flex items-center justify-between mb-2">
+          <label className="text-sm font-semibold text-gray-700">Services</label>
+          <span className="text-xs text-gray-400">expected running/stopped state</span>
+        </div>
+        <div className="space-y-2">
+          {services.map((row, i) => (
+            <div key={i} className="flex gap-2 items-center">
+              <input
+                value={row.name}
+                onChange={e => setServices(services.map((s, j) => j === i ? { ...s, name: e.target.value } : s))}
+                placeholder="service name"
+                className={`${inputClass} flex-1`}
+              />
+              <div className="flex rounded-lg border border-gray-300 overflow-hidden text-xs">
+                <button
+                  onClick={() => setServices(services.map((s, j) => j === i ? { ...s, state: 'running' } : s))}
+                  className={`px-3 py-1.5 font-medium transition-colors ${row.state === 'running' ? 'bg-emerald-600 text-white' : 'text-gray-500 hover:bg-gray-50'}`}
+                >● running</button>
+                <button
+                  onClick={() => setServices(services.map((s, j) => j === i ? { ...s, state: 'stopped' } : s))}
+                  className={`px-3 py-1.5 font-medium transition-colors ${row.state === 'stopped' ? 'bg-red-500 text-white' : 'text-gray-500 hover:bg-gray-50'}`}
+                >○ stopped</button>
+              </div>
+              <button
+                onClick={() => setServices(services.filter((_, j) => j !== i))}
+                className="text-gray-400 hover:text-red-500 text-lg leading-none"
+              >×</button>
+            </div>
+          ))}
+        </div>
+        <button
+          onClick={() => setServices([...services, { name: '', state: 'running' }])}
+          className="mt-2 text-sm text-brand-600 hover:text-brand-700 font-medium"
+        >+ Add service</button>
+      </div>
+    </div>
+  )
 }
 
 // ─── Create modal ─────────────────────────────────────────────────────────────
@@ -29,12 +298,20 @@ const STARTER_STATE = {
 function CreateBaselineModal({ onClose }: { onClose: () => void }) {
   const qc = useQueryClient()
   const toast = useToastStore((s) => s.add)
+
+  // Mode
+  const [mode, setMode] = useState<'choose' | 'capture' | 'manual'>('choose')
+
+  // Shared state
   const [name, setName] = useState('')
   const [description, setDescription] = useState('')
   const [targetType, setTargetType] = useState<'global' | 'group' | 'node'>('global')
   const [targetId, setTargetId] = useState('')
-  const [stateText, setStateText] = useState(JSON.stringify(STARTER_STATE, null, 2))
-  const [jsonError, setJsonError] = useState<string | null>(null)
+
+  // Package/service state (shared between modes)
+  const [required, setRequired] = useState<PkgRow[]>([])
+  const [forbidden, setForbidden] = useState<PkgRow[]>([])
+  const [services, setServices] = useState<SvcRow[]>([])
 
   const { data: groups } = useQuery({
     queryKey: ['groups-for-baseline'],
@@ -42,7 +319,6 @@ function CreateBaselineModal({ onClose }: { onClose: () => void }) {
     enabled: targetType === 'group',
     staleTime: 60_000,
   })
-
   const { data: nodes } = useQuery({
     queryKey: ['nodes-for-baseline'],
     queryFn: () => fleetApi.nodes({ per_page: 200 }),
@@ -50,22 +326,17 @@ function CreateBaselineModal({ onClose }: { onClose: () => void }) {
     staleTime: 60_000,
   })
 
+  const stateJson = buildStateJson(required, forbidden, services)
+  const hasContent = required.some(r => r.name.trim()) || forbidden.some(f => f.name.trim()) || services.some(s => s.name.trim())
+
   const createMutation = useMutation({
-    mutationFn: () => {
-      let parsed: object
-      try {
-        parsed = JSON.parse(stateText)
-      } catch {
-        throw new Error('Invalid JSON in state definition')
-      }
-      return baselinesApi.create({
-        name,
-        description: description || undefined,
-        target_type: targetType,
-        target_id: targetId || undefined,
-        state_json: parsed,
-      })
-    },
+    mutationFn: () => baselinesApi.create({
+      name,
+      description: description || undefined,
+      target_type: targetType,
+      target_id: targetId || undefined,
+      state_json: stateJson,
+    }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['baselines'] })
       toast('Baseline created')
@@ -74,100 +345,143 @@ function CreateBaselineModal({ onClose }: { onClose: () => void }) {
     onError: (e: Error) => toast(e.message, 'error'),
   })
 
-  function validateJson(text: string) {
-    try { JSON.parse(text); setJsonError(null) }
-    catch (e: unknown) { setJsonError(e instanceof Error ? e.message : 'Invalid JSON') }
-  }
+  const canCreate = name.trim() && hasContent && (targetType === 'global' || targetId)
 
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
       <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl flex flex-col max-h-[92vh]">
         {/* Header */}
         <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200">
-          <h2 className="text-lg font-bold text-gray-900">Create Baseline</h2>
-          <button onClick={onClose} className="flex items-center justify-center w-8 h-8 rounded-lg text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-colors text-lg">×</button>
+          <div className="flex items-center gap-3">
+            {mode !== 'choose' && (
+              <button onClick={() => setMode('choose')} className="text-gray-400 hover:text-gray-600 text-sm">← Back</button>
+            )}
+            <h2 className="text-lg font-bold text-gray-900">
+              {mode === 'choose' ? 'New Baseline' : mode === 'capture' ? '📸 Capture from Node' : '✏️ Build Manually'}
+            </h2>
+          </div>
+          <button onClick={onClose} className="w-8 h-8 flex items-center justify-center rounded-lg text-gray-400 hover:text-gray-600 hover:bg-gray-100 text-lg">×</button>
         </div>
 
         {/* Body */}
-        <div className="flex-1 overflow-y-auto px-6 py-5 space-y-5">
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Baseline name</label>
-            <input required value={name} onChange={(e) => setName(e.target.value)}
-              placeholder="macOS fleet standard"
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm text-gray-900 focus:outline-none focus:border-brand-600" />
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Description <span className="text-gray-400 font-normal">(optional)</span></label>
-            <input value={description} onChange={(e) => setDescription(e.target.value)}
-              placeholder="Expected state for production Mac Minis"
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm text-gray-900 focus:outline-none focus:border-brand-600" />
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">Applies to</label>
-            <div className="flex gap-3">
-              {(['global', 'group', 'node'] as const).map((t) => (
-                <label key={t} className="flex items-center gap-2 text-sm cursor-pointer">
-                  <input type="radio" name="targetType" value={t}
-                    checked={targetType === t}
-                    onChange={() => { setTargetType(t); setTargetId('') }}
-                    className="accent-brand-600" />
-                  {TARGET_LABELS[t]}
-                </label>
-              ))}
+        <div className="flex-1 overflow-y-auto px-6 py-5">
+          {mode === 'choose' ? (
+            <div className="space-y-4">
+              <p className="text-sm text-gray-500">How do you want to define the expected state?</p>
+              <div className="grid grid-cols-2 gap-4">
+                <button
+                  onClick={() => setMode('capture')}
+                  className="group border-2 border-gray-200 hover:border-brand-500 rounded-xl p-5 text-left transition-colors"
+                >
+                  <div className="text-3xl mb-3">📸</div>
+                  <p className="font-semibold text-gray-900 group-hover:text-brand-700">Capture from node</p>
+                  <p className="text-sm text-gray-500 mt-1">
+                    Snapshot what's actually installed on a live node. One click — perfect for "gold image" workflows.
+                  </p>
+                </button>
+                <button
+                  onClick={() => setMode('manual')}
+                  className="group border-2 border-gray-200 hover:border-brand-500 rounded-xl p-5 text-left transition-colors"
+                >
+                  <div className="text-3xl mb-3">✏️</div>
+                  <p className="font-semibold text-gray-900 group-hover:text-brand-700">Build manually</p>
+                  <p className="text-sm text-gray-500 mt-1">
+                    Specify required packages, forbidden packages, and expected service states one by one.
+                  </p>
+                </button>
+              </div>
             </div>
-            {targetType !== 'global' && (
-              <select required value={targetId} onChange={(e) => setTargetId(e.target.value)}
-                className="mt-2 w-full px-3 py-2 border border-gray-300 rounded-lg text-sm text-gray-900 focus:outline-none focus:border-brand-600">
-                <option value="">Select {targetType}…</option>
-                {targetType === 'group'
-                  ? groups?.items.map((g) => <option key={g.id} value={g.id}>{g.name}</option>)
-                  : nodes?.items.map((n) => <option key={n.id} value={n.id}>{n.hostname ?? n.minion_id}</option>)
-                }
-              </select>
-            )}
-          </div>
+          ) : (
+            <div className="space-y-6">
+              {/* Mode-specific content */}
+              {mode === 'capture' ? (
+                <CaptureMode required={required} setRequired={setRequired} forbidden={forbidden} services={services} />
+              ) : (
+                <ManualMode
+                  required={required} setRequired={setRequired}
+                  forbidden={forbidden} setForbidden={setForbidden}
+                  services={services} setServices={setServices}
+                />
+              )}
 
-          <div>
-            <div className="flex items-center justify-between mb-1">
-              <label className="block text-sm font-medium text-gray-700">State definition <span className="text-gray-400 font-normal">(JSON)</span></label>
-              {jsonError && <span className="text-xs text-red-600">{jsonError}</span>}
+              {/* Summary badge when content exists */}
+              {hasContent && (
+                <div className="bg-gray-50 border border-gray-200 rounded-lg px-3 py-2 flex gap-4 text-xs text-gray-600">
+                  <span>📦 {required.filter(r => r.name.trim()).length} required</span>
+                  {forbidden.filter(f => f.name.trim()).length > 0 && (
+                    <span>🚫 {forbidden.filter(f => f.name.trim()).length} forbidden</span>
+                  )}
+                  {services.filter(s => s.name.trim()).length > 0 && (
+                    <span>⚙️ {services.filter(s => s.name.trim()).length} services</span>
+                  )}
+                </div>
+              )}
+
+              {/* Name + target (always visible in non-choose mode) */}
+              <div className="border-t border-gray-100 pt-5 space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Baseline name</label>
+                  <input
+                    value={name}
+                    onChange={e => setName(e.target.value)}
+                    placeholder="macOS production standard"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:border-brand-600"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Description <span className="text-gray-400 font-normal">(optional)</span></label>
+                  <input
+                    value={description}
+                    onChange={e => setDescription(e.target.value)}
+                    placeholder="Expected state for production Mac Minis"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:border-brand-600"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Applies to</label>
+                  <div className="flex gap-4">
+                    {(['global', 'group', 'node'] as const).map(t => (
+                      <label key={t} className="flex items-center gap-2 text-sm cursor-pointer">
+                        <input type="radio" name="targetType" value={t}
+                          checked={targetType === t}
+                          onChange={() => { setTargetType(t); setTargetId('') }}
+                          className="accent-brand-600" />
+                        {t === 'global' ? 'All nodes' : t === 'group' ? 'Group' : 'Node'}
+                      </label>
+                    ))}
+                  </div>
+                  {targetType !== 'global' && (
+                    <select value={targetId} onChange={e => setTargetId(e.target.value)}
+                      className="mt-2 w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:border-brand-600">
+                      <option value="">Select {targetType}…</option>
+                      {targetType === 'group'
+                        ? groups?.items.map(g => <option key={g.id} value={g.id}>{g.name}</option>)
+                        : nodes?.items.map(n => <option key={n.id} value={n.id}>{n.hostname ?? n.minion_id}</option>)
+                      }
+                    </select>
+                  )}
+                </div>
+              </div>
             </div>
-            <p className="text-xs text-gray-500 mb-2">
-              Define expected <code>packages</code> (name + optional version constraint) and <code>services</code> (name + expected state).
-              Drift is scored by comparing each node's current SBOM against this definition.
-            </p>
-            <textarea
-              rows={14}
-              value={stateText}
-              onChange={(e) => { setStateText(e.target.value); validateJson(e.target.value) }}
-              spellCheck={false}
-              className={`w-full px-3 py-2 border rounded-lg text-xs font-mono text-gray-900 focus:outline-none resize-none ${
-                jsonError ? 'border-red-400 focus:border-red-500' : 'border-gray-300 focus:border-brand-600'
-              }`}
-            />
-            <p className="text-xs text-gray-400 mt-1">
-              Example: <code>{`{"packages":[{"name":"salt","version":">=3006.0"}],"services":[{"name":"salt-minion","expected":"running"}]}`}</code>
-            </p>
-          </div>
+          )}
         </div>
 
         {/* Footer */}
-        <div className="px-6 py-4 border-t border-gray-200">
-          <div className="flex gap-3">
+        {mode !== 'choose' && (
+          <div className="px-6 py-4 border-t border-gray-200 flex gap-3">
             <button onClick={onClose}
               className="flex-1 py-2.5 border border-gray-300 text-gray-700 rounded-lg text-sm font-medium hover:bg-gray-50">
               Cancel
             </button>
             <button
-              disabled={!name || !!jsonError || createMutation.isPending || (targetType !== 'global' && !targetId)}
+              disabled={!canCreate || createMutation.isPending}
               onClick={() => createMutation.mutate()}
-              className="flex-1 py-2.5 bg-brand-600 text-white rounded-lg text-sm font-medium hover:bg-brand-700 disabled:opacity-50">
+              className="flex-1 py-2.5 bg-brand-600 text-white rounded-lg text-sm font-medium hover:bg-brand-700 disabled:opacity-50"
+            >
               {createMutation.isPending ? 'Creating…' : 'Create Baseline'}
             </button>
           </div>
-        </div>
+        )}
       </div>
     </div>
   )

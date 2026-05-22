@@ -18,6 +18,16 @@ export interface BaselineState {
   services?: Array<{ name: string; expected: 'running' | 'stopped' }>
 }
 
+export interface CaptureResult {
+  node_id: string
+  hostname: string | null
+  minion_id: string
+  package_count: number
+  packages: Array<{ name: string; version: string | null }>
+  services: string[]
+  collected_at: string | null
+}
+
 export const baselinesApi = {
   list: (params?: { page?: number; per_page?: number }) => {
     const q = new URLSearchParams()
@@ -33,4 +43,5 @@ export const baselinesApi = {
     target_id?: string
     state_json: object
   }) => api.post<Baseline>('/api/v1/baselines', { ...payload, git_commit_sha: 'manual' }),
+  capture: (nodeId: string) => api.get<CaptureResult>(`/api/v1/baselines/capture/${nodeId}`),
 }
