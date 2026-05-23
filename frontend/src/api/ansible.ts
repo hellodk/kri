@@ -21,6 +21,7 @@ export interface BootstrapResponse {
   job_id: string
   bootstrap_status: string
   message: string
+  salt_key_deleted: boolean
 }
 
 export interface BootstrapStatus {
