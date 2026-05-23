@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useRef, useEffect } from 'react'
 import { Link } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { fleetApi } from '../api/fleet'
@@ -22,6 +22,11 @@ function isMacOSNode(node: Node): boolean {
 
 // ─── Add Node modal ────────────────────────────────────────────────────────────
 
+interface CheckMinionIdResult {
+  available: boolean
+  existing_node: { id: string; hostname: string | null; status: string; bootstrap_status: string } | null
+}
+
 function AddNodeModal({ onClose }: { onClose: () => void }) {
   const qc = useQueryClient()
   const toast = useToastStore((s) => s.add)
@@ -30,12 +35,85 @@ function AddNodeModal({ onClose }: { onClose: () => void }) {
   const [ipAddress, setIpAddress] = useState('')
   const [groupId, setGroupId] = useState('')
 
+  // ── Minion ID uniqueness check ─────────────────────────────────────────────
+  const [minionIdStatus, setMinionIdStatus] = useState<
+    'idle' | 'checking' | 'available' | 'taken' | 'invalid'
+  >('idle')
+  const [takenNode, setTakenNode] = useState<{
+    id: string
+    hostname: string | null
+    status: string
+  } | null>(null)
+  const minionIdTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  // Clean up debounce timer on unmount
+  useEffect(() => () => {
+    if (minionIdTimerRef.current) clearTimeout(minionIdTimerRef.current)
+  }, [])
+
+  function onMinionIdChange(value: string) {
+    setMinionId(value)
+    setMinionIdStatus('idle')
+    setTakenNode(null)
+    if (minionIdTimerRef.current) clearTimeout(minionIdTimerRef.current)
+    if (!value.trim()) return
+    // Client-side format guard first — avoids a network round-trip for obviously bad input
+    if (!/^[a-zA-Z0-9._-]+$/.test(value.trim())) {
+      setMinionIdStatus('invalid')
+      return
+    }
+    setMinionIdStatus('checking')
+    minionIdTimerRef.current = setTimeout(async () => {
+      try {
+        const result = await api.get<CheckMinionIdResult>(
+          `/api/v1/fleet/nodes/check-minion-id?id=${encodeURIComponent(value.trim())}`,
+        )
+        if (result.available) {
+          setMinionIdStatus('available')
+        } else {
+          setMinionIdStatus('taken')
+          setTakenNode(result.existing_node)
+        }
+      } catch {
+        // Silently fall back to idle — the server validates on submit too
+        setMinionIdStatus('idle')
+      }
+    }, 400)
+  }
+
+  // ── Group credentials check ────────────────────────────────────────────────
+  const [groupCredStatus, setGroupCredStatus] = useState<
+    'idle' | 'checking' | 'ok' | 'missing'
+  >('idle')
+
+  async function onGroupChange(newGroupId: string) {
+    setGroupId(newGroupId)
+    if (!newGroupId) {
+      setGroupCredStatus('idle')
+      return
+    }
+    setGroupCredStatus('checking')
+    try {
+      const creds = await groupsApi.getCredentials(newGroupId)
+      const hasPassword = creds.has_ssh_password
+      const hasKey = creds.has_ssh_key
+      setGroupCredStatus(
+        creds.ssh_username && (hasPassword || hasKey) ? 'ok' : 'missing',
+      )
+    } catch {
+      // Non-fatal — fall back to idle so we don't block the user on network error
+      setGroupCredStatus('idle')
+    }
+  }
+
+  // ── Groups query ───────────────────────────────────────────────────────────
   const { data: groups } = useQuery({
     queryKey: ['groups-for-add-node'],
     queryFn: () => groupsApi.list({ per_page: 100 }),
     staleTime: 60_000,
   })
 
+  // ── Mutation ───────────────────────────────────────────────────────────────
   const mutation = useMutation({
     mutationFn: async () => {
       const node = await fleetApi.createNode({
@@ -55,7 +133,13 @@ function AddNodeModal({ onClose }: { onClose: () => void }) {
     onError: (e: Error) => toast(e.message, 'error'),
   })
 
-  const canSubmit = minionId.trim() && groupId && !mutation.isPending
+  const canSubmit =
+    !!minionId.trim() &&
+    minionIdStatus !== 'taken' &&
+    minionIdStatus !== 'invalid' &&
+    !!groupId &&
+    groupCredStatus !== 'missing' &&
+    !mutation.isPending
 
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
@@ -66,6 +150,7 @@ function AddNodeModal({ onClose }: { onClose: () => void }) {
         </div>
 
         <div className="px-6 py-5 space-y-4">
+          {/* Minion ID */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
               Minion ID <span className="text-red-500">*</span>
@@ -73,11 +158,34 @@ function AddNodeModal({ onClose }: { onClose: () => void }) {
             <input
               required
               value={minionId}
-              onChange={(e) => setMinionId(e.target.value)}
+              onChange={(e) => onMinionIdChange(e.target.value)}
               placeholder="mac-mini-01"
               className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm text-gray-900 focus:outline-none focus:border-brand-600"
             />
+            {minionIdStatus === 'checking' && (
+              <p className="text-xs text-gray-400 mt-1">Checking…</p>
+            )}
+            {minionIdStatus === 'available' && (
+              <p className="text-xs text-green-600 mt-1">✓ Available</p>
+            )}
+            {minionIdStatus === 'taken' && takenNode && (
+              <p className="text-xs text-red-600 mt-1">
+                Already in use by{' '}
+                <span className="font-medium">{takenNode.hostname ?? takenNode.id}</span>{' '}
+                ({takenNode.status}){' '}
+                <Link to={`/nodes/${takenNode.id}`} className="underline">
+                  View node
+                </Link>
+              </p>
+            )}
+            {minionIdStatus === 'invalid' && (
+              <p className="text-xs text-red-600 mt-1">
+                Only letters, numbers, dots, hyphens and underscores allowed
+              </p>
+            )}
           </div>
+
+          {/* Group */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
               Group <span className="text-red-500">*</span>
@@ -85,7 +193,7 @@ function AddNodeModal({ onClose }: { onClose: () => void }) {
             <select
               required
               value={groupId}
-              onChange={(e) => setGroupId(e.target.value)}
+              onChange={(e) => onGroupChange(e.target.value)}
               className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm text-gray-900 focus:outline-none focus:border-brand-600 bg-white"
             >
               <option value="">Select a group…</option>
@@ -96,7 +204,20 @@ function AddNodeModal({ onClose }: { onClose: () => void }) {
             {(groups?.items ?? []).filter(g => g.type === 'static').length === 0 && (
               <p className="text-xs text-amber-600 mt-1">No static groups yet — <a href="/groups" className="underline">create one first</a>.</p>
             )}
+            {groupCredStatus === 'checking' && (
+              <p className="text-xs text-gray-400 mt-1">Checking credentials…</p>
+            )}
+            {groupCredStatus === 'ok' && (
+              <p className="text-xs text-green-600 mt-1">✓ SSH credentials configured</p>
+            )}
+            {groupCredStatus === 'missing' && (
+              <p className="text-xs text-amber-600 mt-1">
+                ⚠ No SSH credentials on this group — configure them in Groups → SSH tab before bootstrapping
+              </p>
+            )}
           </div>
+
+          {/* Hostname */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
               Hostname <span className="text-gray-400 font-normal">(optional)</span>
@@ -108,6 +229,8 @@ function AddNodeModal({ onClose }: { onClose: () => void }) {
               className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm text-gray-900 focus:outline-none focus:border-brand-600"
             />
           </div>
+
+          {/* IP Address */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
               IP Address <span className="text-gray-400 font-normal">(optional)</span>
