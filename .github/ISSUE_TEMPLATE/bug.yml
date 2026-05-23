@@ -1,0 +1,43 @@
+name: Bug
+description: Something is broken
+labels: ["bug", "p1-high"]
+body:
+  - type: textarea
+    id: description
+    attributes:
+      label: What happened?
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      value: |
+        1. 
+        2. 
+        3. 
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behaviour
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behaviour
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: kri version
+      placeholder: "v0.1.46"
+  - type: checkboxes
+    id: regression
+    attributes:
+      label: Regression?
+      options:
+        - label: This worked in a previous version

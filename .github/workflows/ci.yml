@@ -1,0 +1,54 @@
+name: CI
+
+on:
+  pull_request:
+    branches: [master]
+  push:
+    branches: [master]
+
+jobs:
+  frontend-build:
+    name: TypeScript build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - run: npm ci
+        working-directory: frontend
+      - run: npm run build
+        working-directory: frontend
+
+  unit-tests:
+    name: Unit tests
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: timescale/timescaledb:latest-pg17
+        env:
+          POSTGRES_DB: fleet_demo
+          POSTGRES_USER: fleet
+          POSTGRES_PASSWORD: fleet
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 15
+    env:
+      DATABASE_URL: postgresql+psycopg://fleet:fleet@localhost:5432/fleet_demo
+      TEST_DATABASE_URL: postgresql+psycopg://fleet:fleet@localhost:5432/fleet_test
+      REDIS_URL: redis://localhost:6379/0
+      JWT_SECRET: ci-test-secret-minimum-32-chars-long
+      FERNET_KEY: dGVzdC1rZXktbm90LWZvci1wcm9kdWN0aW9uLXVzZS1vbmx5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - run: pip install uv
+      - run: uv sync
+      - run: uv run pytest tests/unit/ -v --tb=short
