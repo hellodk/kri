@@ -3,11 +3,16 @@ import importlib.util
 from unittest.mock import MagicMock, patch
 
 
+_RETURNER_PATH = __file__  # tests/unit/test_salt_returner.py
+import pathlib as _pathlib
+_RETURNER_FILE = (_pathlib.Path(_RETURNER_PATH).parent.parent.parent / "salt" / "returners" / "fleet_platform_return.py")
+
+
 def _load_returner(ingest_url="http://fleet.local/api/v1/ingest", node_token="test-token"):
     """Load the Salt returner module with mocked __salt__ dunder global."""
     spec = importlib.util.spec_from_file_location(
         "fleet_platform_return",
-        "salt/returners/fleet_platform_return.py",
+        str(_RETURNER_FILE),
     )
     module = importlib.util.module_from_spec(spec)
     module.__salt__ = {

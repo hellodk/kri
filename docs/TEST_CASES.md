@@ -15,6 +15,16 @@
 
 ---
 
+## CI Status
+- Unit tests: run on every PR (`pytest tests/unit/`)
+- Integration tests: run on every PR (`pytest tests/integration/`)
+- Coverage gate: 75% floor on `fleet_platform/services/`
+- E2E: run manually against staging
+
+Last updated: 2026-05-24
+
+---
+
 ## 1. Authentication
 
 | ID | Priority | Type | Title | Steps | Expected Result |
