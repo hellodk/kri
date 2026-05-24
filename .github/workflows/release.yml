@@ -1,0 +1,46 @@
+name: Release
+
+on:
+  push:
+    branches: [master]
+
+jobs:
+  maybe-release:
+    name: Create release on VERSION bump
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+
+      - name: Check if VERSION changed
+        id: version_check
+        run: |
+          OLD=$(git show HEAD~1:VERSION 2>/dev/null || echo "0.0.0")
+          NEW=$(cat VERSION)
+          echo "old=$OLD" >> $GITHUB_OUTPUT
+          echo "new=$NEW" >> $GITHUB_OUTPUT
+          if [ "$OLD" != "$NEW" ]; then
+            echo "changed=true" >> $GITHUB_OUTPUT
+          else
+            echo "changed=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Create GitHub release
+        if: steps.version_check.outputs.changed == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          VERSION=$(cat VERSION)
+          # Skip if release already exists
+          if gh release view "v${VERSION}" --repo hellodk/kri &>/dev/null; then
+            echo "Release v${VERSION} already exists, skipping"
+            exit 0
+          fi
+          gh release create "v${VERSION}" \
+            --title "v${VERSION}" \
+            --generate-notes \
+            --target master \
+            --repo hellodk/kri
