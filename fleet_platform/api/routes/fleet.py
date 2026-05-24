@@ -1,9 +1,10 @@
 # fleet_platform/api/routes/fleet.py
 import json
+import re
 from datetime import UTC, datetime
 
 import redis.asyncio as aioredis
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import case, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -16,6 +17,39 @@ router = APIRouter(prefix="/api/v1/fleet")
 
 _OVERVIEW_CACHE_KEY = "fleet:overview"
 _OVERVIEW_TTL = 15  # seconds
+
+# Only letters, digits, dots, hyphens and underscores are valid in a minion ID.
+_MINION_ID_RE = re.compile(r"^[a-zA-Z0-9._-]+$")
+
+
+@router.get("/nodes/check-minion-id")
+async def check_minion_id(
+    id: str = Query(..., description="Minion ID to check for availability"),
+    db: AsyncSession = Depends(get_db),
+    _: dict = Depends(get_current_user),
+) -> dict:
+    """
+    Check whether a minion_id is available (not already in use).
+    Returns the existing node summary if taken, so the UI can link to it.
+    """
+    if not _MINION_ID_RE.match(id):
+        raise HTTPException(
+            status_code=422,
+            detail="Invalid minion_id format. Only [a-zA-Z0-9._-] allowed.",
+        )
+    result = await db.execute(select(Node).where(Node.minion_id == id))
+    existing = result.scalar_one_or_none()
+    if existing:
+        return {
+            "available": False,
+            "existing_node": {
+                "id": str(existing.id),
+                "hostname": existing.hostname,
+                "status": existing.status,
+                "bootstrap_status": existing.bootstrap_status,
+            },
+        }
+    return {"available": True, "existing_node": None}
 
 
 @router.get("/overview", response_model=FleetOverviewResponse)

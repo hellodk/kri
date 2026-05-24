@@ -1,4 +1,11 @@
+from pydantic import model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+_INSECURE_SECRETS = {
+    "insecure-dev-secret",
+    "change-me-generate-with-openssl-rand-hex-32",
+    "",
+}
 
 
 class Settings(BaseSettings):
@@ -16,6 +23,16 @@ class Settings(BaseSettings):
     frontend_origin: str = "http://localhost:5173"
     environment: str = "development"
 
+    @model_validator(mode="after")
+    def validate_production_secrets(self) -> "Settings":
+        if self.environment == "production":
+            if self.jwt_secret in _INSECURE_SECRETS or len(self.jwt_secret) < 32:
+                raise ValueError(
+                    "JWT_SECRET must be at least 32 characters and not a default/example value "
+                    "when ENVIRONMENT=production. Generate with: openssl rand -hex 32"
+                )
+        return self
+
     @property
     def is_development(self) -> bool:
         return self.environment == "development"
@@ -23,4 +40,14 @@ class Settings(BaseSettings):
 
 settings = Settings()
 
-VERSION = "0.1.0"
+def _read_version() -> str:
+    from pathlib import Path
+    for candidate in [
+        Path(__file__).parent.parent.parent / "VERSION",  # repo root
+        Path("/app/VERSION"),                              # Docker container
+    ]:
+        if candidate.exists():
+            return candidate.read_text().strip()
+    return "0.0.0"
+
+VERSION = _read_version()

@@ -1,12 +1,20 @@
+import uuid as _uuid_mod
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
 import bcrypt
 import jwt
+import redis.asyncio as aioredis
 from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
 from fleet_platform.core.config import settings
+
+_REVOKE_PREFIX = "rt:revoked:"
+
+
+def _new_jti() -> str:
+    return str(_uuid_mod.uuid4())
 
 
 class TokenExpiredError(Exception):
@@ -44,6 +52,7 @@ def create_access_token(
         "email": email,
         "role": role,
         "type": "access",
+        "jti": _new_jti(),
         "exp": expire,
         "iat": datetime.now(UTC),
     }
@@ -55,6 +64,7 @@ def create_refresh_token(user_id: str) -> str:
     payload = {
         "sub": user_id,
         "type": "refresh",
+        "jti": _new_jti(),
         "exp": expire,
         "iat": datetime.now(UTC),
     }
@@ -70,6 +80,14 @@ def decode_token(token: str) -> dict[str, Any]:
         raise TokenExpiredError("Token has expired")
     except jwt.PyJWTError:
         raise TokenInvalidError("Token is invalid")
+
+
+async def revoke_token(redis: aioredis.Redis, jti: str, ttl_seconds: int) -> None:
+    await redis.setex(f"{_REVOKE_PREFIX}{jti}", ttl_seconds, "1")
+
+
+async def is_token_revoked(redis: aioredis.Redis, jti: str) -> bool:
+    return await redis.exists(f"{_REVOKE_PREFIX}{jti}") == 1
 
 
 # ── FastAPI dependencies ──────────────────────────────────────────────

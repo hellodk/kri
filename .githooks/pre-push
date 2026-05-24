@@ -1,0 +1,45 @@
+#!/usr/bin/env bash
+# Block pushes that contain likely secrets.
+# Install: cp .githooks/* .git/hooks/  OR  git config core.hooksPath .githooks
+set -e
+
+# Patterns are split across variables so this file does not contain the
+# literal strings it searches for (avoids false-positive on its own diff).
+_K1="BEGIN RSA"        ; _K2=" PRIVATE"
+_K3="BEGIN OPENSSH"    ; _K4=" PRIVATE"
+_K5="BEGIN EC"         ; _K6=" PRIVATE"
+_K7="AKIA"             ; _K8="[0-9A-Z]{16}"
+
+SECRET_PATTERNS=(
+  "${_K1}${_K2}"
+  "${_K3}${_K4}"
+  "${_K5}${_K6}"
+  "${_K7}${_K8}"
+)
+
+while read -r local_ref local_sha remote_ref remote_sha; do
+  [ "$local_sha" = "0000000000000000000000000000000000000000" ] && continue
+
+  if [ "$remote_sha" = "0000000000000000000000000000000000000000" ]; then
+    # New branch — scan only commits not already on the remote default branch.
+    # Without this, git log scans ALL history and hits existing commits.
+    base=$(git merge-base HEAD origin/master 2>/dev/null \
+        || git merge-base HEAD origin/main 2>/dev/null \
+        || echo "")
+    [ -z "$base" ] && continue
+    range="${base}..${local_sha}"
+  else
+    range="${remote_sha}..${local_sha}"
+  fi
+
+  for pattern in "${SECRET_PATTERNS[@]}"; do
+    if git diff "$range" 2>/dev/null | grep '^+' | grep -v '^+++' \
+        | grep -v 'placeholder=' | grep -v '#.*pattern\|#.*example\|#.*sample' \
+        | grep -qiE "$pattern"; then
+      echo "ERROR: Possible secret detected (pattern: $pattern)"
+      echo "Push blocked. Review with: git diff $range"
+      exit 1
+    fi
+  done
+done
+exit 0

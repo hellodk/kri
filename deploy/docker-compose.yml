@@ -1,33 +1,117 @@
 services:
-  postgres:
+  db:
     image: timescale/timescaledb:latest-pg17
+    restart: unless-stopped
     environment:
-      POSTGRES_DB: fleet_platform
+      POSTGRES_DB: fleet_demo
       POSTGRES_USER: fleet
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-fleet}
     volumes:
       - pgdata:/var/lib/postgresql/data
-    ports:
-      - "5432:5432"
+      - ./postgres-init:/docker-entrypoint-initdb.d
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U fleet -d fleet_platform"]
+      test: ["CMD-SHELL", "pg_isready -U fleet -d fleet_demo"]
       interval: 5s
       timeout: 3s
       retries: 15
 
   redis:
     image: redis:7.4-alpine
+    restart: unless-stopped
     command: redis-server --requirepass ${REDIS_PASSWORD:-redispass} --appendonly yes
     volumes:
       - redisdata:/data
-    ports:
-      - "6379:6379"
     healthcheck:
       test: ["CMD", "redis-cli", "--no-auth-warning", "-a", "${REDIS_PASSWORD:-redispass}", "ping"]
       interval: 5s
       timeout: 3s
       retries: 10
 
+  api:
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile.api
+    command: ["sh", "-c", "uv run alembic upgrade head && uv run uvicorn fleet_platform.api.main:app --host 0.0.0.0 --port 8000 --log-level info"]
+    restart: unless-stopped
+    env_file: ../.env.docker
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    volumes:
+      - salt-pillar:/srv/salt/pillar
+      - salt-master-pki:/etc/salt/pki/master   # read/write minion keys via API
+      - /home/dk/Documents/git/pulse:/mnt/pulse:ro   # host playbook repos
+      - ../salt/states:/srv/salt/states:ro
+
+  worker:
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile.api
+    command: ["uv", "run", "celery", "-A", "fleet_platform.workers.celery_app", "worker", "--queues", "default,maintenance,drift,sbom", "--concurrency", "4", "--loglevel", "info"]
+    restart: unless-stopped
+    env_file: ../.env.docker
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    volumes:
+      - salt-pillar:/srv/salt/pillar
+      - ~/.ssh:/root/.ssh:ro
+      - ~/.kri:/root/.kri:ro
+      - /home/dk/Documents/git/pulse:/mnt/pulse:ro   # host playbook repos
+      - /var/run/docker.sock:/var/run/docker.sock
+
+  salt-master:
+    image: saltstack/salt:latest
+    restart: unless-stopped
+    command: salt-master
+    ports:
+      - "4505:4505"   # ZeroMQ publisher  — minions subscribe for events
+      - "4506:4506"   # ZeroMQ request/reply — minions send results here
+    volumes:
+      - salt-pillar:/srv/salt/pillar
+      - salt-master-pki:/etc/salt/pki/master   # persist accepted minion keys across restarts
+      - ./salt-master.conf:/etc/salt/master.d/kri.conf:ro
+      - ../salt/states:/srv/salt/states:ro
+    healthcheck:
+      test: ["CMD", "pgrep", "-f", "salt-master MainProcess"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+  beat:
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile.api
+    command: ["uv", "run", "celery", "-A", "fleet_platform.workers.celery_app", "beat", "--loglevel", "info"]
+    restart: unless-stopped
+    env_file: ../.env.docker
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    volumes:
+      - salt-pillar:/srv/salt/pillar
+
+  frontend:
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile.frontend
+    restart: unless-stopped
+    ports:
+      - "${FRONTEND_PORT:-80}:80"
+    depends_on:
+      - api
+    dns: 127.0.0.11
+    dns_search: ""
+
 volumes:
   pgdata:
   redisdata:
+  salt-pillar:
+  salt-master-pki:

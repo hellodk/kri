@@ -2,7 +2,7 @@ import uuid
 from datetime import datetime
 from decimal import Decimal
 
-from sqlalchemy import DateTime, ForeignKey, Index, Numeric, SmallInteger, String, UniqueConstraint
+from sqlalchemy import DateTime, ForeignKey, Index, Numeric, SmallInteger, String, Text, UniqueConstraint
 from sqlalchemy.dialects.postgresql import INET, UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -29,6 +29,24 @@ class Node(Base, TimestampMixin):
     node_token_hash: Mapped[str] = mapped_column(String(72), nullable=False)
     first_seen_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     last_seen_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    bootstrap_status: Mapped[str] = mapped_column(
+        String(20), nullable=False, default="unregistered"
+    )
+    bootstrap_ip: Mapped[str | None] = mapped_column(String(45), nullable=True)
+    bootstrap_error: Mapped[str | None] = mapped_column(Text, nullable=True)
+    bootstrap_logs: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+    # Per-node SSH credentials (encrypted at rest)
+    ssh_username: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    ssh_password_enc: Mapped[str | None] = mapped_column(Text, nullable=True)
+    ssh_auth_mode: Mapped[str] = mapped_column(String(10), default="password")  # "password" | "key"
+    ssh_key_enc: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+    maintenance_mode: Mapped[bool] = mapped_column(default=False, nullable=False)
+
+    # iOS-specific tracking fields (added by migration 017)
+    xcode_version: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    macos_version: Mapped[str | None] = mapped_column(String(32), nullable=True)
 
     tags: Mapped[list["Tag"]] = relationship(
         "Tag", back_populates="node", cascade="all, delete-orphan"
@@ -55,6 +73,7 @@ class Tag(Base):
     )
     key: Mapped[str] = mapped_column(String(100), nullable=False)
     value: Mapped[str] = mapped_column(String(255), nullable=False)
+    source: Mapped[str] = mapped_column(String(20), nullable=False, default="user")
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
 
     node: Mapped["Node"] = relationship("Node", back_populates="tags")
@@ -62,4 +81,5 @@ class Tag(Base):
     __table_args__ = (
         UniqueConstraint("node_id", "key", name="uq_tags_node_key"),
         Index("idx_tags_key_value", "key", "value"),
+        Index("idx_tags_source", "source"),
     )

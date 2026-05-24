@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN"
+  "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.jenkins.slave</string>
+
+    <key>ProgramArguments</key>
+    <array>
+        <string>/usr/bin/java</string>
+        <string>-jar</string>
+        <string>/usr/local/bin/agent.jar</string>
+        <string>-url</string>
+        <string>{{ jenkins_url }}</string>
+        <string>-secret</string>
+        <string>{{ jenkins_secret }}</string>
+        <string>-name</string>
+        <string>{{ agent_name }}</string>
+        <string>-workDir</string>
+        <string>{{ workdir }}</string>
+    </array>
+
+    <key>WorkingDirectory</key>
+    <string>{{ workdir }}</string>
+
+    <key>RunAtLoad</key>
+    <true/>
+
+    <key>KeepAlive</key>
+    <true/>
+
+    <key>StandardOutPath</key>
+    <string>/var/log/jenkins-agent.log</string>
+
+    <key>StandardErrorPath</key>
+    <string>/var/log/jenkins-agent-error.log</string>
+</dict>
+</plist>

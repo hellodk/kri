@@ -1,12 +1,69 @@
-.env
+# ── Python ────────────────────────────────────────────────────────────────────
 .venv/
+env/
+venv/
 __pycache__/
 *.pyc
 *.pyo
+*.pyd
+*.egg-info/
+.eggs/
+dist/
+build/
 .pytest_cache/
 .ruff_cache/
+.mypy_cache/
 htmlcov/
 .coverage
-dist/
-*.egg-info/
+coverage.xml
+pytestdebug.log
+celerybeat-schedule
+celerybeat.pid
+
+# ── Node / Frontend ───────────────────────────────────────────────────────────
+node_modules/
+frontend/dist/
+
+# ── Playwright ────────────────────────────────────────────────────────────────
+test-results/
+playwright-report/
+.playwright-mcp/
+
+# ── Environment & secrets ─────────────────────────────────────────────────────
+.env
+.env.*
+!.env.*.example
+.env.docker
+.env.local
+*.pem
+*.key
+*.p12
+*.pfx
+*.crt
+*.cer
+
+# ── kri runtime ───────────────────────────────────────────────────────────────
+.kri/
+.kri-logs/
+.kri-pids/
 .worktrees/
+
+# ── Screenshots & temp artifacts ─────────────────────────────────────────────
+*.png
+*.jpg
+*.jpeg
+!frontend/src/assets/**
+
+# ── IDE & OS ──────────────────────────────────────────────────────────────────
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
+Desktop.ini
+
+# ── Logs ─────────────────────────────────────────────────────────────────────
+*.log
+logs/

@@ -1,0 +1,29 @@
+name: Breaking Change
+description: A change that requires migration or breaks existing behaviour
+labels: ["breaking-change", "p1-high", "needs-spec"]
+body:
+  - type: textarea
+    id: what_breaks
+    attributes:
+      label: What breaks?
+      description: All affected features, APIs, and workflows
+    validations:
+      required: true
+  - type: textarea
+    id: why
+    attributes:
+      label: Why is this necessary?
+    validations:
+      required: true
+  - type: textarea
+    id: migration
+    attributes:
+      label: Migration path
+    validations:
+      required: true
+  - type: textarea
+    id: rollback
+    attributes:
+      label: Rollback plan
+    validations:
+      required: true

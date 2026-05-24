@@ -1,0 +1,23 @@
+#!/usr/bin/env bash
+# Bump the patch version in VERSION on every commit.
+# VERSION is the single source of truth — pyproject.toml reads it dynamically,
+# package.json is a static 0.0.0 placeholder and is never touched here.
+#
+# Install once per clone: git config core.hooksPath .githooks
+set -e
+
+ROOT="$(git rev-parse --show-toplevel)"
+VERSION_FILE="$ROOT/VERSION"
+[ -f "$VERSION_FILE" ] || exit 0
+
+current=$(cat "$VERSION_FILE")
+IFS='.' read -r major minor patch <<< "$current"
+new_version="${major}.${minor}.$((patch + 1))"
+echo "$new_version" > "$VERSION_FILE"
+git add "$VERSION_FILE"
+echo "Version bumped to ${new_version}"
+
+# Validate the version chain is consistent
+if command -v python3 &>/dev/null && [ -f "$ROOT/scripts/check_version.py" ]; then
+  python3 "$ROOT/scripts/check_version.py" || { echo "Version chain broken — commit blocked"; exit 1; }
+fi

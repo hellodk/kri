@@ -137,3 +137,18 @@ async def test_delete_nonexistent_tag_returns_404(admin_client: AsyncClient, two
     node_a, _ = two_nodes
     response = await admin_client.delete(f"/api/v1/nodes/{node_a.id}/tags/nonexistent-key")
     assert response.status_code == 404
+
+
+async def test_per_page_capped_at_200(admin_client: AsyncClient):
+    r = await admin_client.get("/api/v1/nodes?per_page=9999")
+    assert r.status_code == 422
+
+
+async def test_per_page_zero_rejected(admin_client: AsyncClient):
+    r = await admin_client.get("/api/v1/nodes?per_page=0")
+    assert r.status_code == 422
+
+
+async def test_page_zero_rejected(admin_client: AsyncClient):
+    r = await admin_client.get("/api/v1/nodes?page=0")
+    assert r.status_code == 422

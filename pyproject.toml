@@ -1,9 +1,14 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
 [project]
 name = "fleet-platform"
-version = "0.1.0"
+dynamic = ["version"]
 requires-python = ">=3.13"
 dependencies = [
     "fastapi>=0.115.0",
+    "gitpython>=3.1.0",
     "uvicorn[standard]>=0.32.0",
     "sqlalchemy>=2.0.36",
     "alembic>=1.14.0",
@@ -20,6 +25,12 @@ dependencies = [
     "slowapi>=0.1.9",
     "aiofiles>=24.1.0",
     "email-validator>=2.2.0",
+    "pyyaml>=6.0",
+    "ansible-runner>=2.4.0",
+    "ansible-core>=2.17.0",
+    "cryptography>=43.0.0",
+    "idna>=3.15",           # CVE-2026-45409: ReDoS in encode(); fix in 3.15
+    "asyncssh>=2.14.0",
 ]
 
 [project.optional-dependencies]
@@ -29,6 +40,15 @@ dev = [
     "pytest-cov>=6.0.0",
     "ruff>=0.8.0",
 ]
+
+# Only package fleet_platform — exclude playbooks/ and other top-level dirs.
+[tool.setuptools.packages.find]
+include = ["fleet_platform*"]
+
+# Version is read dynamically from the VERSION file — do not add it here.
+# Single source of truth: edit VERSION, everything else follows.
+[tool.setuptools.dynamic]
+version = {file = "VERSION"}
 
 [tool.ruff]
 line-length = 100
