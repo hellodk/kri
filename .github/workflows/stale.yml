@@ -1,0 +1,24 @@
+name: Stale Issues
+
+on:
+  schedule:
+    - cron: '0 9 * * 1'  # Every Monday 09:00 UTC
+  workflow_dispatch:
+
+jobs:
+  stale:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/stale@v9
+        with:
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
+          stale-issue-message: >
+            This issue has had no activity for 30 days. It will be closed in 7 days
+            unless updated or labelled `blocked`, `p0-critical`, or `p1-high`.
+          close-issue-message: >
+            Closed due to 37 days of inactivity. Reopen with a comment if still relevant.
+          days-before-stale: 30
+          days-before-close: 7
+          stale-issue-label: stale
+          exempt-issue-labels: 'blocked,p0-critical,p1-high,pinned'
+          operations-per-run: 30
