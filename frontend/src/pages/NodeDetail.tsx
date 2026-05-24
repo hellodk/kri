@@ -602,12 +602,16 @@ export function NodeDetail() {
     if (!node || !rebootstrapIp.trim()) return
     setRebootstrapping(true)
     try {
-      await api.post('/api/v1/ansible/bootstrap', {
-        minion_id: node.minion_id,
-        target_ip: rebootstrapIp.trim(),
-      })
-      toast('Re-bootstrap queued')
+      const resp = await api.post<{ salt_key_deleted: boolean; message: string }>(
+        '/api/v1/ansible/bootstrap',
+        { minion_id: node.minion_id, target_ip: rebootstrapIp.trim() },
+      )
       setShowRebootstrap(false)
+      if (resp.salt_key_deleted) {
+        toast('Re-bootstrap queued — previous Salt key removed. Accept the new key in Minion Keys once the node reconnects.', 'info')
+      } else {
+        toast('Re-bootstrap queued')
+      }
       setTimeout(() => refetch(), 3000)
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : 'Re-bootstrap failed'
@@ -800,6 +804,11 @@ export function NodeDetail() {
               {showRebootstrap && (
                 <div className="p-3 bg-amber-50 border border-amber-200 rounded-lg space-y-2">
                   <p className="text-xs text-amber-700 font-medium">This will re-run the bootstrap playbook. Existing node data is preserved.</p>
+                  <p className="text-xs text-amber-600">
+                    ⚠ If this node has an existing Salt key, it will be <strong>automatically deleted</strong> so the new key
+                    generated during bootstrap is accepted cleanly. After bootstrap completes,
+                    go to <strong>Minion Keys</strong> to approve the new key.
+                  </p>
                   <div className="flex gap-2">
                     <input
                       type="text"

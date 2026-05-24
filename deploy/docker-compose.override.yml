@@ -1,6 +1,11 @@
 # docker-compose.override.yml — development overrides
 # Run: docker compose -f docker-compose.yml -f docker-compose.override.yml up
 services:
+  db:
+    # Expose PostgreSQL to host for local development and running pytest from the host
+    ports:
+      - "5432:5432"
+
   redis:
     # Expose Redis to local dev processes (API + Celery running on host)
     ports:

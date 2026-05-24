@@ -112,6 +112,20 @@ async def bootstrap(
     await db.commit()
     await db.refresh(node)
 
+    # If a stale accepted Salt key exists for this minion, delete it now.
+    # Re-bootstrap generates a new keypair on the minion; the old master key
+    # causes authentication to loop indefinitely ("cached the public key…").
+    import os as _os
+    _pki_base = _os.environ.get("SALT_PKI_DIR", "/etc/salt/pki/master")
+    _accepted_key = __import__("pathlib").Path(_pki_base) / "minions" / payload.minion_id
+    salt_key_deleted = False
+    if _accepted_key.exists():
+        try:
+            _accepted_key.unlink()
+            salt_key_deleted = True
+        except OSError:
+            pass  # PKI volume not mounted or not writable — non-fatal
+
     task = bootstrap_node.delay(
         str(node.id),
         payload.target_ip,
@@ -119,12 +133,20 @@ async def bootstrap(
         ssh_password=payload.ssh_password,
     )
 
+    msg = "Bootstrap queued. Node will appear in fleet once Salt minion connects."
+    if salt_key_deleted:
+        msg = (
+            "Bootstrap queued. The node's previous Salt key was removed — "
+            "a new key will appear in Minion Keys for approval once the minion reconnects."
+        )
+
     return BootstrapResponse(
         node_id=node.id,
         minion_id=node.minion_id,
         job_id=task.id,
         bootstrap_status="pending",
-        message="Bootstrap queued. Node will appear in fleet once Salt minion connects.",
+        message=msg,
+        salt_key_deleted=salt_key_deleted,
     )
 
 

@@ -17,6 +17,7 @@ class BootstrapResponse(BaseModel):
     job_id: str
     bootstrap_status: str
     message: str
+    salt_key_deleted: bool = False
 
 
 class PlatformSettingsUpdate(BaseModel):
