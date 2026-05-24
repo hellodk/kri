@@ -1,0 +1,14 @@
+# Default owner for everything
+*                          @hellodk
+
+# Frontend changes
+frontend/                  @hellodk
+
+# Schema and API — breaking-change risk
+fleet_platform/schemas/    @hellodk
+fleet_platform/api/        @hellodk
+alembic/versions/          @hellodk
+
+# CI/CD and infra
+.github/                   @hellodk
+deploy/                    @hellodk
