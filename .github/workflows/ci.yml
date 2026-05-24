@@ -52,3 +52,81 @@ jobs:
       - run: pip install uv
       - run: uv sync
       - run: uv run pytest tests/unit/ -v --tb=short
+
+  lint:
+    name: Lint (ruff)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - run: pip install uv
+      - run: uv sync --extra dev
+      - run: uv run ruff check fleet_platform/ tests/
+
+  type-check:
+    name: Type check (mypy)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - run: pip install uv
+      - run: uv sync --extra dev
+      - run: uv run mypy fleet_platform/ --ignore-missing-imports --no-error-summary
+
+  coverage:
+    name: Coverage report
+    runs-on: ubuntu-latest
+    permissions:
+      pull-requests: write
+    services:
+      postgres:
+        image: timescale/timescaledb:latest-pg17
+        env:
+          POSTGRES_DB: fleet_demo
+          POSTGRES_USER: fleet
+          POSTGRES_PASSWORD: fleet
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 15
+    env:
+      DATABASE_URL: postgresql+psycopg://fleet:fleet@localhost:5432/fleet_demo
+      TEST_DATABASE_URL: postgresql+psycopg://fleet:fleet@localhost:5432/fleet_test
+      REDIS_URL: redis://localhost:6379/0
+      JWT_SECRET: ci-test-secret-minimum-32-chars-long
+      FERNET_KEY: dGVzdC1rZXktbm90LWZvci1wcm9kdWN0aW9uLXVzZS1vbmx5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - run: pip install uv
+      - run: uv sync --extra dev
+      - run: |
+          uv run pytest tests/unit/ \
+            --cov=fleet_platform/services \
+            --cov-report=term-missing \
+            --cov-report=json:coverage.json \
+            -q
+      - name: Post coverage comment on PR
+        if: github.event_name == 'pull_request'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const cov = JSON.parse(fs.readFileSync('coverage.json'));
+            const pct = cov.totals.percent_covered.toFixed(1);
+            const icon = parseFloat(pct) >= 75 ? '✅' : '⚠️';
+            const body = `## Coverage Report\n\n${icon} **${pct}%** on \`fleet_platform/services/\` (gate: 75%)\n\n${parseFloat(pct) >= 75 ? 'Gate passed' : 'Below gate — add tests before merging'}`;
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body
+            });

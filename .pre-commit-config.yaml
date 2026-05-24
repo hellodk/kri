@@ -1,0 +1,56 @@
+repos:
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.8.0
+    hooks:
+      - id: ruff
+        args: [--fix, --exit-non-zero-on-fix]
+        files: ^(fleet_platform|tests)/
+      - id: ruff-format
+        files: ^(fleet_platform|tests)/
+
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v4.6.0
+    hooks:
+      - id: check-yaml
+      - id: check-toml
+      - id: check-json
+      - id: end-of-file-fixer
+      - id: trailing-whitespace
+      - id: mixed-line-ending
+
+  - repo: local
+    hooks:
+      - id: mypy
+        name: mypy type check
+        entry: bash -c 'source .venv/bin/activate && mypy fleet_platform/ --ignore-missing-imports --no-error-summary'
+        language: system
+        files: ^fleet_platform/
+        pass_filenames: false
+
+      - id: vulture
+        name: dead code (vulture)
+        entry: bash -c 'source .venv/bin/activate && vulture fleet_platform/ --min-confidence 80'
+        language: system
+        files: ^fleet_platform/
+        pass_filenames: false
+
+      - id: bandit
+        name: security scan (bandit)
+        entry: bash -c 'source .venv/bin/activate && bandit -r fleet_platform/ -ll --skip B101 -q'
+        language: system
+        files: ^fleet_platform/
+        pass_filenames: false
+
+      - id: check-unit-test-presence
+        name: unit test presence check
+        entry: bash -c 'for f in "$@"; do base=$(basename "$f" .py); test_file="tests/unit/test_${base}.py"; [ -f "$test_file" ] || echo "⚠ No unit test for $f — expected $test_file"; done; exit 0'
+        language: system
+        files: ^fleet_platform/services/
+        pass_filenames: true
+
+      - id: check-contract-drift
+        name: contract drift check
+        entry: bash -c 'ts_staged=$(git diff --cached --name-only | grep "frontend/src/api/" || true); [ -z "$ts_staged" ] && echo "⚠ Schema changed but no frontend/src/api/*.ts staged — contract drift risk"; exit 0'
+        language: system
+        files: ^fleet_platform/schemas/
+        pass_filenames: false

@@ -162,6 +162,33 @@ pytest tests/unit/ --cov=fleet_platform/services --cov-report=term-missing
 
 The CI gate requires 75% line coverage on `fleet_platform/services/`. Confirm you meet this floor before pushing.
 
+### Pre-commit hooks
+
+Install once after cloning:
+
+```bash
+uv sync --extra dev
+source .venv/bin/activate
+pre-commit install
+```
+
+Hooks run automatically on every `git commit`. To run manually:
+
+```bash
+pre-commit run --all-files
+```
+
+| Hook | What it catches |
+|------|-----------------|
+| ruff | Lint errors, unused imports — auto-fixed |
+| ruff-format | Formatting drift — auto-fixed |
+| check-yaml/toml/json | Config file syntax errors |
+| mypy | Type errors in `fleet_platform/` |
+| vulture | Dead code — unused functions/variables |
+| bandit | Security smells (hardcoded secrets, SQL injection risk) |
+| check-unit-test-presence | Warns if `services/*.py` has no matching unit test |
+| check-contract-drift | Warns if Pydantic schema changed without TS interface update |
+
 ### TypeScript type check and production build
 
 ```bash
