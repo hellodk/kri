@@ -81,6 +81,21 @@
       margin-bottom: .75rem;
     }
 
+    /* ─── SECTION HEADING ANCHORS ────────────────────────────── */
+    .heading-anchor {
+      display: inline-block;
+      margin-left: .5rem;
+      color: var(--gray-400);
+      font-weight: 400;
+      font-size: 1rem;
+      text-decoration: none;
+      opacity: 0;
+      transition: opacity .2s;
+      cursor: pointer;
+      vertical-align: middle;
+    }
+    h2:hover .heading-anchor { opacity: 1; }
+
     /* ─── NAV ────────────────────────────────────────────────── */
     nav {
       position: fixed;
@@ -112,6 +127,21 @@
     .nav-meta {
       font-size: .8rem;
       color: var(--gray-400);
+    }
+    .nav-links {
+      display: flex;
+      align-items: center;
+      gap: 1.25rem;
+    }
+    .nav-link {
+      color: var(--gray-400);
+      font-size: .78rem;
+      text-decoration: none;
+      transition: color .2s;
+    }
+    .nav-link.active { color: var(--white); }
+    @media (max-width: 640px) {
+      .nav-links { display: none; }
     }
 
     /* ─── HERO ───────────────────────────────────────────────── */
@@ -231,7 +261,11 @@
       min-width: 480px;
     }
 
-    /* Timeline animation */
+    /* Timeline animation — scroll-triggered via .anim-pending */
+    .anim-pending .tl-feature,
+    .anim-pending .tl-break {
+      animation-play-state: paused;
+    }
     .tl-feature {
       animation: slideInRight .6s ease forwards;
       opacity: 0;
@@ -302,6 +336,10 @@
       transition: box-shadow .2s, transform .2s;
     }
     .py-card:hover { transform: translateX(4px); box-shadow: 0 4px 20px rgba(0,0,0,.08); }
+    .py-card.highlighted {
+      box-shadow: 0 0 0 2px currentColor, 0 8px 24px rgba(0,0,0,.12);
+      transform: translateX(6px);
+    }
     .py-card.green  { border-color: var(--green); }
     .py-card.blue   { border-color: var(--blue); }
     .py-card.amber  { border-color: var(--amber); }
@@ -328,9 +366,29 @@
     .ci-flow {
       margin-top: 2.5rem;
       overflow-x: auto;
+      position: relative;
+    }
+    @media (max-width: 640px) {
+      .ci-flow::after {
+        content: 'scroll →';
+        position: absolute;
+        right: 0;
+        top: 50%;
+        transform: translateY(-50%);
+        background: linear-gradient(to right, transparent, var(--navy) 60%);
+        padding: .5rem 1rem .5rem 2rem;
+        font-size: .75rem;
+        color: var(--gray-400);
+        pointer-events: none;
+      }
     }
     .ci-svg { display: block; margin: 0 auto; min-width: 700px; }
 
+    /* CI animation — scroll-triggered via .anim-pending */
+    .anim-pending .ci-box,
+    .anim-pending .ci-arrow {
+      animation-play-state: paused;
+    }
     .ci-box {
       opacity: 0;
       animation: ciAppear .5s ease forwards;
@@ -370,14 +428,64 @@
       80%     { transform: translateX(3px); }
     }
 
+    /* CI Replay button */
+    .ci-replay-btn {
+      display: inline-flex;
+      align-items: center;
+      gap: .4rem;
+      margin-top: 1rem;
+      background: transparent;
+      border: 1px solid rgba(255,255,255,.15);
+      color: var(--gray-400);
+      border-radius: 6px;
+      padding: .35rem .8rem;
+      font-size: .8rem;
+      cursor: pointer;
+      transition: border-color .2s, color .2s;
+    }
+    .ci-replay-btn:hover { border-color: var(--blue-light); color: var(--white); }
+
     /* ─── CONTRACT TESTING ───────────────────────────────────── */
     #contract { background: var(--gray-50); }
+
+    /* Contract toggle */
+    .contract-toggle-bar {
+      display: flex;
+      align-items: center;
+      gap: .5rem;
+      margin: 2rem 0 1.25rem;
+    }
+    .contract-pill {
+      display: inline-flex;
+      border: 1px solid var(--gray-200);
+      border-radius: 999px;
+      overflow: hidden;
+      background: var(--white);
+    }
+    .contract-pill-btn {
+      padding: .35rem .9rem;
+      font-size: .8rem;
+      font-weight: 600;
+      border: none;
+      background: transparent;
+      color: var(--gray-600);
+      cursor: pointer;
+      transition: background .2s, color .2s;
+    }
+    .contract-pill-btn.active {
+      background: var(--navy);
+      color: var(--white);
+      border-radius: 999px;
+    }
+
+    .contract-panel { display: none; }
+    .contract-panel.visible { display: block; }
+
     .contract-wrap {
       display: grid;
       grid-template-columns: 1fr auto 1fr;
       gap: 1.5rem;
       align-items: stretch;
-      margin-top: 2.5rem;
     }
     @media (max-width: 640px) {
       .contract-wrap { grid-template-columns: 1fr; }
@@ -395,6 +503,7 @@
       padding: .6rem 1rem;
       background: var(--navy-800);
       border-bottom: 1px solid rgba(255,255,255,.08);
+      position: relative;
     }
     .dot { width: 10px; height: 10px; border-radius: 50%; }
     .dot-red    { background: #ff5f57; }
@@ -406,6 +515,23 @@
       font-family: var(--mono);
       margin-left: .25rem;
     }
+    /* Copy button */
+    .copy-btn {
+      position: absolute;
+      right: .6rem;
+      top: 50%;
+      transform: translateY(-50%);
+      background: rgba(255,255,255,.08);
+      border: 1px solid rgba(255,255,255,.1);
+      color: var(--gray-400);
+      border-radius: 4px;
+      padding: .15rem .5rem;
+      font-size: .7rem;
+      cursor: pointer;
+      transition: background .2s, color .2s;
+    }
+    .copy-btn:hover { background: rgba(255,255,255,.16); color: var(--white); }
+
     .code-body {
       padding: 1.25rem;
       font-family: var(--mono);
@@ -436,14 +562,28 @@
       font-weight: 700;
       text-transform: uppercase;
       letter-spacing: .08em;
-      animation: driftPulse 1.6s ease-in-out infinite;
+      transition: background .4s, color .4s, border-color .4s;
     }
-    .drift-badge.bad  { background: var(--red-faint); color: var(--red); border: 2px solid var(--red); }
-    .drift-badge.good { background: var(--green-faint); color: var(--green); border: 2px solid var(--green); }
+    .drift-badge.bad  {
+      background: var(--red-faint);
+      color: var(--red);
+      border: 2px solid var(--red);
+      animation: driftUrgent 0.8s ease-in-out infinite;
+    }
+    .drift-badge.good {
+      background: var(--green-faint);
+      color: var(--green);
+      border: 2px solid var(--green);
+      animation: syncBreathe 2.4s ease-in-out infinite;
+    }
 
-    @keyframes driftPulse {
+    @keyframes driftUrgent {
+      0%,100% { transform: scale(1); box-shadow: none; }
+      50%      { transform: scale(1.12); box-shadow: 0 0 10px rgba(220,38,38,.45); }
+    }
+    @keyframes syncBreathe {
       0%,100% { transform: scale(1); }
-      50%      { transform: scale(1.08); }
+      50%      { transform: scale(1.04); }
     }
     .drift-arrow { font-size: 1.2rem; color: var(--gray-400); }
 
@@ -568,6 +708,21 @@
       font-weight: 500;
     }
 
+    /* Stamp-in checkmark for 0-regressions card */
+    .metric-checkmark {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin-bottom: .5rem;
+    }
+    .metric-checkmark svg {
+      transform: scale(0);
+      transition: transform .5s cubic-bezier(.34,1.56,.64,1);
+    }
+    .metric-checkmark.stamped svg {
+      transform: scale(1);
+    }
+
     /* ─── NEXT ───────────────────────────────────────────────── */
     #next { background: var(--gray-50); }
     .next-grid {
@@ -591,14 +746,40 @@
       display: flex;
       align-items: center;
       justify-content: center;
-      font-size: 1.3rem;
       margin-bottom: 1rem;
     }
     .ni-blue   { background: var(--blue-faint); }
     .ni-green  { background: var(--green-faint); }
-    .ni-amber  { background: var(--amber-faint); }
+    .ni-red    { background: var(--red-faint); }
     .next-card h4 { font-size: .95rem; font-weight: 700; margin-bottom: .4rem; color: var(--navy); }
     .next-card p  { font-size: .85rem; color: var(--gray-600); }
+
+    /* ─── BACK TO TOP ────────────────────────────────────────── */
+    .back-to-top {
+      position: fixed;
+      bottom: 1.5rem;
+      right: 1.5rem;
+      z-index: 200;
+      width: 40px;
+      height: 40px;
+      border-radius: 50%;
+      background: var(--navy-800);
+      border: 1px solid rgba(255,255,255,.15);
+      color: var(--white);
+      font-size: 1.1rem;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity .3s, box-shadow .2s;
+    }
+    .back-to-top.visible {
+      opacity: 1;
+      pointer-events: auto;
+    }
+    .back-to-top:hover { box-shadow: 0 4px 16px rgba(0,0,0,.3); }
 
     /* ─── FOOTER ─────────────────────────────────────────────── */
     footer {
@@ -636,14 +817,62 @@
         transition-duration: .01ms !important;
       }
     }
+
+    /* ─── DARK MODE ──────────────────────────────────────────── */
+    @media (prefers-color-scheme: dark) {
+      body { background: #0f172a; }
+      .section { background: #0f172a; }
+      #problem { background: #1e293b; }
+      #pyramid { background: #0f172a; }
+      #contract { background: #1e293b; }
+      #digest { background: #0f172a; }
+      #next { background: #1e293b; }
+      p { color: #94a3b8; }
+      h2, h3, h4 { color: #f1f5f9; }
+      .py-card { background: #1e293b; border-color: #334155; }
+      .py-card.green { border-color: var(--green); }
+      .py-card.blue  { border-color: var(--blue); }
+      .py-card.amber { border-color: var(--amber); }
+      .py-card.red   { border-color: var(--red); }
+      .next-card { background: #1e293b; border-color: #334155; }
+      .digest-header { background: #1e293b; border-color: #334155; }
+      .digest-mock { border-color: #334155; }
+      .digest-body { color: #94a3b8; }
+      .digest-issue-title { color: #f1f5f9; }
+      .digest-body h4 { color: #f1f5f9; }
+      .contract-pill { background: #1e293b; border-color: #334155; }
+      .contract-pill-btn { color: #94a3b8; }
+      .section-label { color: var(--blue-light); }
+    }
+
+    /* ─── PRINT STYLES ───────────────────────────────────────── */
+    @media print {
+      nav, .back-to-top, .ci-replay-btn, .copy-btn, .contract-toggle-bar { display: none !important; }
+      *, *::before, *::after { animation: none !important; transition: none !important; }
+      .code-panel { background: #f8fafc; border: 1px solid #ccc; }
+      .code-body { color: #1e293b; background: #f8fafc; }
+      .py-card, .metric-card, .next-card { break-inside: avoid; }
+      .fade-in-up { opacity: 1 !important; transform: none !important; }
+      .contract-panel { display: block !important; }
+    }
   </style>
 </head>
 <body>
+
+<!-- Back to top -->
+<button class="back-to-top" id="backToTop" aria-label="Back to top" onclick="window.scrollTo({top:0,behavior:'smooth'})">↑</button>
 
 <!-- ─── NAV ─────────────────────────────────────────────────── -->
 <nav>
   <div class="nav-inner">
     <div class="nav-logo">k<span>ri</span></div>
+    <nav class="nav-links" aria-label="Section navigation">
+      <a class="nav-link" href="#pyramid">Pyramid</a>
+      <a class="nav-link" href="#ci">CI</a>
+      <a class="nav-link" href="#contract">Contract</a>
+      <a class="nav-link" href="#digest">Digest</a>
+      <a class="nav-link" href="#results">Results</a>
+    </nav>
     <div class="nav-meta">Engineering Blog &nbsp;·&nbsp; <strong>May 2026</strong></div>
   </div>
 </nav>
@@ -683,33 +912,33 @@
 
       <!-- Green nodes (healthy) -->
       <circle class="node-green" cx="120" cy="60" r="10" fill="#059669"/>
-      <text x="120" y="42" text-anchor="middle" font-family="Inter,sans-serif" font-size="9" fill="#94a3b8">mini-01</text>
+      <text x="120" y="42" text-anchor="middle" font-family="Inter,sans-serif" font-size="10" fill="#94a3b8">mini-01</text>
 
       <circle class="node-green" cx="440" cy="60" r="10" fill="#059669"/>
-      <text x="440" y="42" text-anchor="middle" font-family="Inter,sans-serif" font-size="9" fill="#94a3b8">mini-03</text>
+      <text x="440" y="42" text-anchor="middle" font-family="Inter,sans-serif" font-size="10" fill="#94a3b8">mini-03</text>
 
       <circle class="node-green" cx="200" cy="170" r="10" fill="#059669"/>
-      <text x="200" y="192" text-anchor="middle" font-family="Inter,sans-serif" font-size="9" fill="#94a3b8">mini-02</text>
+      <text x="200" y="192" text-anchor="middle" font-family="Inter,sans-serif" font-size="10" fill="#94a3b8">mini-02</text>
 
       <!-- Amber node (pending) -->
       <circle class="node-amber" cx="80" cy="150" r="10" fill="#d97706"/>
-      <text x="80" y="172" text-anchor="middle" font-family="Inter,sans-serif" font-size="9" fill="#94a3b8">mini-05</text>
+      <text x="80" y="172" text-anchor="middle" font-family="Inter,sans-serif" font-size="10" fill="#94a3b8">mini-05</text>
 
       <!-- Red node (issue) -->
       <circle class="node-red" cx="570" cy="90" r="10" fill="#dc2626"/>
-      <text x="570" y="72" text-anchor="middle" font-family="Inter,sans-serif" font-size="9" fill="#94a3b8">mini-07</text>
+      <text x="570" y="72" text-anchor="middle" font-family="Inter,sans-serif" font-size="10" fill="#94a3b8">mini-07</text>
 
       <!-- Another green -->
       <circle class="node-green" cx="520" cy="170" r="10" fill="#059669"/>
-      <text x="520" y="192" text-anchor="middle" font-family="Inter,sans-serif" font-size="9" fill="#94a3b8">mini-04</text>
+      <text x="520" y="192" text-anchor="middle" font-family="Inter,sans-serif" font-size="10" fill="#94a3b8">mini-04</text>
 
       <!-- Legend -->
       <circle cx="200" cy="210" r="5" fill="#059669"/>
-      <text x="210" y="214" font-family="Inter,sans-serif" font-size="9" fill="#64748b">Healthy</text>
+      <text x="210" y="214" font-family="Inter,sans-serif" font-size="11" fill="#64748b">Healthy</text>
       <circle cx="270" cy="210" r="5" fill="#d97706"/>
-      <text x="280" y="214" font-family="Inter,sans-serif" font-size="9" fill="#64748b">Pending</text>
+      <text x="280" y="214" font-family="Inter,sans-serif" font-size="11" fill="#64748b">Pending</text>
       <circle cx="340" cy="210" r="5" fill="#dc2626"/>
-      <text x="350" y="214" font-family="Inter,sans-serif" font-size="9" fill="#64748b">Alert</text>
+      <text x="350" y="214" font-family="Inter,sans-serif" font-size="11" fill="#64748b">Alert</text>
     </svg>
   </div>
 </section>
@@ -718,13 +947,13 @@
 <section id="problem" class="section">
   <div class="container">
     <p class="section-label fade-in-up">The Problem</p>
-    <h2 class="fade-in-up">"New features kept<br/>breaking old ones"</h2>
+    <h2 class="fade-in-up">"New features kept<br/>breaking old ones"<a class="heading-anchor" data-section="problem" title="Copy link">§</a></h2>
     <p class="fade-in-up" style="margin-top:.75rem;max-width:560px;">
       kri started shipping fast. Too fast. Without a structured testing strategy, every sprint risked silent regressions — the fleet API would drift from the frontend, a new Ansible runner would clobber existing node state.
     </p>
 
     <div class="timeline-wrap fade-in-up">
-      <svg class="timeline-svg" viewBox="0 0 680 160" fill="none" xmlns="http://www.w3.org/2000/svg" aria-label="Regression timeline">
+      <svg class="timeline-svg anim-pending" viewBox="0 0 680 160" fill="none" xmlns="http://www.w3.org/2000/svg" aria-label="Regression timeline">
         <!-- Timeline spine -->
         <line x1="40" y1="80" x2="640" y2="80" stroke="#e2e8f0" stroke-width="2"/>
 
@@ -784,7 +1013,7 @@
 <section id="pyramid" class="section">
   <div class="container">
     <p class="section-label fade-in-up">The Testing Pyramid</p>
-    <h2 class="fade-in-up">Four layers, one confident deploy</h2>
+    <h2 class="fade-in-up">Four layers, one confident deploy<a class="heading-anchor" data-section="pyramid" title="Copy link">§</a></h2>
     <p class="fade-in-up" style="margin-top:.75rem;max-width:560px;">
       Each layer has a clear mandate and a clear boundary. Slower tests live higher; faster tests live lower. The pyramid keeps CI fast without sacrificing coverage.
     </p>
@@ -792,29 +1021,29 @@
     <div class="pyramid-wrap fade-in-up" style="margin-top:2.5rem;">
       <!-- SVG Pyramid -->
       <svg class="pyramid-svg" viewBox="0 0 360 340" fill="none" xmlns="http://www.w3.org/2000/svg" aria-label="Testing pyramid layers">
-        <!-- E2E (top) -->
-        <g class="py-layer" tabindex="0" role="button" aria-label="E2E layer">
+        <!-- E2E (top) — red -->
+        <g class="py-layer" tabindex="0" role="button" aria-label="E2E layer" data-card="red" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}" onclick="highlightCard('red')">
           <polygon points="180,20 270,100 90,100" fill="#fef2f2" stroke="#dc2626" stroke-width="2"/>
           <text x="180" y="66" text-anchor="middle" font-family="Inter,sans-serif" font-size="11" font-weight="700" fill="#dc2626">E2E</text>
           <text x="180" y="82" text-anchor="middle" font-family="Inter,sans-serif" font-size="9" fill="#b91c1c">Playwright</text>
         </g>
 
         <!-- Contract (amber) -->
-        <g class="py-layer" tabindex="0" role="button" aria-label="Contract testing layer">
+        <g class="py-layer" tabindex="0" role="button" aria-label="Contract testing layer" data-card="amber" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}" onclick="highlightCard('amber')">
           <polygon points="90,104 270,104 300,180 60,180" fill="#fffbeb" stroke="#d97706" stroke-width="2"/>
           <text x="180" y="138" text-anchor="middle" font-family="Inter,sans-serif" font-size="11" font-weight="700" fill="#b45309">Contract</text>
           <text x="180" y="156" text-anchor="middle" font-family="Inter,sans-serif" font-size="9" fill="#92400e">Pydantic ↔ TypeScript</text>
         </g>
 
         <!-- Integration (blue) -->
-        <g class="py-layer" tabindex="0" role="button" aria-label="Integration testing layer">
+        <g class="py-layer" tabindex="0" role="button" aria-label="Integration testing layer" data-card="blue" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}" onclick="highlightCard('blue')">
           <polygon points="60,184 300,184 330,260 30,260" fill="#eff6ff" stroke="#2563eb" stroke-width="2"/>
           <text x="180" y="218" text-anchor="middle" font-family="Inter,sans-serif" font-size="11" font-weight="700" fill="#1d4ed8">Integration</text>
           <text x="180" y="236" text-anchor="middle" font-family="Inter,sans-serif" font-size="9" fill="#1e40af">Real DB · Real API · 95 tests</text>
         </g>
 
         <!-- Unit (green, widest) -->
-        <g class="py-layer" tabindex="0" role="button" aria-label="Unit testing layer">
+        <g class="py-layer" tabindex="0" role="button" aria-label="Unit testing layer" data-card="green" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}" onclick="highlightCard('green')">
           <polygon points="30,264 330,264 360,340 0,340" fill="#ecfdf5" stroke="#059669" stroke-width="2"/>
           <text x="180" y="298" text-anchor="middle" font-family="Inter,sans-serif" font-size="11" font-weight="700" fill="#065f46">Unit</text>
           <text x="180" y="316" text-anchor="middle" font-family="Inter,sans-serif" font-size="9" fill="#065f46">Pure logic · 112 tests · &lt;3s</text>
@@ -823,22 +1052,22 @@
 
       <!-- Detail cards -->
       <div class="pyramid-details">
-        <div class="py-card green fade-in-up">
+        <div class="py-card green fade-in-up" data-color="green">
           <div class="py-count green" data-target="112" data-suffix=" tests">112 tests</div>
           <h4>Unit — Green foundation</h4>
           <p>Pure Python functions, zero I/O. Schema validators, fleet state calculators, Salt key parsers. Runs in under 3 seconds. The developer's inner loop.</p>
         </div>
-        <div class="py-card blue fade-in-up">
+        <div class="py-card blue fade-in-up" data-color="blue">
           <div class="py-count blue" data-target="95" data-suffix=" tests">95 tests</div>
           <h4>Integration — Real dependencies</h4>
           <p>PostgreSQL via pytest fixtures, FastAPI test client, Salt API mocks. Exercises the full request-response cycle for every endpoint.</p>
         </div>
-        <div class="py-card amber fade-in-up">
+        <div class="py-card amber fade-in-up" data-color="amber">
           <div class="py-count amber" style="font-size:1.2rem;">Schema drift = P0</div>
           <h4>Contract — Pydantic ↔ TypeScript</h4>
           <p>Any field added to a Pydantic response model must have a matching TypeScript interface. Drift caught in CI, not in production.</p>
         </div>
-        <div class="py-card red fade-in-up">
+        <div class="py-card red fade-in-up" data-color="red">
           <div class="py-count red" style="font-size:1.1rem;">User journeys</div>
           <h4>E2E — Playwright acceptance</h4>
           <p>Bootstrap a node, run an Ansible playbook, delete a group. Acceptance criteria as code, running in a real browser against a staging fleet.</p>
@@ -852,13 +1081,13 @@
 <section id="ci" class="section">
   <div class="container">
     <p class="section-label fade-in-up">CI Pipeline</p>
-    <h2 class="fade-in-up">From PR to merge in minutes</h2>
+    <h2 class="fade-in-up">From PR to merge in minutes<a class="heading-anchor" data-section="ci" title="Copy link">§</a></h2>
     <p class="fade-in-up" style="margin-top:.75rem;max-width:560px;">
       GitHub Actions orchestrates a sequential gate: a failing step blocks the merge. No flaky green CIs — each job has a clear ownership contract.
     </p>
 
     <div class="ci-flow fade-in-up">
-      <svg class="ci-svg" viewBox="0 0 760 160" fill="none" xmlns="http://www.w3.org/2000/svg" aria-label="CI pipeline flow">
+      <svg class="ci-svg anim-pending" viewBox="0 0 760 160" fill="none" xmlns="http://www.w3.org/2000/svg" aria-label="CI pipeline flow">
 
         <!-- Boxes -->
         <!-- PR opened -->
@@ -882,7 +1111,7 @@
           <rect x="280" y="45" width="120" height="70" rx="8" fill="#1e293b" stroke="#059669" stroke-width="1.5"/>
           <text x="340" y="66" text-anchor="middle" font-family="Inter,sans-serif" font-size="9" font-weight="600" fill="#10b981">JOB 2</text>
           <text x="340" y="83" text-anchor="middle" font-family="Inter,sans-serif" font-size="10" font-weight="700" fill="#ffffff">Unit Tests</text>
-          <text x="340" y="98" text-anchor="middle" font-family="Inter,sans-serif" font-size="8" fill="#10b981">Coverage ≥ 80%</text>
+          <text x="340" y="98" text-anchor="middle" font-family="Inter,sans-serif" font-size="8" fill="#10b981">Coverage ≥ 75%</text>
           <text x="340" y="111" text-anchor="middle" font-family="Inter,sans-serif" font-size="8" fill="#64748b">pytest -x</text>
         </g>
 
@@ -932,6 +1161,8 @@
       </svg>
     </div>
 
+    <button class="ci-replay-btn" id="ciReplayBtn" aria-label="Replay CI animation">↺ Replay</button>
+
     <!-- Legend -->
     <div style="display:flex;gap:1.5rem;flex-wrap:wrap;margin-top:1.5rem;" class="fade-in-up">
       <div style="display:flex;align-items:center;gap:.4rem;font-size:.82rem;color:#94a3b8;">
@@ -941,7 +1172,7 @@
         <span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:#dc2626;"></span> Any failure blocks merge
       </div>
       <div style="display:flex;align-items:center;gap:.4rem;font-size:.82rem;color:#94a3b8;">
-        <span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:#d97706;"></span> Coverage gate: 80% required
+        <span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:#d97706;"></span> Coverage gate: 75% required
       </div>
     </div>
   </div>
@@ -951,43 +1182,53 @@
 <section id="contract" class="section">
   <div class="container">
     <p class="section-label fade-in-up">Contract Testing</p>
-    <h2 class="fade-in-up">The silent killer: schema drift</h2>
+    <h2 class="fade-in-up">The silent killer: schema drift<a class="heading-anchor" data-section="contract" title="Copy link">§</a></h2>
     <p class="fade-in-up" style="margin-top:.75rem;max-width:600px;">
       The backend speaks Pydantic; the frontend speaks TypeScript. Without enforcement, a renamed field on either side silently breaks the other. We treat schema drift as a P0 incident.
     </p>
 
+    <!-- Toggle UI -->
+    <div class="contract-toggle-bar fade-in-up">
+      <div class="contract-pill">
+        <button class="contract-pill-btn active" id="btnBefore" onclick="showContract('before')">Before</button>
+        <button class="contract-pill-btn" id="btnAfter" onclick="showContract('after')">After</button>
+      </div>
+    </div>
+
     <!-- DRIFTED state -->
-    <p style="font-weight:700;color:var(--red);margin-top:2rem;margin-bottom:.75rem;font-size:.85rem;text-transform:uppercase;letter-spacing:.08em;" class="fade-in-up">Before: Out of sync</p>
-    <div class="contract-wrap fade-in-up">
-      <div class="code-panel">
-        <div class="code-panel-header">
-          <div class="dot dot-red"></div>
-          <div class="dot dot-amber"></div>
-          <div class="dot dot-green"></div>
-          <span class="code-filename">schemas/node.py</span>
-        </div>
-        <div class="code-body"><span class="kw">class</span> <span class="tp">NodeResponse</span>(BaseModel):
+    <div class="contract-panel visible" id="panelBefore">
+      <div class="contract-wrap fade-in-up">
+        <div class="code-panel">
+          <div class="code-panel-header">
+            <div class="dot dot-red"></div>
+            <div class="dot dot-amber"></div>
+            <div class="dot dot-green"></div>
+            <span class="code-filename">schemas/node.py</span>
+            <button class="copy-btn" onclick="copyCode(this)" aria-label="Copy code">Copy</button>
+          </div>
+          <div class="code-body"><span class="kw">class</span> <span class="tp">NodeResponse</span>(BaseModel):
     <span class="fn">id</span>: <span class="tp">str</span>
     <span class="fn">minion_id</span>: <span class="tp">str</span>
     <span class="fn">status</span>: <span class="tp">NodeStatus</span>
     <span class="fn">group_id</span>: <span class="tp">Optional</span>[<span class="tp">str</span>]
     <span class="fn">ip_address</span>: <span class="tp">str</span>    <span class="cm"># ← added</span>
     <span class="fn">serial_number</span>: <span class="tp">str</span> <span class="cm"># ← added</span></div>
-      </div>
-
-      <div class="drift-middle">
-        <div class="drift-badge bad">DRIFT</div>
-        <div class="drift-arrow">⟷</div>
-      </div>
-
-      <div class="code-panel">
-        <div class="code-panel-header">
-          <div class="dot dot-red"></div>
-          <div class="dot dot-amber"></div>
-          <div class="dot dot-green"></div>
-          <span class="code-filename">types/node.ts</span>
         </div>
-        <div class="code-body"><span class="kw">interface</span> <span class="tp">NodeResponse</span> {
+
+        <div class="drift-middle">
+          <div class="drift-badge bad">DRIFT</div>
+          <div class="drift-arrow">⟷</div>
+        </div>
+
+        <div class="code-panel">
+          <div class="code-panel-header">
+            <div class="dot dot-red"></div>
+            <div class="dot dot-amber"></div>
+            <div class="dot dot-green"></div>
+            <span class="code-filename">types/node.ts</span>
+            <button class="copy-btn" onclick="copyCode(this)" aria-label="Copy code">Copy</button>
+          </div>
+          <div class="code-body"><span class="kw">interface</span> <span class="tp">NodeResponse</span> {
   <span class="fn">id</span>: <span class="tp">string</span>;
   <span class="fn">minionId</span>: <span class="tp">string</span>;
   <span class="fn">status</span>: <span class="tp">NodeStatus</span>;
@@ -995,41 +1236,44 @@
   <span class="cm">// ip_address missing!</span>
   <span class="cm">// serial_number missing!</span>
 }</div>
+        </div>
       </div>
     </div>
 
     <!-- SYNCED state -->
-    <p style="font-weight:700;color:var(--green);margin-top:2.5rem;margin-bottom:.75rem;font-size:.85rem;text-transform:uppercase;letter-spacing:.08em;" class="fade-in-up">After: Enforced parity</p>
-    <div class="contract-wrap fade-in-up">
-      <div class="code-panel">
-        <div class="code-panel-header">
-          <div class="dot dot-red"></div>
-          <div class="dot dot-amber"></div>
-          <div class="dot dot-green"></div>
-          <span class="code-filename">schemas/node.py</span>
-        </div>
-        <div class="code-body"><span class="kw">class</span> <span class="tp">NodeResponse</span>(BaseModel):
+    <div class="contract-panel" id="panelAfter">
+      <div class="contract-wrap fade-in-up">
+        <div class="code-panel">
+          <div class="code-panel-header">
+            <div class="dot dot-red"></div>
+            <div class="dot dot-amber"></div>
+            <div class="dot dot-green"></div>
+            <span class="code-filename">schemas/node.py</span>
+            <button class="copy-btn" onclick="copyCode(this)" aria-label="Copy code">Copy</button>
+          </div>
+          <div class="code-body"><span class="kw">class</span> <span class="tp">NodeResponse</span>(BaseModel):
     <span class="fn">id</span>: <span class="tp">str</span>
     <span class="fn">minion_id</span>: <span class="tp">str</span>
     <span class="fn">status</span>: <span class="tp">NodeStatus</span>
     <span class="fn">group_id</span>: <span class="tp">Optional</span>[<span class="tp">str</span>]
     <span class="fn">ip_address</span>: <span class="tp">str</span>
     <span class="fn">serial_number</span>: <span class="tp">str</span></div>
-      </div>
-
-      <div class="drift-middle">
-        <div class="drift-badge good">IN SYNC</div>
-        <div class="drift-arrow" style="color:var(--green);">⟷</div>
-      </div>
-
-      <div class="code-panel">
-        <div class="code-panel-header">
-          <div class="dot dot-red"></div>
-          <div class="dot dot-amber"></div>
-          <div class="dot dot-green"></div>
-          <span class="code-filename">types/node.ts</span>
         </div>
-        <div class="code-body"><span class="kw">interface</span> <span class="tp">NodeResponse</span> {
+
+        <div class="drift-middle">
+          <div class="drift-badge good">IN SYNC</div>
+          <div class="drift-arrow" style="color:var(--green);">⟷</div>
+        </div>
+
+        <div class="code-panel">
+          <div class="code-panel-header">
+            <div class="dot dot-red"></div>
+            <div class="dot dot-amber"></div>
+            <div class="dot dot-green"></div>
+            <span class="code-filename">types/node.ts</span>
+            <button class="copy-btn" onclick="copyCode(this)" aria-label="Copy code">Copy</button>
+          </div>
+          <div class="code-body"><span class="kw">interface</span> <span class="tp">NodeResponse</span> {
   <span class="fn">id</span>: <span class="tp">string</span>;
   <span class="fn">minionId</span>: <span class="tp">string</span>;
   <span class="fn">status</span>: <span class="tp">NodeStatus</span>;
@@ -1037,6 +1281,7 @@
   <span class="fn">ipAddress</span>: <span class="tp">string</span>;
   <span class="fn">serialNumber</span>: <span class="tp">string</span>;
 }</div>
+        </div>
       </div>
     </div>
 
@@ -1050,7 +1295,7 @@
 <section id="digest" class="section">
   <div class="container">
     <p class="section-label fade-in-up">Observability</p>
-    <h2 class="fade-in-up">The weekly digest</h2>
+    <h2 class="fade-in-up">The weekly digest<a class="heading-anchor" data-section="digest" title="Copy link">§</a></h2>
     <p class="fade-in-up" style="margin-top:.75rem;max-width:560px;">
       Every Monday at 08:00 UTC, a GitHub Actions workflow automatically opens an issue summarising the week's fleet activity, test results, and open items — no Slack noise, just a durable artifact.
     </p>
@@ -1111,7 +1356,7 @@
 <section id="results" class="section">
   <div class="container">
     <p class="section-label fade-in-up">Results so far</p>
-    <h2 class="fade-in-up">What the numbers say</h2>
+    <h2 class="fade-in-up">What the numbers say<a class="heading-anchor" data-section="results" title="Copy link">§</a></h2>
     <p class="fade-in-up" style="margin-top:.75rem;max-width:560px;">
       Three months in. The pyramid is paying dividends — faster feedback, fewer production surprises, and a codebase that's actually pleasant to extend.
     </p>
@@ -1121,16 +1366,22 @@
         <div class="metric-value" style="color:#10b981;" data-counter="207" data-suffix="">207</div>
         <div class="metric-label">Total tests across all layers</div>
       </div>
-      <div class="metric-card fade-in-up">
-        <div class="metric-value" style="color:#3b82f6;" data-counter="0" data-suffix="">0</div>
-        <div class="metric-label">Regressions since TDD adoption</div>
+      <!-- 0-regressions: stamp-in checkmark instead of counter -->
+      <div class="metric-card fade-in-up" id="regressionCard">
+        <div class="metric-checkmark" id="regressionCheck">
+          <svg width="56" height="56" viewBox="0 0 56 56" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+            <circle cx="28" cy="28" r="26" stroke="#10b981" stroke-width="3" fill="rgba(16,185,129,.12)"/>
+            <polyline points="16,28 24,36 40,20" stroke="#10b981" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+        </div>
+        <div class="metric-label">0 production regressions since TDD</div>
       </div>
       <div class="metric-card fade-in-up">
         <div class="metric-value" style="color:#f59e0b;">&lt;3s</div>
         <div class="metric-label">Unit suite runtime — developer inner loop</div>
       </div>
       <div class="metric-card fade-in-up">
-        <div class="metric-value" style="color:#c084fc;">80%</div>
+        <div class="metric-value" style="color:#c084fc;">75%</div>
         <div class="metric-label">Coverage gate enforced in CI</div>
       </div>
       <div class="metric-card fade-in-up">
@@ -1149,29 +1400,49 @@
 <section id="next" class="section">
   <div class="container">
     <p class="section-label fade-in-up">What's next</p>
-    <h2 class="fade-in-up">Pushing the pyramid further</h2>
+    <h2 class="fade-in-up">Pushing the pyramid further<a class="heading-anchor" data-section="next" title="Copy link">§</a></h2>
     <p class="fade-in-up" style="margin-top:.75rem;max-width:560px;">
       The foundation is solid. Now we raise the ceiling — catching entire classes of bugs that unit tests can't see by construction.
     </p>
 
     <div class="next-grid">
       <div class="next-card fade-in-up">
-        <div class="next-icon ni-red" style="background:#fee2e2;">
-          <span style="font-size:1.4rem;">☣</span>
+        <div class="next-icon ni-red">
+          <!-- Mutation/bug SVG: X in circle -->
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+            <circle cx="12" cy="12" r="10" stroke="#dc2626" stroke-width="1.8"/>
+            <line x1="8" y1="8" x2="16" y2="16" stroke="#dc2626" stroke-width="2" stroke-linecap="round"/>
+            <line x1="16" y1="8" x2="8" y2="16" stroke="#dc2626" stroke-width="2" stroke-linecap="round"/>
+          </svg>
         </div>
         <h4>Mutation Testing</h4>
         <p>Run <code>mutmut</code> against the unit suite to verify tests actually catch bugs — not just execute lines. A green test that passes when the code is deliberately broken is worthless.</p>
       </div>
       <div class="next-card fade-in-up">
         <div class="next-icon ni-blue">
-          <span style="font-size:1.4rem;">⚗</span>
+          <!-- Property-based: dice SVG -->
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+            <rect x="3" y="3" width="18" height="18" rx="4" stroke="#2563eb" stroke-width="1.8"/>
+            <circle cx="8.5" cy="8.5" r="1.4" fill="#2563eb"/>
+            <circle cx="15.5" cy="8.5" r="1.4" fill="#2563eb"/>
+            <circle cx="8.5" cy="15.5" r="1.4" fill="#2563eb"/>
+            <circle cx="15.5" cy="15.5" r="1.4" fill="#2563eb"/>
+            <circle cx="12" cy="12" r="1.4" fill="#2563eb"/>
+          </svg>
         </div>
         <h4>Property-Based Tests</h4>
         <p>Hypothesis-driven testing for the fleet state machine. Generate hundreds of random node states and verify invariants hold — especially around group membership and Salt key transitions.</p>
       </div>
       <div class="next-card fade-in-up">
         <div class="next-icon ni-green">
-          <span style="font-size:1.4rem;">🎭</span>
+          <!-- E2E in CI: browser window SVG -->
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+            <rect x="2" y="4" width="20" height="16" rx="3" stroke="#059669" stroke-width="1.8"/>
+            <line x1="2" y1="9" x2="22" y2="9" stroke="#059669" stroke-width="1.5"/>
+            <circle cx="5.5" cy="6.5" r="1" fill="#059669"/>
+            <circle cx="8.5" cy="6.5" r="1" fill="#059669"/>
+            <circle cx="11.5" cy="6.5" r="1" fill="#059669"/>
+          </svg>
         </div>
         <h4>E2E in CI</h4>
         <p>Playwright tests currently run locally against a dev fleet. Next: spin up a containerised kri stack in GitHub Actions and run the full acceptance suite on every PR against master.</p>
@@ -1188,9 +1459,9 @@
   </div>
 </footer>
 
-<!-- ─── JS: Intersection Observer + Counter ───────────────────── -->
+<!-- ─── JS ────────────────────────────────────────────────────── -->
 <script>
-  // Fade-in-up on scroll
+  // ── Fade-in-up on scroll ──────────────────────────────────────
   (function () {
     const els = document.querySelectorAll('.fade-in-up');
     if (!('IntersectionObserver' in window)) {
@@ -1208,7 +1479,24 @@
     els.forEach(el => obs.observe(el));
   })();
 
-  // Animated counters
+  // ── Scroll-triggered animations (timeline + CI) ───────────────
+  (function () {
+    if (!('IntersectionObserver' in window)) {
+      document.querySelectorAll('.anim-pending').forEach(el => el.classList.remove('anim-pending'));
+      return;
+    }
+    const obs = new IntersectionObserver((entries) => {
+      entries.forEach(entry => {
+        if (entry.isIntersecting) {
+          entry.target.classList.remove('anim-pending');
+          obs.unobserve(entry.target);
+        }
+      });
+    }, { threshold: 0.2 });
+    document.querySelectorAll('.anim-pending').forEach(el => obs.observe(el));
+  })();
+
+  // ── Animated counters ─────────────────────────────────────────
   (function () {
     function animateCounter(el) {
       const target = parseInt(el.dataset.counter, 10);
@@ -1218,7 +1506,6 @@
       function step(now) {
         const elapsed = now - start;
         const progress = Math.min(elapsed / duration, 1);
-        // ease out cubic
         const eased = 1 - Math.pow(1 - progress, 3);
         const value = Math.round(eased * target);
         el.textContent = value + suffix;
@@ -1241,6 +1528,120 @@
       });
     }, { threshold: 0.5 });
     counters.forEach(el => obs.observe(el));
+  })();
+
+  // ── 0-regressions checkmark stamp-in ─────────────────────────
+  (function () {
+    const card = document.getElementById('regressionCard');
+    const mark = document.getElementById('regressionCheck');
+    if (!card || !mark) return;
+    if (!('IntersectionObserver' in window)) { mark.classList.add('stamped'); return; }
+    const obs = new IntersectionObserver((entries) => {
+      entries.forEach(entry => {
+        if (entry.isIntersecting) {
+          mark.classList.add('stamped');
+          obs.unobserve(entry.target);
+        }
+      });
+    }, { threshold: 0.5 });
+    obs.observe(card);
+  })();
+
+  // ── Pyramid layer → card highlight ───────────────────────────
+  function highlightCard(color) {
+    document.querySelectorAll('.py-card').forEach(card => {
+      card.classList.remove('highlighted');
+    });
+    const target = document.querySelector('.py-card[data-color="' + color + '"]');
+    if (target) {
+      target.classList.add('highlighted');
+      target.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    }
+  }
+
+  // ── Contract toggle ───────────────────────────────────────────
+  function showContract(which) {
+    const panelBefore = document.getElementById('panelBefore');
+    const panelAfter  = document.getElementById('panelAfter');
+    const btnBefore   = document.getElementById('btnBefore');
+    const btnAfter    = document.getElementById('btnAfter');
+    if (which === 'before') {
+      panelBefore.classList.add('visible');
+      panelAfter.classList.remove('visible');
+      btnBefore.classList.add('active');
+      btnAfter.classList.remove('active');
+    } else {
+      panelAfter.classList.add('visible');
+      panelBefore.classList.remove('visible');
+      btnAfter.classList.add('active');
+      btnBefore.classList.remove('active');
+    }
+  }
+
+  // ── Copy to clipboard ─────────────────────────────────────────
+  function copyCode(btn) {
+    const body = btn.closest('.code-panel').querySelector('.code-body');
+    if (!body) return;
+    const text = body.innerText || body.textContent;
+    navigator.clipboard.writeText(text).then(() => {
+      btn.textContent = 'Copied ✓';
+      setTimeout(() => { btn.textContent = 'Copy'; }, 2000);
+    }).catch(() => {
+      btn.textContent = 'Failed';
+      setTimeout(() => { btn.textContent = 'Copy'; }, 2000);
+    });
+  }
+
+  // ── Section heading anchor copy ───────────────────────────────
+  document.querySelectorAll('.heading-anchor').forEach(a => {
+    a.addEventListener('click', function (e) {
+      e.preventDefault();
+      const sectionId = this.dataset.section;
+      const url = window.location.origin + window.location.pathname + '#' + sectionId;
+      navigator.clipboard.writeText(url).catch(() => {});
+      this.textContent = '✓';
+      setTimeout(() => { this.textContent = '§'; }, 1500);
+    });
+  });
+
+  // ── CI Replay button ──────────────────────────────────────────
+  document.getElementById('ciReplayBtn').addEventListener('click', function () {
+    const svg = document.querySelector('.ci-svg');
+    if (!svg) return;
+    // Pause all animations momentarily then restart by toggling anim-pending
+    svg.classList.add('anim-pending');
+    // Force reflow so browser registers the pause
+    void svg.offsetWidth;
+    svg.classList.remove('anim-pending');
+  });
+
+  // ── Nav active section ────────────────────────────────────────
+  (function () {
+    const sections = ['hero', 'pyramid', 'ci', 'contract', 'digest', 'results', 'next'];
+    const links = document.querySelectorAll('.nav-link');
+    if (!('IntersectionObserver' in window)) return;
+    const obs = new IntersectionObserver((entries) => {
+      entries.forEach(entry => {
+        if (entry.isIntersecting) {
+          const id = entry.target.id;
+          links.forEach(link => {
+            link.classList.toggle('active', link.getAttribute('href') === '#' + id);
+          });
+        }
+      });
+    }, { threshold: 0.4 });
+    sections.forEach(id => {
+      const el = document.getElementById(id);
+      if (el) obs.observe(el);
+    });
+  })();
+
+  // ── Back to top visibility ────────────────────────────────────
+  (function () {
+    const btn = document.getElementById('backToTop');
+    window.addEventListener('scroll', function () {
+      btn.classList.toggle('visible', window.scrollY > 400);
+    }, { passive: true });
   })();
 </script>
 
