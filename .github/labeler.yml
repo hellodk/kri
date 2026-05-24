@@ -1,0 +1,27 @@
+frontend:
+  - changed-files:
+    - any-glob-to-any-file: 'frontend/**'
+
+infra:
+  - changed-files:
+    - any-glob-to-any-file:
+      - '.github/**'
+      - 'deploy/**'
+      - 'docker-compose*.yml'
+
+test:
+  - changed-files:
+    - any-glob-to-any-file: 'tests/**'
+
+docs:
+  - changed-files:
+    - any-glob-to-any-file:
+      - 'docs/**'
+      - '*.md'
+
+breaking-change:
+  - changed-files:
+    - any-glob-to-any-file:
+      - 'fleet_platform/schemas/**'
+      - 'frontend/src/api/**'
+      - 'alembic/versions/**'

@@ -1,0 +1,62 @@
+name: Project Board Automation
+
+on:
+  pull_request:
+    types: [opened, ready_for_review, closed]
+
+env:
+  PROJECT_ID: "PVT_kwHOACPj2M4BYn9C"
+  STATUS_FIELD_ID: "PVTSSF_lAHOACPj2M4BYn9CzhTsdXg"
+  IN_REVIEW_OPTION_ID: "47fc9ee4"
+  DONE_OPTION_ID: "98236657"
+
+jobs:
+  move-card:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Add PR to project and get item ID
+        id: get_item
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          NODE_ID: ${{ github.event.pull_request.node_id }}
+        run: |
+          ITEM_ID=$(gh api graphql -f query="
+            mutation {
+              addProjectV2ItemById(input: {
+                projectId: \"$PROJECT_ID\"
+                contentId: \"$NODE_ID\"
+              }) { item { id } }
+            }" --jq '.data.addProjectV2ItemById.item.id')
+          echo "item_id=$ITEM_ID" >> $GITHUB_OUTPUT
+
+      - name: Move to In Review (PR opened)
+        if: github.event.action == 'opened' || github.event.action == 'ready_for_review'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh api graphql -f query="
+            mutation {
+              updateProjectV2ItemFieldValue(input: {
+                projectId: \"$PROJECT_ID\"
+                itemId: \"${{ steps.get_item.outputs.item_id }}\"
+                fieldId: \"$STATUS_FIELD_ID\"
+                value: { singleSelectOptionId: \"$IN_REVIEW_OPTION_ID\" }
+              }) { projectV2Item { id } }
+            }"
+
+      - name: Move to Done (PR merged)
+        if: github.event.action == 'closed' && github.event.pull_request.merged == true
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh api graphql -f query="
+            mutation {
+              updateProjectV2ItemFieldValue(input: {
+                projectId: \"$PROJECT_ID\"
+                itemId: \"${{ steps.get_item.outputs.item_id }}\"
+                fieldId: \"$STATUS_FIELD_ID\"
+                value: { singleSelectOptionId: \"$DONE_OPTION_ID\" }
+              }) { projectV2Item { id } }
+            }"
