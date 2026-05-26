@@ -1008,7 +1008,7 @@ async def list_playbook_files(
     playbooks_dir = await get_playbooks_dir(db)
 
     def _walk(path: Path, rel: str = "") -> list[dict]:
-        items = []
+        items: list[dict] = []
         try:
             entries = sorted(path.iterdir(), key=lambda p: (p.is_file(), p.name))
         except PermissionError:

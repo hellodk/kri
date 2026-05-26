@@ -174,12 +174,12 @@ async def security_node_detail(
     vulns = result.scalars().all()
 
     # License findings
-    result = await db.execute(
+    lic_result = await db.execute(
         select(LicenseFinding)
         .where(LicenseFinding.node_id == node_id)
         .order_by(LicenseFinding.risk.desc(), LicenseFinding.package_name)
     )
-    licenses = result.scalars().all()
+    licenses = lic_result.scalars().all()
 
     return {
         "node_id": str(node_id),

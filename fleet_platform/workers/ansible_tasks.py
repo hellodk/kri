@@ -371,14 +371,14 @@ def bootstrap_node(
             node.bootstrap_error = bootstrap_error
         node.bootstrap_logs = full_stdout or f"rc={result.rc} status={result.status}"
 
-        run = db.execute(
+        run_record: BootstrapRun | None = db.execute(
             select(BootstrapRun).where(BootstrapRun.id == run_id)
         ).scalar_one_or_none()
-        if run:
-            run.finished_at = datetime.now(UTC)
-            run.status = "completed" if result.status == "successful" and result.rc == 0 else "failed"
-            run.ansible_stdout = node.bootstrap_logs
-            run.error = bootstrap_error
+        if run_record:
+            run_record.finished_at = datetime.now(UTC)
+            run_record.status = "completed" if result.status == "successful" and result.rc == 0 else "failed"
+            run_record.ansible_stdout = node.bootstrap_logs
+            run_record.error = bootstrap_error
 
         db.commit()
 

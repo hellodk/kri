@@ -260,7 +260,7 @@ async def list_nodes(
         query = query.where(Node.drift_score <= drift_max)
 
     if tag:
-        key, _, value = tag.partition(":")
+        key, _sep1, value = tag.partition(":")
         subq = (
             select(Tag.node_id)
             .where(Tag.key == key, Tag.value == value)
@@ -277,7 +277,7 @@ async def list_nodes(
         )
         query = query.where(Node.id.in_(member_subq))
 
-    sort_field, _, sort_dir = sort.partition(":")
+    sort_field, _sep2, sort_dir = sort.partition(":")
     if sort_field not in _SORT_FIELDS:
         sort_field = "drift_score"
     sort_col = getattr(Node, sort_field)
@@ -393,10 +393,10 @@ async def add_node_tag(
     except IntegrityError:
         await db.rollback()
         # Concurrent insert won the race — fetch and return the existing tag
-        result = await db.execute(
+        tag_result = await db.execute(
             select(Tag).where(Tag.node_id == node_id, Tag.key == payload.key)
         )
-        tag = result.scalar_one()
+        tag = tag_result.scalar_one()
         return TagResponse.model_validate(tag)
 
     await db.refresh(tag)
