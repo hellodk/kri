@@ -1,8 +1,6 @@
 import uuid
 from datetime import timezone
 
-import pytest
-
 from fleet_platform.services.sbom_parser import SBOMParser
 
 _NODE_ID = str(uuid.uuid4())

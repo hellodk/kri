@@ -36,8 +36,9 @@ def _safe_label(label: str) -> str:
 
 
 def _get_playbooks_dir(db) -> Path:
-    from fleet_platform.models.platform_setting import PlatformSetting
     from sqlalchemy import select as _select
+
+    from fleet_platform.models.platform_setting import PlatformSetting
     row = db.execute(
         _select(PlatformSetting).where(PlatformSetting.key == "playbooks_dir")
     ).scalar_one_or_none()
