@@ -9,6 +9,7 @@ from fleet_platform.models.group_secret import GroupSecret
 from fleet_platform.models.llm_endpoint import LLMEndpoint
 from fleet_platform.models.llm_query_log import LLMQueryLog
 from fleet_platform.models.node import Node, Tag
+from fleet_platform.models.node_health_snapshot import NodeHealthSnapshot
 from fleet_platform.models.node_secret import NodeSecret
 from fleet_platform.models.platform_setting import PlatformSetting
 from fleet_platform.models.sbom import SBOMComponent, SBOMScan
@@ -30,4 +31,5 @@ __all__ = [
     "GroupSecret",
     "LLMEndpoint",
     "LLMQueryLog",
+    "NodeHealthSnapshot",
 ]
