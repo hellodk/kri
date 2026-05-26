@@ -1,0 +1,17 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: kri-datasource
+  namespace: utilities           # app namespace — never monitoring
+  labels:
+    grafana_datasource: "1"      # Grafana sidecar picks this up via label selector
+data:
+  kri-datasource.yaml: |
+    apiVersion: 1
+    datasources:
+      - name: KRI-Prometheus
+        type: prometheus
+        url: http://prometheus-operated.monitoring.svc:9090
+        isDefault: false         # NEVER set isDefault: true
+        jsonData:
+          timeInterval: "30s"
