@@ -8,6 +8,7 @@ from fleet_platform.workers.celery_app import celery_app
 )
 def run_alert_evaluation():
     import asyncio
+
     from fleet_platform.db.session import AsyncSessionLocal
     from fleet_platform.services.alert_svc import evaluate_alerts
 

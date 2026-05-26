@@ -39,7 +39,7 @@ def mark_stale_nodes() -> dict:
         )
         db.commit()
 
-    return {"stale": stale.rowcount, "offline": offline.rowcount}
+    return {"stale": stale.rowcount, "offline": offline.rowcount}  # type: ignore[attr-defined]
 
 
 @celery_app.task(

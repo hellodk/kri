@@ -1,6 +1,5 @@
 # fleet_platform/api/routes/security.py
 import uuid
-from datetime import UTC, datetime
 
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import func, select
@@ -175,12 +174,12 @@ async def security_node_detail(
     vulns = result.scalars().all()
 
     # License findings
-    result = await db.execute(
+    lic_result = await db.execute(
         select(LicenseFinding)
         .where(LicenseFinding.node_id == node_id)
         .order_by(LicenseFinding.risk.desc(), LicenseFinding.package_name)
     )
-    licenses = result.scalars().all()
+    licenses = lic_result.scalars().all()
 
     return {
         "node_id": str(node_id),
@@ -196,11 +195,11 @@ async def security_node_detail(
         ],
         "license_findings": [
             {
-                "id": str(l.id), "package_name": l.package_name,
-                "package_version": l.package_version, "license_id": l.license_id,
-                "risk": l.risk, "scanner": l.scanner, "scanned_at": l.scanned_at,
+                "id": str(lic.id), "package_name": lic.package_name,
+                "package_version": lic.package_version, "license_id": lic.license_id,
+                "risk": lic.risk, "scanner": lic.scanner, "scanned_at": lic.scanned_at,
             }
-            for l in licenses
+            for lic in licenses
         ],
     }
 
@@ -217,7 +216,7 @@ async def trigger_node_scan(
 ):
     """Trigger a vulnerability/license scan for a specific node."""
     if scanner not in _VALID_SCANNERS:
-        raise HTTPException(status_code=422, detail=f"Invalid scanner '{scanner}'. Must be one of: {sorted(_VALID_SCANNERS)}")
+        raise HTTPException(status_code=422, detail=f"Invalid scanner '{scanner}'. Must be one of: {sorted(_VALID_SCANNERS)}")  # noqa: E501
     from fleet_platform.workers.security_tasks import scan_node_security
     result = await db.execute(select(Node).where(Node.id == node_id))
     node = result.scalar_one_or_none()
@@ -235,7 +234,7 @@ async def trigger_fleet_scan(
 ):
     """Trigger vulnerability/license scans for all nodes."""
     if scanner not in _VALID_SCANNERS:
-        raise HTTPException(status_code=422, detail=f"Invalid scanner '{scanner}'. Must be one of: {sorted(_VALID_SCANNERS)}")
+        raise HTTPException(status_code=422, detail=f"Invalid scanner '{scanner}'. Must be one of: {sorted(_VALID_SCANNERS)}")  # noqa: E501
     from fleet_platform.workers.security_tasks import scan_all_nodes
     task = scan_all_nodes.delay(scanner=scanner)
     return {"task_id": task.id, "scanner": scanner, "status": "queued"}
@@ -249,8 +248,11 @@ async def integration_status(
     """Check connectivity to external security tools."""
     import subprocess
     import urllib.request
+
     from fleet_platform.services.platform_settings_svc import (
-        CXONE_URL, SONARQUBE_URL, get_setting,
+        CXONE_URL,
+        SONARQUBE_URL,
+        get_setting,
     )
 
     # Trivy

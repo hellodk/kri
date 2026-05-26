@@ -3,7 +3,7 @@ from datetime import date, datetime
 
 from sqlalchemy import Date, DateTime, ForeignKey, Index, String, UniqueConstraint
 from sqlalchemy.dialects.postgresql import UUID
-from sqlalchemy.orm import Mapped, mapped_column, relationship
+from sqlalchemy.orm import Mapped, mapped_column
 
 from fleet_platform.models.base import Base
 

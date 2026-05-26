@@ -259,8 +259,8 @@ async def _deliver_alert(rule: AlertRule, alert_event: AlertEvent, db: AsyncSess
                 payload = {
                     "event": rule.event_type,
                     "message": alert_event.message,
-                    "node_id": node_id_str,
-                    "fired_at": fired_at_iso,
+                    "node_id": node_id_str or "",
+                    "fired_at": fired_at_iso or "",
                 }
             data = json.dumps(payload).encode("utf-8")
             req = urllib.request.Request(

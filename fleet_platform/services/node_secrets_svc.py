@@ -9,7 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from fleet_platform.models.node_secret import NodeSecret
 from fleet_platform.models.platform_setting import PlatformSetting
-from fleet_platform.services.platform_settings_svc import encrypt_secret, decrypt_secret
+from fleet_platform.services.platform_settings_svc import decrypt_secret, encrypt_secret
 
 _DEFAULT_PILLAR_DIR = Path("/srv/salt/pillar")
 
