@@ -1,5 +1,4 @@
 # tests/integration/test_node_registration.py
-import pytest
 from httpx import AsyncClient
 
 

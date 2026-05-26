@@ -1,8 +1,8 @@
 # fleet_platform/api/routes/search.py
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy import or_, select
-from sqlalchemy.orm import selectinload
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
 from fleet_platform.api.deps import get_db
 from fleet_platform.core.auth import get_current_user
