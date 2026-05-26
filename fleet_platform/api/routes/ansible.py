@@ -7,10 +7,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 from fastapi import APIRouter, Body, Depends, HTTPException, Query, Request, status
-from sqlalchemy import func
-
-_MINION_ID_RE = re.compile(r'^[a-zA-Z0-9._-]{1,128}$')
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from fleet_platform.api.deps import get_db
@@ -41,6 +38,7 @@ from fleet_platform.workers.playbook_tasks import run_playbook
 
 router = APIRouter(prefix="/api/v1/ansible")
 
+_MINION_ID_RE = re.compile(r'^[a-zA-Z0-9._-]{1,128}$')
 _PLAYBOOKS_DIR = Path(__file__).parent.parent.parent.parent / "playbooks"
 
 
@@ -458,7 +456,8 @@ async def validate_source(
                     )
                     if ls_result2.returncode != 0:
                         err = ls_result2.stderr.decode(errors="replace").strip()
-                        logs.append(f"[1/3] ✗ Cannot access repository: {err or 'connection refused or repo not found'}")
+                        msg = err or "connection refused or repo not found"
+                        logs.append(f"[1/3] ✗ Cannot access repository: {msg}")
                         return PlaybookSourceValidateResponse(
                             valid=False,
                             error=f"Cannot access git repository: {err or 'connection refused or repo not found'}",
@@ -576,7 +575,8 @@ async def add_source(
         )
         if ls.returncode != 0:
             err = ls.stderr.decode(errors="replace").strip()
-            raise HTTPException(status_code=422, detail=f"Cannot access git repository: {err[:200] or 'connection refused'}")
+            detail = f"Cannot access git repository: {err[:200] or 'connection refused'}"
+            raise HTTPException(status_code=422, detail=detail)
 
     result = await db.execute(
         select(PlatformSetting).where(PlatformSetting.key == "playbook_sources")
@@ -823,7 +823,11 @@ async def get_playbook_tree(
                         else:
                             nodes.append(_file_node(f"templates/{src}", src, "template", task_name))
             # include_tasks / import_tasks
-            for key in ("include_tasks", "import_tasks", "ansible.builtin.include_tasks", "ansible.builtin.import_tasks"):
+            _task_include_keys = (
+                "include_tasks", "import_tasks",
+                "ansible.builtin.include_tasks", "ansible.builtin.import_tasks",
+            )
+            for key in _task_include_keys:
                 inc = task.get(key)
                 if isinstance(inc, str):
                     nodes.append(_file_node(inc, inc, "include", task_name))
@@ -1004,7 +1008,7 @@ async def list_playbook_files(
     playbooks_dir = await get_playbooks_dir(db)
 
     def _walk(path: Path, rel: str = "") -> list[dict]:
-        items = []
+        items: list[dict] = []
         try:
             entries = sorted(path.iterdir(), key=lambda p: (p.is_file(), p.name))
         except PermissionError:

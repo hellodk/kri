@@ -75,8 +75,8 @@ class SSHProxySession:
         self.ws = ws
         self.session_id = session_id
         self.max_mins = max_mins
-        self._ssh_conn = None
-        self._ssh_process = None
+        self._ssh_conn: asyncssh.SSHClientConnection | None = None
+        self._ssh_process: asyncssh.SSHClientProcess | None = None
         self._cmd_buffer = ""          # accumulates keystrokes until Enter
         self._recording_chunks: list[tuple[str, datetime]] = []
         self._chunk_index = 0
@@ -245,15 +245,15 @@ async def webssh_session(
     # Get session max mins from group (default 60 if not configured)
     max_mins = 60
     from fleet_platform.models.group import Group, GroupMember
-    result = await db.execute(
+    group_result = await db.execute(
         select(Group)
         .join(GroupMember, GroupMember.group_id == Group.id)
         .where(GroupMember.node_id == node_id)
         .order_by(Group.name.asc())
         .limit(1)
     )
-    primary_group = result.scalar_one_or_none()
-    if primary_group and getattr(primary_group, "session_max_mins", None):
+    primary_group = group_result.scalar_one_or_none()
+    if primary_group and primary_group.session_max_mins:
         max_mins = primary_group.session_max_mins
 
     proxy = SSHProxySession(websocket, session_id, max_mins)
@@ -313,6 +313,7 @@ async def webssh_session(
             connect_kwargs["password"] = creds["ssh_password"]
             proxy._ssh_conn = await asyncssh.connect(**connect_kwargs)
 
+        assert proxy._ssh_conn is not None
         proxy._ssh_process = await proxy._ssh_conn.create_process(
             term_type="xterm-256color",
             request_pty=True,
