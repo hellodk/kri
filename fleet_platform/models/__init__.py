@@ -11,6 +11,8 @@ from fleet_platform.models.platform_setting import PlatformSetting
 from fleet_platform.models.ansible_job import AnsibleJob
 from fleet_platform.models.node_secret import NodeSecret
 from fleet_platform.models.group_secret import GroupSecret
+from fleet_platform.models.llm_endpoint import LLMEndpoint
+from fleet_platform.models.llm_query_log import LLMQueryLog
 
 __all__ = [
     "Base", "TimestampMixin",
@@ -26,4 +28,6 @@ __all__ = [
     "AnsibleJob",
     "NodeSecret",
     "GroupSecret",
+    "LLMEndpoint",
+    "LLMQueryLog",
 ]
