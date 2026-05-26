@@ -86,7 +86,7 @@ async def vnc_session(
             timeout=10,
         )
     except (asyncio.TimeoutError, ConnectionRefusedError, OSError) as e:
-        err_msg = f"Cannot connect to VNC on {node.bootstrap_ip}:{VNC_PORT} — ensure Screen Sharing is enabled on the node: {e}"
+        err_msg = f"Cannot connect to VNC on {node.bootstrap_ip}:{VNC_PORT} — ensure Screen Sharing is enabled: {e}"
         await websocket.close(code=4000, reason=err_msg[:120])
         await _close_session(session_id, "failed")
         return

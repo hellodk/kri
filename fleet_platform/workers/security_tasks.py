@@ -141,10 +141,10 @@ def scan_node_security(self, node_id: str, scanner: str = "trivy") -> dict:
         if not components:
             return {"status": "no_components", "node_id": node_id}
 
-        cyclonedx = _build_cyclonedx(node_id, components)
+        cyclonedx = _build_cyclonedx(node_id, list(components))
 
-    vuln_rows = []
-    license_rows = []
+    vuln_rows: list[VulnerabilityFinding] = []
+    license_rows: list[LicenseFinding] = []
 
     if scanner == "trivy":
         with tempfile.NamedTemporaryFile(suffix=".json", mode="w", delete=False) as f:
@@ -181,10 +181,10 @@ def scan_node_security(self, node_id: str, scanner: str = "trivy") -> dict:
             .where(LicenseFinding.node_id == node_uuid)
             .where(LicenseFinding.scanner == scanner)
         )
-        for row in vuln_rows:
-            db.add(row)
-        for row in license_rows:
-            db.add(row)
+        for vrow in vuln_rows:
+            db.add(vrow)
+        for lrow in license_rows:
+            db.add(lrow)
         db.commit()
 
     return {
