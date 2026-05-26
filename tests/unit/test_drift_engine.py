@@ -1,7 +1,5 @@
 # tests/unit/test_drift_engine.py
-import pytest
-from fleet_platform.services.drift_engine import compute_drift, DriftResult
-
+from fleet_platform.services.drift_engine import DriftResult, compute_drift
 
 _GRAINS_FULL = {
     "pkgs": {

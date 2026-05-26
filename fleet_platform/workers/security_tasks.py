@@ -9,7 +9,6 @@ from pathlib import Path
 from sqlalchemy import delete, select
 
 from fleet_platform.db.session import get_sync_db
-from fleet_platform.models.node import Node
 from fleet_platform.models.sbom import SBOMComponent, SBOMScan
 from fleet_platform.models.security import LicenseFinding, VulnerabilityFinding
 from fleet_platform.workers.celery_app import celery_app
@@ -142,10 +141,10 @@ def scan_node_security(self, node_id: str, scanner: str = "trivy") -> dict:
         if not components:
             return {"status": "no_components", "node_id": node_id}
 
-        cyclonedx = _build_cyclonedx(node_id, components)
+        cyclonedx = _build_cyclonedx(node_id, list(components))
 
-    vuln_rows = []
-    license_rows = []
+    vuln_rows: list[VulnerabilityFinding] = []
+    license_rows: list[LicenseFinding] = []
 
     if scanner == "trivy":
         with tempfile.NamedTemporaryFile(suffix=".json", mode="w", delete=False) as f:
@@ -182,10 +181,10 @@ def scan_node_security(self, node_id: str, scanner: str = "trivy") -> dict:
             .where(LicenseFinding.node_id == node_uuid)
             .where(LicenseFinding.scanner == scanner)
         )
-        for row in vuln_rows:
-            db.add(row)
-        for row in license_rows:
-            db.add(row)
+        for vrow in vuln_rows:
+            db.add(vrow)
+        for lrow in license_rows:
+            db.add(lrow)
         db.commit()
 
     return {
@@ -196,14 +195,18 @@ def scan_node_security(self, node_id: str, scanner: str = "trivy") -> dict:
 
 def _scan_cxone(node_uuid: _uuid.UUID, cyclonedx: dict, now: datetime):
     """Submit SBOM to CxOne SCA and retrieve findings."""
-    import urllib.request
     import time as _time
+    import urllib.request
+
     import sqlalchemy as _sa
+
     from fleet_platform.db.session import get_sync_db as _db
-    from fleet_platform.services.platform_settings_svc import (
-        CXONE_URL, CXONE_API_TOKEN, _fernet,
-    )
     from fleet_platform.models.platform_setting import PlatformSetting
+    from fleet_platform.services.platform_settings_svc import (
+        CXONE_API_TOKEN,
+        CXONE_URL,
+        _fernet,
+    )
 
     cxone_url, token = "", ""
     with _db() as db:

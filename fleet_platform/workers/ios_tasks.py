@@ -8,10 +8,12 @@ from fleet_platform.workers.celery_app import celery_app
 )
 def check_all_jenkins_agents():
     import asyncio
+
+    from sqlalchemy import select
+
     from fleet_platform.db.session import AsyncSessionLocal
     from fleet_platform.models.ios_tracking import JenkinsAgent
     from fleet_platform.services.ios_tracking_svc import check_jenkins_agent
-    from sqlalchemy import select
 
     async def _run():
         async with AsyncSessionLocal() as db:

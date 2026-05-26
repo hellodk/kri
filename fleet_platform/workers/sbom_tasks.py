@@ -2,7 +2,7 @@ import json
 import os
 import uuid as _uuid
 
-from sqlalchemy import delete, select, text
+from sqlalchemy import delete, inspect, select, text
 
 from fleet_platform.db.session import get_sync_db
 from fleet_platform.models.sbom import SBOMComponent, SBOMScan
@@ -46,7 +46,7 @@ def index_sbom(self, node_id: str, file_path: str) -> dict:
         db.flush()
         if components:
             db.bulk_insert_mappings(
-                SBOMComponent,
+                inspect(SBOMComponent),  # type: ignore[arg-type]
                 [{"scan_id": scan.id, "node_id": _uuid.UUID(node_id), **c} for c in components],
             )
         db.commit()
@@ -66,6 +66,7 @@ def index_sbom(self, node_id: str, file_path: str) -> dict:
 def index_sbom_from_grains(self, node_id: str) -> dict:
     """Build an SBOM from package data in the latest grain facts and index it."""
     from datetime import UTC, datetime
+
     from fleet_platform.models.facts import NodeFact
 
     node_uuid = _uuid.UUID(node_id)
@@ -93,7 +94,7 @@ def index_sbom_from_grains(self, node_id: str) -> dict:
             return {"status": "no_packages"}
 
         # Build minimal CycloneDX-compatible structure for SBOMParser
-        components = [
+        components: list[dict] = [
             {
                 "name": name,
                 "version": str(ver) if ver else None,
@@ -122,11 +123,10 @@ def index_sbom_from_grains(self, node_id: str) -> dict:
         db.flush()
         if parsed_components:
             db.bulk_insert_mappings(
-                SBOMComponent,
+                inspect(SBOMComponent),  # type: ignore[arg-type]
                 [{"scan_id": scan.id, "node_id": node_uuid, **c} for c in parsed_components],
             )
         db.commit()
-        scan_id = scan.id
 
     archive_old_scans.delay(node_id=node_id, keep_count=3)
     return {"status": "indexed", "node_id": node_id, "component_count": len(parsed_components)}
@@ -161,7 +161,7 @@ def archive_old_scans(self, node_id: str, keep_count: int = 3) -> dict:
             .where(SBOMScan.id.not_in(keep_ids))
         )
         db.commit()
-    return {"deleted": result.rowcount}
+    return {"deleted": result.rowcount}  # type: ignore[attr-defined]
 
 
 @celery_app.task(
@@ -189,4 +189,4 @@ def cleanup_old_sbom_scans(keep_count: int = 3) -> dict:
             {"keep_count": keep_count},
         )
         db.commit()
-    return {"deleted": result.rowcount}
+    return {"deleted": result.rowcount}  # type: ignore[attr-defined]

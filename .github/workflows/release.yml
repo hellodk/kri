@@ -8,6 +8,7 @@ jobs:
   maybe-release:
     name: Create release on VERSION bump
     runs-on: ubuntu-latest
+    environment: production
     permissions:
       contents: write
     steps:
