@@ -3,8 +3,10 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from prometheus_client import CONTENT_TYPE_LATEST, generate_latest
 from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
+from starlette.responses import Response
 
 from fleet_platform.api.limiter import limiter
 from fleet_platform.api.routes import (
@@ -36,6 +38,7 @@ from fleet_platform.api.routes.vnc import router as vnc_router
 from fleet_platform.api.routes.webssh import router as webssh_router
 from fleet_platform.core.config import VERSION, settings
 from fleet_platform.core.logging import configure_logging, get_logger
+from fleet_platform.middleware.prometheus import PrometheusMiddleware
 
 _log = get_logger(__name__)
 
@@ -62,6 +65,11 @@ def create_app() -> FastAPI:
 
     app.state.limiter = limiter
     app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)  # type: ignore[arg-type]
+
+    # Prometheus middleware must be added before CORS so it sees every request.
+    # Starlette applies middleware in reverse-registration order (last-added runs first),
+    # so PrometheusMiddleware is registered first and therefore executes outermost.
+    app.add_middleware(PrometheusMiddleware)
 
     app.add_middleware(
         CORSMiddleware,
@@ -96,6 +104,11 @@ def create_app() -> FastAPI:
     app.include_router(alerts_router, tags=["alerts"])
     app.include_router(ios_tracking_router, tags=["ios"])
     app.include_router(fleet_health.router, tags=["fleet-health"])
+
+    @app.get("/metrics", include_in_schema=False)
+    async def metrics_endpoint():
+        """Prometheus scrape endpoint — returns metrics in text/plain exposition format."""
+        return Response(generate_latest(), media_type=CONTENT_TYPE_LATEST)
 
     @app.exception_handler(Exception)
     async def unhandled_exception_handler(request: Request, exc: Exception):
