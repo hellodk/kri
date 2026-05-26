@@ -7,6 +7,7 @@ from fleet_platform.models.facts import NodeFact
 from fleet_platform.models.group import Group, GroupMember
 from fleet_platform.models.group_secret import GroupSecret
 from fleet_platform.models.node import Node, Tag
+from fleet_platform.models.node_health_snapshot import NodeHealthSnapshot
 from fleet_platform.models.node_secret import NodeSecret
 from fleet_platform.models.platform_setting import PlatformSetting
 from fleet_platform.models.sbom import SBOMComponent, SBOMScan
@@ -26,4 +27,5 @@ __all__ = [
     "AnsibleJob",
     "NodeSecret",
     "GroupSecret",
+    "NodeHealthSnapshot",
 ]

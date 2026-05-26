@@ -16,6 +16,7 @@ from fleet_platform.api.routes import (
     drift,
     executions,
     fleet,
+    fleet_health,
     groups,
     health,
     ingest,
@@ -102,6 +103,7 @@ def create_app() -> FastAPI:
     app.include_router(salt_ops_router, tags=["salt-ops"])
     app.include_router(alerts_router, tags=["alerts"])
     app.include_router(ios_tracking_router, tags=["ios"])
+    app.include_router(fleet_health.router, tags=["fleet-health"])
 
     @app.get("/metrics", include_in_schema=False)
     async def metrics_endpoint():
