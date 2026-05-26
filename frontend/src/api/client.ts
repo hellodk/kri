@@ -1,3 +1,5 @@
+import { useAuthStore } from '../stores/authStore'
+
 export class ApiError extends Error {
   status: number
   constructor(status: number, message: string) {
@@ -45,6 +47,7 @@ async function request<T>(path: string, init?: RequestInit, retry = true): Promi
     if (refreshed) return request<T>(path, init, false)
     localStorage.removeItem('access_token')
     localStorage.removeItem('refresh_token')
+    useAuthStore.setState({ user: null, hydrating: false })
     window.location.href = '/login'
     throw new ApiError(401, 'Session expired')
   }
@@ -75,6 +78,7 @@ export const api = {
       if (refreshed) return api.postForm<T>(path, form, false)
       localStorage.removeItem('access_token')
       localStorage.removeItem('refresh_token')
+      useAuthStore.setState({ user: null, hydrating: false })
       window.location.href = '/login'
       throw new ApiError(401, 'Session expired')
     }

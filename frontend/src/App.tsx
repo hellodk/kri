@@ -53,6 +53,7 @@ function SaltKeyWatcher() {
     if (!userId) return
 
     async function poll() {
+      if (!localStorage.getItem('access_token')) return
       try {
         const keys = await saltKeysApi.list()
         const n = keys.pending_count
