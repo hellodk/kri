@@ -82,5 +82,6 @@ async def call_anthropic(
         system=system_prompt,
         messages=[{"role": "user", "content": user_prompt}],
     )
-    content: str = message.content[0].text
+    block = message.content[0]
+    content: str = block.text if hasattr(block, "text") else ""
     return content, message.usage.input_tokens, message.usage.output_tokens
