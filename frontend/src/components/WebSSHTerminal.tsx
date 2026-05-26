@@ -4,9 +4,11 @@ interface WebSSHTerminalProps {
   nodeId: string
   nodeName: string
   onClose: () => void
+  /** Optional: pre-existing session ID (informational only — displayed in header) */
+  sessionId?: string | null
 }
 
-export function WebSSHTerminal({ nodeId, nodeName, onClose }: WebSSHTerminalProps) {
+export function WebSSHTerminal({ nodeId, nodeName, onClose, sessionId }: WebSSHTerminalProps) {
   const termRef = useRef<HTMLDivElement>(null)
   const wsRef = useRef<WebSocket | null>(null)
   const terminalRef = useRef<any>(null)
@@ -119,6 +121,11 @@ export function WebSSHTerminal({ nodeId, nodeName, onClose }: WebSSHTerminalProp
           <span className="text-xs text-amber-500 bg-gray-800 px-2 py-0.5 rounded">
             Session recorded
           </span>
+          {sessionId && (
+            <span className="text-xs text-gray-600 bg-gray-800 px-2 py-0.5 rounded font-mono" title="Session ID">
+              {sessionId.slice(0, 8)}
+            </span>
+          )}
         </div>
         <button
           onClick={() => {

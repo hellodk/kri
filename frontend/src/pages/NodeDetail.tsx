@@ -17,7 +17,9 @@ import { DriftBadge } from '../components/DriftBadge'
 import { Skeleton } from '../components/Skeleton'
 import { ErrorState } from '../components/ErrorState'
 import { Pagination } from '../components/Pagination'
-import { WebSSHTerminal } from '../components/WebSSHTerminal'
+import { SshTabBar } from '../components/ssh/SshTabBar'
+import { MultiSessionTerminal } from '../components/ssh/MultiSessionTerminal'
+import type { SshTab } from '../components/ssh/SshTabBar'
 import { VNCViewer } from '../components/VNCViewer'
 import { formatDistanceToNow, format, differenceInDays, parseISO } from 'date-fns'
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts'
@@ -362,6 +364,8 @@ export function NodeDetail() {
   const [rebootstrapIp, setRebootstrapIp] = useState('')
   const [rebootstrapping, setRebootstrapping] = useState(false)
   const [showSSH, setShowSSH] = useState(false)
+  const [sshTabs, setSshTabs] = useState<SshTab[]>([])
+  const [activeSshTabId, setActiveSshTabId] = useState<string>('')
   const [showVNC, setShowVNC] = useState(false)
   const [sbomFilter, setSbomFilter] = useState('')
   const [selectedScanId, setSelectedScanId] = useState<string | null>(null)
@@ -679,7 +683,17 @@ export function NodeDetail() {
               : '⚙ Maintenance'}
           </button>
           <button
-            onClick={() => setShowSSH(true)}
+            onClick={() => {
+              const firstTab: SshTab = {
+                id: crypto.randomUUID(),
+                nodeId: node.id,
+                nodeName: node.hostname ?? node.minion_id,
+                sessionId: null,
+              }
+              setSshTabs([firstTab])
+              setActiveSshTabId(firstTab.id)
+              setShowSSH(true)
+            }}
             disabled={node.status !== 'online'}
             className="px-4 py-2 bg-emerald-600 text-white text-sm font-medium rounded-lg hover:bg-emerald-700 disabled:opacity-40 shadow-sm font-mono"
             title={node.status !== 'online' ? 'Node must be online' : 'Open SSH terminal'}
@@ -1380,12 +1394,70 @@ export function NodeDetail() {
         </div>
       )}
 
-      {showSSH && (
-        <WebSSHTerminal
-          nodeId={node.id}
-          nodeName={node.hostname ?? node.minion_id}
-          onClose={() => setShowSSH(false)}
-        />
+      {showSSH && sshTabs.length > 0 && (
+        <div className="fixed inset-0 z-50 flex flex-col bg-gray-950">
+          {/* Modal header */}
+          <div className="flex items-center justify-between px-4 py-2 bg-gray-900 border-b border-gray-800 shrink-0">
+            <div className="flex items-center gap-2">
+              <span className="text-sm font-mono text-gray-300">
+                SSH &rarr; <span className="text-cyan-400">{node.hostname ?? node.minion_id}</span>
+              </span>
+              <span className="text-xs text-gray-500 bg-gray-800 px-2 py-0.5 rounded">
+                {sshTabs.length} {sshTabs.length === 1 ? 'session' : 'sessions'}
+              </span>
+              <span className="text-xs text-amber-500 bg-gray-800 px-2 py-0.5 rounded">
+                Sessions recorded
+              </span>
+            </div>
+            <button
+              onClick={() => {
+                setShowSSH(false)
+                setSshTabs([])
+                setActiveSshTabId('')
+              }}
+              className="text-gray-400 hover:text-white text-lg px-3 py-1 hover:bg-gray-800 rounded transition-colors"
+            >
+              × Close All
+            </button>
+          </div>
+
+          {/* Tab bar */}
+          <SshTabBar
+            tabs={sshTabs}
+            activeTabId={activeSshTabId}
+            onTabSelect={setActiveSshTabId}
+            onTabClose={(tabId) => {
+              const remaining = sshTabs.filter((t) => t.id !== tabId)
+              if (remaining.length === 0) {
+                setShowSSH(false)
+                setSshTabs([])
+                setActiveSshTabId('')
+              } else {
+                setSshTabs(remaining)
+                // If we closed the active tab, switch to last remaining tab
+                if (tabId === activeSshTabId) {
+                  setActiveSshTabId(remaining[remaining.length - 1].id)
+                }
+              }
+            }}
+            onNewTab={() => {
+              const newTab: SshTab = {
+                id: crypto.randomUUID(),
+                nodeId: node.id,
+                nodeName: node.hostname ?? node.minion_id,
+                sessionId: null,
+              }
+              setSshTabs((prev) => [...prev, newTab])
+              setActiveSshTabId(newTab.id)
+            }}
+          />
+
+          {/* Terminal area — fills remaining height */}
+          <MultiSessionTerminal
+            tabs={sshTabs}
+            activeTabId={activeSshTabId}
+          />
+        </div>
       )}
 
       {showVNC && (
