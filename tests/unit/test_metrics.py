@@ -1,10 +1,9 @@
 # tests/unit/test_metrics.py
 """Unit tests for the Prometheus metrics module and /metrics endpoint."""
-import pytest
 
 
 def test_metrics_module_exports_node_gauges():
-    from fleet_platform.metrics import nodes_total, nodes_online, nodes_offline
+    from fleet_platform.metrics import nodes_offline, nodes_online, nodes_total
 
     assert nodes_total._name == "kri_nodes_total"
     assert nodes_online._name == "kri_nodes_online"
@@ -20,7 +19,7 @@ def test_metrics_module_exports_ssh_metrics():
 
 
 def test_metrics_module_exports_http_metrics():
-    from fleet_platform.metrics import http_requests_total, http_request_duration_seconds
+    from fleet_platform.metrics import http_request_duration_seconds, http_requests_total
 
     assert "kri_http_requests" in http_requests_total._name
     assert http_request_duration_seconds._name == "kri_http_request_duration_seconds"
@@ -34,6 +33,7 @@ def test_metrics_module_exports_celery_metrics():
 
 def test_metrics_endpoint_returns_200():
     from fastapi.testclient import TestClient
+
     from fleet_platform.api.main import app
 
     client = TestClient(app)
@@ -43,6 +43,7 @@ def test_metrics_endpoint_returns_200():
 
 def test_metrics_endpoint_content_type_is_text_plain():
     from fastapi.testclient import TestClient
+
     from fleet_platform.api.main import app
 
     client = TestClient(app)
@@ -52,6 +53,7 @@ def test_metrics_endpoint_content_type_is_text_plain():
 
 def test_metrics_endpoint_includes_kri_counter():
     from fastapi.testclient import TestClient
+
     from fleet_platform.api.main import app
 
     client = TestClient(app)
@@ -63,6 +65,7 @@ def test_metrics_endpoint_includes_kri_counter():
 
 def test_metrics_endpoint_includes_node_gauges():
     from fastapi.testclient import TestClient
+
     from fleet_platform.api.main import app
 
     client = TestClient(app)

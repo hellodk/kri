@@ -1,7 +1,8 @@
 # tests/unit/test_prometheus_middleware.py
 """Unit tests for the Prometheus middleware."""
+from unittest.mock import AsyncMock, MagicMock
+
 import pytest
-from unittest.mock import AsyncMock, MagicMock, patch
 
 
 @pytest.mark.asyncio
@@ -27,8 +28,8 @@ async def test_middleware_skips_metrics_path():
 @pytest.mark.asyncio
 async def test_middleware_records_metrics_for_api_calls():
     """Middleware must increment the request counter for non-metrics paths."""
-    from fleet_platform.middleware.prometheus import PrometheusMiddleware
     from fleet_platform.metrics import http_requests_total
+    from fleet_platform.middleware.prometheus import PrometheusMiddleware
 
     # Sample the counter before the request
     before = _sample_counter(http_requests_total, method="GET", endpoint="/health", status_code="200")
@@ -53,8 +54,8 @@ async def test_middleware_records_metrics_for_api_calls():
 @pytest.mark.asyncio
 async def test_middleware_records_duration():
     """Middleware must observe request duration on the histogram."""
-    from fleet_platform.middleware.prometheus import PrometheusMiddleware
     from fleet_platform.metrics import http_request_duration_seconds
+    from fleet_platform.middleware.prometheus import PrometheusMiddleware
 
     app_mock = AsyncMock()
     middleware = PrometheusMiddleware(app_mock)

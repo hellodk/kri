@@ -9,7 +9,6 @@ from slowapi.errors import RateLimitExceeded
 from starlette.responses import Response
 
 from fleet_platform.api.limiter import limiter
-from fleet_platform.middleware.prometheus import PrometheusMiddleware
 from fleet_platform.api.routes import (
     ansible,
     auth,
@@ -38,6 +37,7 @@ from fleet_platform.api.routes.vnc import router as vnc_router
 from fleet_platform.api.routes.webssh import router as webssh_router
 from fleet_platform.core.config import VERSION, settings
 from fleet_platform.core.logging import configure_logging, get_logger
+from fleet_platform.middleware.prometheus import PrometheusMiddleware
 
 _log = get_logger(__name__)
 
