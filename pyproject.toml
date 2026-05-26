@@ -1,5 +1,5 @@
 [build-system]
-requires = ["setuptools>=61"]
+requires = ["setuptools>=82.0.1"]
 build-backend = "setuptools.build_meta"
 
 [project]
@@ -17,16 +17,16 @@ dependencies = [
     "pydantic-settings>=2.7.0",
     "pyjwt[crypto]>=2.9.0",
     "bcrypt>=4.2.0",
-    "celery[redis]>=5.4.0",
+    "celery[redis]>=5.6.3",
     "redis>=5.2.0",
     "structlog>=24.4.0",
     "python-multipart>=0.0.12",
     "httpx>=0.28.0",
     "anthropic>=0.40",
     "slowapi>=0.1.9",
-    "aiofiles>=24.1.0",
+    "aiofiles>=25.1.0",
     "email-validator>=2.2.0",
-    "pyyaml>=6.0",
+    "pyyaml>=6.0.3",
     "ansible-runner>=2.4.0",
     "ansible-core>=2.17.0",
     "cryptography>=43.0.0",
@@ -38,7 +38,7 @@ dependencies = [
 dev = [
     "pytest>=8.3.0",
     "pytest-asyncio>=0.24.0",
-    "pytest-cov>=6.0.0",
+    "pytest-cov>=7.1.0",
     "ruff>=0.8.0",
     "mypy>=1.10",
     "vulture>=2.11",
