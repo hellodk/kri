@@ -1,11 +1,12 @@
 import uuid
+
 from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from fleet_platform.models.llm_endpoint import LLMEndpoint
 from fleet_platform.models.llm_query_log import LLMQueryLog
 from fleet_platform.schemas.llm import LLMEndpointCreate, LLMEndpointUpdate
-from fleet_platform.services.platform_settings_svc import encrypt_secret, decrypt_secret
+from fleet_platform.services.platform_settings_svc import decrypt_secret, encrypt_secret
 
 
 async def list_endpoints(db: AsyncSession) -> list[LLMEndpoint]:

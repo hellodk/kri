@@ -12,11 +12,13 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from fleet_platform.models.group import Group, GroupMember
 from fleet_platform.models.node import Node
+from fleet_platform.models.platform_setting import PlatformSetting
 from fleet_platform.services.platform_settings_svc import (
-    SSH_USERNAME, SSH_PASSWORD, _fernet,
+    SSH_PASSWORD,
+    SSH_USERNAME,
+    _fernet,
     decrypt_secret,
 )
-from fleet_platform.models.platform_setting import PlatformSetting
 
 
 async def resolve_node_credentials(node: Node, db: AsyncSession) -> dict:

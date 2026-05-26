@@ -1,6 +1,7 @@
 # tests/unit/test_llm_caller.py
-import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
+
+import pytest
 
 
 @pytest.mark.asyncio
@@ -126,8 +127,9 @@ async def test_call_anthropic_sends_correct_structure():
 
 @pytest.mark.asyncio
 async def test_call_openai_compat_raises_llm_call_error_on_http_error():
-    from fleet_platform.services.llm_caller import call_openai_compat, LLMCallError
     import httpx
+
+    from fleet_platform.services.llm_caller import LLMCallError, call_openai_compat
 
     mock_client = AsyncMock()
     mock_client.__aenter__ = AsyncMock(return_value=mock_client)
@@ -152,7 +154,7 @@ async def test_call_openai_compat_raises_llm_call_error_on_http_error():
 
 @pytest.mark.asyncio
 async def test_call_openai_compat_raises_llm_call_error_on_bad_response_shape():
-    from fleet_platform.services.llm_caller import call_openai_compat, LLMCallError
+    from fleet_platform.services.llm_caller import LLMCallError, call_openai_compat
 
     mock_response = MagicMock()
     mock_response.json.return_value = {"choices": []}  # empty choices — IndexError

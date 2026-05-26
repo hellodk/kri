@@ -1,5 +1,5 @@
-from unittest.mock import MagicMock, patch
 import uuid
+from unittest.mock import MagicMock, patch
 
 
 def _make_mock_db():
@@ -23,8 +23,9 @@ def test_compute_drift_no_facts_returns_no_facts_status():
 
 
 def test_compute_drift_no_baseline_returns_no_baseline_status():
-    from fleet_platform.workers.drift_tasks import compute_drift
     from unittest.mock import MagicMock
+
+    from fleet_platform.workers.drift_tasks import compute_drift
 
     node_id = str(uuid.uuid4())
     mock_fact = MagicMock()
@@ -47,8 +48,9 @@ def test_compute_drift_no_baseline_returns_no_baseline_status():
 
 
 def test_compute_drift_writes_drift_record_and_returns_score():
-    from fleet_platform.workers.drift_tasks import compute_drift
     from unittest.mock import MagicMock
+
+    from fleet_platform.workers.drift_tasks import compute_drift
 
     node_id = str(uuid.uuid4())
     mock_fact = MagicMock()

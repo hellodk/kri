@@ -51,12 +51,16 @@ def build_static_context(
 
 async def build_fleet_context(db: AsyncSession, intent: str) -> str:
     """Fetch live fleet state and build a system prompt. Stays under ~1500 tokens."""
-    from fleet_platform.models.node import Node
     from fleet_platform.models.group import Group
+    from fleet_platform.models.node import Node
+    from fleet_platform.services.platform_settings_svc import (
+        ANSIBLE_ENDPOINT_URL as ANSIBLE_ENDPOINT_URL_KEY,
+    )
+    from fleet_platform.services.platform_settings_svc import (
+        SALT_MASTER as SALT_MASTER_KEY,
+    )
     from fleet_platform.services.platform_settings_svc import (
         get_setting,
-        SALT_MASTER as SALT_MASTER_KEY,
-        ANSIBLE_ENDPOINT_URL as ANSIBLE_ENDPOINT_URL_KEY,
     )
 
     node_count_result = await db.execute(select(func.count()).select_from(Node))

@@ -4,8 +4,9 @@ These tests use a real test DB and mock only the outbound LLM HTTP calls.
 Run with: pytest tests/integration/test_llm_api.py -v
 Requires: DATABASE_URL env var pointing to a test PostgreSQL instance.
 """
+from unittest.mock import AsyncMock, MagicMock, patch
+
 import pytest
-from unittest.mock import AsyncMock, patch, MagicMock
 from httpx import AsyncClient
 
 pytestmark = pytest.mark.integration

@@ -16,11 +16,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from fleet_platform.api.deps import get_db
 from fleet_platform.api.limiter import limiter
 from fleet_platform.core.auth import get_current_user, hash_password, require_role
-from fleet_platform.services.platform_settings_svc import encrypt_secret
 from fleet_platform.models.ansible_job import AnsibleJob
 from fleet_platform.models.node import Node
-from fleet_platform.schemas.ansible import BootstrapRequest, BootstrapResponse
 from fleet_platform.models.platform_setting import PlatformSetting
+from fleet_platform.schemas.ansible import BootstrapRequest, BootstrapResponse
 from fleet_platform.schemas.playbook import (
     AnsibleJobResponse,
     PlaybookEntryResponse,
@@ -28,16 +27,17 @@ from fleet_platform.schemas.playbook import (
     PlaybookRunResponse,
     PlaybookSourceRequest,
     PlaybookSourceResponse,
+    PlaybookSourcesImportRequest,
     PlaybookSourceSyncResult,
     PlaybookSourceValidateRequest,
     PlaybookSourceValidateResponse,
-    PlaybookSourcesImportRequest,
 )
+from fleet_platform.services.credential_resolver import node_has_group
+from fleet_platform.services.platform_settings_svc import encrypt_secret
 from fleet_platform.services.playbook_discovery import discover_all
 from fleet_platform.services.playbook_sources import get_all_playbook_dirs, sync_all_git_sources
 from fleet_platform.workers.ansible_tasks import bootstrap_node
 from fleet_platform.workers.playbook_tasks import run_playbook
-from fleet_platform.services.credential_resolver import node_has_group
 
 router = APIRouter(prefix="/api/v1/ansible")
 
@@ -210,8 +210,9 @@ async def bootstrap_history(
     _: dict = Depends(require_role("viewer", "operator", "admin")),
 ):
     """List all bootstrap runs for a node, newest first."""
-    from fleet_platform.models.bootstrap_run import BootstrapRun
     from sqlalchemy import desc
+
+    from fleet_platform.models.bootstrap_run import BootstrapRun
 
     result = await db.execute(
         select(BootstrapRun)
@@ -897,7 +898,7 @@ async def run_playbook_endpoint(
     entries = discover_all(_PLAYBOOKS_DIR)
     entry = next((e for e in entries if e.filename == payload.playbook), None)
     if not entry:
-        raise HTTPException(status_code=404, detail=f"Playbook not found")
+        raise HTTPException(status_code=404, detail="Playbook not found")
     safe_name = entry.filename  # trusted — came from filesystem scan, not user input
 
     target_label = payload.target_id
@@ -1082,6 +1083,7 @@ async def get_task_status(
 ):
     """Return Celery task state + result for any queued task."""
     from celery.result import AsyncResult
+
     from fleet_platform.workers.celery_app import celery_app
     result = AsyncResult(task_id, app=celery_app)
     payload: dict = {"task_id": task_id, "state": result.state}

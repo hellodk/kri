@@ -1,6 +1,7 @@
 # tests/unit/test_llm_context.py
-import pytest
 from unittest.mock import AsyncMock, MagicMock
+
+import pytest
 
 
 def test_build_context_returns_nonempty_string():
@@ -57,9 +58,10 @@ def test_build_static_context_unknown_intent_falls_back_to_empty():
 @pytest.mark.asyncio
 async def test_build_fleet_context_assembles_prompt():
     """build_fleet_context fetches DB counts/groups/settings and builds the prompt."""
-    from unittest.mock import patch, AsyncMock
-    from fleet_platform.services.llm_context import build_fleet_context
+    from unittest.mock import patch
+
     import fleet_platform.services.platform_settings_svc as svc_mod
+    from fleet_platform.services.llm_context import build_fleet_context
 
     mock_db = AsyncMock()
 
@@ -87,8 +89,9 @@ async def test_build_fleet_context_assembles_prompt():
 
 @pytest.mark.asyncio
 async def test_build_fleet_context_appends_intent_addendum():
-    from fleet_platform.services.llm_context import build_fleet_context, INTENT_ADDENDUM
-    from unittest.mock import patch, AsyncMock
+    from unittest.mock import patch
+
+    from fleet_platform.services.llm_context import INTENT_ADDENDUM, build_fleet_context
 
     mock_db = AsyncMock()
 

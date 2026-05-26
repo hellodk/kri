@@ -2,6 +2,7 @@
 import base64
 import hashlib
 from pathlib import Path
+
 from cryptography.fernet import Fernet
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession

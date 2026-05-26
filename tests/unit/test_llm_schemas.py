@@ -99,6 +99,7 @@ def test_llm_models_exported_from_package():
 def test_llm_endpoint_create_rejects_unknown_provider():
     import pytest
     from pydantic import ValidationError
+
     from fleet_platform.schemas.llm import LLMEndpointCreate
     with pytest.raises(ValidationError):
         LLMEndpointCreate(
@@ -115,7 +116,9 @@ def test_llm_endpoint_create_accepts_valid_providers():
         assert obj.provider == provider
 
 def test_llm_endpoint_response_has_no_api_key_field():
-    import uuid, datetime
+    import datetime
+    import uuid
+
     from fleet_platform.schemas.llm import LLMEndpointResponse
     r = LLMEndpointResponse(
         id=uuid.uuid4(),
@@ -137,6 +140,7 @@ def test_llm_endpoint_response_has_no_api_key_field():
 def test_llm_query_request_valid_intents():
     import pytest
     from pydantic import ValidationError
+
     from fleet_platform.schemas.llm import LLMQueryRequest
     for intent in ("salt_state", "ansible_playbook", "fleet_command", "explain"):
         req = LLMQueryRequest(prompt="do something", intent=intent)
@@ -147,6 +151,7 @@ def test_llm_query_request_valid_intents():
 def test_llm_query_request_prompt_min_length():
     import pytest
     from pydantic import ValidationError
+
     from fleet_platform.schemas.llm import LLMQueryRequest
     with pytest.raises(ValidationError):
         LLMQueryRequest(prompt="", intent="explain")
@@ -161,6 +166,7 @@ def test_llm_endpoint_update_all_fields_optional():
 
 def test_llm_endpoint_response_model_validate_with_api_key():
     import datetime
+
     from fleet_platform.models.llm_endpoint import LLMEndpoint
     from fleet_platform.schemas.llm import LLMEndpointResponse
     now = datetime.datetime.now(datetime.timezone.utc)
@@ -182,6 +188,7 @@ def test_llm_endpoint_response_model_validate_with_api_key():
 
 def test_llm_endpoint_response_model_validate_without_api_key():
     import datetime
+
     from fleet_platform.models.llm_endpoint import LLMEndpoint
     from fleet_platform.schemas.llm import LLMEndpointResponse
     now = datetime.datetime.now(datetime.timezone.utc)

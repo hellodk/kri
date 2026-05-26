@@ -1,4 +1,4 @@
-from fleet_platform.db.session import get_sync_db, SyncSessionLocal
+from fleet_platform.db.session import SyncSessionLocal, get_sync_db
 
 
 def test_sync_session_imports():
