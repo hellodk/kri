@@ -13,7 +13,6 @@ from fleet_platform.services.alert_svc import (
     evaluate_alerts,
 )
 
-
 # ---------------------------------------------------------------------------
 # _validate_webhook_url — pure function, no async, no DB
 # ---------------------------------------------------------------------------

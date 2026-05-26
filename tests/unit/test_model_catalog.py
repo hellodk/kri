@@ -1,4 +1,3 @@
-import pytest
 from fleet_platform.services.model_catalog import CATALOG, get_model, get_models
 
 VALID_PROVIDERS = {"mlx", "anthropic", "openai_compat"}

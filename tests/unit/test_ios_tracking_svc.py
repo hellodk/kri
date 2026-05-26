@@ -1,7 +1,6 @@
 # tests/unit/test_ios_tracking_svc.py
 import json
 import uuid
-from datetime import UTC, datetime
 from unittest.mock import AsyncMock, MagicMock, patch
 
 from fleet_platform.services.ios_tracking_svc import (
@@ -9,7 +8,6 @@ from fleet_platform.services.ios_tracking_svc import (
     get_expiring_certs,
     update_node_from_grains,
 )
-
 
 # ---------------------------------------------------------------------------
 # update_node_from_grains

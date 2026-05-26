@@ -7,18 +7,17 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import yaml
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from fleet_platform.services.platform_settings_svc import decrypt_secret, encrypt_secret
 from fleet_platform.services.group_secrets_svc import (
     _DEFAULT_PILLAR_DIR,
     _get_pillar_dir,
-    get_secrets,
-    upsert_secret,
     delete_secret,
     get_decrypted_secrets,
-    write_group_pillar,
+    get_secrets,
     rebuild_top_sls,
+    upsert_secret,
+    write_group_pillar,
 )
-
+from fleet_platform.services.platform_settings_svc import encrypt_secret
 
 # ---------------------------------------------------------------------------
 # Helpers

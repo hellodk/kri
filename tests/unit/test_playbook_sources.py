@@ -1,9 +1,6 @@
 import json
-import os
 from pathlib import Path
-from unittest.mock import MagicMock, call, patch
-
-import pytest
+from unittest.mock import patch
 
 from fleet_platform.services.playbook_sources import (
     _default_clone_path,
@@ -12,7 +9,6 @@ from fleet_platform.services.playbook_sources import (
     get_all_playbook_dirs,
     sync_all_git_sources,
 )
-
 
 # ---------------------------------------------------------------------------
 # _translate_path

@@ -7,17 +7,16 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import yaml
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from fleet_platform.services.platform_settings_svc import decrypt_secret, encrypt_secret
 from fleet_platform.services.node_secrets_svc import (
     _DEFAULT_PILLAR_DIR,
     _get_pillar_dir,
-    get_secrets,
-    upsert_secret,
     delete_secret,
     get_decrypted_secrets,
+    get_secrets,
+    upsert_secret,
     write_node_pillar,
 )
-
+from fleet_platform.services.platform_settings_svc import encrypt_secret
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -122,7 +121,7 @@ async def test_upsert_secret_creates_new():
     db.execute.return_value = result1
 
     with patch("fleet_platform.services.node_secrets_svc.encrypt_secret", return_value="encrypted"):
-        returned = await upsert_secret(db, uuid.uuid4(), "my_key", "plaintext")
+        await upsert_secret(db, uuid.uuid4(), "my_key", "plaintext")
 
     db.add.assert_called_once()
     db.commit.assert_called_once()

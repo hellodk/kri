@@ -1,16 +1,15 @@
 # tests/unit/test_credential_resolver.py
 """Unit tests for fleet_platform.services.credential_resolver."""
 import uuid
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from fleet_platform.services.platform_settings_svc import _fernet, decrypt_secret, encrypt_secret
 from fleet_platform.services.credential_resolver import (
-    resolve_node_credentials,
     node_has_group,
+    resolve_node_credentials,
 )
-
+from fleet_platform.services.platform_settings_svc import _fernet, encrypt_secret
 
 # ---------------------------------------------------------------------------
 # Helpers
