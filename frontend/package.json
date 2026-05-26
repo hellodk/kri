@@ -16,7 +16,7 @@
     "@tanstack/react-virtual": "^3.13.24",
     "@xterm/xterm": "^6.0.0",
     "clsx": "^2.1.1",
-    "date-fns": "^4.1.0",
+    "date-fns": "^4.3.0",
     "date-fns-tz": "^3.2.0",
     "react": "^19.2.6",
     "react-dom": "^19.2.6",
