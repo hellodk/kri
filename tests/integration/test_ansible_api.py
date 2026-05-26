@@ -1,5 +1,4 @@
 # tests/integration/test_ansible_api.py
-import pytest
 from httpx import AsyncClient
 
 

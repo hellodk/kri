@@ -1,7 +1,5 @@
 # tests/integration/test_baselines_api.py
-import pytest
 from httpx import AsyncClient
-
 
 _SAMPLE_BASELINE = {
     "name": "test-global",

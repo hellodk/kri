@@ -1,6 +1,6 @@
 """Add bootstrap fields to nodes and platform_settings table."""
-from alembic import op
 import sqlalchemy as sa
+from alembic import op
 
 revision = "003"
 down_revision = "002"

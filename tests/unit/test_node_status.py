@@ -1,10 +1,8 @@
 # tests/unit/test_node_status.py
 from datetime import UTC, datetime, timedelta
 
-import pytest
-
-from fleet_platform.services.node_status import classify_status, verify_node_token
 from fleet_platform.core.auth import hash_password
+from fleet_platform.services.node_status import classify_status, verify_node_token
 
 
 def test_classify_online_within_15_minutes():

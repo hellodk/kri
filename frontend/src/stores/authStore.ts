@@ -5,8 +5,10 @@ import type { User } from '../types'
 interface AuthState {
   user: User | null
   hydrating: boolean
+  _hasHydrated: boolean
   setUser: (user: User) => void
   setHydrating: (v: boolean) => void
+  setHasHydrated: (v: boolean) => void
   clearAuth: () => Promise<void>
 }
 
@@ -15,8 +17,10 @@ export const useAuthStore = create<AuthState>()(
     (set) => ({
       user: null,
       hydrating: false,
+      _hasHydrated: false,
       setUser: (user) => set({ user, hydrating: false }),
       setHydrating: (v) => set({ hydrating: v }),
+      setHasHydrated: (v) => set({ _hasHydrated: v }),
       clearAuth: async () => {
         const refreshToken = localStorage.getItem('refresh_token')
         const accessToken = localStorage.getItem('access_token')
@@ -42,6 +46,9 @@ export const useAuthStore = create<AuthState>()(
     {
       name: 'auth-store',
       partialize: (state) => ({ user: state.user }),
+      onRehydrateStorage: () => (state) => {
+        state?.setHasHydrated(true)
+      },
     }
   )
 )

@@ -83,7 +83,7 @@ async def create_group(
         if not validate_predicate(payload.predicate):
             raise HTTPException(
                 status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-                detail='Invalid predicate. Must be {"and": [...]} or {"or": [...]} with {"key":"...","value":"..."} conditions.',
+                detail='Predicate must be {"and":[...]} or {"or":[...]} with {"key":"...","value":"..."} items.',
             )
     group = Group(
         name=payload.name,

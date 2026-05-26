@@ -8,25 +8,36 @@ from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 from starlette.responses import Response
 
-from fleet_platform.core.config import settings, VERSION
-from fleet_platform.core.logging import configure_logging, get_logger
 from fleet_platform.api.limiter import limiter
 from fleet_platform.middleware.prometheus import PrometheusMiddleware
 from fleet_platform.api.routes import (
-    health, auth, nodes, ingest, fleet, groups, search, baselines, drift, executions, sbom,
-    ansible, platform_settings
+    ansible,
+    auth,
+    baselines,
+    drift,
+    executions,
+    fleet,
+    groups,
+    health,
+    ingest,
+    nodes,
+    platform_settings,
+    sbom,
+    search,
 )
-from fleet_platform.api.routes.provisioning import router as provisioning_router
-from fleet_platform.api.routes.security import router as security_router
-from fleet_platform.api.routes.webssh import router as webssh_router
-from fleet_platform.api.routes.vnc import router as vnc_router
-from fleet_platform.api.routes.audit import router as audit_router
-from fleet_platform.api.routes.salt_keys import router as salt_keys_router
-from fleet_platform.api.routes.node_secrets import router as node_secrets_router
-from fleet_platform.api.routes.group_secrets import router as group_secrets_router
-from fleet_platform.api.routes.salt_ops import router as salt_ops_router
 from fleet_platform.api.routes.alerts import router as alerts_router
+from fleet_platform.api.routes.audit import router as audit_router
+from fleet_platform.api.routes.group_secrets import router as group_secrets_router
 from fleet_platform.api.routes.ios_tracking import router as ios_tracking_router
+from fleet_platform.api.routes.node_secrets import router as node_secrets_router
+from fleet_platform.api.routes.provisioning import router as provisioning_router
+from fleet_platform.api.routes.salt_keys import router as salt_keys_router
+from fleet_platform.api.routes.salt_ops import router as salt_ops_router
+from fleet_platform.api.routes.security import router as security_router
+from fleet_platform.api.routes.vnc import router as vnc_router
+from fleet_platform.api.routes.webssh import router as webssh_router
+from fleet_platform.core.config import VERSION, settings
+from fleet_platform.core.logging import configure_logging, get_logger
 
 _log = get_logger(__name__)
 
@@ -52,7 +63,7 @@ def create_app() -> FastAPI:
     )
 
     app.state.limiter = limiter
-    app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+    app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)  # type: ignore[arg-type]
 
     # Prometheus middleware must be added before CORS so it sees every request.
     # Starlette applies middleware in reverse-registration order (last-added runs first),

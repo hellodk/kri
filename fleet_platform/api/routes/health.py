@@ -4,7 +4,7 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from fleet_platform.api.deps import get_db, get_redis
-from fleet_platform.core.config import settings, VERSION
+from fleet_platform.core.config import VERSION, settings
 
 router = APIRouter()
 

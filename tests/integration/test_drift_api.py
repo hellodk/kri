@@ -1,6 +1,5 @@
 # tests/integration/test_drift_api.py
 import secrets
-import uuid
 from datetime import UTC, datetime
 from unittest.mock import patch
 
