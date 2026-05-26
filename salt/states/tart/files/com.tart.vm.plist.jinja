@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN"
+  "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>{{ label }}</string>
+
+    <key>ProgramArguments</key>
+    <array>
+        <string>{{ tart_bin }}</string>
+        <string>run</string>
+        <string>{{ vm_name }}</string>
+        <string>--no-graphics</string>
+    </array>
+
+    <!-- Run as the user who owns ~/.tart/ so VM storage is accessible -->
+    <key>UserName</key>
+    <string>{{ run_user }}</string>
+
+    <key>RunAtLoad</key>
+    <true/>
+
+    <!-- Restart automatically if the VM exits unexpectedly -->
+    <key>KeepAlive</key>
+    <true/>
+
+    <key>ThrottleInterval</key>
+    <integer>10</integer>
+
+    <key>StandardOutPath</key>
+    <string>/var/log/tart-{{ vm_name }}.log</string>
+
+    <key>StandardErrorPath</key>
+    <string>/var/log/tart-{{ vm_name }}.err</string>
+</dict>
+</plist>
