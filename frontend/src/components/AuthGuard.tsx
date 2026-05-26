@@ -7,6 +7,7 @@ export function AuthGuard({ children }: { children: React.ReactNode }) {
   const token = localStorage.getItem('access_token')
   const user = useAuthStore((s) => s.user)
   const hydrating = useAuthStore((s) => s.hydrating)
+  const _hasHydrated = useAuthStore((s) => s._hasHydrated)
   const setUser = useAuthStore((s) => s.setUser)
   const setHydrating = useAuthStore((s) => s.setHydrating)
   // Use a ref to prevent multiple concurrent /auth/me calls
@@ -31,7 +32,22 @@ export function AuthGuard({ children }: { children: React.ReactNode }) {
     }
   }, [token, user, setUser, setHydrating])
 
+  // Wait for Zustand persist to finish reading from localStorage before rendering anything.
+  // Without this gate, the store briefly returns user=null before rehydration completes,
+  // causing a blank-screen flash on every page load.
+  if (!_hasHydrated) {
+    return (
+      <div className="flex h-screen items-center justify-center bg-gray-50">
+        <div className="h-8 w-8 animate-spin rounded-full border-4 border-gray-200 border-t-blue-600" />
+      </div>
+    )
+  }
+
   if (!token) return <Navigate to="/login" replace />
-  if (hydrating || (token && !user)) return null  // waiting for /auth/me
+  if (hydrating || (token && !user)) return (
+    <div className="flex h-screen items-center justify-center bg-gray-50">
+      <div className="h-8 w-8 animate-spin rounded-full border-4 border-gray-200 border-t-blue-600" />
+    </div>
+  )
   return <>{children}</>
 }

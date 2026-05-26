@@ -1,5 +1,8 @@
 {
   "permissions": {
+    "deny": [
+      "Bash(sudo *)"
+    ],
     "allow": [
       "Read",
       "Edit",
@@ -83,6 +86,8 @@
       "Bash(gh workflow *)",
       "Bash(./scripts/kri.sh *)",
       "Bash(/home/dk/Documents/git/kri/scripts/kri.sh *)",
+      "Bash(cd /home/dk/Documents/git/kri-* && *)",
+      "Bash(pre-commit *)",
       "mcp__plugin_playwright_playwright__browser_navigate",
       "mcp__plugin_playwright_playwright__browser_snapshot",
       "mcp__plugin_playwright_playwright__browser_click",

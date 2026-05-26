@@ -1,5 +1,4 @@
 # tests/integration/test_playbook_api.py
-import pytest
 from httpx import AsyncClient
 
 

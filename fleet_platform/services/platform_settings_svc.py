@@ -2,15 +2,16 @@
 import base64
 import hashlib
 from pathlib import Path
+
 from cryptography.fernet import Fernet
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-_REPO_ROOT = Path(__file__).parent.parent.parent
-_DEFAULT_PLAYBOOKS_DIR = _REPO_ROOT / "playbooks"
-
 from fleet_platform.core.config import settings
 from fleet_platform.models.platform_setting import PlatformSetting
+
+_REPO_ROOT = Path(__file__).parent.parent.parent
+_DEFAULT_PLAYBOOKS_DIR = _REPO_ROOT / "playbooks"
 
 # Setting key constants
 SALT_MASTER = "salt_master_address"
