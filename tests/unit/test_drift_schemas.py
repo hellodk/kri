@@ -1,9 +1,9 @@
 # tests/unit/test_drift_schemas.py
 import uuid
-from datetime import UTC, datetime
 
 from fleet_platform.schemas.drift import (
-    DriftRecordResponse, BaselineCreate, BaselineResponse, drift_severity,
+    BaselineCreate,
+    drift_severity,
 )
 from fleet_platform.schemas.execution import ExecutionJobResponse
 

@@ -66,6 +66,7 @@ def index_sbom(self, node_id: str, file_path: str) -> dict:
 def index_sbom_from_grains(self, node_id: str) -> dict:
     """Build an SBOM from package data in the latest grain facts and index it."""
     from datetime import UTC, datetime
+
     from fleet_platform.models.facts import NodeFact
 
     node_uuid = _uuid.UUID(node_id)
@@ -126,7 +127,6 @@ def index_sbom_from_grains(self, node_id: str) -> dict:
                 [{"scan_id": scan.id, "node_id": node_uuid, **c} for c in parsed_components],
             )
         db.commit()
-        scan_id = scan.id
 
     archive_old_scans.delay(node_id=node_id, keep_count=3)
     return {"status": "indexed", "node_id": node_id, "component_count": len(parsed_components)}

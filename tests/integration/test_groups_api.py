@@ -1,7 +1,6 @@
 # tests/integration/test_groups_api.py
 import uuid
 
-import pytest
 from httpx import AsyncClient
 
 

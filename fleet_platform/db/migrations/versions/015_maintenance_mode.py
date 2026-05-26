@@ -1,12 +1,12 @@
 """Add maintenance_mode to nodes table."""
 
+import sqlalchemy as sa
+from alembic import op
+
 revision = '015'
 down_revision = '014'
 branch_labels = None
 depends_on = None
-
-import sqlalchemy as sa
-from alembic import op
 
 
 def upgrade():

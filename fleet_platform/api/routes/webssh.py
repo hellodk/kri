@@ -18,10 +18,15 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from fleet_platform.api.deps import get_db
-from fleet_platform.core.auth import decode_token, TokenExpiredError, TokenInvalidError, get_current_user
+from fleet_platform.core.auth import (
+    TokenExpiredError,
+    TokenInvalidError,
+    decode_token,
+    get_current_user,
+)
+from fleet_platform.db.session import AsyncSessionLocal
 from fleet_platform.models.node import Node
 from fleet_platform.models.ssh_session import SecurityEvent, SessionRecording, SSHSession
-from fleet_platform.db.session import AsyncSessionLocal
 
 router = APIRouter(prefix="/api/v1/ssh")
 
@@ -293,8 +298,8 @@ async def webssh_session(
             connect_timeout=15,
         )
         if creds["auth_mode"] == "key" and creds.get("ssh_key"):
-            import tempfile
             import os
+            import tempfile
             with tempfile.NamedTemporaryFile(mode="w", suffix=".pem", delete=False) as f:
                 f.write(creds["ssh_key"])
                 key_path = f.name

@@ -6,14 +6,13 @@ import re
 import secrets
 import tempfile
 import uuid as _uuid
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, datetime
 from pathlib import Path
 
 import ansible_runner
 from sqlalchemy import select
 
 from fleet_platform.core.auth import hash_password
-from fleet_platform.core.config import settings
 from fleet_platform.db.session import get_sync_db
 from fleet_platform.models.bootstrap_run import BootstrapRun
 from fleet_platform.models.node import Node
@@ -41,8 +40,11 @@ def _validate_minion_id(minion_id: str) -> str:
 def _get_bootstrap_settings(db) -> tuple[str, str, str, str]:
     """Returns (salt_master, ssh_user, ssh_password, controller_pubkey)."""
     from fleet_platform.services.platform_settings_svc import (
-        SALT_MASTER, SSH_USERNAME, SSH_PASSWORD,
-        CONTROLLER_PUBKEY_PATH, _fernet,
+        CONTROLLER_PUBKEY_PATH,
+        SALT_MASTER,
+        SSH_PASSWORD,
+        SSH_USERNAME,
+        _fernet,
     )
 
     def _get(key: str) -> str:
@@ -79,8 +81,9 @@ def _get_node_credentials(node) -> tuple[str, str, str]:
 
 def _get_pillar_dir(db) -> Path:
     """Return the configured pillar directory, falling back to /srv/salt/pillar."""
-    from fleet_platform.models.platform_setting import PlatformSetting
     from sqlalchemy import select as _select
+
+    from fleet_platform.models.platform_setting import PlatformSetting
     row = db.execute(
         _select(PlatformSetting).where(PlatformSetting.key == "pillar_dir")
     ).scalar_one_or_none()
@@ -131,7 +134,9 @@ def _write_pillar_file(
     max_retries=0,
     queue="maintenance",
 )
-def bootstrap_node(self, node_id: str, target_ip: str, ssh_username: str | None = None, ssh_password: str | None = None) -> dict:
+def bootstrap_node(
+    self, node_id: str, target_ip: str, ssh_username: str | None = None, ssh_password: str | None = None
+) -> dict:
     """Run bootstrap_mac_mini.yml against a single Mac Mini."""
     node_uuid = _uuid.UUID(node_id)
     logger.info("bootstrap_node starting: node_id=%s target_ip=%s", node_id, target_ip)
