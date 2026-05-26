@@ -15,7 +15,8 @@ const links = [
   { to: '/salt-ops',   label: 'Salt Ops',    icon: '▹' },
   { to: '/salt-keys',  label: 'Minion Keys', icon: '⊗' },
   { to: '/audit',      label: 'Audit',       icon: '◎' },
-  { to: '/alerts',     label: 'Alerts',      icon: '◭' },
+  { to: '/alerts',       label: 'Alerts',        icon: '◭' },
+  { to: '/fleet-health', label: 'Fleet Health', icon: '♥' },
   { to: '/settings',   label: 'Settings',    icon: '⚙' },
 ]
 
