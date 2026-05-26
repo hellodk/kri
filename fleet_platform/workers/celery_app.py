@@ -17,6 +17,7 @@ celery_app = Celery(
         "fleet_platform.workers.salt_tasks",
         "fleet_platform.workers.alert_tasks",
         "fleet_platform.workers.ios_tasks",
+        "fleet_platform.workers.health_tasks",
     ],
 )
 
@@ -32,6 +33,7 @@ celery_app.conf.update(
         "fleet_platform.workers.drift_tasks.*": {"queue": "drift"},
         "fleet_platform.workers.sbom_tasks.*": {"queue": "sbom"},
         "fleet_platform.workers.maintenance.*": {"queue": "maintenance"},
+        "fleet_platform.workers.health_tasks.*": {"queue": "maintenance"},
     },
     beat_schedule={
         "mark-stale-nodes": {
@@ -58,6 +60,10 @@ celery_app.conf.update(
         "check-jenkins-agents": {
             "task": "fleet_platform.workers.ios_tasks.check_all_jenkins_agents",
             "schedule": 300,
+        },
+        "collect-fleet-health": {
+            "task": "fleet_platform.workers.health_tasks.collect_fleet_health",
+            "schedule": 900.0,  # every 15 minutes
         },
     },
 )
