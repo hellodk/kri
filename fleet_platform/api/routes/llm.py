@@ -18,8 +18,18 @@ from fleet_platform.schemas.llm import (
 from fleet_platform.services import llm_svc
 from fleet_platform.services.llm_caller import LLMCallError, call_anthropic, call_openai_compat
 from fleet_platform.services.llm_context import build_fleet_context
+from fleet_platform.services.model_catalog import get_models
 
 router = APIRouter(prefix="/api/v1/llm", tags=["llm"])
+
+
+@router.get("/models")
+async def list_models(provider: str | None = None):
+    """Return the shared model catalog, optionally filtered by provider.
+
+    Used by the UI model selector dropdown. No auth required — catalog is public.
+    """
+    return get_models(provider)
 
 
 def _to_response(endpoint) -> LLMEndpointResponse:
