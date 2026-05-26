@@ -18,8 +18,9 @@ def test_collect_fleet_health_skips_when_no_online_nodes():
 
 
 def test_collect_fleet_health_inserts_snapshot_per_node():
-    from fleet_platform.workers.health_tasks import collect_fleet_health
     import uuid
+
+    from fleet_platform.workers.health_tasks import collect_fleet_health
 
     node1 = MagicMock()
     node1.id = uuid.uuid4()

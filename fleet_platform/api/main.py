@@ -14,6 +14,7 @@ from fleet_platform.api.routes import (
     drift,
     executions,
     fleet,
+    fleet_health,
     groups,
     health,
     ingest,
@@ -24,7 +25,8 @@ from fleet_platform.api.routes import (
 )
 from fleet_platform.api.routes.alerts import router as alerts_router
 from fleet_platform.api.routes.audit import router as audit_router
-from fleet_platform.api.routes import fleet_health
+from fleet_platform.api.routes.group_secrets import router as group_secrets_router
+from fleet_platform.api.routes.ios_tracking import router as ios_tracking_router
 from fleet_platform.api.routes.node_secrets import router as node_secrets_router
 from fleet_platform.api.routes.provisioning import router as provisioning_router
 from fleet_platform.api.routes.salt_keys import router as salt_keys_router

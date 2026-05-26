@@ -126,8 +126,9 @@ def test_parse_gpu_info_invalid_json_returns_none():
 
 
 def test_parse_powermetrics_apple_silicon():
-    from fleet_platform.services.salt_maintenance_svc import parse_powermetrics
     import json
+
+    from fleet_platform.services.salt_maintenance_svc import parse_powermetrics
     data = {
         "processor": {"packages": [{"package_mw": 5000}]},
         "gpu": {"package_mw": 1500},
@@ -140,8 +141,9 @@ def test_parse_powermetrics_apple_silicon():
 
 
 def test_parse_powermetrics_intel_format():
-    from fleet_platform.services.salt_maintenance_svc import parse_powermetrics
     import json
+
+    from fleet_platform.services.salt_maintenance_svc import parse_powermetrics
     data = {
         "cpu_power": {"package_mw": 8000},
         "gpu_power": {"gpu_mw": 2000},
