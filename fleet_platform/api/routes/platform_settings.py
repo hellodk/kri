@@ -6,11 +6,22 @@ from fleet_platform.api.deps import get_db
 from fleet_platform.core.auth import require_role
 from fleet_platform.schemas.ansible import PlatformSettingsResponse, PlatformSettingsUpdate
 from fleet_platform.services.platform_settings_svc import (
-    SALT_MASTER, SSH_USERNAME, SSH_PASSWORD, ANSIBLE_ENDPOINT_URL, ANSIBLE_API_TOKEN,
-    PLAYBOOKS_DIR, PILLAR_DIR, KRI_API_URL,
-    CXONE_URL, CXONE_API_TOKEN, SONARQUBE_URL, SONARQUBE_TOKEN, LICENSE_POLICY,
+    ANSIBLE_API_TOKEN,
+    ANSIBLE_ENDPOINT_URL,
+    CXONE_API_TOKEN,
+    CXONE_URL,
+    KRI_API_URL,
+    LICENSE_POLICY,
+    PILLAR_DIR,
+    PLAYBOOKS_DIR,
+    SALT_MASTER,
+    SONARQUBE_TOKEN,
+    SONARQUBE_URL,
+    SSH_PASSWORD,
+    SSH_USERNAME,
     VNC_ENABLED,
-    get_setting, set_setting,
+    get_setting,
+    set_setting,
 )
 from fleet_platform.services.ssh_keypair import ensure_controller_keypair, get_controller_pubkey
 

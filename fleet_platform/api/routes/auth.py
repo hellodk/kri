@@ -20,7 +20,6 @@ from fleet_platform.core.auth import (
 )
 from fleet_platform.models.user import User
 from fleet_platform.schemas.auth import (
-    AccessTokenResponse,
     LoginRequest,
     LogoutRequest,
     MeResponse,

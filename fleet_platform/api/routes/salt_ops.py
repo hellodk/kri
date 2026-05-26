@@ -5,9 +5,7 @@ from pathlib import Path
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel
-from sqlalchemy.ext.asyncio import AsyncSession
 
-from fleet_platform.api.deps import get_db
 from fleet_platform.core.auth import get_current_user, require_role
 
 router = APIRouter(prefix="/api/v1/salt")

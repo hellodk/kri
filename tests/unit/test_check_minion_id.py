@@ -1,17 +1,16 @@
 """Unit tests for GET /api/v1/fleet/nodes/check-minion-id"""
 import secrets
 from datetime import UTC, datetime
+from unittest.mock import AsyncMock
 
 import pytest_asyncio
 from httpx import ASGITransport, AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
-from unittest.mock import AsyncMock
 
 from fleet_platform.core.auth import create_access_token, hash_password
 from fleet_platform.core.config import settings
 from fleet_platform.models import Base, User
 from fleet_platform.models.node import Node
-
 
 # ─── Fixtures ──────────────────────────────────────────────────────────────────
 
@@ -39,13 +38,14 @@ async def db_session(test_engine):
 async def app_with_test_db(test_engine):
     from slowapi import Limiter
     from slowapi.util import get_remote_address
+
     import fleet_platform.api.limiter as limiter_module
 
     test_limiter = Limiter(key_func=get_remote_address, storage_uri="memory://")
     limiter_module.limiter = test_limiter
 
-    from fleet_platform.api.main import create_app
     from fleet_platform.api import deps
+    from fleet_platform.api.main import create_app
 
     app = create_app()
     app.state.limiter = test_limiter

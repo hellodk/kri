@@ -1,10 +1,11 @@
-import pytest
 import uuid
 from datetime import UTC, datetime
 
-from fleet_platform.schemas.fleet import FleetOverviewResponse, NodeListItem, NodeDetailResponse
-from fleet_platform.schemas.group import GroupCreate, GroupResponse
-from fleet_platform.schemas.tag import TagCreate, TagResponse
+import pytest
+
+from fleet_platform.schemas.fleet import FleetOverviewResponse, NodeListItem
+from fleet_platform.schemas.group import GroupCreate
+from fleet_platform.schemas.tag import TagCreate
 
 
 def test_fleet_overview_response():
