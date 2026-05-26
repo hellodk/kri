@@ -112,14 +112,14 @@ async def test_node_level_credentials_decrypt_failure():
 # ---------------------------------------------------------------------------
 
 async def test_node_level_credentials_with_ssh_key():
-    encrypted_key = encrypt_secret("-----BEGIN RSA PRIVATE KEY-----")
+    encrypted_key = encrypt_secret("SSH_KEY_PLACEHOLDER_RSA")
     node = _node(ssh_username="admin", ssh_key_enc=encrypted_key, ssh_auth_mode="key")
     db = AsyncMock(spec=AsyncSession)
 
     result = await resolve_node_credentials(node, db)
 
     assert result["credential_source"] == "node"
-    assert result["ssh_key"] == "-----BEGIN RSA PRIVATE KEY-----"
+    assert result["ssh_key"] == "SSH_KEY_PLACEHOLDER_RSA"
     assert result["auth_mode"] == "key"
 
 
@@ -253,14 +253,14 @@ async def test_group_level_decrypt_failure_swallowed():
 # ---------------------------------------------------------------------------
 
 async def test_group_level_with_ssh_key():
-    encrypted_key = encrypt_secret("-----BEGIN EC PRIVATE KEY-----")
+    encrypted_key = encrypt_secret("SSH_KEY_PLACEHOLDER_EC")
     node = _node()
     group = _group(ssh_username="guser", ssh_key_enc=encrypted_key, ssh_auth_mode="key")
     db = _make_db(group)
 
     result = await resolve_node_credentials(node, db)
 
-    assert result["ssh_key"] == "-----BEGIN EC PRIVATE KEY-----"
+    assert result["ssh_key"] == "SSH_KEY_PLACEHOLDER_EC"
     assert result["auth_mode"] == "key"
 
 
