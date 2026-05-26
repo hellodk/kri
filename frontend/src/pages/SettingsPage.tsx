@@ -2,6 +2,8 @@ import { useEffect, useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { ansibleApi } from '../api/ansible'
 import { playbookSourcesApi, type PlaybookSource, type PlaybookSourceValidateResponse } from '../api/playbookSources'
+import { llmApi, type LLMEndpoint } from '../api/llm'
+import { LLMEndpointForm } from '../components/LLMEndpointForm'
 import { useToastStore } from '../stores/toastStore'
 
 export function SettingsPage() {
@@ -76,7 +78,7 @@ export function SettingsPage() {
       ? `http://${master}/api/v1/ingest/grains`
       : null
 
-  const TABS = ['General', 'Bootstrap', 'Remote Access', 'Integrations', 'Advanced'] as const
+  const TABS = ['General', 'Bootstrap', 'Remote Access', 'Integrations', 'Advanced', 'AI / LLM'] as const
   type Tab = typeof TABS[number]
   const [activeTab, setActiveTab] = useState<Tab>('General')
 
@@ -451,16 +453,25 @@ export function SettingsPage() {
         </div>
       )}
 
-      {/* Save button — always visible */}
-      <div className="flex justify-end pt-2">
-        <button
-          onClick={() => saveMutation.mutate()}
-          disabled={saveMutation.isPending}
-          className="px-6 py-2.5 bg-brand-600 text-white rounded-lg font-medium hover:bg-brand-700 disabled:opacity-50 shadow-sm"
-        >
-          {saveMutation.isPending ? 'Saving…' : 'Save Settings'}
-        </button>
-      </div>
+      {/* AI / LLM tab */}
+      {activeTab === 'AI / LLM' && (
+        <div className="space-y-6">
+          <LLMEndpointsSection />
+        </div>
+      )}
+
+      {/* Save button — visible for all tabs except AI / LLM (which manages its own records) */}
+      {activeTab !== 'AI / LLM' && (
+        <div className="flex justify-end pt-2">
+          <button
+            onClick={() => saveMutation.mutate()}
+            disabled={saveMutation.isPending}
+            className="px-6 py-2.5 bg-brand-600 text-white rounded-lg font-medium hover:bg-brand-700 disabled:opacity-50 shadow-sm"
+          >
+            {saveMutation.isPending ? 'Saving…' : 'Save Settings'}
+          </button>
+        </div>
+      )}
     </div>
   )
 }
@@ -857,5 +868,233 @@ function PlaybookSourcesSection() {
         )}
       </div>
     </div>
+  )
+}
+
+// ---------------------------------------------------------------------------
+// LLM Endpoints sub-section
+// ---------------------------------------------------------------------------
+
+function ProviderBadge({ provider }: { provider: string }) {
+  if (provider === 'anthropic') {
+    return (
+      <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-amber-100 text-amber-700">
+        Anthropic
+      </span>
+    )
+  }
+  return (
+    <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-700">
+      OpenAI-compat
+    </span>
+  )
+}
+
+function LLMEndpointsSection() {
+  const qc = useQueryClient()
+  const toast = useToastStore((s) => s.add)
+
+  const [showForm, setShowForm] = useState(false)
+  const [editingEndpoint, setEditingEndpoint] = useState<LLMEndpoint | undefined>(undefined)
+  const [testingId, setTestingId] = useState<string | null>(null)
+  const [deletingId, setDeletingId] = useState<string | null>(null)
+  const [testResults, setTestResults] = useState<Record<string, { ok: boolean; latency_ms: number | null; error: string | null }>>({})
+
+  const { data: endpoints = [], isLoading, isError } = useQuery({
+    queryKey: ['llm-endpoints'],
+    queryFn: llmApi.list,
+  })
+
+  const deleteMutation = useMutation({
+    mutationFn: (id: string) => llmApi.delete(id),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['llm-endpoints'] })
+      toast('Endpoint deleted')
+    },
+    onError: (e: Error) => toast(e.message, 'error'),
+    onSettled: () => setDeletingId(null),
+  })
+
+  function openAdd() {
+    setEditingEndpoint(undefined)
+    setShowForm(true)
+  }
+
+  function openEdit(ep: LLMEndpoint) {
+    setEditingEndpoint(ep)
+    setShowForm(true)
+  }
+
+  function handleSaved() {
+    qc.invalidateQueries({ queryKey: ['llm-endpoints'] })
+  }
+
+  async function handleTest(ep: LLMEndpoint) {
+    setTestingId(ep.id)
+    setTestResults((prev) => {
+      const next = { ...prev }
+      delete next[ep.id]
+      return next
+    })
+    try {
+      const result = await llmApi.test(ep.id)
+      setTestResults((prev) => ({ ...prev, [ep.id]: result }))
+      if (result.ok) {
+        toast(`${ep.name}: OK (${result.latency_ms ?? '?'} ms)`)
+      } else {
+        toast(`${ep.name}: ${result.error ?? 'Test failed'}`, 'error')
+      }
+    } catch (e: any) {
+      toast(e.message ?? 'Test failed', 'error')
+    } finally {
+      setTestingId(null)
+    }
+  }
+
+  function handleDelete(ep: LLMEndpoint) {
+    if (!window.confirm(`Delete endpoint "${ep.name}"? This cannot be undone.`)) return
+    setDeletingId(ep.id)
+    deleteMutation.mutate(ep.id)
+  }
+
+  const btnSecondary = 'px-3 py-1.5 bg-white border border-gray-300 text-gray-700 text-xs rounded-lg font-medium hover:bg-gray-50 disabled:opacity-50'
+  const btnDanger = 'px-3 py-1.5 bg-white border border-red-200 text-red-600 text-xs rounded-lg font-medium hover:bg-red-50 disabled:opacity-50'
+
+  return (
+    <>
+      {showForm && (
+        <LLMEndpointForm
+          endpoint={editingEndpoint}
+          onClose={() => setShowForm(false)}
+          onSaved={handleSaved}
+        />
+      )}
+
+      <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-6 space-y-5">
+        <div className="flex items-start justify-between">
+          <div>
+            <h2 className="text-base font-semibold text-gray-900">AI / LLM Endpoints</h2>
+            <p className="text-sm text-gray-500 mt-0.5">
+              Configure LLM providers for AI-assisted fleet operations. Supports Ollama, OpenAI-compatible endpoints, and Anthropic.
+            </p>
+          </div>
+          <button
+            onClick={openAdd}
+            className="px-4 py-2 bg-brand-600 text-white text-sm rounded-lg font-medium hover:bg-brand-700 shadow-sm shrink-0"
+          >
+            Add Endpoint
+          </button>
+        </div>
+
+        {isLoading && (
+          <p className="text-sm text-gray-400">Loading…</p>
+        )}
+
+        {isError && (
+          <div className="px-3 py-2 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700">
+            Failed to load LLM endpoints. Check that the backend is running.
+          </div>
+        )}
+
+        {!isLoading && !isError && endpoints.length === 0 && (
+          <div className="text-center py-8 border border-dashed border-gray-200 rounded-lg">
+            <p className="text-sm text-gray-500">No LLM endpoints configured.</p>
+            <p className="text-xs text-gray-400 mt-1">Add an Ollama, OpenAI-compatible, or Anthropic endpoint to get started.</p>
+          </div>
+        )}
+
+        {!isLoading && !isError && endpoints.length > 0 && (
+          <div className="overflow-x-auto rounded-lg border border-gray-200">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="bg-gray-50 border-b border-gray-200">
+                  <th className="text-left px-4 py-2.5 text-xs font-semibold text-gray-600 uppercase tracking-wide">Name</th>
+                  <th className="text-left px-4 py-2.5 text-xs font-semibold text-gray-600 uppercase tracking-wide">Provider</th>
+                  <th className="text-left px-4 py-2.5 text-xs font-semibold text-gray-600 uppercase tracking-wide">Model</th>
+                  <th className="text-center px-4 py-2.5 text-xs font-semibold text-gray-600 uppercase tracking-wide">Default</th>
+                  <th className="text-center px-4 py-2.5 text-xs font-semibold text-gray-600 uppercase tracking-wide">Enabled</th>
+                  <th className="text-center px-4 py-2.5 text-xs font-semibold text-gray-600 uppercase tracking-wide">Has Key</th>
+                  <th className="text-right px-4 py-2.5 text-xs font-semibold text-gray-600 uppercase tracking-wide">Actions</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-100">
+                {endpoints.map((ep) => {
+                  const testResult = testResults[ep.id]
+                  return (
+                    <tr key={ep.id} className="hover:bg-gray-50 transition-colors">
+                      <td className="px-4 py-3">
+                        <span className="font-medium text-gray-900">{ep.name}</span>
+                        {ep.base_url && (
+                          <p className="text-xs font-mono text-gray-400 mt-0.5 truncate max-w-[180px]">{ep.base_url}</p>
+                        )}
+                        {testResult && (
+                          <p className={`text-xs mt-0.5 ${testResult.ok ? 'text-emerald-600' : 'text-red-600'}`}>
+                            {testResult.ok
+                              ? `✓ ${testResult.latency_ms ?? '?'} ms`
+                              : `✗ ${testResult.error ?? 'failed'}`}
+                          </p>
+                        )}
+                      </td>
+                      <td className="px-4 py-3">
+                        <ProviderBadge provider={ep.provider} />
+                      </td>
+                      <td className="px-4 py-3">
+                        <span className="font-mono text-gray-700 text-xs">{ep.model}</span>
+                      </td>
+                      <td className="px-4 py-3 text-center">
+                        {ep.is_default ? (
+                          <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-emerald-100 text-emerald-700">Yes</span>
+                        ) : (
+                          <span className="text-gray-300 text-xs">—</span>
+                        )}
+                      </td>
+                      <td className="px-4 py-3 text-center">
+                        {ep.enabled ? (
+                          <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-emerald-100 text-emerald-700">On</span>
+                        ) : (
+                          <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-gray-100 text-gray-500">Off</span>
+                        )}
+                      </td>
+                      <td className="px-4 py-3 text-center">
+                        {ep.has_api_key ? (
+                          <span className="text-emerald-600 text-xs font-medium">✓</span>
+                        ) : (
+                          <span className="text-gray-300 text-xs">—</span>
+                        )}
+                      </td>
+                      <td className="px-4 py-3">
+                        <div className="flex items-center justify-end gap-2">
+                          <button
+                            onClick={() => handleTest(ep)}
+                            disabled={testingId === ep.id || deletingId === ep.id}
+                            className={btnSecondary}
+                          >
+                            {testingId === ep.id ? 'Testing…' : 'Test'}
+                          </button>
+                          <button
+                            onClick={() => openEdit(ep)}
+                            disabled={deletingId === ep.id}
+                            className={btnSecondary}
+                          >
+                            Edit
+                          </button>
+                          <button
+                            onClick={() => handleDelete(ep)}
+                            disabled={deletingId === ep.id}
+                            className={btnDanger}
+                          >
+                            Delete
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+    </>
   )
 }

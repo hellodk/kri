@@ -28,6 +28,7 @@ import { saltKeysApi } from './api/saltKeys'
 import { useSaltKeysStore } from './stores/saltKeysStore'
 import { useToastStore } from './stores/toastStore'
 import { useAuthStore } from './stores/authStore'
+import LLMAssistant from './components/LLMAssistant'
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -80,6 +81,7 @@ export default function App() {
     <QueryClientProvider client={queryClient}>
       <BrowserRouter>
         <SaltKeyWatcher />
+        <LLMAssistant />
         <Routes>
           <Route path="/login" element={<LoginPage />} />
           <Route

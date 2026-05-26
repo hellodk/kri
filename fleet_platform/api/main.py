@@ -29,6 +29,7 @@ from fleet_platform.api.routes.alerts import router as alerts_router
 from fleet_platform.api.routes.audit import router as audit_router
 from fleet_platform.api.routes.group_secrets import router as group_secrets_router
 from fleet_platform.api.routes.ios_tracking import router as ios_tracking_router
+from fleet_platform.api.routes.llm import router as llm_router
 from fleet_platform.api.routes.node_secrets import router as node_secrets_router
 from fleet_platform.api.routes.provisioning import router as provisioning_router
 from fleet_platform.api.routes.salt_keys import router as salt_keys_router
@@ -103,6 +104,7 @@ def create_app() -> FastAPI:
     app.include_router(salt_ops_router, tags=["salt-ops"])
     app.include_router(alerts_router, tags=["alerts"])
     app.include_router(ios_tracking_router, tags=["ios"])
+    app.include_router(llm_router, tags=["llm"])
     app.include_router(fleet_health.router, tags=["fleet-health"])
 
     @app.get("/metrics", include_in_schema=False)

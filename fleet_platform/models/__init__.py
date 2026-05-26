@@ -6,6 +6,8 @@ from fleet_platform.models.execution import ExecutionJob, ExecutionResult
 from fleet_platform.models.facts import NodeFact
 from fleet_platform.models.group import Group, GroupMember
 from fleet_platform.models.group_secret import GroupSecret
+from fleet_platform.models.llm_endpoint import LLMEndpoint
+from fleet_platform.models.llm_query_log import LLMQueryLog
 from fleet_platform.models.node import Node, Tag
 from fleet_platform.models.node_health_snapshot import NodeHealthSnapshot
 from fleet_platform.models.node_secret import NodeSecret
@@ -27,5 +29,7 @@ __all__ = [
     "AnsibleJob",
     "NodeSecret",
     "GroupSecret",
+    "LLMEndpoint",
+    "LLMQueryLog",
     "NodeHealthSnapshot",
 ]
