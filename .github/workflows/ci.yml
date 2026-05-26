@@ -11,7 +11,7 @@ jobs:
     name: TypeScript build
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - uses: actions/setup-node@v4
         with:
           node-version: '20'
@@ -45,7 +45,7 @@ jobs:
       JWT_SECRET: ci-test-secret-minimum-32-chars-long
       FERNET_KEY: dGVzdC1rZXktbm90LWZvci1wcm9kdWN0aW9uLXVzZS1vbmx5
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - uses: actions/setup-python@v5
         with:
           python-version: '3.13'
@@ -58,7 +58,7 @@ jobs:
     name: Lint (ruff)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - uses: actions/setup-python@v5
         with:
           python-version: '3.13'
@@ -70,7 +70,7 @@ jobs:
     name: Type check (mypy)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - uses: actions/setup-python@v5
         with:
           python-version: '3.13'
@@ -103,7 +103,7 @@ jobs:
       JWT_SECRET: ci-test-secret-minimum-32-chars-long
       FERNET_KEY: dGVzdC1rZXktbm90LWZvci1wcm9kdWN0aW9uLXVzZS1vbmx5
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - uses: actions/setup-python@v5
         with:
           python-version: '3.13'
