@@ -2,9 +2,9 @@
 import importlib.util
 from unittest.mock import MagicMock, patch
 
-
 _RETURNER_PATH = __file__  # tests/unit/test_salt_returner.py
 import pathlib as _pathlib
+
 _RETURNER_FILE = (_pathlib.Path(_RETURNER_PATH).parent.parent.parent / "salt" / "returners" / "fleet_platform_return.py")
 
 

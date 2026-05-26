@@ -71,13 +71,14 @@ def auth_fake_redis() -> _FakeRedis:
 async def auth_client(test_engine, auth_fake_redis: _FakeRedis):
     from slowapi import Limiter
     from slowapi.util import get_remote_address
+
     import fleet_platform.api.limiter as limiter_module
 
     test_limiter = Limiter(key_func=get_remote_address, storage_uri="memory://")
     limiter_module.limiter = test_limiter
 
-    from fleet_platform.api.main import create_app
     from fleet_platform.api import deps
+    from fleet_platform.api.main import create_app
 
     app = create_app()
     app.state.limiter = test_limiter

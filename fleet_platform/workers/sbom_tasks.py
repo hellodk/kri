@@ -66,6 +66,7 @@ def index_sbom(self, node_id: str, file_path: str) -> dict:
 def index_sbom_from_grains(self, node_id: str) -> dict:
     """Build an SBOM from package data in the latest grain facts and index it."""
     from datetime import UTC, datetime
+
     from fleet_platform.models.facts import NodeFact
 
     node_uuid = _uuid.UUID(node_id)

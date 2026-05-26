@@ -52,6 +52,7 @@ async def test_execution_ingest_creates_job_and_result(
     client: AsyncClient, exec_node, db_session: AsyncSession
 ):
     from sqlalchemy import select
+
     from fleet_platform.models.execution import ExecutionJob, ExecutionResult
 
     node, token = exec_node

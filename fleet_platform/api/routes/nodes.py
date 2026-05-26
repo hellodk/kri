@@ -14,13 +14,13 @@ from sqlalchemy.orm import selectinload
 from fleet_platform.api.deps import get_db
 from fleet_platform.core.audit import audit
 from fleet_platform.core.auth import get_current_user, hash_password, require_role
-from fleet_platform.services.platform_settings_svc import encrypt_secret
 from fleet_platform.models.facts import NodeFact
 from fleet_platform.models.node import Node, Tag
 from fleet_platform.schemas.common import PaginatedResponse
 from fleet_platform.schemas.fleet import NodeCreateRequest, NodeDetailResponse, NodeListItem, NodeUpdateRequest
 from fleet_platform.schemas.node import NodeRegisterRequest, NodeRegisterResponse
 from fleet_platform.schemas.tag import TagCreate, TagResponse
+from fleet_platform.services.platform_settings_svc import encrypt_secret
 
 router = APIRouter(prefix="/api/v1/nodes")
 

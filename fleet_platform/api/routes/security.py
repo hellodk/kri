@@ -1,6 +1,5 @@
 # fleet_platform/api/routes/security.py
 import uuid
-from datetime import UTC, datetime
 
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import func, select
@@ -249,8 +248,11 @@ async def integration_status(
     """Check connectivity to external security tools."""
     import subprocess
     import urllib.request
+
     from fleet_platform.services.platform_settings_svc import (
-        CXONE_URL, SONARQUBE_URL, get_setting,
+        CXONE_URL,
+        SONARQUBE_URL,
+        get_setting,
     )
 
     # Trivy

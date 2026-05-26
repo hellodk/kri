@@ -6,12 +6,9 @@ and the session list response structure. No network, DB, or SSH connection neede
 """
 import uuid
 from datetime import UTC, datetime
-from unittest.mock import MagicMock, AsyncMock
-
-import pytest
+from unittest.mock import AsyncMock, MagicMock
 
 from fleet_platform.api.routes.webssh import _is_dangerous
-
 
 # ── Command blocklist tests ────────────────────────────────────────────────────
 
@@ -96,8 +93,9 @@ class TestSSHSessionModel:
     """SSHSession model has correct field defaults and accepts required fields."""
 
     def test_session_defaults(self):
-        from fleet_platform.models.ssh_session import SSHSession
         from sqlalchemy import inspect as sa_inspect
+
+        from fleet_platform.models.ssh_session import SSHSession
         mapper = sa_inspect(SSHSession)
         # SQLAlchemy mapped_column defaults are DB-level; verify via column metadata
         status_col = mapper.c.status
@@ -128,8 +126,9 @@ class TestSSHSessionModel:
         assert s.target_ip == "10.0.0.5"
 
     def test_security_event_defaults(self):
-        from fleet_platform.models.ssh_session import SecurityEvent
         from sqlalchemy import inspect as sa_inspect
+
+        from fleet_platform.models.ssh_session import SecurityEvent
         mapper = sa_inspect(SecurityEvent)
         severity_col = mapper.c.severity
         assert severity_col.default.arg == "info"
