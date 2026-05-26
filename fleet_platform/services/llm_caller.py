@@ -4,6 +4,10 @@ import httpx
 OPENAI_COMPAT_TIMEOUT = 90.0  # local Ollama models can be slow
 
 
+class LLMCallError(Exception):
+    """Raised when an LLM provider call fails — wraps transport and parse errors."""
+
+
 async def call_openai_compat(
     *,
     base_url: str,
@@ -17,6 +21,7 @@ async def call_openai_compat(
     Call an OpenAI-compatible /chat/completions endpoint.
     Returns (content, input_tokens, output_tokens).
     Compatible with: OpenAI, Ollama, LM Studio, vLLM, Groq, Mistral, Together.
+    Raises: LLMCallError on HTTP errors, timeouts, or unexpected response shape.
     """
     headers: dict[str, str] = {"Content-Type": "application/json"}
     if api_key:
@@ -31,16 +36,27 @@ async def call_openai_compat(
         ],
     }
 
-    async with httpx.AsyncClient(timeout=OPENAI_COMPAT_TIMEOUT) as client:
-        response = await client.post(
-            f"{base_url.rstrip('/')}/chat/completions",
-            headers=headers,
-            json=payload,
-        )
-        response.raise_for_status()
+    try:
+        async with httpx.AsyncClient(timeout=OPENAI_COMPAT_TIMEOUT) as client:
+            response = await client.post(
+                f"{base_url.rstrip('/')}/chat/completions",
+                headers=headers,
+                json=payload,
+            )
+            response.raise_for_status()
+    except httpx.HTTPStatusError as exc:
+        raise LLMCallError(f"HTTP {exc.response.status_code} from {base_url}") from exc
+    except httpx.TimeoutException as exc:
+        raise LLMCallError(f"Request timed out after {OPENAI_COMPAT_TIMEOUT}s") from exc
+    except httpx.RequestError as exc:
+        raise LLMCallError(f"Network error: {exc}") from exc
 
-    data = response.json()
-    content: str = data["choices"][0]["message"]["content"]
+    try:
+        data = response.json()
+        content: str = data["choices"][0]["message"]["content"]
+    except (KeyError, IndexError, ValueError) as exc:
+        raise LLMCallError(f"Unexpected response shape from {base_url}: {exc}") from exc
+
     usage = data.get("usage", {})
     return content, usage.get("prompt_tokens", 0), usage.get("completion_tokens", 0)
 

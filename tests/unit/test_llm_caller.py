@@ -122,3 +122,54 @@ async def test_call_anthropic_sends_correct_structure():
     assert content == "- the playbook"
     assert inp == 200
     assert out == 80
+
+
+@pytest.mark.asyncio
+async def test_call_openai_compat_raises_llm_call_error_on_http_error():
+    from fleet_platform.services.llm_caller import call_openai_compat, LLMCallError
+    import httpx
+
+    mock_client = AsyncMock()
+    mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+    mock_client.__aexit__ = AsyncMock(return_value=None)
+
+    error_response = MagicMock()
+    error_response.status_code = 500
+    http_error = httpx.HTTPStatusError("500", request=MagicMock(), response=error_response)
+    mock_client.post = AsyncMock(side_effect=http_error)
+
+    with patch("fleet_platform.services.llm_caller.httpx.AsyncClient", return_value=mock_client):
+        with pytest.raises(LLMCallError, match="HTTP 500"):
+            await call_openai_compat(
+                base_url="http://localhost:11434/v1",
+                api_key=None,
+                model="llama3.2",
+                max_tokens=512,
+                system_prompt="sys",
+                user_prompt="prompt",
+            )
+
+
+@pytest.mark.asyncio
+async def test_call_openai_compat_raises_llm_call_error_on_bad_response_shape():
+    from fleet_platform.services.llm_caller import call_openai_compat, LLMCallError
+
+    mock_response = MagicMock()
+    mock_response.json.return_value = {"choices": []}  # empty choices — IndexError
+    mock_response.raise_for_status = MagicMock()
+
+    mock_client = AsyncMock()
+    mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+    mock_client.__aexit__ = AsyncMock(return_value=None)
+    mock_client.post = AsyncMock(return_value=mock_response)
+
+    with patch("fleet_platform.services.llm_caller.httpx.AsyncClient", return_value=mock_client):
+        with pytest.raises(LLMCallError, match="Unexpected response shape"):
+            await call_openai_compat(
+                base_url="http://localhost:11434/v1",
+                api_key=None,
+                model="llama3.2",
+                max_tokens=512,
+                system_prompt="sys",
+                user_prompt="prompt",
+            )

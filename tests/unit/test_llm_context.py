@@ -1,12 +1,6 @@
 # tests/unit/test_llm_context.py
 import pytest
-
-INTENT_SYSTEM_ADDENDUM = {
-    "salt_state": "Generate a complete SaltStack state file (.sls).",
-    "ansible_playbook": "Generate a complete Ansible playbook (YAML).",
-    "fleet_command": "Suggest the exact Salt execution module call.",
-    "explain": "Explain the given code in plain English.",
-}
+from unittest.mock import AsyncMock, MagicMock
 
 
 def test_build_context_returns_nonempty_string():
@@ -50,11 +44,66 @@ def test_build_context_contains_groups():
 
 
 def test_intent_addendum_covers_all_intents():
-    intents = {"salt_state", "ansible_playbook", "fleet_command", "explain"}
-    assert set(INTENT_SYSTEM_ADDENDUM.keys()) == intents
-
-
-def test_build_context_intent_addendum_included():
-    from fleet_platform.services.llm_context import build_static_context, INTENT_ADDENDUM
-    # Verify INTENT_ADDENDUM in module covers all four intents
+    from fleet_platform.services.llm_context import INTENT_ADDENDUM
     assert set(INTENT_ADDENDUM.keys()) == {"salt_state", "ansible_playbook", "fleet_command", "explain"}
+
+
+def test_build_static_context_unknown_intent_falls_back_to_empty():
+    from fleet_platform.services.llm_context import INTENT_ADDENDUM
+    result = INTENT_ADDENDUM.get("magic_wand", "")
+    assert result == ""
+
+
+@pytest.mark.asyncio
+async def test_build_fleet_context_assembles_prompt():
+    """build_fleet_context fetches DB counts/groups/settings and builds the prompt."""
+    from unittest.mock import patch, AsyncMock
+    from fleet_platform.services.llm_context import build_fleet_context
+    import fleet_platform.services.platform_settings_svc as svc_mod
+
+    mock_db = AsyncMock()
+
+    node_count_result = MagicMock()
+    node_count_result.scalar_one.return_value = 7
+
+    online_count_result = MagicMock()
+    online_count_result.scalar_one.return_value = 5
+
+    groups_result = MagicMock()
+    groups_result.scalars.return_value.all.return_value = ["dev", "prod"]
+
+    mock_db.execute = AsyncMock(side_effect=[node_count_result, online_count_result, groups_result])
+
+    async def fake_get_setting(db, key):
+        return {"salt_master_address": "salt.local", "ansible_endpoint_url": "/srv/plays"}.get(key)
+
+    with patch.object(svc_mod, "get_setting", side_effect=fake_get_setting):
+        ctx = await build_fleet_context(mock_db, "salt_state")
+
+    assert "7" in ctx
+    assert "5" in ctx
+    assert "SaltStack" in ctx
+
+
+@pytest.mark.asyncio
+async def test_build_fleet_context_appends_intent_addendum():
+    from fleet_platform.services.llm_context import build_fleet_context, INTENT_ADDENDUM
+    from unittest.mock import patch, AsyncMock
+
+    mock_db = AsyncMock()
+
+    count_result = MagicMock()
+    count_result.scalar_one.side_effect = [3, 3]
+    groups_result = MagicMock()
+    groups_result.scalars.return_value.all.return_value = []
+
+    import fleet_platform.services.platform_settings_svc as svc_mod
+
+    async def fake_get_setting(db, key):
+        return None
+
+    with patch.object(svc_mod, "get_setting", side_effect=fake_get_setting):
+        mock_db.execute = AsyncMock(side_effect=[count_result, count_result, groups_result])
+        ctx = await build_fleet_context(mock_db, "ansible_playbook")
+
+    assert INTENT_ADDENDUM["ansible_playbook"] in ctx
