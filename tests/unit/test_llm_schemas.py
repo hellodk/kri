@@ -92,3 +92,110 @@ def test_llm_models_exported_from_package():
     from fleet_platform.models import LLMEndpoint, LLMQueryLog
     assert LLMEndpoint.__tablename__ == "llm_endpoints"
     assert LLMQueryLog.__tablename__ == "llm_query_log"
+
+
+# ── Pydantic schema tests ──────────────────────────────────────────────────
+
+def test_llm_endpoint_create_rejects_unknown_provider():
+    import pytest
+    from pydantic import ValidationError
+    from fleet_platform.schemas.llm import LLMEndpointCreate
+    with pytest.raises(ValidationError):
+        LLMEndpointCreate(
+            name="bad",
+            provider="gemini",  # not in Literal["openai_compat","anthropic"]
+            base_url="http://example.com",
+            model="gemini-pro",
+        )
+
+def test_llm_endpoint_create_accepts_valid_providers():
+    from fleet_platform.schemas.llm import LLMEndpointCreate
+    for provider in ("openai_compat", "anthropic"):
+        obj = LLMEndpointCreate(name="x", provider=provider, base_url="http://x", model="m")
+        assert obj.provider == provider
+
+def test_llm_endpoint_response_has_no_api_key_field():
+    import uuid, datetime
+    from fleet_platform.schemas.llm import LLMEndpointResponse
+    r = LLMEndpointResponse(
+        id=uuid.uuid4(),
+        name="test",
+        provider="openai_compat",
+        base_url="http://localhost:11434/v1",
+        has_api_key=True,
+        model="llama3.2",
+        max_tokens=4096,
+        is_default=True,
+        enabled=True,
+        created_at=datetime.datetime.now(),
+        updated_at=datetime.datetime.now(),
+    )
+    assert not hasattr(r, "api_key")
+    assert not hasattr(r, "api_key_encrypted")
+    assert r.has_api_key is True
+
+def test_llm_query_request_valid_intents():
+    import pytest
+    from pydantic import ValidationError
+    from fleet_platform.schemas.llm import LLMQueryRequest
+    for intent in ("salt_state", "ansible_playbook", "fleet_command", "explain"):
+        req = LLMQueryRequest(prompt="do something", intent=intent)
+        assert req.intent == intent
+    with pytest.raises(ValidationError):
+        LLMQueryRequest(prompt="do something", intent="magic_wand")
+
+def test_llm_query_request_prompt_min_length():
+    import pytest
+    from pydantic import ValidationError
+    from fleet_platform.schemas.llm import LLMQueryRequest
+    with pytest.raises(ValidationError):
+        LLMQueryRequest(prompt="", intent="explain")
+
+def test_llm_endpoint_update_all_fields_optional():
+    from fleet_platform.schemas.llm import LLMEndpointUpdate
+    # Should construct with no fields — all optional
+    obj = LLMEndpointUpdate()
+    assert obj.name is None
+    assert obj.base_url is None
+    assert obj.model is None
+
+def test_llm_endpoint_response_model_validate_with_api_key():
+    import datetime
+    from fleet_platform.models.llm_endpoint import LLMEndpoint
+    from fleet_platform.schemas.llm import LLMEndpointResponse
+    now = datetime.datetime.now(datetime.timezone.utc)
+    endpoint = LLMEndpoint(
+        name="ollama",
+        provider="openai_compat",
+        base_url="http://localhost:11434/v1",
+        model="llama3.2",
+        api_key_encrypted="encrypted-ciphertext",
+        max_tokens=4096,
+        is_default=False,
+        enabled=True,
+        created_at=now,
+        updated_at=now,
+    )
+    response = LLMEndpointResponse.model_validate(endpoint)
+    assert response.has_api_key is True
+    assert not hasattr(response, "api_key_encrypted")
+
+def test_llm_endpoint_response_model_validate_without_api_key():
+    import datetime
+    from fleet_platform.models.llm_endpoint import LLMEndpoint
+    from fleet_platform.schemas.llm import LLMEndpointResponse
+    now = datetime.datetime.now(datetime.timezone.utc)
+    endpoint = LLMEndpoint(
+        name="local-ollama",
+        provider="openai_compat",
+        base_url="http://localhost:11434/v1",
+        model="llama3.2",
+        api_key_encrypted=None,
+        max_tokens=4096,
+        is_default=False,
+        enabled=True,
+        created_at=now,
+        updated_at=now,
+    )
+    response = LLMEndpointResponse.model_validate(endpoint)
+    assert response.has_api_key is False

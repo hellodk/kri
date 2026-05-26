@@ -44,3 +44,7 @@ class LLMEndpoint(Base):
         Index("idx_llm_endpoints_is_default", "is_default"),
         Index("idx_llm_endpoints_enabled", "enabled"),
     )
+
+    @property
+    def has_api_key(self) -> bool:
+        return self.api_key_encrypted is not None
