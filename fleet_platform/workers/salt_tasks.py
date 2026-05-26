@@ -27,6 +27,10 @@ _ALLOWED_SALT_FUNCTIONS: frozenset[str] = frozenset({
     "service.restart",
     "service.status",
     "cmd.run",  # kept for operator flexibility; log a warning on use
+    "disk.usage",
+    "disk.inodeusage",
+    "status.loadavg",
+    "status.meminfo",
     "grains.items",
     "grains.get",
     "test.ping",
