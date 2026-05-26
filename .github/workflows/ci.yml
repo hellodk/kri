@@ -124,8 +124,8 @@ jobs:
             const fs = require('fs');
             const cov = JSON.parse(fs.readFileSync('coverage.json'));
             const pct = cov.totals.percent_covered.toFixed(1);
-            const icon = parseFloat(pct) >= 75 ? '✅' : '⚠️';
-            const body = `## Coverage Report\n\n${icon} **${pct}%** on \`fleet_platform/services/\` (gate: 75%)\n\n${parseFloat(pct) >= 75 ? 'Gate passed' : 'Below gate — add tests before merging'}`;
+            const icon = parseFloat(pct) >= 85 ? '✅' : '⚠️';
+            const body = `## Coverage Report\n\n${icon} **${pct}%** on \`fleet_platform/services/\` (gate: 85%)\n\n${parseFloat(pct) >= 85 ? 'Gate passed' : 'Below gate — add tests before merging'}`;
             github.rest.issues.createComment({
               issue_number: context.issue.number,
               owner: context.repo.owner,
