@@ -1,8 +1,6 @@
 # tests/unit/test_group_resolver.py
 from unittest.mock import AsyncMock
 
-import pytest
-
 from fleet_platform.services.group_resolver import resolve_dynamic_group, validate_predicate
 
 

@@ -112,7 +112,7 @@ def _extract_node_updates(grains: dict) -> dict:
     }
 
 
-_SYSTEM_TAG_GRAINS: list[tuple[str, str]] = [
+_SYSTEM_TAG_GRAINS: list[tuple[str, str | None]] = [
     # (tag_key, grain_key)
     ("hostname",        "fqdn"),
     ("ip",              None),          # computed from ip4_interfaces — set below

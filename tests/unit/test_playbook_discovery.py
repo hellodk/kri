@@ -1,8 +1,9 @@
 # tests/unit/test_playbook_discovery.py
 import textwrap
-from pathlib import Path
+
 import pytest
-from fleet_platform.services.playbook_discovery import discover_all, PlaybookEntry
+
+from fleet_platform.services.playbook_discovery import discover_all
 
 
 @pytest.fixture

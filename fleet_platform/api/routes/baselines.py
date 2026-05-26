@@ -68,8 +68,9 @@ async def common_packages(
     _: dict = Depends(get_current_user),
 ):
     """Return the most frequently installed packages across all fleet nodes."""
-    from fleet_platform.models.sbom import SBOMComponent, SBOMScan
     from sqlalchemy import func as _func
+
+    from fleet_platform.models.sbom import SBOMComponent, SBOMScan
 
     # Count how many distinct nodes have each package (from latest SBOM per node)
     latest_scans = (
