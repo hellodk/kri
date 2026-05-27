@@ -250,7 +250,25 @@ def bootstrap_node(
             )
         inv_path.chmod(0o600)
 
-        ssh_args = "-F /dev/null -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null"
+        # TOFU: use node's stored host key for strict verification if available,
+        # otherwise accept on first connection.
+        import os as _os
+        known_hosts_file: str | None = None
+        if node.ssh_host_key:
+            tmp_kh = tempfile.NamedTemporaryFile(
+                mode="w", suffix=".known_hosts", delete=False
+            )
+            tmp_kh.write(f"{target_ip} {node.ssh_host_key}\n")
+            tmp_kh.close()
+            known_hosts_file = tmp_kh.name
+            strict_check = (
+                f"-o StrictHostKeyChecking=yes "
+                f"-o UserKnownHostsFile={known_hosts_file}"
+            )
+        else:
+            strict_check = "-o StrictHostKeyChecking=accept-new"
+
+        ssh_args = f"-F /dev/null {strict_check}"
         if key_file_path:
             ssh_args += f" -i {key_file_path}"
 
@@ -276,6 +294,11 @@ def bootstrap_node(
             rotate_artifacts=1,
             timeout=1200,  # 20-minute hard timeout
         )
+        if known_hosts_file:
+            try:
+                _os.unlink(known_hosts_file)
+            except OSError:
+                pass
         for event in result.events:
             event_type = event.get("event", "")
             logger.debug("bootstrap_node: ansible event type=%s node_id=%s", event_type, node_id)
@@ -420,14 +443,29 @@ def collect_node_grains(self, node_id: str) -> dict:
             tmp_key.chmod(0o600)
             key_file_path = str(tmp_key)
 
+        # TOFU: use node's stored host key for strict verification if available,
+        # otherwise accept on first connection.
+        import os as _os2
+        grains_known_hosts_file: str | None = None
+        if node.ssh_host_key:
+            tmp_kh2 = tempfile.NamedTemporaryFile(
+                mode="w", suffix=".known_hosts", delete=False
+            )
+            tmp_kh2.write(f"{target_ip} {node.ssh_host_key}\n")
+            tmp_kh2.close()
+            grains_known_hosts_file = tmp_kh2.name
+            grains_strict_opts = [
+                "-o", "StrictHostKeyChecking=yes",
+                "-o", f"UserKnownHostsFile={grains_known_hosts_file}",
+            ]
+        else:
+            grains_strict_opts = ["-o", "StrictHostKeyChecking=accept-new"]
+
         ssh_opts = [
             "ssh",
             "-F",
             "/dev/null",  # skip mounted ~/.ssh/config (UID mismatch in container)
-            "-o",
-            "StrictHostKeyChecking=no",
-            "-o",
-            "UserKnownHostsFile=/dev/null",
+            *grains_strict_opts,
             "-o",
             "ConnectTimeout=15",
             "-o",
@@ -481,6 +519,12 @@ def collect_node_grains(self, node_id: str) -> dict:
             return {"status": "error", "reason": "ssh timeout"}
         except Exception as e:
             return {"status": "error", "reason": str(e)[:200]}
+        finally:
+            if grains_known_hosts_file:
+                try:
+                    _os2.unlink(grains_known_hosts_file)
+                except OSError:
+                    pass
 
 
 @celery_app.task(
