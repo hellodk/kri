@@ -105,6 +105,6 @@ def cleanup_old_health_snapshots() -> int:
             {"cutoff": cutoff},
         )
         db.commit()
-        deleted = result.rowcount
+        deleted: int = result.rowcount  # type: ignore[attr-defined]
     _log.info("Cleaned up %d old health snapshots (older than 90 days)", deleted)
     return deleted
