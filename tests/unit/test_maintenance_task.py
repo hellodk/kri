@@ -1,5 +1,4 @@
-from datetime import UTC, datetime, timedelta
-from unittest.mock import MagicMock, call, patch
+from unittest.mock import MagicMock, patch
 
 
 def test_mark_stale_nodes_returns_counts():
@@ -42,11 +41,7 @@ def test_mark_stale_nodes_calls_commit():
 
 def test_mark_stale_nodes_sets_offline_when_last_seen_2h_ago():
     """Node with last_seen_at 2 hours ago must be marked offline by mark_stale_nodes."""
-    from fleet_platform.workers.maintenance import _OFFLINE_THRESHOLD, _STALE_THRESHOLD, mark_stale_nodes
-
-    # The offline threshold is 1 hour.  A node last seen 2 hours ago is beyond
-    # that threshold, so the second UPDATE (offline branch) must fire.
-    last_seen = datetime.now(UTC) - timedelta(hours=2)
+    from fleet_platform.workers.maintenance import mark_stale_nodes
 
     # Capture the WHERE clauses passed to the two UPDATE calls by inspecting the
     # arguments forwarded to session.execute().  We do not have SQLAlchemy models
