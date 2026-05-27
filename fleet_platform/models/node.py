@@ -53,6 +53,9 @@ class Node(Base, TimestampMixin):
 
     maintenance_mode: Mapped[bool] = mapped_column(default=False, nullable=False)
 
+    # SSH host key (TOFU — Trust-On-First-Use, stored on first connection)
+    ssh_host_key: Mapped[str | None] = mapped_column(Text, nullable=True)
+
     # iOS-specific tracking fields (added by migration 017)
     xcode_version: Mapped[str | None] = mapped_column(String(32), nullable=True)
     macos_version: Mapped[str | None] = mapped_column(String(32), nullable=True)

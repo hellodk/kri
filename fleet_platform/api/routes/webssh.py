@@ -315,6 +315,23 @@ async def webssh_session(
 
         if proxy._ssh_conn is None:
             raise RuntimeError("SSH proxy connection was not established")
+
+        # TOFU: verify/store SSH host key
+        server_host_key = proxy._ssh_conn.get_server_host_key()
+        if server_host_key is not None:
+            key_bytes = server_host_key.export_public_key("openssh")
+            if isinstance(key_bytes, str):
+                key_bytes = key_bytes.encode()
+            key_b64 = base64.b64encode(key_bytes).decode()
+            from fleet_platform.services.ssh_host_key_svc import verify_or_store_host_key
+            key_ok = await verify_or_store_host_key(node, key_b64, db, user_id=str(user_id))
+            if not key_ok:
+                proxy._ssh_conn.close()
+                raise RuntimeError(
+                    "SSH host key mismatch — connection refused. "
+                    "Possible man-in-the-middle attack. Contact your administrator."
+                )
+
         proxy._ssh_process = await proxy._ssh_conn.create_process(
             term_type="xterm-256color",
             request_pty=True,
