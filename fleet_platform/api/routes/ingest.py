@@ -18,7 +18,7 @@ from fleet_platform.models.node import Node, Tag
 from fleet_platform.schemas.ingest import ExecutionIngestPayload, GrainIngestPayload
 from fleet_platform.services.node_status import verify_node_token
 from fleet_platform.workers.drift_tasks import compute_drift
-from fleet_platform.workers.sbom_tasks import index_sbom
+from fleet_platform.workers.sbom_tasks import index_sbom, index_sbom_from_grains
 
 router = APIRouter(prefix="/api/v1/ingest")
 
@@ -211,7 +211,6 @@ async def ingest_grains(
         grains.get("pkgs") or grains.get("brew_pkgs") or grains.get("pip_pkgs")
     )
     if has_packages:
-        from fleet_platform.workers.sbom_tasks import index_sbom_from_grains
         index_sbom_from_grains.delay(str(node.id))
 
     return {"status": "ok", "node_id": str(node.id)}

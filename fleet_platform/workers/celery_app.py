@@ -30,6 +30,10 @@ celery_app.conf.update(
     enable_utc=True,
     task_track_started=True,
     worker_prefetch_multiplier=1,
+    task_acks_late=True,
+    task_reject_on_worker_lost=True,
+    task_soft_time_limit=1800,   # 30 min soft limit — raises SoftTimeLimitExceeded
+    task_time_limit=2100,        # 35 min hard kill — SIGKILL if soft limit is ignored
     task_routes={
         "fleet_platform.workers.drift_tasks.*": {"queue": "drift"},
         "fleet_platform.workers.sbom_tasks.*": {"queue": "sbom"},
