@@ -155,6 +155,7 @@ jobs:
             --cov=fleet_platform/services \
             --cov-report=term-missing \
             --cov-report=json:coverage.json \
+            --cov-fail-under=85 \
             -q
       - name: Post coverage comment on PR
         if: github.event_name == 'pull_request'
