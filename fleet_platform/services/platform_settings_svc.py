@@ -36,6 +36,15 @@ OIDC_CLIENT_SECRET = "oidc_client_secret"
 OIDC_ROLE_PREFIX = "oidc_role_prefix"
 OIDC_ENABLED = "oidc_enabled"
 
+# Email digest + Jenkins settings
+SMTP_HOST = "smtp_host"
+SMTP_PORT = "smtp_port"
+SMTP_USERNAME = "smtp_username"
+SMTP_PASSWORD = "smtp_password"
+SMTP_FROM = "smtp_from"
+DIGEST_RECIPIENTS = "digest_recipients"  # comma-separated email list
+JENKINS_INGEST_SECRET = "jenkins_ingest_secret"
+
 
 def _fernet_key() -> bytes:
     digest = hashlib.sha256(settings.jwt_secret.encode()).digest()
@@ -58,6 +67,19 @@ def decrypt_secret(ciphertext: str) -> str:
 
 async def get_setting(db: AsyncSession, key: str) -> str | None:
     result = await db.execute(select(PlatformSetting).where(PlatformSetting.key == key))
+    row = result.scalar_one_or_none()
+    if row is None:
+        return None
+    if row.is_encrypted and row.value:
+        return _fernet().decrypt(row.value.encode()).decode()
+    return row.value
+
+
+def get_setting_sync(db: "Session", key: str) -> str | None:
+    """Synchronous version of get_setting for use in Celery tasks."""
+    from sqlalchemy import select as sa_select
+    from sqlalchemy.orm import Session  # noqa: F401 — type hint only
+    result = db.execute(sa_select(PlatformSetting).where(PlatformSetting.key == key))
     row = result.scalar_one_or_none()
     if row is None:
         return None

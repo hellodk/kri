@@ -26,6 +26,7 @@ from fleet_platform.api.routes import (
     search,
 )
 from fleet_platform.api.routes.alerts import router as alerts_router
+from fleet_platform.api.routes.builds import router as builds_router
 from fleet_platform.api.routes.audit import router as audit_router
 from fleet_platform.api.routes.group_secrets import router as group_secrets_router
 from fleet_platform.api.routes.ios_tracking import router as ios_tracking_router
@@ -80,7 +81,7 @@ def create_app() -> FastAPI:
         allow_origins=[settings.frontend_origin],
         allow_credentials=True,
         allow_methods=["GET", "POST", "PATCH", "PUT", "DELETE"],
-        allow_headers=["Authorization", "Content-Type", "X-Node-Token"],
+        allow_headers=["Authorization", "Content-Type", "X-Node-Token", "X-Jenkins-Secret"],
     )
 
     app.include_router(health.router, tags=["health"])
@@ -110,6 +111,7 @@ def create_app() -> FastAPI:
     app.include_router(llm_router, tags=["llm"])
     app.include_router(fleet_health.router, tags=["fleet-health"])
     app.include_router(oidc_router, tags=["oidc"])
+    app.include_router(builds_router, tags=["builds"])
 
     @app.get("/metrics", include_in_schema=False)
     async def metrics_endpoint():
