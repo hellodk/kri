@@ -1,19 +1,25 @@
-FROM python:3.13.3-slim AS base
+FROM python:3.13.3-slim AS builder
 WORKDIR /app
 
-# System deps for psycopg, ansible-runner, git, and Trivy vulnerability scanner
+# Build deps: gcc for compiling psycopg C extensions, libpq-dev for headers
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    gcc libpq-dev git openssh-client curl wget \
-    && curl -sfL https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/install.sh \
-       | sh -s -- -b /usr/local/bin \
+    gcc libpq-dev \
     && rm -rf /var/lib/apt/lists/*
 
-# Install uv for fast dependency install
 RUN pip install uv
-
 COPY pyproject.toml uv.lock VERSION ./
 RUN uv sync --frozen --no-dev
 
+FROM python:3.13.3-slim AS runtime
+WORKDIR /app
+
+# Only runtime deps needed: libpq5 (psycopg), git and openssh-client (ansible-runner + git clone)
+RUN apt-get update && apt-get upgrade -y && apt-get install -y --no-install-recommends \
+    libpq5 git openssh-client \
+    && rm -rf /var/lib/apt/lists/*
+
+COPY --from=builder /app/.venv /app/.venv
+COPY --from=builder /app/pyproject.toml /app/pyproject.toml
 COPY fleet_platform/ ./fleet_platform/
 COPY playbooks/ ./playbooks/
 COPY alembic.ini ./
@@ -21,6 +27,7 @@ COPY deploy/migrate.sh /app/deploy/migrate.sh
 
 ENV PYTHONPATH=/app
 ENV PYTHONUNBUFFERED=1
+ENV PATH="/app/.venv/bin:$PATH"
 
 # Create a non-root user to run the application (issue #88).
 # Docker volume mounts (salt-pillar, etc.) use UID/GID at runtime; if pillar
