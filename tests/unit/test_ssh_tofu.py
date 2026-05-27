@@ -37,6 +37,7 @@ async def test_tofu_mismatch_blocks_and_creates_event():
     node.id = "node-1"
     node.hostname = "mm1"
     db = AsyncMock()
+    db.add = MagicMock()  # db.add is sync in AsyncSession
     result = await verify_or_store_host_key(node, "key-different", db)
     assert result is False
     db.add.assert_called_once()
