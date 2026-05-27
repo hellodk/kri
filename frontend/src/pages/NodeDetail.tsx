@@ -394,6 +394,7 @@ export function NodeDetail() {
   // Quick Actions state
   const [actionResult, setActionResult] = useState<string | null>(null)
   const [runningAction, setRunningAction] = useState(false)
+  const [rebootConfirm, setRebootConfirm] = useState(false)
   const qc = useQueryClient()
   const toast = useToastStore((s) => s.add)
 
@@ -1053,7 +1054,25 @@ export function NodeDetail() {
               >
                 Refresh Grains
               </button>
+              <button
+                onClick={() => setRebootConfirm(true)}
+                disabled={runningAction}
+                className="px-3 py-1.5 text-xs font-medium bg-red-100 text-red-700 rounded-md hover:bg-red-200 disabled:opacity-50 transition-colors"
+              >
+                Reboot
+              </button>
             </div>
+            {rebootConfirm && (
+              <div role="alertdialog" aria-label="Confirm reboot" className="mt-3 flex items-center gap-2 p-2 bg-red-50 border border-red-200 rounded text-xs text-red-700">
+                <span>Confirm reboot of {node.hostname ?? node.minion_id}?</span>
+                <button onClick={() => { runSaltCommand('system.reboot'); setRebootConfirm(false) }}
+                  disabled={runningAction}
+                  className="px-2 py-1 bg-red-600 text-white rounded hover:bg-red-700 disabled:opacity-50 font-medium">Yes, reboot</button>
+                {/* autoFocus so keyboard focus lands on Cancel when confirmation strip appears */}
+                <button autoFocus onClick={() => setRebootConfirm(false)}
+                  className="px-2 py-1 bg-gray-100 text-gray-700 rounded hover:bg-gray-200">Cancel</button>
+              </div>
+            )}
             {actionResult && (
               <div className="mt-3 p-2 text-xs font-mono bg-gray-50 dark:bg-gray-900 rounded text-gray-800 dark:text-gray-200 border border-gray-200 dark:border-gray-700">
                 {actionResult}
