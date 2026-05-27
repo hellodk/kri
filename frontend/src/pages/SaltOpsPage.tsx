@@ -400,22 +400,30 @@ export function SaltOpsPage() {
                         const failed = stateResults.filter((s) => !s.result).length
                         const changed = stateResults.filter((s) => s.changes).length
                         return (
-                          <div key={minion}>
-                            <div className="px-4 py-2.5 bg-gray-50 flex items-center gap-3">
-                              <span className="font-mono font-semibold text-gray-900 text-sm">{minion}</span>
-                              {failed > 0 && (
-                                <span className="text-xs px-2 py-0.5 bg-red-100 text-red-700 rounded-full font-medium">
-                                  {failed} failed
+                          <div key={minion} className="border border-gray-200 dark:border-gray-700 rounded-lg mb-3 last:mb-0 overflow-hidden">
+                            <div className="flex items-center justify-between px-4 py-2 bg-gray-50 dark:bg-gray-800 rounded-t-lg gap-3">
+                              <span className="font-mono font-semibold text-gray-900 dark:text-gray-100 text-sm">{minion}</span>
+                              <div className="flex items-center gap-2 ml-auto">
+                                {failed > 0 && (
+                                  <span className="text-xs px-2 py-0.5 bg-red-100 text-red-700 rounded-full font-medium">
+                                    {failed} failed
+                                  </span>
+                                )}
+                                {changed > 0 && (
+                                  <span className="text-xs px-2 py-0.5 bg-emerald-100 text-emerald-700 rounded-full font-medium">
+                                    {changed} changed
+                                  </span>
+                                )}
+                                <span className="text-xs px-2 py-0.5 bg-gray-100 text-gray-600 rounded-full">
+                                  {stateResults.length - changed - failed} unchanged
                                 </span>
-                              )}
-                              {changed > 0 && (
-                                <span className="text-xs px-2 py-0.5 bg-emerald-100 text-emerald-700 rounded-full font-medium">
-                                  {changed} changed
-                                </span>
-                              )}
-                              <span className="text-xs px-2 py-0.5 bg-gray-100 text-gray-600 rounded-full">
-                                {stateResults.length - changed - failed} unchanged
-                              </span>
+                                <button
+                                  onClick={() => navigator.clipboard.writeText(JSON.stringify(stateResults, null, 2))}
+                                  className="text-xs text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 px-2 py-0.5 rounded border border-gray-200 dark:border-gray-600"
+                                >
+                                  Copy
+                                </button>
+                              </div>
                             </div>
                             <ul className="divide-y divide-gray-100">
                               {stateResults.map((sr) => (
@@ -444,9 +452,48 @@ export function SaltOpsPage() {
                       })}
                     </div>
                   ) : taskOutput?.stdout ? (
-                    <pre className="bg-gray-900 text-gray-100 px-4 py-3 text-xs font-mono overflow-auto max-h-96 whitespace-pre-wrap">
-                      {taskOutput.stdout}
-                    </pre>
+                    (() => {
+                      let parsed: unknown = null
+                      try { parsed = JSON.parse(taskOutput.stdout) } catch { /* not JSON */ }
+                      if (parsed && typeof parsed === 'object') {
+                        return (
+                          <div className="divide-y divide-gray-200">
+                            {Object.entries(parsed as Record<string, unknown>).map(([minion, result]) => (
+                              <div key={minion} className="border border-gray-200 dark:border-gray-700 rounded-lg mb-3 last:mb-0 overflow-hidden">
+                                <div className="flex items-center justify-between px-4 py-2 bg-gray-50 dark:bg-gray-800 rounded-t-lg">
+                                  <span className="font-mono text-sm font-medium text-gray-900 dark:text-gray-100">{minion}</span>
+                                  <button
+                                    onClick={() => navigator.clipboard.writeText(JSON.stringify(result, null, 2))}
+                                    className="text-xs text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 px-2 py-0.5 rounded border border-gray-200 dark:border-gray-600"
+                                  >
+                                    Copy
+                                  </button>
+                                </div>
+                                <pre className="p-4 text-xs font-mono text-gray-800 dark:text-gray-200 overflow-auto max-h-64 bg-white dark:bg-gray-900 rounded-b-lg">
+                                  {typeof result === 'string' ? result : JSON.stringify(result, null, 2)}
+                                </pre>
+                              </div>
+                            ))}
+                          </div>
+                        )
+                      }
+                      return (
+                        <div className="border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden">
+                          <div className="flex items-center justify-between px-4 py-2 bg-gray-50 dark:bg-gray-800">
+                            <span className="font-mono text-sm font-medium text-gray-900 dark:text-gray-100">stdout</span>
+                            <button
+                              onClick={() => navigator.clipboard.writeText(taskOutput.stdout ?? '')}
+                              className="text-xs text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 px-2 py-0.5 rounded border border-gray-200 dark:border-gray-600"
+                            >
+                              Copy
+                            </button>
+                          </div>
+                          <pre className="bg-gray-900 text-gray-100 px-4 py-3 text-xs font-mono overflow-auto max-h-96 whitespace-pre-wrap rounded-b-lg">
+                            {taskOutput.stdout}
+                          </pre>
+                        </div>
+                      )
+                    })()
                   ) : null}
                 </div>
               )}

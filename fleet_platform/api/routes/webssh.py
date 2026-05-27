@@ -2,13 +2,17 @@
 
 Security model:
   - Credentials resolved server-side, never sent to browser
-  - All keystrokes buffered and checked against blocklist
-  - Blocked commands: Ctrl+C sent to SSH, blocked message injected to terminal
   - Full session recording stored in DB
+  - Real security enforced at OS level (see note below)
+
+# Security note: command-level filtering in the WebSocket handler cannot reliably
+# block malicious input — shell features (backticks, $(), eval, alternate paths)
+# trivially bypass string matching. Real security is enforced at the OS level:
+# sudo restrictions, SELinux/AppArmor profiles, and restricted shells on fleet nodes.
+# The previous blocklist was removed (issue #118) to avoid false confidence.
 """
 import asyncio
 import base64
-import re
 import uuid
 from datetime import UTC, datetime
 
@@ -30,30 +34,6 @@ from fleet_platform.models.ssh_session import SecurityEvent, SessionRecording, S
 
 router = APIRouter(prefix="/api/v1/ssh")
 
-# ── Blocklist — dangerous commands that will be blocked ──────────────────────
-_BLOCK_PATTERNS = [
-    r"rm\s+-rf?\s+/",           # rm -rf /
-    r"rm\s+-rf?\s+~",           # rm -rf ~
-    r"dd\s+if=",                # dd if= (disk wipe)
-    r"mkfs\.",                  # mkfs.* (format disk)
-    r">\s*/dev/sd",             # redirect to block device
-    r":\(\)\s*\{",              # fork bomb :(){ :|:& };:
-    r"chmod\s+-R\s+777\s+/",    # world-writable root
-    r"curl\s+.*\|\s*sh",        # curl | sh (remote execution)
-    r"wget\s+.*\|\s*sh",        # wget | sh
-    r"python\s+-c\s+.*exec",    # python -c exec
-    r"base64\s+.*\|\s*sh",      # base64 decode | sh
-]
-_BLOCK_RE = [re.compile(p, re.IGNORECASE) for p in _BLOCK_PATTERNS]
-
-
-def _is_dangerous(command: str) -> str | None:
-    """Return the matched pattern description if command is dangerous, else None."""
-    for pattern in _BLOCK_RE:
-        if pattern.search(command):
-            return pattern.pattern
-    return None
-
 
 async def get_current_user_ws(token: str) -> dict:
     """Verify JWT token for WebSocket connections (token from query param)."""
@@ -69,7 +49,7 @@ async def get_current_user_ws(token: str) -> dict:
 
 
 class SSHProxySession:
-    """Manages one WebSocket <-> SSH connection with recording and command blocking."""
+    """Manages one WebSocket <-> SSH connection with recording."""
 
     def __init__(self, ws: WebSocket, session_id: uuid.UUID, max_mins: int = 60):
         self.ws = ws
@@ -116,25 +96,9 @@ class SSHProxySession:
 
         # Accumulate printable chars into command buffer
         if key in ("\r", "\n"):
-            # Enter — check buffer
-            command = self._cmd_buffer.strip()
+            # Enter — send through; OS-level restrictions enforce security
             self._cmd_buffer = ""
-            matched = _is_dangerous(command) if command else None
-
-            if matched and command:
-                # BLOCK: send Ctrl+C to abort, inject message to browser
-                self._ssh_process.stdin.write("\x03")  # Ctrl+C
-                block_msg = (
-                    f"\r\n\033[31m[BLOCKED] Command blocked by kri PAM:"
-                    f" matches rule '{matched}'\033[0m\r\n"
-                )
-                await self.send_to_browser(block_msg.encode())
-                await self._log_security_event("block", command, "critical")
-                self._alert_count += 1
-                return True
-            else:
-                # Safe — send Enter
-                self._ssh_process.stdin.write("\r")
+            self._ssh_process.stdin.write("\r")
         elif key == "\x7f" or key == "\x08":
             # Backspace
             if self._cmd_buffer:
