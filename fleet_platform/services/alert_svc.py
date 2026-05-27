@@ -1,4 +1,5 @@
 """Alert evaluation and delivery service."""
+
 from __future__ import annotations
 
 import ipaddress
@@ -112,9 +113,7 @@ async def _check_drift_threshold(rule: AlertRule, now: datetime, db: AsyncSessio
     if rule.threshold is None:
         return
 
-    result = await db.execute(
-        select(Node).where(Node.drift_score > rule.threshold)
-    )
+    result = await db.execute(select(Node).where(Node.drift_score > rule.threshold))
     nodes = result.scalars().all()
 
     recent_cutoff = now - timedelta(minutes=30)
@@ -269,7 +268,7 @@ async def _deliver_alert(rule: AlertRule, alert_event: AlertEvent, db: AsyncSess
                 headers={"Content-Type": "application/json"},
                 method="POST",
             )
-            urllib.request.urlopen(req, timeout=10)
+            urllib.request.urlopen(req, timeout=10)  # nosec B310
             delivered_any = True
         except Exception:
             pass

@@ -34,11 +34,11 @@ def build_static_context(
 ) -> str:
     group_line = ", ".join(groups) if groups else "(none)"
     return (
-        "You are an AI assistant embedded in **kri**, a Mac Mini fleet management platform.\n\n"
+        "You are an AI assistant embedded in **kri**, a build fleet management platform.\n\n"
         "## Fleet Snapshot\n"
         f"- Total nodes: {node_count}\n"
         f"- Online: {online_count}  |  Offline: {node_count - online_count}\n"
-        "- Node OS: macOS (all nodes are Apple Mac Minis running macOS)\n"
+        "- Node OS: varies (Linux and macOS nodes supported)\n"
         f"- Salt master: {salt_master or 'not configured'}\n"
         f"- Playbooks directory: {playbooks_dir or 'not configured'}\n"
         f"- Groups: {group_line}\n\n"
@@ -66,9 +66,7 @@ async def build_fleet_context(db: AsyncSession, intent: str) -> str:
     node_count_result = await db.execute(select(func.count()).select_from(Node))
     node_count: int = node_count_result.scalar_one()
 
-    online_result = await db.execute(
-        select(func.count()).select_from(Node).where(Node.status == "online")
-    )
+    online_result = await db.execute(select(func.count()).select_from(Node).where(Node.status == "online"))
     online_count: int = online_result.scalar_one()
 
     groups_result = await db.execute(select(Group.name).order_by(Group.name))

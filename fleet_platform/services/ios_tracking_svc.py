@@ -1,4 +1,5 @@
 """iOS-specific tracking service: Xcode/macOS versions, certs, Jenkins agents."""
+
 from __future__ import annotations
 
 import json
@@ -41,9 +42,7 @@ async def update_node_from_grains(node_id: uuid.UUID, grains: dict, db: AsyncSes
 
 async def check_jenkins_agent(agent_id: uuid.UUID, db: AsyncSession) -> None:
     """Poll Jenkins API for agent online status and update the row."""
-    result = await db.execute(
-        select(JenkinsAgent).where(JenkinsAgent.id == agent_id)
-    )
+    result = await db.execute(select(JenkinsAgent).where(JenkinsAgent.id == agent_id))
     agent = result.scalar_one_or_none()
     if not agent:
         return
@@ -51,7 +50,7 @@ async def check_jenkins_agent(agent_id: uuid.UUID, db: AsyncSession) -> None:
     try:
         url = f"{agent.jenkins_url.rstrip('/')}/computer/{agent.agent_name}/api/json?tree=offline"
         req = urllib.request.Request(url, method="GET")
-        with urllib.request.urlopen(req, timeout=5) as resp:
+        with urllib.request.urlopen(req, timeout=5) as resp:  # nosec B310
             data = json.loads(resp.read())
         if data.get("offline") is False:
             agent.status = "online"
@@ -68,8 +67,6 @@ async def get_expiring_certs(db: AsyncSession, days: int = 30) -> list[Certifica
     """Return certs expiring within the given number of days."""
     cutoff = date.today() + timedelta(days=days)
     result = await db.execute(
-        select(Certificate)
-        .where(Certificate.expiry_date <= cutoff)
-        .order_by(Certificate.expiry_date)
+        select(Certificate).where(Certificate.expiry_date <= cutoff).order_by(Certificate.expiry_date)
     )
     return list(result.scalars().all())
