@@ -472,7 +472,10 @@ export function GroupDetail() {
                       </td>
                       <td className="px-4 py-3 text-right">
                         <button
-                          onClick={() => deleteGroupSecretMutation.mutate(s.key)}
+                          onClick={() => {
+                            if (!window.confirm('Delete this secret? This cannot be undone.')) return
+                            deleteGroupSecretMutation.mutate(s.key)
+                          }}
                           disabled={deleteGroupSecretMutation.isPending}
                           className="text-xs text-red-600 hover:text-red-700 font-medium disabled:opacity-50"
                         >
@@ -623,7 +626,10 @@ export function GroupDetail() {
                     {isStatic && (
                       <td className="px-4 py-3 text-right">
                         <button
-                          onClick={() => removeMutation.mutate(n.id)}
+                          onClick={() => {
+                            if (!window.confirm('Remove this node from the group?')) return
+                            removeMutation.mutate(n.id)
+                          }}
                           disabled={removeMutation.isPending}
                           className="text-xs text-red-500 hover:text-red-700 font-medium disabled:opacity-50"
                           title="Remove from group"

@@ -707,8 +707,11 @@ export function FleetDashboard() {
 
   async function bulkApplySaltState(state: string) {
     if (!state) return
-    setBulkApplying(true)
     const selectedNodes = nodes?.items.filter((n) => selected.has(n.id)) ?? []
+    if (!window.confirm(`Apply state '${state}' to ${selectedNodes.length} node(s)? This will trigger a Salt state execution on selected nodes.`)) {
+      return
+    }
+    setBulkApplying(true)
     const minionIds = selectedNodes.map((n) => n.minion_id)
     try {
       await api.post('/api/v1/salt/apply', { minion_ids: minionIds, state })
