@@ -1,5 +1,6 @@
 # fleet_platform/workers/ansible_tasks.py
 """Celery tasks for Ansible-based node bootstrap."""
+
 import fcntl
 import logging
 import re
@@ -27,7 +28,7 @@ _DEFAULT_PILLAR_DIR = Path("/srv/salt/pillar")
 _DEFAULT_KRI_DIR = Path.home() / ".kri"
 
 
-_MINION_ID_RE = re.compile(r'^[a-zA-Z0-9._-]{1,128}$')
+_MINION_ID_RE = re.compile(r"^[a-zA-Z0-9._-]{1,128}$")
 
 
 def _validate_minion_id(minion_id: str) -> str:
@@ -48,9 +49,7 @@ def _get_bootstrap_settings(db) -> tuple[str, str, str, str]:
     )
 
     def _get(key: str) -> str:
-        row = db.execute(
-            select(PlatformSetting).where(PlatformSetting.key == key)
-        ).scalar_one_or_none()
+        row = db.execute(select(PlatformSetting).where(PlatformSetting.key == key)).scalar_one_or_none()
         if row is None:
             return ""
         if row.is_encrypted and row.value:
@@ -68,6 +67,7 @@ def _get_bootstrap_settings(db) -> tuple[str, str, str, str]:
 def _get_node_credentials(node) -> tuple[str, str, str]:
     """Returns (ssh_user, ssh_password, ssh_auth_mode) from per-node stored credentials."""
     from fleet_platform.services.platform_settings_svc import decrypt_secret
+
     user = node.ssh_username or ""
     password = ""
     auth_mode = node.ssh_auth_mode or "password"
@@ -84,9 +84,8 @@ def _get_pillar_dir(db) -> Path:
     from sqlalchemy import select as _select
 
     from fleet_platform.models.platform_setting import PlatformSetting
-    row = db.execute(
-        _select(PlatformSetting).where(PlatformSetting.key == "pillar_dir")
-    ).scalar_one_or_none()
+
+    row = db.execute(_select(PlatformSetting).where(PlatformSetting.key == "pillar_dir")).scalar_one_or_none()
     if row and row.value:
         return Path(row.value)
     return _DEFAULT_PILLAR_DIR
@@ -119,9 +118,7 @@ def _write_pillar_file(
             if top_path.exists():
                 existing = top_path.read_text()
                 if minion_id not in existing:
-                    top_path.write_text(
-                        existing.rstrip() + f"\n  '{minion_id}':\n    - {minion_id}\n"
-                    )
+                    top_path.write_text(existing.rstrip() + f"\n  '{minion_id}':\n    - {minion_id}\n")
             else:
                 top_path.write_text(f"base:\n  '{minion_id}':\n    - {minion_id}\n")
         finally:
@@ -143,9 +140,7 @@ def bootstrap_node(
 
     # 1. Load node and mark as bootstrapping
     with get_sync_db() as db:
-        node = db.execute(
-            select(Node).where(Node.id == node_uuid)
-        ).scalar_one_or_none()
+        node = db.execute(select(Node).where(Node.id == node_uuid)).scalar_one_or_none()
         if not node:
             return {"status": "error", "reason": "node_not_found"}
         try:
@@ -158,12 +153,11 @@ def bootstrap_node(
 
         node.bootstrap_status = "bootstrapping"
         node.bootstrap_ip = target_ip
-        node.bootstrap_logs = ""        # clear any previous run's logs
+        node.bootstrap_logs = ""  # clear any previous run's logs
         node.bootstrap_error = None
         db.commit()
 
-        salt_master, _settings_ssh_user, _settings_ssh_password, controller_pubkey = \
-            _get_bootstrap_settings(db)
+        salt_master, _settings_ssh_user, _settings_ssh_password, controller_pubkey = _get_bootstrap_settings(db)
         pillar_dir = _get_pillar_dir(db)
 
         # Per-node stored credentials
@@ -183,26 +177,21 @@ def bootstrap_node(
         node_ssh_key: str | None = None
         if resolved_auth_mode == "key" and node.ssh_key_enc:
             from fleet_platform.services.platform_settings_svc import decrypt_secret
+
             try:
                 node_ssh_key = decrypt_secret(node.ssh_key_enc)
             except Exception:
-                logger.warning(
-                    "bootstrap_node: failed to decrypt ssh_key_enc for node_id=%s", node_id
-                )
+                logger.warning("bootstrap_node: failed to decrypt ssh_key_enc for node_id=%s", node_id)
 
         if not ssh_password and not node_ssh_key:
-            logger.warning(
-                "bootstrap_node: SSH credentials missing from settings for node_id=%s", node_id
-            )
+            logger.warning("bootstrap_node: SSH credentials missing from settings for node_id=%s", node_id)
 
     # 2. Generate fresh node token and write pillar BEFORE Ansible runs
     raw_token = secrets.token_urlsafe(32)
     ingest_url = f"http://{salt_master}/api/v1/ingest"
 
     if not pillar_dir.is_dir() or not _pillar_dir_writable(pillar_dir):
-        logger.warning(
-            "bootstrap_node: pillar dir %s is not writable for node_id=%s", pillar_dir, node_id
-        )
+        logger.warning("bootstrap_node: pillar dir %s is not writable for node_id=%s", pillar_dir, node_id)
 
     _write_pillar_file(
         pillar_dir=str(pillar_dir),
@@ -210,9 +199,7 @@ def bootstrap_node(
         ingest_url=ingest_url,
         node_token=raw_token,
     )
-    logger.info(
-        "bootstrap_node: pillar written for minion_id=%s node_id=%s", node.minion_id, node_id
-    )
+    logger.info("bootstrap_node: pillar written for minion_id=%s node_id=%s", node.minion_id, node_id)
 
     # 3. Update the stored token hash AND create a BootstrapRun record
     with get_sync_db() as db:
@@ -302,9 +289,7 @@ def bootstrap_node(
                     # Write live progress into bootstrap_error while still bootstrapping
                     # (no bootstrap_last_task column on model — embed in bootstrap_error)
                     with get_sync_db() as _db:
-                        _node = _db.execute(
-                            select(Node).where(Node.id == node_uuid)
-                        ).scalar_one_or_none()
+                        _node = _db.execute(select(Node).where(Node.id == node_uuid)).scalar_one_or_none()
                         if _node and _node.bootstrap_status == "bootstrapping":
                             _node.bootstrap_error = f"[blocked at: TASK {last_task}]"
                             _db.commit()
@@ -316,12 +301,8 @@ def bootstrap_node(
                 if len(stdout_lines) % 10 == 0:
                     joined = "\n".join(stdout_lines)
                     with get_sync_db() as _db:
-                        _n = _db.execute(
-                            select(Node).where(Node.id == node_uuid)
-                        ).scalar_one_or_none()
-                        _run = _db.execute(
-                            select(BootstrapRun).where(BootstrapRun.id == run_id)
-                        ).scalar_one_or_none()
+                        _n = _db.execute(select(Node).where(Node.id == node_uuid)).scalar_one_or_none()
+                        _run = _db.execute(select(BootstrapRun).where(BootstrapRun.id == run_id)).scalar_one_or_none()
                         if _n:
                             _n.bootstrap_logs = joined
                         if _run:
@@ -334,30 +315,26 @@ def bootstrap_node(
 
     if result.status == "timeout":
         bootstrap_error = (
-            f"Timed out after 20 minutes. Last task: {last_task}" if last_task
-            else "Timed out after 20 minutes."
+            f"Timed out after 20 minutes. Last task: {last_task}" if last_task else "Timed out after 20 minutes."
         )
     elif result.status != "successful" or result.rc != 0:
         if "UNREACHABLE" in full_stdout:
-            bootstrap_error = (
-                f"SSH unreachable: check IP {target_ip} and SSH credentials in Settings"
-            )
+            bootstrap_error = f"SSH unreachable: check IP {target_ip} and SSH credentials in Settings"
         elif "Authentication failure" in full_stdout or "Permission denied" in full_stdout:
-            bootstrap_error = (
-                "SSH auth failed: check SSH username/password in Settings → Bootstrap"
-            )
+            bootstrap_error = "SSH auth failed: check SSH username/password in Settings → Bootstrap"
         elif "No such file or directory" in full_stdout and "salt" in full_stdout:
             bootstrap_error = "Salt package not found on target node"
         elif "Could not match supplied host pattern" in full_stdout:
-            bootstrap_error = (
-                "Inventory misconfiguration — check minion ID format"
-            )
+            bootstrap_error = "Inventory misconfiguration — check minion ID format"
         else:
             bootstrap_error = f"ansible rc={result.rc} status={result.status}"
 
         logger.error(
             "bootstrap_node: ansible failure rc=%s status=%s last_task=%r node_id=%s",
-            result.rc, result.status, last_task, node_id,
+            result.rc,
+            result.status,
+            last_task,
+            node_id,
         )
 
     # 6. Update bootstrap status + logs; finalize the BootstrapRun record
@@ -388,6 +365,7 @@ def bootstrap_node(
 def _pillar_dir_writable(pillar_dir: Path) -> bool:
     """Return True if pillar_dir exists and is writable by the current process."""
     import os
+
     return os.access(pillar_dir, os.W_OK)
 
 
@@ -417,11 +395,10 @@ def collect_node_grains(self, node_id: str) -> dict:
 
         # Prefer kri_api_url for ingest; fall back to salt_master
         from fleet_platform.services.platform_settings_svc import KRI_API_URL
+
         kri_api_url = ""
         try:
-            row = db.execute(
-                select(PlatformSetting).where(PlatformSetting.key == KRI_API_URL)
-            ).scalar_one_or_none()
+            row = db.execute(select(PlatformSetting).where(PlatformSetting.key == KRI_API_URL)).scalar_one_or_none()
             if row and row.value:
                 kri_api_url = row.value.rstrip("/")
         except Exception:
@@ -445,11 +422,16 @@ def collect_node_grains(self, node_id: str) -> dict:
 
         ssh_opts = [
             "ssh",
-            "-F", "/dev/null",  # skip mounted ~/.ssh/config (UID mismatch in container)
-            "-o", "StrictHostKeyChecking=no",
-            "-o", "UserKnownHostsFile=/dev/null",
-            "-o", "ConnectTimeout=15",
-            "-o", "BatchMode=yes",
+            "-F",
+            "/dev/null",  # skip mounted ~/.ssh/config (UID mismatch in container)
+            "-o",
+            "StrictHostKeyChecking=no",
+            "-o",
+            "UserKnownHostsFile=/dev/null",
+            "-o",
+            "ConnectTimeout=15",
+            "-o",
+            "BatchMode=yes",
         ]
         if key_file_path:
             ssh_opts += ["-i", key_file_path]
@@ -484,6 +466,7 @@ def collect_node_grains(self, node_id: str) -> dict:
                 return {"status": "error", "reason": "no node_token found in pillar"}
 
             import urllib.request
+
             payload = _json.dumps({"minion_id": minion_id, "grains": grains}).encode()
             req = urllib.request.Request(
                 f"{ingest_url}/grains",
@@ -491,7 +474,7 @@ def collect_node_grains(self, node_id: str) -> dict:
                 headers={"Content-Type": "application/json", "X-Node-Token": node_token},
                 method="POST",
             )
-            with urllib.request.urlopen(req, timeout=15) as resp:
+            with urllib.request.urlopen(req, timeout=15) as resp:  # nosec B310
                 return {"status": "ok", "http_status": resp.status, "node_id": node_id}
 
         except subprocess.TimeoutExpired:
@@ -507,9 +490,7 @@ def collect_node_grains(self, node_id: str) -> dict:
 def refresh_all_node_grains() -> dict:
     """Periodic: trigger grain collection for all bootstrapped online nodes."""
     with get_sync_db() as db:
-        rows = db.execute(
-            select(Node).where(Node.bootstrap_status == "completed")
-        ).scalars().all()
+        rows = db.execute(select(Node).where(Node.bootstrap_status == "completed")).scalars().all()
         node_ids = [str(n.id) for n in rows if n.bootstrap_ip]
 
     for nid in node_ids:

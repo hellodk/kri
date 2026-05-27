@@ -24,32 +24,24 @@ async def security_dashboard(
     vuln_counts = {}
     for sev in ("CRITICAL", "HIGH", "MEDIUM", "LOW"):
         result = await db.execute(
-            select(func.count()).select_from(VulnerabilityFinding)
-            .where(VulnerabilityFinding.severity == sev)
+            select(func.count()).select_from(VulnerabilityFinding).where(VulnerabilityFinding.severity == sev)
         )
         vuln_counts[sev.lower()] = result.scalar_one()
 
     # License risk counts
     lic_counts = {}
     for risk in ("high", "medium", "unknown"):
-        result = await db.execute(
-            select(func.count()).select_from(LicenseFinding)
-            .where(LicenseFinding.risk == risk)
-        )
+        result = await db.execute(select(func.count()).select_from(LicenseFinding).where(LicenseFinding.risk == risk))
         lic_counts[risk] = result.scalar_one()
 
     # Nodes with critical/high vulnerabilities
     critical_nodes = await db.execute(
-        select(VulnerabilityFinding.node_id)
-        .where(VulnerabilityFinding.severity.in_(["CRITICAL", "HIGH"]))
-        .distinct()
+        select(VulnerabilityFinding.node_id).where(VulnerabilityFinding.severity.in_(["CRITICAL", "HIGH"])).distinct()
     )
     critical_node_count = len(critical_nodes.scalars().all())
 
     # Last scan time
-    last_scan = await db.execute(
-        select(func.max(VulnerabilityFinding.scanned_at))
-    )
+    last_scan = await db.execute(select(func.max(VulnerabilityFinding.scanned_at)))
     last_scan_at = last_scan.scalar_one()
 
     return {
@@ -80,8 +72,7 @@ async def security_node_list(
             VulnerabilityFinding.node_id,
             VulnerabilityFinding.severity,
             func.count().label("cnt"),
-        )
-        .group_by(VulnerabilityFinding.node_id, VulnerabilityFinding.severity)
+        ).group_by(VulnerabilityFinding.node_id, VulnerabilityFinding.severity)
     )
     vuln_map: dict[str, dict[str, int]] = {}
     for row in vuln_rows:
@@ -93,8 +84,7 @@ async def security_node_list(
             LicenseFinding.node_id,
             LicenseFinding.risk,
             func.count().label("cnt"),
-        )
-        .group_by(LicenseFinding.node_id, LicenseFinding.risk)
+        ).group_by(LicenseFinding.node_id, LicenseFinding.risk)
     )
     lic_map: dict[str, dict[str, int]] = {}
     for row in lic_rows:
@@ -105,15 +95,12 @@ async def security_node_list(
         select(
             VulnerabilityFinding.node_id,
             func.max(VulnerabilityFinding.scanned_at).label("last_scan"),
-        )
-        .group_by(VulnerabilityFinding.node_id)
+        ).group_by(VulnerabilityFinding.node_id)
     )
     scan_map: dict[str, object] = {str(row.node_id): row.last_scan for row in scan_rows}
 
     # --- Aggregate query 4: which nodes have at least one SBOM scan ---
-    sbom_rows = await db.execute(
-        select(SBOMScan.node_id).distinct()
-    )
+    sbom_rows = await db.execute(select(SBOMScan.node_id).distinct())
     sbom_set: set[str] = {str(r.node_id) for r in sbom_rows}
 
     # Build response without any per-node queries
@@ -125,32 +112,40 @@ async def security_node_list(
         last_scan = scan_map.get(nid)
         has_sbom_val = nid in sbom_set
 
-        items.append({
-            "node_id": nid,
-            "minion_id": node.minion_id,
-            "hostname": node.hostname,
-            "status": node.status,
-            "has_sbom": has_sbom_val,
-            "vulnerabilities": {
-                "critical": vcounts.get("critical", 0),
-                "high": vcounts.get("high", 0),
-                "medium": vcounts.get("medium", 0),
-                "low": vcounts.get("low", 0),
-            },
-            "license_risks": {
-                "high": lcounts.get("high", 0),
-                "medium": lcounts.get("medium", 0),
-                "unknown": lcounts.get("unknown", 0),
-            },
-            "last_scanned_at": last_scan,
-            "risk_level": (
-                "critical" if vcounts.get("critical", 0) > 0
-                else "high" if vcounts.get("high", 0) > 0
-                else "medium" if (vcounts.get("medium", 0) > 0 or lcounts.get("high", 0) > 0)
-                else "low" if vcounts.get("low", 0) > 0
-                else "clean" if last_scan else "unscanned"
-            ),
-        })
+        items.append(
+            {
+                "node_id": nid,
+                "minion_id": node.minion_id,
+                "hostname": node.hostname,
+                "status": node.status,
+                "has_sbom": has_sbom_val,
+                "vulnerabilities": {
+                    "critical": vcounts.get("critical", 0),
+                    "high": vcounts.get("high", 0),
+                    "medium": vcounts.get("medium", 0),
+                    "low": vcounts.get("low", 0),
+                },
+                "license_risks": {
+                    "high": lcounts.get("high", 0),
+                    "medium": lcounts.get("medium", 0),
+                    "unknown": lcounts.get("unknown", 0),
+                },
+                "last_scanned_at": last_scan,
+                "risk_level": (
+                    "critical"
+                    if vcounts.get("critical", 0) > 0
+                    else "high"
+                    if vcounts.get("high", 0) > 0
+                    else "medium"
+                    if (vcounts.get("medium", 0) > 0 or lcounts.get("high", 0) > 0)
+                    else "low"
+                    if vcounts.get("low", 0) > 0
+                    else "clean"
+                    if last_scan
+                    else "unscanned"
+                ),
+            }
+        )
 
     return {"items": items, "total": len(items)}
 
@@ -167,8 +162,7 @@ async def security_node_detail(
         select(VulnerabilityFinding)
         .where(VulnerabilityFinding.node_id == node_id)
         .order_by(
-            VulnerabilityFinding.severity.in_(["CRITICAL", "HIGH"]).desc(),
-            VulnerabilityFinding.scanned_at.desc()
+            VulnerabilityFinding.severity.in_(["CRITICAL", "HIGH"]).desc(), VulnerabilityFinding.scanned_at.desc()
         )
     )
     vulns = result.scalars().all()
@@ -185,19 +179,29 @@ async def security_node_detail(
         "node_id": str(node_id),
         "vulnerabilities": [
             {
-                "id": str(v.id), "cve_id": v.cve_id, "package_name": v.package_name,
-                "package_version": v.package_version, "severity": v.severity,
-                "cvss_score": v.cvss_score, "fixed_version": v.fixed_version,
-                "description": v.description, "reference_url": v.reference_url,
-                "scanner": v.scanner, "scanned_at": v.scanned_at,
+                "id": str(v.id),
+                "cve_id": v.cve_id,
+                "package_name": v.package_name,
+                "package_version": v.package_version,
+                "severity": v.severity,
+                "cvss_score": v.cvss_score,
+                "fixed_version": v.fixed_version,
+                "description": v.description,
+                "reference_url": v.reference_url,
+                "scanner": v.scanner,
+                "scanned_at": v.scanned_at,
             }
             for v in vulns
         ],
         "license_findings": [
             {
-                "id": str(lic.id), "package_name": lic.package_name,
-                "package_version": lic.package_version, "license_id": lic.license_id,
-                "risk": lic.risk, "scanner": lic.scanner, "scanned_at": lic.scanned_at,
+                "id": str(lic.id),
+                "package_name": lic.package_name,
+                "package_version": lic.package_version,
+                "license_id": lic.license_id,
+                "risk": lic.risk,
+                "scanner": lic.scanner,
+                "scanned_at": lic.scanned_at,
             }
             for lic in licenses
         ],
@@ -216,8 +220,11 @@ async def trigger_node_scan(
 ):
     """Trigger a vulnerability/license scan for a specific node."""
     if scanner not in _VALID_SCANNERS:
-        raise HTTPException(status_code=422, detail=f"Invalid scanner '{scanner}'. Must be one of: {sorted(_VALID_SCANNERS)}")  # noqa: E501
+        raise HTTPException(
+            status_code=422, detail=f"Invalid scanner '{scanner}'. Must be one of: {sorted(_VALID_SCANNERS)}"
+        )  # noqa: E501
     from fleet_platform.workers.security_tasks import scan_node_security
+
     result = await db.execute(select(Node).where(Node.id == node_id))
     node = result.scalar_one_or_none()
     if not node:
@@ -234,8 +241,11 @@ async def trigger_fleet_scan(
 ):
     """Trigger vulnerability/license scans for all nodes."""
     if scanner not in _VALID_SCANNERS:
-        raise HTTPException(status_code=422, detail=f"Invalid scanner '{scanner}'. Must be one of: {sorted(_VALID_SCANNERS)}")  # noqa: E501
+        raise HTTPException(
+            status_code=422, detail=f"Invalid scanner '{scanner}'. Must be one of: {sorted(_VALID_SCANNERS)}"
+        )  # noqa: E501
     from fleet_platform.workers.security_tasks import scan_all_nodes
+
     task = scan_all_nodes.delay(scanner=scanner)
     return {"task_id": task.id, "scanner": scanner, "status": "queued"}
 
@@ -266,7 +276,7 @@ async def integration_status(
     cxone_ok = False
     if cxone_url:
         try:
-            urllib.request.urlopen(f"{cxone_url}/api/health", timeout=5)
+            urllib.request.urlopen(f"{cxone_url}/api/health", timeout=5)  # nosec B310
             cxone_ok = True
         except Exception:
             pass
@@ -276,7 +286,7 @@ async def integration_status(
     sonar_ok = False
     if sonar_url:
         try:
-            urllib.request.urlopen(f"{sonar_url}/api/system/health", timeout=5)
+            urllib.request.urlopen(f"{sonar_url}/api/system/health", timeout=5)  # nosec B310
             sonar_ok = True
         except Exception:
             pass

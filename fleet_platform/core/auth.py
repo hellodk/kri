@@ -1,3 +1,4 @@
+import logging
 import uuid as _uuid_mod
 from datetime import UTC, datetime, timedelta
 from typing import Any
@@ -8,7 +9,10 @@ import redis.asyncio as aioredis
 from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
+from fleet_platform.api.deps import get_redis
 from fleet_platform.core.config import settings
+
+logger = logging.getLogger(__name__)
 
 _REVOKE_PREFIX = "rt:revoked:"
 
@@ -103,16 +107,9 @@ def _unauthorized(detail: str) -> HTTPException:
     )
 
 
-async def _get_redis() -> aioredis.Redis:
-    """Thin wrapper to lazily import get_redis and avoid circular imports at module load."""
-    from fleet_platform.api.deps import get_redis
-
-    return await get_redis()
-
-
 async def get_current_user(
     credentials: HTTPAuthorizationCredentials | None = Depends(_bearer),
-    redis: aioredis.Redis = Depends(_get_redis),
+    redis: aioredis.Redis = Depends(get_redis),
 ) -> dict[str, Any]:
     if not credentials:
         raise _unauthorized("Missing Authorization header")
@@ -125,8 +122,15 @@ async def get_current_user(
     if claims.get("type") != "access":
         raise _unauthorized("Refresh tokens cannot access this endpoint")
     jti = claims.get("jti", "")
-    if jti and await is_token_revoked(redis, jti):
-        raise _unauthorized("Token has been revoked")
+    if jti:
+        try:
+            if await is_token_revoked(redis, jti):
+                raise _unauthorized("Token has been revoked")
+        except aioredis.RedisError:
+            logger.error("Redis unavailable during token revocation check — denying request")
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="Service temporarily unavailable"
+            )
     return claims
 
 

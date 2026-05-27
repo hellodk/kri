@@ -1,4 +1,5 @@
 """Alert rules, webhook configs, and alert events API."""
+
 from __future__ import annotations
 
 import json
@@ -22,6 +23,7 @@ router = APIRouter(prefix="/api/v1/alerts")
 
 # ── Schemas ───────────────────────────────────────────────────────────
 
+
 class CreateRuleBody(BaseModel):
     name: str
     event_type: str
@@ -37,6 +39,7 @@ class CreateWebhookBody(BaseModel):
 
 
 # ── Alert Rules ───────────────────────────────────────────────────────
+
 
 @router.get("/rules")
 async def list_rules(
@@ -107,6 +110,7 @@ async def delete_rule(
 
 # ── Webhook Configs ───────────────────────────────────────────────────
 
+
 @router.get("/webhooks")
 async def list_webhooks(
     db: AsyncSession = Depends(get_db),
@@ -176,17 +180,14 @@ async def delete_webhook(
 
 # ── Alert Events ──────────────────────────────────────────────────────
 
+
 @router.get("/events")
 async def list_events(
     limit: int = 50,
     db: AsyncSession = Depends(get_db),
     _: dict = Depends(require_role("operator", "admin")),
 ):
-    result = await db.execute(
-        select(AlertEvent)
-        .order_by(AlertEvent.fired_at.desc())
-        .limit(limit)
-    )
+    result = await db.execute(select(AlertEvent).order_by(AlertEvent.fired_at.desc()).limit(limit))
     events = result.scalars().all()
     return {
         "items": [
@@ -204,6 +205,7 @@ async def list_events(
 
 
 # ── Test Webhook ──────────────────────────────────────────────────────
+
 
 @router.post("/test-webhook/{webhook_id}")
 async def test_webhook(
@@ -239,7 +241,7 @@ async def test_webhook(
             headers={"Content-Type": "application/json"},
             method="POST",
         )
-        urllib.request.urlopen(req, timeout=10)
+        urllib.request.urlopen(req, timeout=10)  # nosec B310
         return {"status": "ok", "message": "Test payload delivered successfully"}
     except Exception as exc:
         raise HTTPException(
