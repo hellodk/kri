@@ -313,7 +313,8 @@ async def webssh_session(
             connect_kwargs["password"] = creds["ssh_password"]
             proxy._ssh_conn = await asyncssh.connect(**connect_kwargs)
 
-        assert proxy._ssh_conn is not None
+        if proxy._ssh_conn is None:
+            raise RuntimeError("SSH connection failed to establish")
         proxy._ssh_process = await proxy._ssh_conn.create_process(
             term_type="xterm-256color",
             request_pty=True,
