@@ -1,7 +1,6 @@
 """Unit tests for API code quality fixes (issues #107, #111, #113, #134, #135)."""
 import pytest
 
-
 # ── Fix #113: BaselineUpdate Pydantic model ───────────────────────────────────
 
 def test_baseline_update_rejects_extra_fields():
@@ -106,6 +105,7 @@ def _get_query_bounds(query_obj):
 def test_webssh_sessions_limit_default_and_bounds():
     """list_sessions limit parameter has ge=1 and le=500 bounds."""
     import inspect
+
     from fleet_platform.api.routes.webssh import list_sessions
     sig = inspect.signature(list_sessions)
     param = sig.parameters["limit"]
@@ -119,6 +119,7 @@ def test_webssh_sessions_limit_default_and_bounds():
 def test_webssh_events_limit_default_and_bounds():
     """list_security_events limit parameter has ge=1 and le=500 bounds."""
     import inspect
+
     from fleet_platform.api.routes.webssh import list_security_events
     sig = inspect.signature(list_security_events)
     param = sig.parameters["limit"]
@@ -132,6 +133,7 @@ def test_webssh_events_limit_default_and_bounds():
 def test_alerts_events_limit_default_and_bounds():
     """list_events limit parameter has ge=1 and le=500 bounds."""
     import inspect
+
     from fleet_platform.api.routes.alerts import list_events
     sig = inspect.signature(list_events)
     param = sig.parameters["limit"]
@@ -158,6 +160,7 @@ def test_group_member_has_node_id_index():
 def test_group_member_node_id_index_covers_correct_column():
     """The node_id index in GroupMember targets the node_id column."""
     from sqlalchemy import Index
+
     from fleet_platform.models.group import GroupMember
     for arg in GroupMember.__table_args__:
         if isinstance(arg, Index) and arg.name == "idx_group_members_node_id":
