@@ -85,6 +85,10 @@ def get_decrypted_api_key(endpoint: LLMEndpoint) -> str | None:
     return decrypt_secret(endpoint.api_key_encrypted)
 
 
+_SYSTEM_PROMPT_LOG_LIMIT = 500
+_PROMPT_LOG_LIMIT = 2000
+
+
 async def create_query_log(
     db: AsyncSession,
     *,
@@ -100,12 +104,22 @@ async def create_query_log(
     duration_ms: int | None,
     error: str | None,
 ) -> LLMQueryLog:
+    truncated_system_prompt = (
+        system_prompt[:_SYSTEM_PROMPT_LOG_LIMIT] + "... [truncated]"
+        if len(system_prompt) > _SYSTEM_PROMPT_LOG_LIMIT
+        else system_prompt
+    )
+    truncated_user_prompt = (
+        prompt[:_PROMPT_LOG_LIMIT] + "... [truncated]"
+        if len(prompt) > _PROMPT_LOG_LIMIT
+        else prompt
+    )
     log = LLMQueryLog(
         endpoint_id=endpoint_id,
         user_id=user_id,
         intent=intent,
-        prompt=prompt,
-        system_prompt=system_prompt,
+        prompt=truncated_user_prompt,
+        system_prompt=truncated_system_prompt,
         response=response,
         model_used=model_used,
         input_tokens=input_tokens,
