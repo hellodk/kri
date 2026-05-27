@@ -6,20 +6,36 @@ from fleet_platform.db.session import get_sync_db
 from fleet_platform.models.bootstrap_run import BootstrapRun
 from fleet_platform.models.node import Node
 from fleet_platform.models.platform_setting import PlatformSetting
+from fleet_platform.services.platform_settings_svc import (
+    NODE_OFFLINE_THRESHOLD_HOURS,
+    NODE_STALE_THRESHOLD_MINUTES,
+    get_setting_sync,
+)
 from fleet_platform.workers.celery_app import celery_app
 
-_STALE_THRESHOLD = timedelta(minutes=15)
-_OFFLINE_THRESHOLD = timedelta(hours=1)
+_DEFAULT_STALE_MINUTES = 15
+_DEFAULT_OFFLINE_HOURS = 1
 
 
 @celery_app.task(name="fleet_platform.workers.maintenance.mark_stale_nodes")
 def mark_stale_nodes() -> dict:
     """Mark nodes as stale or offline based on last_seen_at. Runs every 5 minutes via beat."""
     now = datetime.now(UTC)
-    stale_cutoff = now - _STALE_THRESHOLD
-    offline_cutoff = now - _OFFLINE_THRESHOLD
 
     with get_sync_db() as db:
+        # Read thresholds from platform settings; fall back to defaults on missing/invalid values
+        try:
+            stale_minutes = int(get_setting_sync(db, NODE_STALE_THRESHOLD_MINUTES) or _DEFAULT_STALE_MINUTES)
+        except (TypeError, ValueError):
+            stale_minutes = _DEFAULT_STALE_MINUTES
+
+        try:
+            offline_hours = int(get_setting_sync(db, NODE_OFFLINE_THRESHOLD_HOURS) or _DEFAULT_OFFLINE_HOURS)
+        except (TypeError, ValueError):
+            offline_hours = _DEFAULT_OFFLINE_HOURS
+
+        stale_cutoff = now - timedelta(minutes=stale_minutes)
+        offline_cutoff = now - timedelta(hours=offline_hours)
         # NOTE: Nodes with last_seen_at IS NULL (registered but never reported) are
         # intentionally not touched here. They stay in status="unknown" indefinitely.
         # A separate cleanup task (Plan 3+) should evict nodes that are unknown for

@@ -46,6 +46,10 @@ SMTP_FROM = "smtp_from"
 DIGEST_RECIPIENTS = "digest_recipients"  # comma-separated email list
 JENKINS_INGEST_SECRET = "jenkins_ingest_secret"
 
+# Node health thresholds
+NODE_STALE_THRESHOLD_MINUTES = "node_stale_threshold_minutes"
+NODE_OFFLINE_THRESHOLD_HOURS = "node_offline_threshold_hours"
+
 
 def _fernet_key() -> bytes:
     if settings.fernet_secret_key:
