@@ -1,5 +1,5 @@
 import { useEffect, useRef } from 'react'
-import { BrowserRouter, Routes, Route } from 'react-router-dom'
+import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { AuthGuard } from './components/AuthGuard'
 import { Layout } from './components/Layout/Layout'
@@ -25,7 +25,6 @@ import { SaltOpsPage } from './pages/SaltOpsPage'
 import { AlertsPage } from './pages/AlertsPage'
 import FleetHealthPage from './pages/FleetHealthPage'
 import { DashboardPage } from './pages/DashboardPage'
-import { Navigate } from 'react-router-dom'
 import { saltKeysApi } from './api/saltKeys'
 import { useSaltKeysStore } from './stores/saltKeysStore'
 import { useToastStore } from './stores/toastStore'
@@ -82,14 +81,16 @@ export default function App() {
     <QueryClientProvider client={queryClient}>
       <BrowserRouter>
         <SaltKeyWatcher />
-        <LLMAssistant />
         <Routes>
           <Route path="/login" element={<LoginPage />} />
           <Route path="/auth/callback" element={<OidcCallbackPage />} />
           <Route
             element={
               <AuthGuard>
-                <Layout />
+                <>
+                  <Layout />
+                  <LLMAssistant />
+                </>
               </AuthGuard>
             }
           >
