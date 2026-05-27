@@ -1,5 +1,6 @@
 import uuid
 import uuid as _uuid
+from asyncio import to_thread
 from datetime import UTC, datetime
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
@@ -37,7 +38,8 @@ async def login(request: Request, payload: LoginRequest, db: AsyncSession = Depe
     result = await db.execute(select(User).where(User.email == payload.email))
     user = result.scalar_one_or_none()
 
-    if not user or not verify_password(payload.password, user.password_hash):
+    password_valid = await to_thread(verify_password, payload.password, user.password_hash)
+    if not user or not password_valid:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid credentials")
 
     if not user.is_active:

@@ -115,6 +115,10 @@ def _run_trivy(sbom_path: str) -> tuple[list[dict], list[dict]]:
     name="fleet_platform.workers.security_tasks.scan_node_security",
     bind=True,
     max_retries=2,
+    autoretry_for=(Exception,),
+    retry_backoff=True,
+    retry_backoff_max=300,
+    retry_jitter=True,
     queue="default",
 )
 def scan_node_security(self, node_id: str, scanner: str = "trivy") -> dict:
