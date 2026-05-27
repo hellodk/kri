@@ -3,13 +3,16 @@
 import json
 import logging
 import os
+import shutil
 import subprocess
 
 from fleet_platform.workers.celery_app import celery_app
 
 logger = logging.getLogger(__name__)
 
-_SALT_CONTAINER = os.environ.get("SALT_MASTER_CONTAINER", "deploy-salt-master-1")
+# Name of the salt-master container when running in Docker/Podman.
+# Set to empty string for bare-metal deployments where salt is on PATH.
+_SALT_MASTER_CONTAINER = os.environ.get("SALT_MASTER_CONTAINER", "deploy-salt-master-1")
 
 # Allowlist of Salt functions that can be executed via the ad-hoc command API.
 # This prevents operators from running arbitrary shell commands via cmd.run
@@ -22,6 +25,9 @@ _ALLOWED_SALT_FUNCTIONS: frozenset[str] = frozenset({
     "pkg.remove",
     "pkg.list_pkgs",
     "pkg.upgrade",
+    "pip.install",
+    "pip.installed",
+    "pip.list",
     "service.start",
     "service.stop",
     "service.restart",
@@ -39,6 +45,52 @@ _ALLOWED_SALT_FUNCTIONS: frozenset[str] = frozenset({
     "saltutil.refresh_pillar",
 })
 
+# Ordered list of container runtime candidates to try.
+_CONTAINER_RUNTIMES = ("docker", "podman")
+
+# Common non-standard binary locations for Docker/Podman on macOS and Linux.
+_EXTRA_PATHS = (
+    "/usr/local/bin",
+    "/usr/bin",
+    "/opt/homebrew/bin",
+    "/snap/bin",
+)
+
+
+def _find_runtime() -> str | None:
+    """Return the full path to docker or podman, checking both PATH and common locations."""
+    for rt in _CONTAINER_RUNTIMES:
+        found = shutil.which(rt)
+        if found:
+            return found
+        for prefix in _EXTRA_PATHS:
+            candidate = os.path.join(prefix, rt)
+            if os.path.isfile(candidate) and os.access(candidate, os.X_OK):
+                return candidate
+    return None
+
+
+def _salt_prefix() -> list[str]:
+    """Return the command prefix for running salt.
+
+    - Empty list  → salt is on PATH (bare-metal, salt-master on host)
+    - [runtime, "exec", container] → proxy through docker/podman exec
+    """
+    if not _SALT_MASTER_CONTAINER:
+        return []
+
+    runtime = _find_runtime()
+    if runtime:
+        return [runtime, "exec", _SALT_MASTER_CONTAINER]
+
+    # No container runtime found — try salt directly (may be installed on host).
+    logger.warning(
+        "SALT_MASTER_CONTAINER=%r but no container runtime (docker/podman) found on PATH "
+        "or common locations. Attempting to run salt directly.",
+        _SALT_MASTER_CONTAINER,
+    )
+    return []
+
 
 @celery_app.task(
     name="fleet_platform.workers.salt_tasks.apply_salt_state",
@@ -53,19 +105,19 @@ def apply_salt_state(
 ) -> dict:
     """Run: salt -L '{minion1,minion2}' state.apply {state_name} [pillar={...}]
 
-    The salt binary lives inside the salt-master container; we invoke it via
-    docker exec so the worker doesn't need Salt installed.
+    Works with Docker, Podman, or bare-metal salt installs. Runtime is detected
+    automatically via SALT_MASTER_CONTAINER env var + shutil.which().
     """
     target = ",".join(target_minions)
     cmd = ["salt", "-L", target, "state.apply", state_name, "--no-color", "--out=json"]
     if pillar_data:
         cmd += [f"pillar={json.dumps(pillar_data)}"]
 
-    docker_cmd = ["docker", "exec", _SALT_CONTAINER] + cmd
-    logger.info("apply_salt_state: %s", " ".join(docker_cmd))
+    full_cmd = _salt_prefix() + cmd
+    logger.info("apply_salt_state: %s", " ".join(full_cmd))
 
     try:
-        proc = subprocess.run(docker_cmd, capture_output=True, text=True, timeout=300)
+        proc = subprocess.run(full_cmd, capture_output=True, text=True, timeout=300)
         return {
             "status": "ok" if proc.returncode == 0 else "error",
             "stdout": proc.stdout[:10000],
@@ -74,6 +126,15 @@ def apply_salt_state(
         }
     except subprocess.TimeoutExpired:
         return {"status": "error", "reason": "timeout after 300s"}
+    except FileNotFoundError as exc:
+        return {
+            "status": "error",
+            "reason": (
+                f"Salt runner not found ({exc}). "
+                "Set SALT_MASTER_CONTAINER to the container name (docker/podman) "
+                "or to empty string if salt is installed directly on the host."
+            ),
+        }
     except Exception as exc:
         return {"status": "error", "reason": str(exc)[:500]}
 
@@ -108,11 +169,11 @@ def run_salt_cmd(
     if args:
         cmd += args
 
-    docker_cmd = ["docker", "exec", _SALT_CONTAINER] + cmd
-    logger.info("run_salt_cmd: %s", " ".join(docker_cmd))
+    full_cmd = _salt_prefix() + cmd
+    logger.info("run_salt_cmd: %s", " ".join(full_cmd))
 
     try:
-        proc = subprocess.run(docker_cmd, capture_output=True, text=True, timeout=120)
+        proc = subprocess.run(full_cmd, capture_output=True, text=True, timeout=120)
         return {
             "status": "ok" if proc.returncode == 0 else "error",
             "stdout": proc.stdout[:10000],
@@ -121,5 +182,14 @@ def run_salt_cmd(
         }
     except subprocess.TimeoutExpired:
         return {"status": "error", "reason": "timeout after 120s"}
+    except FileNotFoundError as exc:
+        return {
+            "status": "error",
+            "reason": (
+                f"Salt runner not found ({exc}). "
+                "Set SALT_MASTER_CONTAINER to the container name (docker/podman) "
+                "or to empty string if salt is installed directly on the host."
+            ),
+        }
     except Exception as exc:
         return {"status": "error", "reason": str(exc)[:500]}
