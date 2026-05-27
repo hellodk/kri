@@ -1,5 +1,6 @@
 """Unit tests for #123 (log limits) and #114 (DB rename)."""
 from pathlib import Path
+
 import yaml  # pyyaml is in dev deps
 
 COMPOSE = Path("deploy/docker-compose.yml")
