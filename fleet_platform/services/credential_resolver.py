@@ -7,6 +7,8 @@ Priority chain (first match wins):
 """
 from __future__ import annotations
 
+import logging
+
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -19,6 +21,8 @@ from fleet_platform.services.platform_settings_svc import (
     _fernet,
     decrypt_secret,
 )
+
+logger = logging.getLogger(__name__)
 
 
 async def resolve_node_credentials(node: Node, db: AsyncSession) -> dict:
@@ -33,14 +37,22 @@ async def resolve_node_credentials(node: Node, db: AsyncSession) -> dict:
         if node.ssh_password_enc:
             try:
                 password = decrypt_secret(node.ssh_password_enc)
-            except Exception:
-                pass
+            except Exception as exc:
+                logger.warning(
+                    "Fernet decryption failed for node %s field ssh_password: %s",
+                    node.id,
+                    exc,
+                )
         ssh_key = ""
         if node.ssh_key_enc:
             try:
                 ssh_key = decrypt_secret(node.ssh_key_enc)
-            except Exception:
-                pass
+            except Exception as exc:
+                logger.warning(
+                    "Fernet decryption failed for node %s field ssh_key: %s",
+                    node.id,
+                    exc,
+                )
         return {
             "ssh_user": node.ssh_username,
             "ssh_password": password,
@@ -64,14 +76,24 @@ async def resolve_node_credentials(node: Node, db: AsyncSession) -> dict:
         if group.ssh_password_enc:
             try:
                 password = decrypt_secret(group.ssh_password_enc)
-            except Exception:
-                pass
+            except Exception as exc:
+                logger.warning(
+                    "Fernet decryption failed for group %s field ssh_password (node %s): %s",
+                    group.name,
+                    node.id,
+                    exc,
+                )
         ssh_key = ""
         if group.ssh_key_enc:
             try:
                 ssh_key = decrypt_secret(group.ssh_key_enc)
-            except Exception:
-                pass
+            except Exception as exc:
+                logger.warning(
+                    "Fernet decryption failed for group %s field ssh_key (node %s): %s",
+                    group.name,
+                    node.id,
+                    exc,
+                )
         return {
             "ssh_user": group.ssh_username,
             "ssh_password": password,
@@ -103,7 +125,12 @@ async def _get_global_setting(db: AsyncSession, key: str, encrypted: bool = Fals
     if encrypted and row.is_encrypted:
         try:
             return _fernet().decrypt(row.value.encode()).decode()
-        except Exception:
+        except Exception as exc:
+            logger.warning(
+                "Fernet decryption failed for global platform setting %s: %s",
+                key,
+                exc,
+            )
             return ""
     return row.value or ""
 
