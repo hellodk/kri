@@ -18,6 +18,7 @@ import { formatGrainKey } from './DriftExplorer'
 import { Skeleton } from '../components/Skeleton'
 import { ErrorState } from '../components/ErrorState'
 import { Pagination } from '../components/Pagination'
+import { ConfirmDialog } from '../components/ConfirmDialog'
 import { SshTabBar } from '../components/ssh/SshTabBar'
 import { MultiSessionTerminal } from '../components/ssh/MultiSessionTerminal'
 import type { SshTab } from '../components/ssh/SshTabBar'
@@ -148,6 +149,7 @@ function IOSTabPanel({
   qc: ReturnType<typeof useQueryClient>
   toast: (message: string, type?: 'success' | 'error' | 'info') => void
 }) {
+  const [deletingCert, setDeletingCert] = useState<string | null>(null)
   const agent = iosDetail?.jenkins_agent ?? null
   const certs = iosDetail?.certificates ?? []
 
@@ -318,11 +320,7 @@ function IOSTabPanel({
                       </td>
                       <td className="px-4 py-2 text-right">
                         <button
-                          onClick={() => {
-                            if (confirm('Delete this certificate?')) {
-                              deleteCertMutation.mutate(cert.id)
-                            }
-                          }}
+                          onClick={() => setDeletingCert(cert.id)}
                           disabled={deleteCertMutation.isPending}
                           className="text-xs text-red-500 hover:text-red-700 font-medium disabled:opacity-50"
                         >
@@ -337,6 +335,16 @@ function IOSTabPanel({
           </div>
         )}
       </div>
+      {deletingCert && (
+        <ConfirmDialog
+          title="Delete this certificate?"
+          message="This certificate will be permanently removed from the node."
+          confirmLabel="Delete"
+          destructive
+          onConfirm={() => { deleteCertMutation.mutate(deletingCert); setDeletingCert(null) }}
+          onCancel={() => setDeletingCert(null)}
+        />
+      )}
     </div>
   )
 }
@@ -377,6 +385,7 @@ export function NodeDetail() {
   const [secretValue, setSecretValue] = useState('')
   const [secretDesc, setSecretDesc] = useState('')
   const [secretShowValue, setSecretShowValue] = useState(false)
+  const [deletingSecretKey, setDeletingSecretKey] = useState<string | null>(null)
   // iOS tab state
   const [showAddCert, setShowAddCert] = useState(false)
   const [showJenkinsConfigure, setShowJenkinsConfigure] = useState(false)
@@ -1598,10 +1607,7 @@ export function NodeDetail() {
                       </td>
                       <td className="px-4 py-3 text-right">
                         <button
-                          onClick={() => {
-                            if (!window.confirm('Delete this secret? This cannot be undone.')) return
-                            deleteSecretMutation.mutate(s.key)
-                          }}
+                          onClick={() => setDeletingSecretKey(s.key)}
                           disabled={deleteSecretMutation.isPending}
                           className="text-xs text-red-600 hover:text-red-700 font-medium disabled:opacity-50"
                         >
@@ -1764,6 +1770,16 @@ export function NodeDetail() {
             />
           )}
         </div>
+      )}
+      {deletingSecretKey && (
+        <ConfirmDialog
+          title="Delete this secret?"
+          message="This secret will be permanently removed from the node. This cannot be undone."
+          confirmLabel="Delete"
+          destructive
+          onConfirm={() => { deleteSecretMutation.mutate(deletingSecretKey); setDeletingSecretKey(null) }}
+          onCancel={() => setDeletingSecretKey(null)}
+        />
       )}
     </div>
   )

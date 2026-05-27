@@ -5,6 +5,7 @@ import { groupsApi } from '../api/groups'
 import { useToastStore } from '../stores/toastStore'
 import { Skeleton } from '../components/Skeleton'
 import { ErrorState } from '../components/ErrorState'
+import { ConfirmDialog } from '../components/ConfirmDialog'
 import { Pagination } from '../components/Pagination'
 import { format } from 'date-fns'
 
@@ -17,6 +18,8 @@ export function GroupExplorer() {
   const [predicate, setPredicate] = useState('{"and": []}')
   const [selected, setSelected] = useState<Set<string>>(new Set())
   const [bulkDeleting, setBulkDeleting] = useState(false)
+  const [bulkDeleteConfirm, setBulkDeleteConfirm] = useState(false)
+  const [deletingGroup, setDeletingGroup] = useState<{ id: string; name: string } | null>(null)
   const qc = useQueryClient()
   const toast = useToastStore((s) => s.add)
 
@@ -65,9 +68,14 @@ export function GroupExplorer() {
     setSelected(next)
   }
 
-  async function bulkDelete() {
+  function bulkDelete() {
+    if (selected.size === 0) return
+    setBulkDeleteConfirm(true)
+  }
+
+  async function confirmBulkDelete() {
+    setBulkDeleteConfirm(false)
     const count = selected.size
-    if (!confirm(`Delete ${count} group${count === 1 ? '' : 's'}? This cannot be undone.`)) return
     setBulkDeleting(true)
     await Promise.all([...selected].map((id) => groupsApi.delete(id)))
     setBulkDeleting(false)
@@ -203,11 +211,7 @@ export function GroupExplorer() {
                     <td className="px-4 py-3 text-gray-500">{format(new Date(g.created_at), 'PP')}</td>
                     <td className="px-4 py-3 text-right">
                       <button
-                        onClick={() => {
-                          if (confirm(`Delete group "${g.name}"? This cannot be undone.`)) {
-                            deleteMutation.mutate(g.id)
-                          }
-                        }}
+                        onClick={() => setDeletingGroup({ id: g.id, name: g.name })}
                         disabled={deleteMutation.isPending || bulkDeleting}
                         className="text-xs text-red-500 hover:text-red-700 font-medium disabled:opacity-50"
                       >
@@ -222,6 +226,26 @@ export function GroupExplorer() {
           </>
         )}
       </div>
+      {bulkDeleteConfirm && (
+        <ConfirmDialog
+          title={`Delete ${selected.size} group${selected.size === 1 ? '' : 's'}?`}
+          message="This cannot be undone. All selected groups will be permanently deleted."
+          confirmLabel="Delete"
+          destructive
+          onConfirm={confirmBulkDelete}
+          onCancel={() => setBulkDeleteConfirm(false)}
+        />
+      )}
+      {deletingGroup && (
+        <ConfirmDialog
+          title={`Delete group "${deletingGroup.name}"?`}
+          message="This cannot be undone."
+          confirmLabel="Delete"
+          destructive
+          onConfirm={() => { deleteMutation.mutate(deletingGroup.id); setDeletingGroup(null) }}
+          onCancel={() => setDeletingGroup(null)}
+        />
+      )}
     </div>
   )
 }

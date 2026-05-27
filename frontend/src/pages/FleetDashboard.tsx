@@ -13,6 +13,7 @@ import { Skeleton } from '../components/Skeleton'
 import { ErrorState } from '../components/ErrorState'
 import { Pagination } from '../components/Pagination'
 import { BootstrapModal } from './BootstrapModal'
+import { ConfirmDialog } from '../components/ConfirmDialog'
 import { formatDistanceToNow, differenceInDays, parseISO } from 'date-fns'
 import type { Node } from '../types'
 
@@ -571,6 +572,7 @@ export function FleetDashboard() {
   const [bulkScanning, setBulkScanning] = useState(false)
   const [bulkApplying, setBulkApplying] = useState(false)
   const [showSaltStateDropdown, setShowSaltStateDropdown] = useState(false)
+  const [saltStateConfirm, setSaltStateConfirm] = useState<string | null>(null)
   const [macosOnly, setMacosOnly] = useState(false)
 
   const user = useAuthStore((s) => s.user)
@@ -707,10 +709,14 @@ export function FleetDashboard() {
 
   async function bulkApplySaltState(state: string) {
     if (!state) return
+    setSaltStateConfirm(state)
+  }
+
+  async function confirmBulkApplySaltState() {
+    const state = saltStateConfirm
+    setSaltStateConfirm(null)
+    if (!state) return
     const selectedNodes = nodes?.items.filter((n) => selected.has(n.id)) ?? []
-    if (!window.confirm(`Apply state '${state}' to ${selectedNodes.length} node(s)? This will trigger a Salt state execution on selected nodes.`)) {
-      return
-    }
     setBulkApplying(true)
     const minionIds = selectedNodes.map((n) => n.minion_id)
     try {
@@ -1052,6 +1058,15 @@ export function FleetDashboard() {
       {showAddNode && <AddNodeModal onClose={() => setShowAddNode(false)} />}
       {editingNode && <EditNodeModal node={editingNode} onClose={() => setEditingNode(null)} />}
       {deletingNode && <DeleteNodeDialog node={deletingNode} onClose={() => setDeletingNode(null)} />}
+      {saltStateConfirm && (
+        <ConfirmDialog
+          title={`Apply state '${saltStateConfirm}'?`}
+          message={`This will trigger a Salt state execution on ${[...selected].length} selected node(s). This action cannot be undone.`}
+          confirmLabel="Apply State"
+          onConfirm={confirmBulkApplySaltState}
+          onCancel={() => setSaltStateConfirm(null)}
+        />
+      )}
       {showBulkDeleteConfirm && (
         <BulkDeleteConfirmModal
           count={selected.size}
