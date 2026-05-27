@@ -59,7 +59,9 @@ def test_mark_stale_nodes_sets_offline_when_last_seen_2h_ago():
     mock_session.__enter__ = lambda s: s
     mock_session.__exit__ = MagicMock(return_value=False)
 
-    with patch("fleet_platform.workers.maintenance.get_sync_db") as mock_db:
+    with patch("fleet_platform.workers.maintenance.get_sync_db") as mock_db, patch(
+        "fleet_platform.workers.maintenance.get_setting_sync", return_value=None
+    ):
         mock_db.return_value = mock_session
         result = mark_stale_nodes()
 
