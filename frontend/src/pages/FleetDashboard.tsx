@@ -499,6 +499,55 @@ function DeleteNodeDialog({ node, onClose }: { node: Node; onClose: () => void }
   )
 }
 
+// ─── Bulk delete confirmation modal ───────────────────────────────────────────
+
+interface BulkDeleteConfirmModalProps {
+  count: number
+  onConfirm: () => void
+  onCancel: () => void
+}
+
+function BulkDeleteConfirmModal({ count, onConfirm, onCancel }: BulkDeleteConfirmModalProps) {
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => { if (e.key === 'Escape') onCancel() }
+    document.addEventListener('keydown', handler)
+    return () => document.removeEventListener('keydown', handler)
+  }, [onCancel])
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" role="dialog" aria-modal="true" aria-labelledby="bulk-delete-title">
+      <div className="bg-white rounded-xl shadow-2xl p-6 w-full max-w-md mx-4 border border-gray-200">
+        <div className="flex items-center gap-3 mb-4">
+          <div className="w-10 h-10 rounded-full bg-red-100 flex items-center justify-center flex-shrink-0">
+            <svg className="w-5 h-5 text-red-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z" />
+            </svg>
+          </div>
+          <h2 id="bulk-delete-title" className="text-lg font-semibold text-gray-900">Delete {count} node{count !== 1 ? 's' : ''}?</h2>
+        </div>
+        <p className="text-sm text-gray-600 mb-6">
+          This will permanently delete <span className="font-semibold text-gray-900">{count} node{count !== 1 ? 's' : ''}</span> from the fleet.
+          Deleted nodes must be re-bootstrapped manually. This action cannot be undone.
+        </p>
+        <div className="flex justify-end gap-3">
+          <button
+            onClick={onCancel}
+            className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50"
+          >
+            Cancel
+          </button>
+          <button
+            onClick={onConfirm}
+            className="px-4 py-2 text-sm font-medium text-white bg-red-600 border border-transparent rounded-lg hover:bg-red-700"
+          >
+            Delete {count} node{count !== 1 ? 's' : ''}
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 // ─── Main page ─────────────────────────────────────────────────────────────────
 
 export function FleetDashboard() {
@@ -516,6 +565,7 @@ export function FleetDashboard() {
   const [editingNode, setEditingNode] = useState<Node | null>(null)
   const [deletingNode, setDeletingNode] = useState<Node | null>(null)
   const [selected, setSelected] = useState<Set<string>>(new Set())
+  const [showBulkDeleteConfirm, setShowBulkDeleteConfirm] = useState(false)
   const [bulkDeleting, setBulkDeleting] = useState(false)
   const [bulkGraining, setBulkGraining] = useState(false)
   const [bulkScanning, setBulkScanning] = useState(false)
@@ -622,6 +672,11 @@ export function FleetDashboard() {
     qc.invalidateQueries({ queryKey: ['nodes'] })
     qc.invalidateQueries({ queryKey: ['fleet-overview'] })
     toast(failed ? `Deleted with ${failed} error(s)` : `Deleted ${count} node(s)`, failed ? 'error' : 'success')
+  }
+
+  async function handleBulkDeleteConfirm() {
+    setShowBulkDeleteConfirm(false)
+    await bulkDelete()
   }
 
   async function bulkCollectGrains() {
@@ -863,7 +918,7 @@ export function FleetDashboard() {
                       )}
                     </div>
                     <button
-                      onClick={bulkDelete}
+                      onClick={() => setShowBulkDeleteConfirm(true)}
                       disabled={bulkDeleting}
                       className="px-3 py-1 bg-red-600 text-white text-xs font-medium rounded-lg hover:bg-red-700 disabled:opacity-50"
                     >
@@ -994,6 +1049,13 @@ export function FleetDashboard() {
       {showAddNode && <AddNodeModal onClose={() => setShowAddNode(false)} />}
       {editingNode && <EditNodeModal node={editingNode} onClose={() => setEditingNode(null)} />}
       {deletingNode && <DeleteNodeDialog node={deletingNode} onClose={() => setDeletingNode(null)} />}
+      {showBulkDeleteConfirm && (
+        <BulkDeleteConfirmModal
+          count={selected.size}
+          onConfirm={handleBulkDeleteConfirm}
+          onCancel={() => setShowBulkDeleteConfirm(false)}
+        />
+      )}
     </div>
   )
 }
