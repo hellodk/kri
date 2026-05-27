@@ -52,7 +52,7 @@ celery_app.conf.update(
         },
         "refresh-all-node-grains": {
             "task": "fleet_platform.workers.ansible_tasks.refresh_all_node_grains",
-            "schedule": 1800,  # every 30 minutes — nodes recover within 30 min of any disruption
+            "schedule": 300,  # every 5 minutes
         },
         "run-alert-evaluation": {
             "task": "fleet_platform.workers.alert_tasks.run_alert_evaluation",
