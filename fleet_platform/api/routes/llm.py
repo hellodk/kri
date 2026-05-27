@@ -5,6 +5,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from fleet_platform.api.deps import get_db
+from fleet_platform.core.audit import audit
 from fleet_platform.core.auth import require_role
 from fleet_platform.schemas.llm import (
     LLMEndpointCreate,
@@ -51,7 +52,8 @@ def _to_response(endpoint) -> LLMEndpointResponse:
     )
 
 
-# ── Endpoint management (admin only) ─────────────────────────────────────────
+# -- Endpoint management (admin only) -----------------------------------------
+
 
 @router.get("/endpoints", response_model=list[LLMEndpointResponse])
 async def list_endpoints(
@@ -148,7 +150,8 @@ async def test_endpoint(
         return LLMEndpointTestResponse(ok=False, latency_ms=latency_ms, error=str(exc))
 
 
-# ── Query (operator+) ─────────────────────────────────────────────────────────
+# -- Query (operator+) --------------------------------------------------------
+
 
 @router.post("/query", response_model=LLMQueryResponse)
 async def submit_query(
@@ -165,7 +168,7 @@ async def submit_query(
         if not endpoint:
             raise HTTPException(
                 status_code=422,
-                detail="No default LLM endpoint configured. Add one in Settings → LLM.",
+                detail="No default LLM endpoint configured. Add one in Settings -> LLM.",
             )
 
     if not endpoint.enabled:
@@ -216,6 +219,20 @@ async def submit_query(
         output_tokens=output_tokens,
         duration_ms=duration_ms,
         error=error,
+    )
+
+    await audit(
+        db,
+        actor=claims["sub"],
+        action="llm_query",
+        resource_type="llm",
+        resource_id=None,
+        new_value={
+            "query": payload.prompt[:200],
+            "intent": payload.intent,
+            "model": endpoint.model,
+            "endpoint": endpoint.name,
+        },
     )
 
     if error:
