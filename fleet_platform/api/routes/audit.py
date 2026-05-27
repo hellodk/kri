@@ -8,7 +8,7 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from fleet_platform.api.deps import get_db
-from fleet_platform.core.auth import get_current_user
+from fleet_platform.core.auth import require_role
 from fleet_platform.models.audit import AuditEvent
 from fleet_platform.schemas.common import PaginatedResponse
 
@@ -49,7 +49,7 @@ async def list_audit_logs(
     page: int = Query(default=1, ge=1),
     per_page: int = Query(default=50, ge=1, le=200),
     db: AsyncSession = Depends(get_db),
-    _: dict = Depends(get_current_user),
+    _: dict = Depends(require_role("admin", "auditor")),
 ):
     query = select(AuditEvent)
 

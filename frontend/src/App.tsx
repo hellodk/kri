@@ -4,6 +4,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { AuthGuard } from './components/AuthGuard'
 import { Layout } from './components/Layout/Layout'
 import { LoginPage } from './pages/LoginPage'
+import { OidcCallbackPage } from './pages/OidcCallbackPage'
 import { FleetDashboard } from './pages/FleetDashboard'
 import { NodeDetail } from './pages/NodeDetail'
 import { DriftExplorer } from './pages/DriftExplorer'
@@ -85,6 +86,7 @@ export default function App() {
         <LLMAssistant />
         <Routes>
           <Route path="/login" element={<LoginPage />} />
+          <Route path="/auth/callback" element={<OidcCallbackPage />} />
           <Route
             element={
               <AuthGuard>

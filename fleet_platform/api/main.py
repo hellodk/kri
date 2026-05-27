@@ -31,6 +31,7 @@ from fleet_platform.api.routes.group_secrets import router as group_secrets_rout
 from fleet_platform.api.routes.ios_tracking import router as ios_tracking_router
 from fleet_platform.api.routes.llm import router as llm_router
 from fleet_platform.api.routes.node_secrets import router as node_secrets_router
+from fleet_platform.api.routes.oidc import router as oidc_router
 from fleet_platform.api.routes.provisioning import router as provisioning_router
 from fleet_platform.api.routes.salt_keys import router as salt_keys_router
 from fleet_platform.api.routes.salt_ops import router as salt_ops_router
@@ -50,8 +51,10 @@ async def lifespan(app: FastAPI):
     # Seed non-secret platform settings from env vars (fills gaps after DB wipe)
     from fleet_platform.db.session import AsyncSessionLocal
     from fleet_platform.services.platform_settings_svc import seed_settings_from_env
+    from fleet_platform.services.user_seeding import seed_local_users
     async with AsyncSessionLocal() as db:
         await seed_settings_from_env(db)
+        await seed_local_users(db)
     yield
 
 
@@ -106,6 +109,7 @@ def create_app() -> FastAPI:
     app.include_router(ios_tracking_router, tags=["ios"])
     app.include_router(llm_router, tags=["llm"])
     app.include_router(fleet_health.router, tags=["fleet-health"])
+    app.include_router(oidc_router, tags=["oidc"])
 
     @app.get("/metrics", include_in_schema=False)
     async def metrics_endpoint():

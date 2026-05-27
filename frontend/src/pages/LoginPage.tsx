@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { authApi } from '../api/auth'
 import { useAuthStore } from '../stores/authStore'
@@ -9,8 +9,13 @@ export function LoginPage() {
   const [showPassword, setShowPassword] = useState(false)
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
+  const [oidcEnabled, setOidcEnabled] = useState(false)
   const navigate = useNavigate()
   const setUser = useAuthStore((s) => s.setUser)
+
+  useEffect(() => {
+    authApi.getOidcConfig().then((cfg) => setOidcEnabled(cfg.enabled)).catch(() => {})
+  }, [])
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
@@ -124,6 +129,26 @@ export function LoginPage() {
             >
               {loading ? 'Signing in…' : 'Sign in'}
             </button>
+
+            {oidcEnabled && (
+              <div className="relative flex items-center my-4">
+                <div className="flex-1 border-t border-white/10" />
+                <span className="px-3 text-xs text-white/30">or</span>
+                <div className="flex-1 border-t border-white/10" />
+              </div>
+            )}
+            {oidcEnabled && (
+              <a
+                href="/api/v1/auth/oidc/login"
+                className="flex items-center justify-center gap-2 w-full py-2.5 border border-white/15 text-white/70 rounded-lg text-sm font-medium hover:bg-white/5 hover:text-white transition-colors"
+              >
+                <svg width="18" height="18" viewBox="0 0 18 18" fill="none" xmlns="http://www.w3.org/2000/svg" style={{flexShrink:0}}>
+                  <circle cx="9" cy="9" r="7.5" stroke="currentColor" strokeWidth="1.5" fill="none" />
+                  <path d="M9 4.5v9M4.5 9h9" stroke="currentColor" strokeWidth="1.5" />
+                </svg>
+                Sign in with SSO
+              </a>
+            )}
           </form>
         </div>
       </div>

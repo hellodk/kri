@@ -13,6 +13,10 @@ export interface PlatformSettings {
   sonarqube_url: string | null
   license_policy: string | null
   vnc_enabled?: boolean
+  oidc_enabled: boolean
+  oidc_issuer_url: string | null
+  oidc_client_id: string | null
+  oidc_role_prefix: string | null
 }
 
 export interface BootstrapResponse {
@@ -99,6 +103,11 @@ export const ansibleApi = {
     sonarqube_token?: string
     license_policy?: string
     vnc_enabled?: boolean
+    oidc_enabled?: boolean
+    oidc_issuer_url?: string
+    oidc_client_id?: string
+    oidc_client_secret?: string
+    oidc_role_prefix?: string
   }) => api.put<PlatformSettings>('/api/v1/settings', payload),
   bootstrap: (minion_id: string, target_ip: string, sshUsername?: string, sshPassword?: string) =>
     api.post<BootstrapResponse>('/api/v1/ansible/bootstrap', {

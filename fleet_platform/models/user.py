@@ -21,3 +21,10 @@ class User(Base, TimestampMixin):
     last_login_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True
     )
+    auth_provider: Mapped[str] = mapped_column(
+        String(20), nullable=False, insert_default="local"
+    )
+
+    def __init__(self, **kwargs):
+        kwargs.setdefault("auth_provider", "local")
+        super().__init__(**kwargs)

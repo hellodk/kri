@@ -35,6 +35,11 @@ class PlatformSettingsUpdate(BaseModel):
     sonarqube_token: str | None = None
     license_policy: str | None = None
     vnc_enabled: bool = False
+    oidc_enabled: bool | None = None
+    oidc_issuer_url: str | None = None
+    oidc_client_id: str | None = None
+    oidc_client_secret: str | None = None
+    oidc_role_prefix: str | None = None
 
 
 class PlatformSettingsResponse(BaseModel):
@@ -51,3 +56,8 @@ class PlatformSettingsResponse(BaseModel):
     sonarqube_url: str | None = None
     license_policy: str | None = None
     vnc_enabled: bool = False
+    oidc_enabled: bool = False
+    oidc_issuer_url: str | None = None
+    oidc_client_id: str | None = None
+    oidc_client_secret: None = None    # write-only
+    oidc_role_prefix: str | None = None

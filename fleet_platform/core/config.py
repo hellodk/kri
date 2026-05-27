@@ -23,6 +23,12 @@ class Settings(BaseSettings):
     frontend_origin: str = "http://localhost:5173"
     environment: str = "development"
 
+    oidc_enabled: bool = False
+    oidc_issuer_url: str = ""          # e.g. https://keycloak.example.com/realms/kri
+    oidc_client_id: str = ""
+    oidc_client_secret: str = ""
+    oidc_role_prefix: str = "kri-"    # Keycloak role prefix: kri-admin → admin
+
     @model_validator(mode="after")
     def validate_production_secrets(self) -> "Settings":
         if self.environment == "production":

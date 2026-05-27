@@ -6,7 +6,7 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from fleet_platform.api.deps import get_db
-from fleet_platform.core.auth import get_current_user, require_role
+from fleet_platform.core.auth import require_role
 from fleet_platform.models.node import Node
 from fleet_platform.models.sbom import SBOMScan
 from fleet_platform.models.security import LicenseFinding, VulnerabilityFinding
@@ -17,7 +17,7 @@ router = APIRouter(prefix="/api/v1/security")
 @router.get("/dashboard")
 async def security_dashboard(
     db: AsyncSession = Depends(get_db),
-    _: dict = Depends(get_current_user),
+    _: dict = Depends(require_role("operator", "admin", "auditor")),
 ):
     """Fleet-wide security summary."""
     # Vulnerability counts by severity
@@ -64,7 +64,7 @@ async def security_dashboard(
 @router.get("/nodes")
 async def security_node_list(
     db: AsyncSession = Depends(get_db),
-    _: dict = Depends(get_current_user),
+    _: dict = Depends(require_role("operator", "admin", "auditor")),
 ):
     """Per-node vulnerability and license summary.
 
@@ -159,7 +159,7 @@ async def security_node_list(
 async def security_node_detail(
     node_id: uuid.UUID,
     db: AsyncSession = Depends(get_db),
-    _: dict = Depends(get_current_user),
+    _: dict = Depends(require_role("operator", "admin", "auditor")),
 ):
     """Detailed vulnerability and license findings for one node."""
     # Vulnerabilities
@@ -243,7 +243,7 @@ async def trigger_fleet_scan(
 @router.get("/integration-status")
 async def integration_status(
     db: AsyncSession = Depends(get_db),
-    _: dict = Depends(get_current_user),
+    _: dict = Depends(require_role("operator", "admin", "auditor")),
 ):
     """Check connectivity to external security tools."""
     import subprocess
