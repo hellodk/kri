@@ -9,6 +9,25 @@ import { Pagination } from '../components/Pagination'
 import { formatDistanceToNow } from 'date-fns'
 import { useFilterStore } from '../stores/filterStore'
 
+export const GRAIN_DISPLAY_NAMES: Record<string, string> = {
+  'system.machinename': 'Machine Name',
+  'system.kernelversion': 'Kernel Version',
+  'system.osversion': 'OS Version',
+  'system.productname': 'Product Name',
+  'disk.capacity': 'Disk Capacity',
+  'network.interface': 'Network Interface',
+  'software.installed': 'Installed Software',
+  'hardware.cpucount': 'CPU Count',
+  'hardware.memtotal': 'Total Memory',
+  'os.family': 'OS Family',
+  'os.release': 'OS Release',
+}
+
+export function formatGrainKey(key: string): string {
+  return GRAIN_DISPLAY_NAMES[key] ??
+    key.split(/[._]/).map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ')
+}
+
 const SEVERITIES = ['', 'clean', 'low', 'medium', 'high', 'critical']
 
 export function DriftExplorer() {

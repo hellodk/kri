@@ -14,6 +14,7 @@ import {
 } from '../api/iosTracking'
 import { StatusBadge } from '../components/StatusBadge'
 import { DriftBadge } from '../components/DriftBadge'
+import { formatGrainKey } from './DriftExplorer'
 import { Skeleton } from '../components/Skeleton'
 import { ErrorState } from '../components/ErrorState'
 import { Pagination } from '../components/Pagination'
@@ -25,6 +26,7 @@ import { formatDistanceToNow, format, differenceInDays, parseISO } from 'date-fn
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts'
 import { useToastStore } from '../stores/toastStore'
 import { api } from '../api/client'
+import { saltOpsApi } from '../api/saltOps'
 import type { Node } from '../types'
 
 function isMacOSNode(node: Node): boolean {
@@ -380,6 +382,9 @@ export function NodeDetail() {
   const [showJenkinsConfigure, setShowJenkinsConfigure] = useState(false)
   const [jenkinsForm, setJenkinsForm] = useState({ jenkins_url: '', agent_name: '' })
   const [checkingJenkins, setCheckingJenkins] = useState(false)
+  // Quick Actions state
+  const [actionResult, setActionResult] = useState<string | null>(null)
+  const [runningAction, setRunningAction] = useState(false)
   const qc = useQueryClient()
   const toast = useToastStore((s) => s.add)
 
@@ -582,6 +587,23 @@ export function NodeDetail() {
       toast(e instanceof Error ? e.message : 'Check failed', 'error')
     } finally {
       setCheckingJenkins(false)
+    }
+  }
+
+  async function runSaltCommand(fn: string) {
+    if (!node) return
+    setRunningAction(true)
+    setActionResult(null)
+    try {
+      const resp = await saltOpsApi.cmd(fn, [node.minion_id])
+      setActionResult(`Queued: ${fn} (task ${resp.task_id})`)
+      toast(`Salt command '${fn}' queued`)
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : 'Command failed'
+      setActionResult(`Error: ${msg}`)
+      toast(msg, 'error')
+    } finally {
+      setRunningAction(false)
     }
   }
 
@@ -996,6 +1018,39 @@ export function NodeDetail() {
               </button>
             </form>
           </div>
+
+          {/* Quick Actions card */}
+          <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-4 md:col-span-2">
+            <h3 className="text-sm font-semibold text-gray-900 dark:text-gray-100 mb-3">Quick Actions</h3>
+            <div className="flex flex-wrap gap-2">
+              <button
+                onClick={() => runSaltCommand('state.apply')}
+                disabled={runningAction}
+                className="px-3 py-1.5 text-xs font-medium bg-brand-600 text-white rounded-md hover:bg-brand-700 disabled:opacity-50 transition-colors"
+              >
+                Apply Highstate
+              </button>
+              <button
+                onClick={() => runSaltCommand('test.ping')}
+                disabled={runningAction}
+                className="px-3 py-1.5 text-xs font-medium bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-200 rounded-md hover:bg-gray-200 dark:hover:bg-gray-600 disabled:opacity-50 transition-colors"
+              >
+                Test Ping
+              </button>
+              <button
+                onClick={() => runSaltCommand('saltutil.refresh_grains')}
+                disabled={runningAction}
+                className="px-3 py-1.5 text-xs font-medium bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-200 rounded-md hover:bg-gray-200 dark:hover:bg-gray-600 disabled:opacity-50 transition-colors"
+              >
+                Refresh Grains
+              </button>
+            </div>
+            {actionResult && (
+              <div className="mt-3 p-2 text-xs font-mono bg-gray-50 dark:bg-gray-900 rounded text-gray-800 dark:text-gray-200 border border-gray-200 dark:border-gray-700">
+                {actionResult}
+              </div>
+            )}
+          </div>
         </div>
       )}
 
@@ -1191,9 +1246,44 @@ export function NodeDetail() {
                       <tbody className="divide-y divide-gray-50">
                         {latestDrift.service_drift.map((svc, i) => (
                           <tr key={i} className="hover:bg-gray-50">
-                            <td className="px-4 py-2 font-mono font-medium text-gray-900">{svc.name}</td>
+                            <td className="px-4 py-2 font-medium text-gray-900" title={svc.name}>
+                              {formatGrainKey(svc.name)}
+                            </td>
                             <td className="px-4 py-2 text-gray-600">{svc.expected}</td>
                             <td className="px-4 py-2 text-red-600">{svc.actual}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+
+                {/* Config / Grain drift */}
+                {(latestDrift.config_drift as Array<{ key: string; expected: unknown; actual: unknown }> ?? []).length > 0 && (
+                  <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
+                    <div className="flex items-center gap-2 px-4 py-2 bg-gray-50 border-b border-gray-200">
+                      <h4 className="text-sm font-semibold text-gray-700">Config / Grain Drift</h4>
+                    </div>
+                    <table className="w-full text-sm">
+                      <thead>
+                        <tr className="text-xs text-gray-500 uppercase border-b border-gray-100 bg-gray-50">
+                          <th className="px-4 py-2 text-left font-medium">Key</th>
+                          <th className="px-4 py-2 text-left font-medium">Expected</th>
+                          <th className="px-4 py-2 text-left font-medium">Actual</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-gray-50">
+                        {(latestDrift.config_drift as Array<{ key: string; expected: unknown; actual: unknown }>).map((item, i) => (
+                          <tr key={i} className="hover:bg-gray-50">
+                            <td className="px-4 py-2 font-medium text-gray-900" title={item.key}>
+                              {formatGrainKey(item.key)}
+                            </td>
+                            <td className="px-4 py-2 font-mono text-xs text-gray-600">
+                              {String(item.expected ?? '—')}
+                            </td>
+                            <td className="px-4 py-2 font-mono text-xs text-red-600">
+                              {String(item.actual ?? '—')}
+                            </td>
                           </tr>
                         ))}
                       </tbody>
