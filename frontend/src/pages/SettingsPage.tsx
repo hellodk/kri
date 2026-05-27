@@ -5,6 +5,7 @@ import { playbookSourcesApi, type PlaybookSource, type PlaybookSourceValidateRes
 import { llmApi, type LLMEndpoint } from '../api/llm'
 import { LLMEndpointForm } from '../components/LLMEndpointForm'
 import { useToastStore } from '../stores/toastStore'
+import { buildsApi } from '../api/builds'
 
 export function SettingsPage() {
   const qc = useQueryClient()
@@ -30,6 +31,15 @@ export function SettingsPage() {
   const [oidcClientSecret, setOidcClientSecret] = useState('')
   const [oidcRolePrefix, setOidcRolePrefix] = useState('kri-')
   const [timezone, setTimezone] = useState(() => localStorage.getItem('kri_timezone') ?? '')
+  // Email digest settings
+  const [smtpHost, setSmtpHost] = useState('')
+  const [smtpPort, setSmtpPort] = useState('587')
+  const [smtpUsername, setSmtpUsername] = useState('')
+  const [smtpPassword, setSmtpPassword] = useState('')
+  const [smtpFrom, setSmtpFrom] = useState('')
+  const [digestRecipients, setDigestRecipients] = useState('')
+  const [jenkinsSecret, setJenkinsSecret] = useState('')
+  const [digestSending, setDigestSending] = useState(false)
 
   const { data, isLoading } = useQuery({
     queryKey: ['settings'],
@@ -52,6 +62,11 @@ export function SettingsPage() {
       if (data.oidc_issuer_url) setOidcIssuer(data.oidc_issuer_url)
       if (data.oidc_client_id) setOidcClientId(data.oidc_client_id)
       if (data.oidc_role_prefix) setOidcRolePrefix(data.oidc_role_prefix)
+      if (data.smtp_host) setSmtpHost(data.smtp_host)
+      if (data.smtp_port) setSmtpPort(data.smtp_port)
+      if (data.smtp_username) setSmtpUsername(data.smtp_username)
+      if (data.smtp_from) setSmtpFrom(data.smtp_from)
+      if (data.digest_recipients) setDigestRecipients(data.digest_recipients)
     }
   }, [data])
 
@@ -76,6 +91,13 @@ export function SettingsPage() {
       oidc_client_id: oidcClientId || undefined,
       oidc_client_secret: oidcClientSecret || undefined,
       oidc_role_prefix: oidcRolePrefix || undefined,
+      smtp_host: smtpHost || undefined,
+      smtp_port: smtpPort || undefined,
+      smtp_username: smtpUsername || undefined,
+      smtp_password: smtpPassword || undefined,
+      smtp_from: smtpFrom || undefined,
+      digest_recipients: digestRecipients || undefined,
+      jenkins_ingest_secret: jenkinsSecret || undefined,
     }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['settings'] })
@@ -92,7 +114,7 @@ export function SettingsPage() {
       ? `http://${master}/api/v1/ingest/grains`
       : null
 
-  const TABS = ['General', 'Bootstrap', 'Remote Access', 'Integrations', 'Advanced', 'AI / LLM'] as const
+  const TABS = ['General', 'Bootstrap', 'Remote Access', 'Integrations', 'Advanced', 'AI / LLM', 'Notifications'] as const
   type Tab = typeof TABS[number]
   const [activeTab, setActiveTab] = useState<Tab>('General')
 
@@ -526,8 +548,202 @@ export function SettingsPage() {
         </div>
       )}
 
-      {/* Save button — visible for all tabs except AI / LLM (which manages its own records) */}
-      {activeTab !== 'AI / LLM' && (
+      {/* Notifications tab */}
+      {activeTab === 'Notifications' && (
+        <div className="space-y-6">
+
+          {/* Jenkins Ingest */}
+          <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-6 space-y-4">
+            <div>
+              <h2 className="text-base font-semibold text-gray-900">Jenkins Build Ingest</h2>
+              <p className="text-sm text-gray-500 mt-1">
+                Configure your Jenkins jobs to POST build results to kri after each build.
+                No polling — Jenkins pushes data to you.
+              </p>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Ingest Endpoint
+              </label>
+              <div className="bg-gray-50 border border-gray-200 rounded-lg px-3 py-2 flex items-center gap-2">
+                <code className="text-xs font-mono text-brand-700 truncate">
+                  {kriApiUrl ? `${kriApiUrl.replace(/\/$/, '')}/api/v1/builds/ingest` : 'Set kri server URL in General tab first'}
+                </code>
+              </div>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Shared Secret (X-Jenkins-Secret header)
+              </label>
+              <input
+                type="password"
+                value={jenkinsSecret}
+                onChange={(e) => setJenkinsSecret(e.target.value)}
+                placeholder="Enter new secret to set or rotate"
+                className={inputClass}
+              />
+              <p className="text-xs text-gray-400 mt-1">
+                Set this once, copy it to Jenkins as a credential, then add it to each job's
+                <code className="mx-1 text-xs bg-gray-100 px-1 rounded">X-Jenkins-Secret</code>
+                header. Secret is stored encrypted.
+              </p>
+            </div>
+            <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+              <p className="text-sm font-semibold text-blue-900 mb-2">Jenkins Pipeline Snippet</p>
+              <pre className="text-xs font-mono text-blue-800 overflow-x-auto whitespace-pre">{`post {
+  always {
+    script {
+      def payload = groovy.json.JsonOutput.toJson([
+        job_name    : env.JOB_NAME,
+        build_number: env.BUILD_NUMBER.toInteger(),
+        result      : currentBuild.result ?: 'SUCCESS',
+        duration_ms : currentBuild.duration,
+        started_at  : new Date(currentBuild.startTimeInMillis)
+                        .format("yyyy-MM-dd'T'HH:mm:ss'Z'",
+                                TimeZone.getTimeZone('UTC')),
+        test_pass   : currentBuild.testResultAction?.passCount,
+        test_fail   : currentBuild.testResultAction?.failCount,
+        test_total  : currentBuild.testResultAction?.totalCount,
+        node_name   : env.NODE_NAME,
+        branch      : env.GIT_BRANCH,
+      ])
+      httpRequest(
+        url         : "\${env.KRI_API_URL}/api/v1/builds/ingest",
+        httpMode    : 'POST',
+        contentType : 'APPLICATION_JSON',
+        requestBody : payload,
+        customHeaders: [[name: 'X-Jenkins-Secret',
+                         value: env.KRI_JENKINS_SECRET]],
+        validResponseCodes: '200'
+      )
+    }
+  }
+}`}</pre>
+              <p className="text-xs text-blue-700 mt-2">
+                Add <code className="bg-blue-100 px-1 rounded">KRI_API_URL</code> and{' '}
+                <code className="bg-blue-100 px-1 rounded">KRI_JENKINS_SECRET</code> as Jenkins
+                credentials (Secret Text). Requires the{' '}
+                <a
+                  href="https://plugins.jenkins.io/http_request/"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="underline"
+                >HTTP Request Plugin</a>.
+              </p>
+            </div>
+          </div>
+
+          {/* SMTP settings */}
+          <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-6 space-y-4">
+            <div>
+              <h2 className="text-base font-semibold text-gray-900">Email (SMTP)</h2>
+              <p className="text-sm text-gray-500 mt-1">
+                Settings for the weekly fleet digest email. Sent every Monday at 08:00 UTC.
+              </p>
+            </div>
+            <div className="grid grid-cols-3 gap-3">
+              <div className="col-span-2">
+                <label className="block text-sm font-medium text-gray-700 mb-1">SMTP Host</label>
+                <input
+                  type="text"
+                  value={smtpHost}
+                  onChange={(e) => setSmtpHost(e.target.value)}
+                  placeholder="smtp.gmail.com"
+                  className={monoInputClass}
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Port</label>
+                <input
+                  type="text"
+                  value={smtpPort}
+                  onChange={(e) => setSmtpPort(e.target.value)}
+                  placeholder="587"
+                  className={monoInputClass}
+                />
+              </div>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">SMTP Username</label>
+              <input
+                type="text"
+                value={smtpUsername}
+                onChange={(e) => setSmtpUsername(e.target.value)}
+                placeholder="alerts@yourorg.com"
+                className={monoInputClass}
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">SMTP Password</label>
+              <input
+                type="password"
+                value={smtpPassword}
+                onChange={(e) => setSmtpPassword(e.target.value)}
+                placeholder="Enter password to set or update"
+                className={inputClass}
+              />
+              <p className="text-xs text-gray-400 mt-1">Stored encrypted. Leave blank to keep existing.</p>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">From Address</label>
+              <input
+                type="text"
+                value={smtpFrom}
+                onChange={(e) => setSmtpFrom(e.target.value)}
+                placeholder="kri Fleet Platform <kri@yourorg.com>"
+                className={monoInputClass}
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Digest Recipients
+              </label>
+              <input
+                type="text"
+                value={digestRecipients}
+                onChange={(e) => setDigestRecipients(e.target.value)}
+                placeholder="manager@yourorg.com, cto@yourorg.com"
+                className={monoInputClass}
+              />
+              <p className="text-xs text-gray-400 mt-1">Comma-separated list of email addresses.</p>
+            </div>
+          </div>
+
+          {/* Save + Test */}
+          <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-6">
+            <div className="flex items-center gap-3">
+              <button
+                onClick={() => saveMutation.mutate()}
+                disabled={saveMutation.isPending}
+                className="px-4 py-2 bg-brand-600 text-white rounded-lg text-sm font-medium hover:bg-brand-700 disabled:opacity-50"
+              >
+                {saveMutation.isPending ? 'Saving…' : 'Save Notification Settings'}
+              </button>
+              <button
+                onClick={async () => {
+                  setDigestSending(true)
+                  try {
+                    await buildsApi.triggerDigest()
+                    toast('Digest queued — check your inbox in a moment')
+                  } catch {
+                    toast('Failed to queue digest', 'error')
+                  } finally {
+                    setDigestSending(false)
+                  }
+                }}
+                disabled={digestSending}
+                className="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg text-sm font-medium hover:bg-gray-200 disabled:opacity-50 border border-gray-200"
+              >
+                {digestSending ? 'Sending…' : 'Send Test Digest Now'}
+              </button>
+            </div>
+          </div>
+
+        </div>
+      )}
+
+      {/* Save button — visible for all tabs except AI / LLM and Notifications (which manages its own save button) */}
+      {activeTab !== 'AI / LLM' && activeTab !== 'Notifications' && (
         <div className="flex justify-end pt-2">
           <button
             onClick={() => saveMutation.mutate()}
