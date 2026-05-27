@@ -3,8 +3,7 @@ Tests for issue #68: stale/offline thresholds read from platform settings.
 
 TDD: these tests are written before implementation — they must fail first.
 """
-from datetime import timedelta
-from unittest.mock import MagicMock, call, patch
+from unittest.mock import MagicMock, patch
 
 
 def _make_mock_session(stale_rowcount: int = 0, offline_rowcount: int = 0) -> MagicMock:
