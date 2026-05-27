@@ -14,6 +14,52 @@ logger = logging.getLogger(__name__)
 # Set to empty string for bare-metal deployments where salt is on PATH.
 _SALT_MASTER_CONTAINER = os.environ.get("SALT_MASTER_CONTAINER", "deploy-salt-master-1")
 
+# Ordered list of container runtime candidates to try.
+_CONTAINER_RUNTIMES = ("docker", "podman")
+
+# Common non-standard binary locations for Docker/Podman on macOS and Linux.
+_EXTRA_PATHS = (
+    "/usr/local/bin",
+    "/usr/bin",
+    "/opt/homebrew/bin",
+    "/snap/bin",
+)
+
+
+def _find_runtime() -> str | None:
+    """Return the full path to docker or podman, checking both PATH and common locations."""
+    for rt in _CONTAINER_RUNTIMES:
+        found = shutil.which(rt)
+        if found:
+            return found
+        for prefix in _EXTRA_PATHS:
+            candidate = os.path.join(prefix, rt)
+            if os.path.isfile(candidate) and os.access(candidate, os.X_OK):
+                return candidate
+    return None
+
+
+def _salt_prefix() -> list[str]:
+    """Return the command prefix for running salt.
+
+    - Empty list  → salt is on PATH (bare-metal, salt-master on host)
+    - [runtime, "exec", container] → proxy through docker/podman exec
+    """
+    if not _SALT_MASTER_CONTAINER:
+        return []
+
+    runtime = _find_runtime()
+    if runtime:
+        return [runtime, "exec", _SALT_MASTER_CONTAINER]
+
+    # No container runtime found — try salt directly (may be installed on host).
+    logger.warning(
+        "No container runtime (docker/podman) found on PATH or common locations "
+        "while SALT_MASTER_CONTAINER=%r is set. Attempting to run salt directly.",
+        _SALT_MASTER_CONTAINER,
+    )
+    return []
+
 # Allowlist of Salt functions that can be executed via the ad-hoc command API.
 # This prevents operators from running arbitrary shell commands via cmd.run
 # or other dangerous Salt modules.
