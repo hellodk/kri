@@ -1,7 +1,7 @@
 """add jenkins_build_events table
 
 Revision ID: 021
-Revises: 019
+Revises: 020
 Create Date: 2026-05-27
 """
 import sqlalchemy as sa
@@ -9,7 +9,7 @@ from alembic import op
 from sqlalchemy.dialects import postgresql
 
 revision = "021"
-down_revision = "019"
+down_revision = "020"
 branch_labels = None
 depends_on = None
 
