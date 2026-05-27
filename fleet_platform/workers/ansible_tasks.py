@@ -19,6 +19,7 @@ from fleet_platform.models.bootstrap_run import BootstrapRun
 from fleet_platform.models.node import Node
 from fleet_platform.models.platform_setting import PlatformSetting
 from fleet_platform.services.ssh_keypair import get_controller_pubkey
+from fleet_platform.services.task_lock import unique_task
 from fleet_platform.workers.celery_app import celery_app
 
 logger = logging.getLogger(__name__)
@@ -527,6 +528,7 @@ def collect_node_grains(self, node_id: str) -> dict:
                     pass
 
 
+@unique_task()  # singleton — one run at a time
 @celery_app.task(
     name="fleet_platform.workers.ansible_tasks.refresh_all_node_grains",
     queue="maintenance",

@@ -10,9 +10,11 @@ from fleet_platform.models.facts import NodeFact
 from fleet_platform.models.node import Node
 from fleet_platform.services.baseline_loader import find_baseline_for_node_sync
 from fleet_platform.services.drift_engine import compute_drift as engine_compute_drift
+from fleet_platform.services.task_lock import unique_task
 from fleet_platform.workers.celery_app import celery_app
 
 
+@unique_task(key_fn=lambda args, kwargs: f"compute_drift:{args[0]}")
 @celery_app.task(
     name="fleet_platform.workers.drift_tasks.compute_drift",
     bind=True,
