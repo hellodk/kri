@@ -6,7 +6,7 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from fleet_platform.api.deps import get_db
-from fleet_platform.core.auth import get_current_user, require_role
+from fleet_platform.core.auth import require_role
 from fleet_platform.models.node import Node
 from fleet_platform.models.sbom import SBOMScan
 from fleet_platform.models.security import LicenseFinding, VulnerabilityFinding
