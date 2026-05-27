@@ -1,7 +1,7 @@
 # fleet_platform/api/routes/security.py
 import uuid
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -55,6 +55,8 @@ async def security_dashboard(
 
 @router.get("/nodes")
 async def security_node_list(
+    page: int = Query(default=1, ge=1),
+    per_page: int = Query(default=50, ge=1, le=200),
     db: AsyncSession = Depends(get_db),
     _: dict = Depends(require_role("operator", "admin", "auditor")),
 ):
@@ -62,8 +64,12 @@ async def security_node_list(
 
     Uses 5 aggregate queries instead of 9 per-node queries (N+1 fix).
     """
-    # Fetch all nodes
-    result = await db.execute(select(Node))
+    # Count total nodes for pagination metadata
+    total = (await db.execute(select(func.count()).select_from(Node))).scalar_one()
+
+    # Fetch paginated nodes
+    node_query = select(Node).offset((page - 1) * per_page).limit(per_page)
+    result = await db.execute(node_query)
     nodes = result.scalars().all()
 
     # --- Aggregate query 1: vuln counts grouped by node_id + severity ---
@@ -147,36 +153,50 @@ async def security_node_list(
             }
         )
 
-    return {"items": items, "total": len(items)}
+    return {"items": items, "total": total, "page": page, "per_page": per_page}
 
 
 @router.get("/nodes/{node_id}")
 async def security_node_detail(
     node_id: uuid.UUID,
+    page: int = Query(default=1, ge=1),
+    per_page: int = Query(default=50, ge=1, le=200),
     db: AsyncSession = Depends(get_db),
     _: dict = Depends(require_role("operator", "admin", "auditor")),
 ):
     """Detailed vulnerability and license findings for one node."""
     # Vulnerabilities
-    result = await db.execute(
+    vuln_query = (
         select(VulnerabilityFinding)
         .where(VulnerabilityFinding.node_id == node_id)
         .order_by(
             VulnerabilityFinding.severity.in_(["CRITICAL", "HIGH"]).desc(), VulnerabilityFinding.scanned_at.desc()
         )
     )
+    total_vulns = (
+        await db.execute(select(func.count()).select_from(vuln_query.subquery()))
+    ).scalar_one()
+    result = await db.execute(vuln_query.offset((page - 1) * per_page).limit(per_page))
     vulns = result.scalars().all()
 
     # License findings
-    lic_result = await db.execute(
+    lic_query = (
         select(LicenseFinding)
         .where(LicenseFinding.node_id == node_id)
         .order_by(LicenseFinding.risk.desc(), LicenseFinding.package_name)
     )
+    total_licenses = (
+        await db.execute(select(func.count()).select_from(lic_query.subquery()))
+    ).scalar_one()
+    lic_result = await db.execute(lic_query.offset((page - 1) * per_page).limit(per_page))
     licenses = lic_result.scalars().all()
 
     return {
         "node_id": str(node_id),
+        "page": page,
+        "per_page": per_page,
+        "total_vulnerabilities": total_vulns,
+        "total_license_findings": total_licenses,
         "vulnerabilities": [
             {
                 "id": str(v.id),
