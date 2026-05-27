@@ -182,7 +182,7 @@ jobs:
         with:
           python-version: '3.13'
       - run: pip install uv pip-audit
-      - run: uv export --no-dev --no-editable --format requirements-txt | grep -v '^file://' > /tmp/requirements.txt
+      - run: uv export --no-dev --no-emit-project --format requirements-txt > /tmp/requirements.txt
       - run: pip-audit -r /tmp/requirements.txt --progress-spinner off
 
   container-scan:
