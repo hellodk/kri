@@ -19,7 +19,7 @@ def _check_jenkins_agent_sync(agent: JenkinsAgent) -> None:
     try:
         url = f"{agent.jenkins_url.rstrip('/')}/computer/{agent.agent_name}/api/json?tree=offline"
         req = urllib.request.Request(url, method="GET")
-        with urllib.request.urlopen(req, timeout=5) as resp:
+        with urllib.request.urlopen(req, timeout=5) as resp:  # nosec B310 — URL from admin-configured Jenkins endpoint
             data = json.loads(resp.read())
         agent.status = "online" if data.get("offline") is False else "offline"
     except Exception:
