@@ -12,6 +12,11 @@ from fleet_platform.services.platform_settings_svc import (
     CXONE_URL,
     KRI_API_URL,
     LICENSE_POLICY,
+    OIDC_CLIENT_ID,
+    OIDC_CLIENT_SECRET,
+    OIDC_ENABLED,
+    OIDC_ISSUER_URL,
+    OIDC_ROLE_PREFIX,
     PILLAR_DIR,
     PLAYBOOKS_DIR,
     SALT_MASTER,
@@ -36,6 +41,8 @@ async def get_settings(
     ensure_controller_keypair()
     vnc_enabled_raw = await get_setting(db, VNC_ENABLED)
     vnc_enabled = vnc_enabled_raw == "true"
+    oidc_enabled_raw = await get_setting(db, OIDC_ENABLED)
+    oidc_enabled = oidc_enabled_raw == "true"
     return PlatformSettingsResponse(
         salt_master_address=await get_setting(db, SALT_MASTER),
         kri_api_url=await get_setting(db, KRI_API_URL),
@@ -48,6 +55,10 @@ async def get_settings(
         sonarqube_url=await get_setting(db, SONARQUBE_URL),
         license_policy=await get_setting(db, LICENSE_POLICY),
         vnc_enabled=vnc_enabled,
+        oidc_enabled=oidc_enabled,
+        oidc_issuer_url=await get_setting(db, OIDC_ISSUER_URL),
+        oidc_client_id=await get_setting(db, OIDC_CLIENT_ID),
+        oidc_role_prefix=await get_setting(db, OIDC_ROLE_PREFIX),
     )
 
 
@@ -86,8 +97,20 @@ async def update_settings(
         await set_setting(db, LICENSE_POLICY, payload.license_policy)
     if payload.vnc_enabled is not None:
         await set_setting(db, VNC_ENABLED, "true" if payload.vnc_enabled else "false")
+    if payload.oidc_enabled is not None:
+        await set_setting(db, OIDC_ENABLED, "true" if payload.oidc_enabled else "false")
+    if payload.oidc_issuer_url is not None:
+        await set_setting(db, OIDC_ISSUER_URL, payload.oidc_issuer_url)
+    if payload.oidc_client_id is not None:
+        await set_setting(db, OIDC_CLIENT_ID, payload.oidc_client_id)
+    if payload.oidc_client_secret:
+        await set_setting(db, OIDC_CLIENT_SECRET, payload.oidc_client_secret, encrypt=True)
+    if payload.oidc_role_prefix is not None:
+        await set_setting(db, OIDC_ROLE_PREFIX, payload.oidc_role_prefix)
     vnc_enabled_raw = await get_setting(db, VNC_ENABLED)
     vnc_enabled = vnc_enabled_raw == "true"
+    oidc_enabled_raw = await get_setting(db, OIDC_ENABLED)
+    oidc_enabled = oidc_enabled_raw == "true"
     return PlatformSettingsResponse(
         salt_master_address=await get_setting(db, SALT_MASTER),
         kri_api_url=await get_setting(db, KRI_API_URL),
@@ -100,4 +123,8 @@ async def update_settings(
         sonarqube_url=await get_setting(db, SONARQUBE_URL),
         license_policy=await get_setting(db, LICENSE_POLICY),
         vnc_enabled=vnc_enabled,
+        oidc_enabled=oidc_enabled,
+        oidc_issuer_url=await get_setting(db, OIDC_ISSUER_URL),
+        oidc_client_id=await get_setting(db, OIDC_CLIENT_ID),
+        oidc_role_prefix=await get_setting(db, OIDC_ROLE_PREFIX),
     )

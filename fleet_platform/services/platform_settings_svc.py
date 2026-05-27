@@ -30,6 +30,11 @@ SONARQUBE_URL = "sonarqube_url"
 SONARQUBE_TOKEN = "sonarqube_token"
 LICENSE_POLICY = "license_policy"  # "permissive" | "strict"
 VNC_ENABLED = "vnc_enabled"  # "true" | "false"
+OIDC_ISSUER_URL = "oidc_issuer_url"
+OIDC_CLIENT_ID = "oidc_client_id"
+OIDC_CLIENT_SECRET = "oidc_client_secret"
+OIDC_ROLE_PREFIX = "oidc_role_prefix"
+OIDC_ENABLED = "oidc_enabled"
 
 
 def _fernet_key() -> bytes:
