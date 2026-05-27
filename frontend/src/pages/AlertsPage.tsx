@@ -12,6 +12,7 @@ import {
 import { Skeleton } from '../components/Skeleton'
 import { ErrorState } from '../components/ErrorState'
 import { useToastStore } from '../stores/toastStore'
+import { ConfirmDialog } from '../components/ConfirmDialog'
 
 const EVENT_TYPES = [
   { value: 'node_offline', label: 'Node Offline' },
@@ -152,6 +153,8 @@ function AlertRules() {
     onError: (err: Error) => toast(err.message, 'error'),
   })
 
+  const [deletingRule, setDeletingRule] = useState<AlertRule | null>(null)
+
   const needsThreshold = form.event_type === 'drift_threshold' || form.event_type === 'cve_found'
 
   return (
@@ -270,11 +273,7 @@ function AlertRules() {
                   </td>
                   <td className="px-4 py-3 text-right">
                     <button
-                      onClick={() => {
-                        if (confirm(`Delete rule "${rule.name}"?`)) {
-                          deleteMut.mutate(rule.id)
-                        }
-                      }}
+                      onClick={() => setDeletingRule(rule)}
                       className="text-red-500 hover:text-red-700 text-xs font-medium"
                     >
                       Delete
@@ -286,6 +285,16 @@ function AlertRules() {
           </table>
         )}
       </div>
+      {deletingRule && (
+        <ConfirmDialog
+          title={`Delete rule "${deletingRule.name}"?`}
+          message="This alert rule will be permanently removed."
+          confirmLabel="Delete"
+          destructive
+          onConfirm={() => { deleteMut.mutate(deletingRule.id); setDeletingRule(null) }}
+          onCancel={() => setDeletingRule(null)}
+        />
+      )}
     </section>
   )
 }
@@ -302,6 +311,7 @@ function WebhookTargets() {
     type: 'slack',
     enabled: true,
   })
+  const [deletingWebhook, setDeletingWebhook] = useState<WebhookConfig | null>(null)
 
   const { data, isLoading, isError, refetch } = useQuery({
     queryKey: ['alert-webhooks'],
@@ -455,11 +465,7 @@ function WebhookTargets() {
                         Test
                       </button>
                       <button
-                        onClick={() => {
-                          if (confirm(`Delete webhook "${wh.name}"?`)) {
-                            deleteMut.mutate(wh.id)
-                          }
-                        }}
+                        onClick={() => setDeletingWebhook(wh)}
                         className="text-red-500 hover:text-red-700 text-xs font-medium"
                       >
                         Delete
@@ -472,6 +478,16 @@ function WebhookTargets() {
           </table>
         )}
       </div>
+      {deletingWebhook && (
+        <ConfirmDialog
+          title={`Delete webhook "${deletingWebhook.name}"?`}
+          message="This webhook target will be permanently removed."
+          confirmLabel="Delete"
+          destructive
+          onConfirm={() => { deleteMut.mutate(deletingWebhook.id); setDeletingWebhook(null) }}
+          onCancel={() => setDeletingWebhook(null)}
+        />
+      )}
     </section>
   )
 }
