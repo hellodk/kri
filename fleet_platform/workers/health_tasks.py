@@ -1,8 +1,10 @@
 # fleet_platform/workers/health_tasks.py
 """Celery task for periodic fleet health metric collection."""
 import logging
+import time
+from datetime import datetime, timedelta
 
-from sqlalchemy import select
+from sqlalchemy import select, text
 
 from fleet_platform.db.session import get_sync_db
 from fleet_platform.models.node import Node
@@ -10,7 +12,13 @@ from fleet_platform.models.node_health_snapshot import NodeHealthSnapshot
 from fleet_platform.services import salt_maintenance_svc
 from fleet_platform.workers.celery_app import celery_app
 
-logger = logging.getLogger(__name__)
+_log = logging.getLogger(__name__)
+logger = _log  # backward-compatible alias
+
+# Thundering-herd guard: process nodes in batches so we never fire 7 Salt
+# commands at every minion simultaneously.
+BATCH_SIZE = 25
+BATCH_DELAY_S = 2
 
 
 @celery_app.task(
@@ -21,6 +29,8 @@ def collect_fleet_health() -> dict:
     """Collect health metrics from all online nodes and persist snapshots.
 
     Runs as Celery beat task every 15 minutes. Also triggerable on-demand via API.
+    Nodes are processed in batches of BATCH_SIZE with a short pause between
+    batches to avoid thundering-herd on the Salt master.
     """
     with get_sync_db() as db:
         nodes = db.execute(
@@ -28,17 +38,28 @@ def collect_fleet_health() -> dict:
         ).scalars().all()
 
         if not nodes:
-            logger.info("collect_fleet_health: no online nodes, skipping")
+            _log.info("collect_fleet_health: no online nodes, skipping")
             return {"collected": 0}
 
-        minion_ids = [n.minion_id for n in nodes]
         node_by_minion = {n.minion_id: n for n in nodes}
+        minion_ids = list(node_by_minion.keys())
 
-        logger.info("collect_fleet_health: collecting from %d nodes", len(nodes))
-        health_data = salt_maintenance_svc.collect_all_metrics(minion_ids)
+        _log.info(
+            "collect_fleet_health: collecting from %d nodes in batches of %d",
+            len(minion_ids),
+            BATCH_SIZE,
+        )
+
+        merged: dict[str, dict] = {}
+        for i in range(0, len(minion_ids), BATCH_SIZE):
+            batch = minion_ids[i : i + BATCH_SIZE]
+            batch_metrics = salt_maintenance_svc.collect_all_metrics(batch)
+            merged.update(batch_metrics)
+            if i + BATCH_SIZE < len(minion_ids):
+                time.sleep(BATCH_DELAY_S)
 
         count = 0
-        for minion_id, metrics in health_data.items():
+        for minion_id, metrics in merged.items():
             node = node_by_minion.get(minion_id)
             if node is None:
                 continue
@@ -67,5 +88,23 @@ def collect_fleet_health() -> dict:
             count += 1
 
         db.commit()
-        logger.info("collect_fleet_health: stored %d snapshots", count)
+        _log.info("collect_fleet_health: stored %d snapshots", count)
         return {"collected": count}
+
+
+@celery_app.task(
+    name="fleet_platform.workers.health_tasks.cleanup_old_health_snapshots",
+    queue="maintenance",
+)
+def cleanup_old_health_snapshots() -> int:
+    """Delete node_health_snapshots older than 90 days. Returns rows deleted."""
+    cutoff = datetime.utcnow() - timedelta(days=90)
+    with get_sync_db() as db:
+        result = db.execute(
+            text("DELETE FROM node_health_snapshots WHERE created_at < :cutoff"),
+            {"cutoff": cutoff},
+        )
+        db.commit()
+        deleted: int = result.rowcount  # type: ignore[attr-defined]
+    _log.info("Cleaned up %d old health snapshots (older than 90 days)", deleted)
+    return deleted
