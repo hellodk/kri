@@ -11,7 +11,6 @@ import uuid
 from datetime import UTC, datetime
 from unittest.mock import AsyncMock, MagicMock
 
-
 # ── Blocklist removal verification ────────────────────────────────────────────
 
 class TestBlocklistRemoved:
