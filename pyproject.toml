@@ -66,6 +66,7 @@ select = ["E", "F", "I"]
 
 [tool.ruff.lint.per-file-ignores]
 "fleet_platform/db/migrations/versions/*.py" = ["E501", "E402"]
+"fleet_platform/services/digest_svc.py" = ["E501"]
 
 [tool.ruff.lint.isort]
 known-first-party = ["fleet_platform"]

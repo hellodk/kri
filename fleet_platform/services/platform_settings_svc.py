@@ -6,6 +6,7 @@ from pathlib import Path
 from cryptography.fernet import Fernet
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import Session
 
 from fleet_platform.core.config import settings
 from fleet_platform.models.platform_setting import PlatformSetting
@@ -75,7 +76,7 @@ async def get_setting(db: AsyncSession, key: str) -> str | None:
     return row.value
 
 
-def get_setting_sync(db: "Session", key: str) -> str | None:
+def get_setting_sync(db: Session, key: str) -> str | None:
     """Synchronous version of get_setting for use in Celery tasks."""
     from sqlalchemy import select as sa_select
     from sqlalchemy.orm import Session  # noqa: F401 — type hint only
