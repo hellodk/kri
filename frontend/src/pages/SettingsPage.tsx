@@ -24,6 +24,11 @@ export function SettingsPage() {
   const [sonarToken, setSonarToken] = useState('')
   const [licensePolicy, setLicensePolicy] = useState('permissive')
   const [vncEnabled, setVncEnabled] = useState(false)
+  const [oidcEnabled, setOidcEnabled] = useState(false)
+  const [oidcIssuer, setOidcIssuer] = useState('')
+  const [oidcClientId, setOidcClientId] = useState('')
+  const [oidcClientSecret, setOidcClientSecret] = useState('')
+  const [oidcRolePrefix, setOidcRolePrefix] = useState('kri-')
   const [timezone, setTimezone] = useState(() => localStorage.getItem('kri_timezone') ?? '')
 
   const { data, isLoading } = useQuery({
@@ -43,6 +48,10 @@ export function SettingsPage() {
       if (data.sonarqube_url) setSonarUrl(data.sonarqube_url)
       if (data.license_policy) setLicensePolicy(data.license_policy)
       if (data.vnc_enabled !== undefined) setVncEnabled(data.vnc_enabled)
+      if (data.oidc_enabled !== undefined) setOidcEnabled(data.oidc_enabled)
+      if (data.oidc_issuer_url) setOidcIssuer(data.oidc_issuer_url)
+      if (data.oidc_client_id) setOidcClientId(data.oidc_client_id)
+      if (data.oidc_role_prefix) setOidcRolePrefix(data.oidc_role_prefix)
     }
   }, [data])
 
@@ -62,6 +71,11 @@ export function SettingsPage() {
       sonarqube_token: sonarToken || undefined,
       license_policy: licensePolicy || undefined,
       vnc_enabled: vncEnabled,
+      oidc_enabled: oidcEnabled,
+      oidc_issuer_url: oidcIssuer || undefined,
+      oidc_client_id: oidcClientId || undefined,
+      oidc_client_secret: oidcClientSecret || undefined,
+      oidc_role_prefix: oidcRolePrefix || undefined,
     }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['settings'] })
@@ -419,6 +433,58 @@ export function SettingsPage() {
               </select>
               <p className="text-xs text-gray-400 mt-1">Controls which licenses are flagged as "high risk" in the Security dashboard.</p>
             </div>
+          </div>
+
+          {/* OIDC / SSO */}
+          <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-6 space-y-4">
+            <div className="flex items-center justify-between">
+              <h2 className="text-base font-semibold text-gray-900">OIDC / SSO</h2>
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input type="checkbox" checked={oidcEnabled}
+                  onChange={(e) => setOidcEnabled(e.target.checked)}
+                  className="accent-brand-600 w-4 h-4" />
+                <span className="text-sm text-gray-600">Enable</span>
+              </label>
+            </div>
+            {oidcEnabled && (
+              <div className="space-y-3">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Issuer URL</label>
+                  <input type="text" value={oidcIssuer} onChange={(e) => setOidcIssuer(e.target.value)}
+                    placeholder="https://keycloak.example.com/realms/kri"
+                    className={inputClass} />
+                  <p className="text-xs text-gray-400 mt-1">Keycloak realm URL — kri will fetch the discovery document from here.</p>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Client ID</label>
+                  <input type="text" value={oidcClientId} onChange={(e) => setOidcClientId(e.target.value)}
+                    placeholder="kri-app"
+                    className={inputClass} />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Client Secret <span className="text-xs font-normal text-gray-400">(stored encrypted, leave blank to keep)</span>
+                  </label>
+                  <input type="password" value={oidcClientSecret}
+                    onChange={(e) => setOidcClientSecret(e.target.value)}
+                    placeholder="Leave blank to keep existing"
+                    className={inputClass} />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Role prefix</label>
+                  <input type="text" value={oidcRolePrefix} onChange={(e) => setOidcRolePrefix(e.target.value)}
+                    placeholder="kri-"
+                    className={inputClass} />
+                  <p className="text-xs text-gray-400 mt-1">
+                    Keycloak realm roles with this prefix are mapped to kri roles.
+                    Example: <code className="text-xs bg-gray-100 px-1 rounded">kri-admin</code> → <code className="text-xs bg-gray-100 px-1 rounded">admin</code>
+                  </p>
+                </div>
+              </div>
+            )}
+            {!oidcEnabled && (
+              <p className="text-sm text-gray-400">Enable OIDC to configure single sign-on via Keycloak.</p>
+            )}
           </div>
 
           {/* External Ansible endpoint */}
