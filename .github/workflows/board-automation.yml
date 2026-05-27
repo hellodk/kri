@@ -19,7 +19,7 @@ jobs:
       - name: Add PR to project and get item ID
         id: get_item
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ secrets.GH_TOKEN }}
           NODE_ID: ${{ github.event.pull_request.node_id }}
         run: |
           ITEM_ID=$(gh api graphql -f query="
@@ -34,7 +34,7 @@ jobs:
       - name: Move to In Review (PR opened)
         if: github.event.action == 'opened' || github.event.action == 'ready_for_review'
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ secrets.GH_TOKEN }}
         run: |
           gh api graphql -f query="
             mutation {
@@ -49,7 +49,7 @@ jobs:
       - name: Move to Done (PR merged)
         if: github.event.action == 'closed' && github.event.pull_request.merged == true
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ secrets.GH_TOKEN }}
         run: |
           gh api graphql -f query="
             mutation {
