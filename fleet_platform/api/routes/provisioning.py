@@ -1,3 +1,4 @@
+import re
 import uuid
 from datetime import UTC, datetime
 from typing import Optional
@@ -14,6 +15,11 @@ from fleet_platform.schemas.provisioning import ProvisioningProfileList, Provisi
 router = APIRouter(prefix="/api/v1/provisioning")
 
 MAX_PROFILE_SIZE = 5 * 1024 * 1024  # 5 MB
+
+
+def _safe_filename(name: str) -> str:
+    # Strip control chars, quotes, backslashes, and forward slashes (path traversal)
+    return re.sub(r'[\x00-\x1f\x7f"\\\/]', '_', name)
 
 
 def _parse_profile_metadata(content: bytes) -> dict:
@@ -121,7 +127,7 @@ async def download_profile(
     return Response(
         content=profile.content,
         media_type="application/octet-stream",
-        headers={"Content-Disposition": f'attachment; filename="{profile.filename}"'},
+        headers={"Content-Disposition": f'attachment; filename="{_safe_filename(profile.filename)}"'},
     )
 
 
