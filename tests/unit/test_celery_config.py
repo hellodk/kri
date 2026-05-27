@@ -60,7 +60,7 @@ def test_scan_node_security_retry_backoff():
 
 
 def test_ios_tasks_uses_sync_db():
-    """Fix #112 — check_all_jenkins_agents must not import asyncio.run at module level."""
+    """Fix #112 — check_all_jenkins_agents must not call asyncio.run()."""
     import ast
     import inspect
 

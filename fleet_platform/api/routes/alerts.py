@@ -8,7 +8,7 @@ import uuid
 from datetime import UTC, datetime
 from typing import Any
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -183,7 +183,7 @@ async def delete_webhook(
 
 @router.get("/events")
 async def list_events(
-    limit: int = 50,
+    limit: int = Query(default=50, ge=1, le=500),
     db: AsyncSession = Depends(get_db),
     _: dict = Depends(require_role("operator", "admin")),
 ):
