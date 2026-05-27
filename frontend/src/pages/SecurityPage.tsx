@@ -45,6 +45,10 @@ interface NodeDetail {
   node_id: string
   vulnerabilities: VulnFinding[]
   license_findings: LicenseFinding[]
+  total_vulnerabilities: number
+  total_license_findings: number
+  page: number
+  per_page: number
 }
 
 interface IntegrationStatus {
@@ -321,7 +325,7 @@ export function SecurityPage() {
 
   const { data: nodes, isLoading: nodesLoading } = useQuery({
     queryKey: ['security-nodes'],
-    queryFn: () => api.get<{ items: NodeSecuritySummary[]; total: number }>('/api/v1/security/nodes'),
+    queryFn: () => api.get<{ items: NodeSecuritySummary[]; total: number; page: number; per_page: number }>('/api/v1/security/nodes'),
     staleTime: 30_000,
   })
 
