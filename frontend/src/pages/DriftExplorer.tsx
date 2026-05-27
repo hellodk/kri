@@ -65,6 +65,11 @@ export function DriftExplorer() {
       <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
         {isLoading ? <Skeleton rows={10} /> : isError ? (
           <ErrorState message="Failed to load drift data" retry={refetch} />
+        ) : (!data?.items || data.items.length === 0) ? (
+          <div className="p-12 text-center">
+            <p className="text-gray-500 text-sm">No drift data available.</p>
+            <p className="text-gray-400 text-xs mt-1">Assign baselines to nodes and run drift computation to see results here.</p>
+          </div>
         ) : (
           <>
             <table className="w-full text-sm">

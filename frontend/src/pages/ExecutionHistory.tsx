@@ -122,6 +122,13 @@ export function ExecutionHistory() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100">
+                {filteredItems.length === 0 && !isLoading && (
+                  <tr>
+                    <td colSpan={6} className="px-4 py-12 text-center text-sm text-gray-500">
+                      No executions yet. Run a playbook or Salt state to see results here.
+                    </td>
+                  </tr>
+                )}
                 {filteredItems.map((j) => (
                   <tr key={j.id} className="hover:bg-gray-50">
                     <td className="px-4 py-3">
