@@ -26,7 +26,7 @@ router = APIRouter(prefix="/api/v1/llm", tags=["llm"])
 @router.get("/models")
 async def list_models(
     provider: str | None = None,
-    _: dict = Depends(require_role("operator", "admin")),
+    _: dict = Depends(require_role("viewer", "operator", "admin")),
 ):
     """Return the shared model catalog, optionally filtered by provider.
 
