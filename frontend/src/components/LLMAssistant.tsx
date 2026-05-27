@@ -2,18 +2,12 @@ import { useState, useRef, useEffect } from 'react'
 import { useMutation } from '@tanstack/react-query'
 import { llmApi } from '../api/llm'
 import type { LLMQueryResponse } from '../api/llm'
-
-interface Message {
-  role: 'user' | 'assistant'
-  text: string
-  meta?: { model: string; tokens_in: number; tokens_out: number; duration_ms: number }
-  error?: string
-}
+import { useLLMStore } from '../stores/llmStore'
 
 export default function LLMAssistant() {
   const [open, setOpen] = useState(false)
   const [prompt, setPrompt] = useState('')
-  const [messages, setMessages] = useState<Message[]>([])
+  const { messages, addMessage, clearMessages } = useLLMStore()
   const bottomRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
@@ -24,32 +18,30 @@ export default function LLMAssistant() {
     mutationFn: (text: string) =>
       llmApi.submitQuery({ prompt: text, intent: 'explain' }),
     onSuccess: (data: LLMQueryResponse) => {
-      setMessages(prev => [
-        ...prev,
-        {
-          role: 'assistant',
-          text: data.result,
-          meta: {
-            model: data.model_used,
-            tokens_in: data.input_tokens,
-            tokens_out: data.output_tokens,
-            duration_ms: data.duration_ms,
-          },
+      addMessage({
+        role: 'assistant',
+        content: data.result,
+        meta: {
+          model: data.model_used,
+          tokens_in: data.input_tokens,
+          tokens_out: data.output_tokens,
+          duration_ms: data.duration_ms,
         },
-      ])
+      })
     },
     onError: (err: Error) => {
-      setMessages(prev => [
-        ...prev,
-        { role: 'assistant', text: '', error: err.message || 'LLM call failed.' },
-      ])
+      addMessage({
+        role: 'assistant',
+        content: '',
+        error: err.message || 'LLM call failed.',
+      })
     },
   })
 
   const handleSubmit = () => {
     const text = prompt.trim()
     if (!text || mutation.isPending) return
-    setMessages(prev => [...prev, { role: 'user', text }])
+    addMessage({ role: 'user', content: text })
     setPrompt('')
     mutation.mutate(text)
   }
@@ -79,15 +71,26 @@ export default function LLMAssistant() {
         <div className="fixed bottom-6 right-6 z-50 w-96 max-h-[600px] flex flex-col bg-white border border-gray-200 rounded-xl shadow-2xl overflow-hidden">
           <div className="flex items-center justify-between px-4 py-3 bg-blue-600 text-white">
             <span className="font-semibold text-sm">AI Fleet Assistant</span>
-            <button
-              onClick={() => setOpen(false)}
-              className="text-white/80 hover:text-white transition-colors"
-              title="Close"
-            >
-              <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-              </svg>
-            </button>
+            <div className="flex items-center gap-2">
+              {messages.length > 0 && (
+                <button
+                  onClick={clearMessages}
+                  className="text-white/70 hover:text-white text-xs px-2 py-0.5 rounded border border-white/30 hover:border-white/60 transition-colors"
+                  title="Clear chat history"
+                >
+                  Clear
+                </button>
+              )}
+              <button
+                onClick={() => setOpen(false)}
+                className="text-white/80 hover:text-white transition-colors"
+                title="Close"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
           </div>
 
           <div className="flex-1 overflow-y-auto p-4 space-y-4 min-h-0">
@@ -110,7 +113,7 @@ export default function LLMAssistant() {
                   {msg.error ? (
                     <span>⚠ {msg.error}</span>
                   ) : (
-                    <pre className="whitespace-pre-wrap font-sans">{msg.text}</pre>
+                    <pre className="whitespace-pre-wrap font-sans">{msg.content}</pre>
                   )}
                   {msg.meta && (
                     <div className="mt-1 text-xs text-gray-400">
