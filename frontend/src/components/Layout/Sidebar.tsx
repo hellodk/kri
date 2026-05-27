@@ -37,7 +37,7 @@ export function Sidebar() {
         {open && (
           <div className="flex flex-col leading-none">
             <span className="text-white font-bold text-xl tracking-tight">kri</span>
-            <span className="text-white/30 text-[10px] font-mono tracking-wide mt-0.5">v{__APP_VERSION__}</span>
+            <span className="text-white/50 text-[11px] font-mono tracking-wide mt-0.5">v{__APP_VERSION__}</span>
           </div>
         )}
       </div>

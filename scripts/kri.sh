@@ -26,6 +26,8 @@ cmd_start() {
   echo "  kri fleet management platform"
   echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
   echo "  Starting all services via Docker Compose…"
+  export APP_VERSION
+  APP_VERSION=$(cat "$REPO_DIR/VERSION" 2>/dev/null || echo "0.0.0")
   docker compose -f "$COMPOSE_FILE" up -d --build
   echo ""
   ok "kri is up →  http://localhost"
@@ -205,6 +207,7 @@ cmd_deploy() {
   echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
   local version
   version=$(cat "$REPO_DIR/VERSION" 2>/dev/null || echo "?")
+  export APP_VERSION="$version"
 
   if [[ -n "$service" ]]; then
     echo "  Building $service → v$version"

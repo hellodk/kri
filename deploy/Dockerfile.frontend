@@ -4,7 +4,10 @@ COPY frontend/package.json frontend/package-lock.json ./
 RUN npm ci
 COPY frontend/ ./
 COPY VERSION ./VERSION
-# VITE_API_URL is proxied by nginx; VERSION is read by vite.config.ts at build time
+# Pass version as build arg so vite.config.ts can read it via VITE_APP_VERSION
+# even if the file-based read path ever fails (belt-and-suspenders).
+ARG VITE_APP_VERSION
+ENV VITE_APP_VERSION=${VITE_APP_VERSION}
 RUN npm run build
 
 FROM nginx:alpine
