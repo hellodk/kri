@@ -56,6 +56,11 @@ async def lifespan(app: FastAPI):
     async with AsyncSessionLocal() as db:
         await seed_settings_from_env(db)
         await seed_local_users(db)
+    # Trigger a grain refresh immediately on every API container start so that
+    # nodes do not stay offline after a kri deploy (salt minions reconnect but
+    # do not re-push grains automatically; this queues a one-shot refresh).
+    from fleet_platform.workers.ansible_tasks import refresh_all_node_grains
+    refresh_all_node_grains.delay()
     yield
 
 
