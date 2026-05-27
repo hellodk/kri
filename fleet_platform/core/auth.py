@@ -27,6 +27,7 @@ class TokenInvalidError(Exception):
 
 # ── Password hashing ──────────────────────────────────────────────────
 
+
 def hash_password(password: str) -> str:
     return bcrypt.hashpw(password.encode(), bcrypt.gensalt()).decode()
 
@@ -37,16 +38,14 @@ def verify_password(password: str, hashed: str) -> bool:
 
 # ── Token creation ────────────────────────────────────────────────────
 
+
 def create_access_token(
     user_id: str,
     email: str,
     role: str,
     expires_delta: timedelta | None = None,
 ) -> str:
-    expire = datetime.now(UTC) + (
-        expires_delta
-        or timedelta(minutes=settings.jwt_access_token_expire_minutes)
-    )
+    expire = datetime.now(UTC) + (expires_delta or timedelta(minutes=settings.jwt_access_token_expire_minutes))
     payload = {
         "sub": user_id,
         "email": email,
@@ -72,6 +71,7 @@ def create_refresh_token(user_id: str) -> str:
 
 
 # ── Token decoding ────────────────────────────────────────────────────
+
 
 def decode_token(token: str) -> dict[str, Any]:
     try:
@@ -103,8 +103,16 @@ def _unauthorized(detail: str) -> HTTPException:
     )
 
 
+async def _get_redis() -> aioredis.Redis:
+    """Thin wrapper to lazily import get_redis and avoid circular imports at module load."""
+    from fleet_platform.api.deps import get_redis
+
+    return await get_redis()
+
+
 async def get_current_user(
     credentials: HTTPAuthorizationCredentials | None = Depends(_bearer),
+    redis: aioredis.Redis = Depends(_get_redis),
 ) -> dict[str, Any]:
     if not credentials:
         raise _unauthorized("Missing Authorization header")
@@ -116,6 +124,9 @@ async def get_current_user(
         raise _unauthorized("Invalid token")
     if claims.get("type") != "access":
         raise _unauthorized("Refresh tokens cannot access this endpoint")
+    jti = claims.get("jti", "")
+    if jti and await is_token_revoked(redis, jti):
+        raise _unauthorized("Token has been revoked")
     return claims
 
 

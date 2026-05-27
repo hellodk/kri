@@ -1,7 +1,7 @@
-"""OIDC SSO endpoints — login redirect, callback."""
-import base64
+"""OIDC SSO endpoints — login redirect, callback, one-time exchange."""
+
 import json
-import urllib.parse
+import secrets
 
 import redis.asyncio as aioredis
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -24,6 +24,8 @@ router = APIRouter(prefix="/api/v1/auth/oidc")
 
 _STATE_TTL = 300  # 5 minutes
 _STATE_PREFIX = "oidc:state:"
+_EXCHANGE_PREFIX = "oidc:exchange:"
+_EXCHANGE_TTL = 30  # 30 seconds — one-time code
 
 
 @router.get("/config")
@@ -75,7 +77,7 @@ async def oidc_callback(
     db: AsyncSession = Depends(get_db),
     redis: aioredis.Redis = Depends(get_redis),
 ):
-    """Receive auth code from Keycloak, exchange for tokens, issue kri JWT."""
+    """Receive auth code from Keycloak, exchange for tokens, issue kri JWT via one-time code."""
     key = f"{_STATE_PREFIX}{state}"
     valid = await redis.getdel(key)
     if not valid:
@@ -103,14 +105,16 @@ async def oidc_callback(
     except Exception:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Token exchange failed")
 
-    # Decode ID token claims without signature verification (Keycloak validates server-side)
+    # Verify the ID token signature using the IdP's JWKS (fix #79)
     id_token = token_response.get("id_token", "")
     try:
-        payload_b64 = id_token.split(".")[1]
-        padding = "=" * (4 - len(payload_b64) % 4)
-        claims = json.loads(base64.urlsafe_b64decode(payload_b64 + padding))
+        claims = await oidc_svc.verify_id_token(
+            id_token=id_token,
+            discovery=discovery,
+            client_id=client_id,
+        )
     except Exception:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid ID token")
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="ID token verification failed")
 
     email = claims.get("email", "")
     if not email:
@@ -120,12 +124,23 @@ async def oidc_callback(
     user = await oidc_svc.upsert_oidc_user(db, email=email, role=role)
     tokens = oidc_svc.issue_kri_tokens(user)
 
-    # Redirect frontend to /auth/callback with tokens in query string
-    params = urllib.parse.urlencode({
-        "access_token": tokens["access_token"],
-        "refresh_token": tokens["refresh_token"],
-    })
+    # Store tokens behind a one-time exchange code; redirect with only the code (fix #84)
+    exchange_code = secrets.token_urlsafe(32)
+    await redis.setex(f"{_EXCHANGE_PREFIX}{exchange_code}", _EXCHANGE_TTL, json.dumps(tokens))
     return RedirectResponse(
-        url=f"{app_settings.frontend_origin.rstrip('/')}/auth/callback?{params}",
+        url=f"{app_settings.frontend_origin.rstrip('/')}/auth/callback?exchange_code={exchange_code}",
         status_code=302,
     )
+
+
+@router.get("/exchange")
+async def oidc_exchange(
+    exchange_code: str,
+    redis: aioredis.Redis = Depends(get_redis),
+):
+    """Exchange one-time code for tokens. Code expires in 30s and is consumed on first use."""
+    key = f"{_EXCHANGE_PREFIX}{exchange_code}"
+    raw = await redis.getdel(key)
+    if not raw:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid or expired exchange code")
+    return json.loads(raw)
