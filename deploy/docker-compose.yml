@@ -15,6 +15,35 @@ services:
       timeout: 3s
       retries: 15
 
+  pg_backup:
+    image: timescale/timescaledb:latest-pg17
+    restart: unless-stopped
+    environment:
+      PGPASSWORD: ${POSTGRES_PASSWORD:-fleet}
+    volumes:
+      - pgbackups:/var/backups/postgresql
+    depends_on:
+      db:
+        condition: service_healthy
+    entrypoint: >
+      sh -c "
+        echo '[backup] PostgreSQL backup service started';
+        while true; do
+          TIMESTAMP=$$(date +%Y%m%d_%H%M%S);
+          BACKUP_FILE=/var/backups/postgresql/fleet_$${TIMESTAMP}.dump;
+          echo \"[backup] Starting pg_dump at $$(date)\";
+          if pg_dump -h db -U fleet -Fc fleet_demo -f \"$${BACKUP_FILE}\"; then
+            echo \"[backup] Saved $${BACKUP_FILE}\";
+            find /var/backups/postgresql -name '*.dump' -mtime +7 -delete;
+            echo '[backup] Pruned backups older than 7 days';
+          else
+            echo \"[backup] ERROR: pg_dump failed at $$(date) — skipping prune\";
+            rm -f \"$${BACKUP_FILE}\";
+          fi;
+          sleep 86400;
+        done
+      "
+
   redis:
     image: redis:7.4-alpine
     restart: unless-stopped
@@ -133,3 +162,4 @@ volumes:
   redisdata:
   salt-pillar:
   salt-master-pki:
+  pgbackups:
