@@ -1,6 +1,7 @@
 # tests/integration/test_builds_ingest.py
-import pytest
 from datetime import UTC, datetime
+
+import pytest
 from httpx import AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -9,16 +10,18 @@ pytestmark = pytest.mark.asyncio
 
 async def _clean_setting(db_session: AsyncSession, key: str) -> None:
     """Remove a platform_settings row if it exists."""
-    from fleet_platform.models.platform_setting import PlatformSetting
     from sqlalchemy import delete
+
+    from fleet_platform.models.platform_setting import PlatformSetting
     await db_session.execute(delete(PlatformSetting).where(PlatformSetting.key == key))
     await db_session.commit()
 
 
 async def _clean_build(db_session: AsyncSession, job_name: str, build_number: int) -> None:
     """Remove a jenkins_build_event row if it exists."""
-    from fleet_platform.models.jenkins_build_event import JenkinsBuildEvent
     from sqlalchemy import delete
+
+    from fleet_platform.models.jenkins_build_event import JenkinsBuildEvent
     await db_session.execute(
         delete(JenkinsBuildEvent).where(
             JenkinsBuildEvent.job_name == job_name,
@@ -66,9 +69,10 @@ async def test_ingest_build_wrong_secret(client: AsyncClient, db_session: AsyncS
 
 
 async def test_ingest_build_success(client: AsyncClient, db_session: AsyncSession):
-    from fleet_platform.models.platform_setting import PlatformSetting
-    from fleet_platform.models.jenkins_build_event import JenkinsBuildEvent
     from sqlalchemy import select
+
+    from fleet_platform.models.jenkins_build_event import JenkinsBuildEvent
+    from fleet_platform.models.platform_setting import PlatformSetting
 
     await _clean_setting(db_session, "jenkins_ingest_secret")
     await _clean_build(db_session, "deploy-prod", 42)
