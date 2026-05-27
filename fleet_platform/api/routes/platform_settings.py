@@ -10,6 +10,8 @@ from fleet_platform.services.platform_settings_svc import (
     ANSIBLE_ENDPOINT_URL,
     CXONE_API_TOKEN,
     CXONE_URL,
+    DIGEST_RECIPIENTS,
+    JENKINS_INGEST_SECRET,
     KRI_API_URL,
     LICENSE_POLICY,
     OIDC_CLIENT_ID,
@@ -20,6 +22,11 @@ from fleet_platform.services.platform_settings_svc import (
     PILLAR_DIR,
     PLAYBOOKS_DIR,
     SALT_MASTER,
+    SMTP_FROM,
+    SMTP_HOST,
+    SMTP_PASSWORD,
+    SMTP_PORT,
+    SMTP_USERNAME,
     SONARQUBE_TOKEN,
     SONARQUBE_URL,
     SSH_PASSWORD,
@@ -59,6 +66,11 @@ async def get_settings(
         oidc_issuer_url=await get_setting(db, OIDC_ISSUER_URL),
         oidc_client_id=await get_setting(db, OIDC_CLIENT_ID),
         oidc_role_prefix=await get_setting(db, OIDC_ROLE_PREFIX),
+        smtp_host=await get_setting(db, SMTP_HOST),
+        smtp_port=await get_setting(db, SMTP_PORT),
+        smtp_username=await get_setting(db, SMTP_USERNAME),
+        smtp_from=await get_setting(db, SMTP_FROM),
+        digest_recipients=await get_setting(db, DIGEST_RECIPIENTS),
     )
 
 
@@ -107,6 +119,20 @@ async def update_settings(
         await set_setting(db, OIDC_CLIENT_SECRET, payload.oidc_client_secret, encrypt=True)
     if payload.oidc_role_prefix is not None:
         await set_setting(db, OIDC_ROLE_PREFIX, payload.oidc_role_prefix)
+    if payload.smtp_host is not None:
+        await set_setting(db, SMTP_HOST, payload.smtp_host)
+    if payload.smtp_port is not None:
+        await set_setting(db, SMTP_PORT, payload.smtp_port)
+    if payload.smtp_username is not None:
+        await set_setting(db, SMTP_USERNAME, payload.smtp_username)
+    if payload.smtp_password:
+        await set_setting(db, SMTP_PASSWORD, payload.smtp_password, encrypt=True)
+    if payload.smtp_from is not None:
+        await set_setting(db, SMTP_FROM, payload.smtp_from)
+    if payload.digest_recipients is not None:
+        await set_setting(db, DIGEST_RECIPIENTS, payload.digest_recipients)
+    if payload.jenkins_ingest_secret:
+        await set_setting(db, JENKINS_INGEST_SECRET, payload.jenkins_ingest_secret, encrypt=True)
     vnc_enabled_raw = await get_setting(db, VNC_ENABLED)
     vnc_enabled = vnc_enabled_raw == "true"
     oidc_enabled_raw = await get_setting(db, OIDC_ENABLED)
@@ -127,4 +153,9 @@ async def update_settings(
         oidc_issuer_url=await get_setting(db, OIDC_ISSUER_URL),
         oidc_client_id=await get_setting(db, OIDC_CLIENT_ID),
         oidc_role_prefix=await get_setting(db, OIDC_ROLE_PREFIX),
+        smtp_host=await get_setting(db, SMTP_HOST),
+        smtp_port=await get_setting(db, SMTP_PORT),
+        smtp_username=await get_setting(db, SMTP_USERNAME),
+        smtp_from=await get_setting(db, SMTP_FROM),
+        digest_recipients=await get_setting(db, DIGEST_RECIPIENTS),
     )

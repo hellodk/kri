@@ -40,6 +40,15 @@ class PlatformSettingsUpdate(BaseModel):
     oidc_client_id: str | None = None
     oidc_client_secret: str | None = None
     oidc_role_prefix: str | None = None
+    # Email digest
+    smtp_host: str | None = None
+    smtp_port: str | None = None
+    smtp_username: str | None = None
+    smtp_password: str | None = None
+    smtp_from: str | None = None
+    digest_recipients: str | None = None
+    # Jenkins
+    jenkins_ingest_secret: str | None = None
 
 
 class PlatformSettingsResponse(BaseModel):
@@ -59,5 +68,14 @@ class PlatformSettingsResponse(BaseModel):
     oidc_enabled: bool = False
     oidc_issuer_url: str | None = None
     oidc_client_id: str | None = None
-    oidc_client_secret: None = None    # write-only
+    oidc_client_secret: None = None
     oidc_role_prefix: str | None = None
+    # Email digest (never return secrets)
+    smtp_host: str | None = None
+    smtp_port: str | None = None
+    smtp_username: str | None = None
+    smtp_password: None = None
+    smtp_from: str | None = None
+    digest_recipients: str | None = None
+    # Jenkins (never return secret)
+    jenkins_ingest_secret: None = None

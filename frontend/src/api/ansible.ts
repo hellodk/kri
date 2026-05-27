@@ -17,6 +17,15 @@ export interface PlatformSettings {
   oidc_issuer_url: string | null
   oidc_client_id: string | null
   oidc_role_prefix: string | null
+  // Email digest
+  smtp_host: string | null
+  smtp_port: string | null
+  smtp_username: string | null
+  smtp_password: null
+  smtp_from: string | null
+  digest_recipients: string | null
+  // Jenkins
+  jenkins_ingest_secret: null
 }
 
 export interface BootstrapResponse {
@@ -108,6 +117,15 @@ export const ansibleApi = {
     oidc_client_id?: string
     oidc_client_secret?: string
     oidc_role_prefix?: string
+    // Email digest
+    smtp_host?: string
+    smtp_port?: string
+    smtp_username?: string
+    smtp_password?: string
+    smtp_from?: string
+    digest_recipients?: string
+    // Jenkins
+    jenkins_ingest_secret?: string
   }) => api.put<PlatformSettings>('/api/v1/settings', payload),
   bootstrap: (minion_id: string, target_ip: string, sshUsername?: string, sshPassword?: string) =>
     api.post<BootstrapResponse>('/api/v1/ansible/bootstrap', {
