@@ -13,6 +13,7 @@ Security model:
 """
 import asyncio
 import base64
+import logging
 import uuid
 from datetime import UTC, datetime
 
@@ -31,6 +32,8 @@ from fleet_platform.core.auth import (
 from fleet_platform.db.session import AsyncSessionLocal
 from fleet_platform.models.node import Node
 from fleet_platform.models.ssh_session import SecurityEvent, SessionRecording, SSHSession
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/v1/ssh")
 
@@ -70,8 +73,8 @@ class SSHProxySession:
             await self._flush_recording()
         try:
             await self.ws.send_text(text)
-        except Exception:
-            pass
+        except Exception as e:
+            logger.debug("send_to_browser: ws send failed (client may have disconnected): %s", e)
 
     async def _flush_recording(self) -> None:
         if not self._recording_chunks:
@@ -137,13 +140,13 @@ class SSHProxySession:
         if self._ssh_process:
             try:
                 self._ssh_process.close()
-            except Exception:
-                pass
+            except Exception as e:
+                logger.debug("close: SSH process close failed: %s", e)
         if self._ssh_conn:
             try:
                 self._ssh_conn.close()
-            except Exception:
-                pass
+            except Exception as e:
+                logger.debug("close: SSH connection close failed: %s", e)
         # Update session end
         async with AsyncSessionLocal() as db:
             session = await db.get(SSHSession, self.session_id)
@@ -308,8 +311,8 @@ async def webssh_session(
                     if isinstance(chunk, str):
                         chunk = chunk.encode()
                     await proxy.send_to_browser(chunk)
-            except Exception:
-                pass
+            except Exception as e:
+                logger.debug("read_ssh: SSH stdout pump ended: %s", e)
 
         asyncio.create_task(read_ssh())
 
