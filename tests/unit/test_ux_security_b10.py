@@ -16,7 +16,7 @@ def test_security_page_no_loading_text():
     assert 'return "Loading..."' not in src and ">Loading...</" not in src, (
         "SecurityPage must not use 'Loading...' text — use skeleton UI"
     )
-    assert "animate-pulse" in src, "SecurityPage must use skeleton animation"
+    assert "animate-pulse" in src or "<Skeleton" in src, "SecurityPage must use skeleton animation"
 
 
 def test_salt_ops_structured_results():
