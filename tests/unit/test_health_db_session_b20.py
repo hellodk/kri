@@ -5,9 +5,7 @@ any Salt subprocess calls, so the connection pool slot is not held for the
 entire (potentially 30s+) Salt collection window.
 """
 import uuid
-from contextlib import contextmanager
-from unittest.mock import MagicMock, call, patch
-
+from unittest.mock import MagicMock, patch
 
 # ---------------------------------------------------------------------------
 # Helpers
