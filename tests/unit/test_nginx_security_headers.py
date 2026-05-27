@@ -1,7 +1,6 @@
 """Unit tests for #128 — nginx security headers."""
 from pathlib import Path
 
-
 NGINX_CONF = Path("deploy/nginx.conf")
 
 
