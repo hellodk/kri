@@ -1,15 +1,10 @@
 """Verify the RBAC permission matrix — every role/endpoint combination."""
-import pytest
+# ── auditor fixtures ──────────────────────────────────────────────────────────
+import pytest_asyncio
 from httpx import ASGITransport, AsyncClient
-from sqlalchemy.ext.asyncio import async_sessionmaker
 
 from fleet_platform.core.auth import create_access_token, hash_password
 from fleet_platform.models.user import User
-
-
-# ── auditor fixtures ──────────────────────────────────────────────────────────
-
-import pytest_asyncio
 
 
 @pytest_asyncio.fixture(scope="module", loop_scope="module")

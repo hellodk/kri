@@ -1,5 +1,3 @@
-import pytest
-from unittest.mock import AsyncMock, MagicMock, patch
 
 
 def test_extract_role_from_claims_admin():

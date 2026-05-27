@@ -1,7 +1,9 @@
-import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
-from fleet_platform.models.user import User
+
+import pytest
 from sqlalchemy.ext.asyncio import AsyncSession
+
+from fleet_platform.models.user import User
 
 
 def test_user_model_has_auth_provider_field():

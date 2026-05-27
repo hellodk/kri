@@ -4,14 +4,12 @@
 All tests hit a real SQLite test DB (via the shared db_session fixture from
 conftest.py). No mocks of the DB layer are used.
 """
-import os
 
 import pytest
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from fleet_platform.models.platform_setting import PlatformSetting
 from fleet_platform.services import platform_settings_svc as svc
-
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -101,7 +99,7 @@ async def test_set_setting_updates_existing_row(db_session: AsyncSession):
     assert result == "second_value"
 
     # Confirm only one row exists
-    from sqlalchemy import select, func
+    from sqlalchemy import func, select
     count_result = await db_session.execute(
         select(func.count()).where(PlatformSetting.key == key)
     )
