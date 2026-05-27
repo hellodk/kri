@@ -1,16 +1,22 @@
+x-logging: &default-logging
+  driver: "json-file"
+  options:
+    max-size: "50m"
+    max-file: "5"
+
 services:
   db:
     image: timescale/timescaledb:2.17.2-pg17
     restart: unless-stopped
     environment:
-      POSTGRES_DB: fleet_demo
+      POSTGRES_DB: fleet_platform
       POSTGRES_USER: fleet
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD must be set in .env.docker}
     volumes:
       - pgdata:/var/lib/postgresql/data
       - ./postgres-init:/docker-entrypoint-initdb.d
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U fleet -d fleet_demo"]
+      test: ["CMD-SHELL", "pg_isready -U fleet -d fleet_platform"]
       interval: 5s
       timeout: 3s
       retries: 15
@@ -19,6 +25,7 @@ services:
         limits:
           cpus: '2.0'
           memory: 2G
+    logging: *default-logging
 
   pg_backup:
     image: timescale/timescaledb:2.17.2-pg17
@@ -37,7 +44,7 @@ services:
           TIMESTAMP=$$(date +%Y%m%d_%H%M%S);
           BACKUP_FILE=/var/backups/postgresql/fleet_$${TIMESTAMP}.dump;
           echo \"[backup] Starting pg_dump at $$(date)\";
-          if pg_dump -h db -U fleet -Fc fleet_demo -f \"$${BACKUP_FILE}\"; then
+          if pg_dump -h db -U fleet -Fc fleet_platform -f \"$${BACKUP_FILE}\"; then
             echo \"[backup] Saved $${BACKUP_FILE}\";
             find /var/backups/postgresql -name '*.dump' -mtime +7 -delete;
             echo '[backup] Pruned backups older than 7 days';
@@ -53,6 +60,7 @@ services:
         limits:
           cpus: '0.5'
           memory: 256M
+    logging: *default-logging
 
   redis:
     image: redis:7.4.1-alpine
@@ -70,6 +78,7 @@ services:
         limits:
           cpus: '0.5'
           memory: 512M
+    logging: *default-logging
 
   api:
     build:
@@ -101,6 +110,7 @@ services:
         limits:
           cpus: '1.0'
           memory: 1G
+    logging: *default-logging
 
   worker:
     build:
@@ -145,6 +155,7 @@ services:
         limits:
           cpus: '2.0'
           memory: 2G
+    logging: *default-logging
 
   salt-master:
     image: saltstack/salt:3007.1
@@ -169,6 +180,7 @@ services:
         limits:
           cpus: '1.0'
           memory: 1G
+    logging: *default-logging
 
   beat:
     build:
@@ -195,6 +207,7 @@ services:
         limits:
           cpus: '0.5'
           memory: 512M
+    logging: *default-logging
 
   frontend:
     build:
@@ -220,6 +233,7 @@ services:
         limits:
           cpus: '0.5'
           memory: 256M
+    logging: *default-logging
 
 volumes:
   pgdata:

@@ -29,7 +29,7 @@ jobs:
       postgres:
         image: timescale/timescaledb:latest-pg17
         env:
-          POSTGRES_DB: fleet_demo
+          POSTGRES_DB: fleet_platform
           POSTGRES_USER: fleet
           POSTGRES_PASSWORD: fleet
         ports: ["5432:5432"]
@@ -47,7 +47,7 @@ jobs:
           --health-timeout 3s
           --health-retries 10
     env:
-      DATABASE_URL: postgresql+psycopg://fleet:fleet@localhost:5432/fleet_demo
+      DATABASE_URL: postgresql+psycopg://fleet:fleet@localhost:5432/fleet_platform
       TEST_DATABASE_URL: postgresql+psycopg://fleet:fleet@localhost:5432/fleet_test
       REDIS_URL: redis://localhost:6379/0
       JWT_SECRET: ci-test-secret-minimum-32-chars-long
@@ -57,7 +57,7 @@ jobs:
       - uses: actions/setup-python@v6
         with:
           python-version: '3.13'
-      - run: PGPASSWORD=fleet psql -h localhost -U fleet -c "CREATE DATABASE fleet_test;" fleet_demo
+      - run: PGPASSWORD=fleet psql -h localhost -U fleet -c "CREATE DATABASE fleet_test;" fleet_platform
       - run: pip install uv
       - run: uv sync --extra dev
       - run: uv run pytest tests/unit/ -v --tb=short
@@ -119,7 +119,7 @@ jobs:
       postgres:
         image: timescale/timescaledb:latest-pg17
         env:
-          POSTGRES_DB: fleet_demo
+          POSTGRES_DB: fleet_platform
           POSTGRES_USER: fleet
           POSTGRES_PASSWORD: fleet
         ports: ["5432:5432"]
@@ -137,7 +137,7 @@ jobs:
           --health-timeout 3s
           --health-retries 10
     env:
-      DATABASE_URL: postgresql+psycopg://fleet:fleet@localhost:5432/fleet_demo
+      DATABASE_URL: postgresql+psycopg://fleet:fleet@localhost:5432/fleet_platform
       TEST_DATABASE_URL: postgresql+psycopg://fleet:fleet@localhost:5432/fleet_test
       REDIS_URL: redis://localhost:6379/0
       JWT_SECRET: ci-test-secret-minimum-32-chars-long
@@ -147,7 +147,7 @@ jobs:
       - uses: actions/setup-python@v6
         with:
           python-version: '3.13'
-      - run: PGPASSWORD=fleet psql -h localhost -U fleet -c "CREATE DATABASE fleet_test;" fleet_demo
+      - run: PGPASSWORD=fleet psql -h localhost -U fleet -c "CREATE DATABASE fleet_test;" fleet_platform
       - run: pip install uv
       - run: uv sync --extra dev
       - run: |
