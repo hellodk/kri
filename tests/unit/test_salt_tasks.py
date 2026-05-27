@@ -8,7 +8,6 @@ not-configured error path, and the HTTP dispatch logic.
 
 from unittest.mock import MagicMock, patch
 
-
 # ── Allowlist enforcement (unchanged from prior implementation) ───────────────
 
 def test_run_salt_cmd_rejects_disallowed_function():
@@ -76,7 +75,6 @@ def test_apply_salt_state_returns_error_when_api_not_configured():
 
 def test_run_salt_cmd_dispatches_via_http_api():
     """An allowlisted function triggers a POST to the salt-api /run endpoint."""
-    import requests as req_mod
 
     from fleet_platform.workers import salt_tasks
     from fleet_platform.workers.salt_tasks import run_salt_cmd
