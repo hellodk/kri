@@ -1,42 +1,48 @@
 #!/usr/bin/env python3
-"""Seed default users into the Docker kri database."""
-import bcrypt
-import subprocess
-import tempfile
-import os
+"""Create initial admin user. Run with:
+    docker exec deploy-api-1 uv run python3 /app/scripts/seed_users.py
 
-USERS = [
-    ("admin@fleet.local", "changeme", "admin"),
-    ("viewer@fleet.local", "changeme", "viewer"),
-    ("admin@admin.com", "changeme", "admin"),
-]
+This script creates an admin account with a randomly generated password
+printed to stdout. Change it via the Settings UI after first login.
 
-rows = []
-for email, pw, role in USERS:
-    h = bcrypt.hashpw(pw.encode(), bcrypt.gensalt(12)).decode()
-    rows.append((email, h, role))
+DO NOT use the old seed.py — it creates accounts with a hardcoded
+insecure password. That script has been removed.
+"""
+import asyncio
+import secrets
+import string
 
-lines = ["INSERT INTO users (id,email,password_hash,role,is_active,created_at,updated_at) VALUES"]
-vals = []
-for email, h, role in rows:
-    vals.append(f"  (gen_random_uuid(), '{email}', '{h}', '{role}', true, now(), now())")
-lines.append(",\n".join(vals))
-lines.append("ON CONFLICT (email) DO UPDATE SET password_hash=EXCLUDED.password_hash, role=EXCLUDED.role;")
-lines.append("SELECT email, role FROM users ORDER BY email;")
-sql = "\n".join(lines)
+from fleet_platform.core.auth import hash_password
+from fleet_platform.core.config import settings
+from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession
+from sqlalchemy import text
 
-with tempfile.NamedTemporaryFile(mode="w", suffix=".sql", delete=False) as f:
-    f.write(sql)
-    tmpfile = f.name
 
-try:
-    subprocess.run(["docker", "cp", tmpfile, "deploy-db-1:/tmp/seed_users.sql"], check=True)
-    result = subprocess.run(
-        ["docker", "exec", "deploy-db-1", "psql", "-U", "fleet", "-d", "fleet_demo", "-f", "/tmp/seed_users.sql"],
-        capture_output=True, text=True
-    )
-    print(result.stdout)
-    if result.stderr:
-        print("STDERR:", result.stderr[:500])
-finally:
-    os.unlink(tmpfile)
+def _generate_password(length: int = 20) -> str:
+    alphabet = string.ascii_letters + string.digits + "!@#$%^&*"
+    return "".join(secrets.choice(alphabet) for _ in range(length))
+
+
+async def main() -> None:
+    engine = create_async_engine(settings.database_url)
+    async with AsyncSession(engine) as s:
+        email = "admin@fleet.local"
+        password = _generate_password()
+        await s.execute(
+            text(
+                "INSERT INTO users (id,email,password_hash,role,is_active,created_at,updated_at)"
+                " VALUES (gen_random_uuid(),:e,:h,'admin',true,now(),now())"
+                " ON CONFLICT (email) DO NOTHING"
+            ),
+            {"e": email, "h": hash_password(password)},
+        )
+        await s.commit()
+        print(f"\n{'='*50}")
+        print(f"Admin account created:")
+        print(f"  Email:    {email}")
+        print(f"  Password: {password}")
+        print(f"  IMPORTANT: Save this password — it will not be shown again.")
+        print(f"{'='*50}\n")
+
+
+asyncio.run(main())

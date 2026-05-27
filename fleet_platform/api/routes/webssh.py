@@ -23,6 +23,7 @@ from fleet_platform.core.auth import (
     TokenInvalidError,
     decode_token,
     get_current_user,
+    require_role,
 )
 from fleet_platform.db.session import AsyncSessionLocal
 from fleet_platform.models.node import Node
@@ -380,7 +381,7 @@ async def list_sessions(
     status: str | None = None,
     limit: int = Query(default=50, ge=1, le=500),
     db: AsyncSession = Depends(get_db),
-    _: dict = Depends(get_current_user),
+    _: dict = Depends(require_role("admin", "operator")),
 ):
     """List SSH sessions with optional filters."""
     q = select(SSHSession).order_by(SSHSession.started_at.desc()).limit(limit)
@@ -412,7 +413,7 @@ async def list_sessions(
 async def get_session_recording(
     session_id: uuid.UUID,
     db: AsyncSession = Depends(get_db),
-    _: dict = Depends(get_current_user),
+    _: dict = Depends(require_role("admin", "operator")),
 ):
     """Return session recording chunks for replay."""
     result = await db.execute(
@@ -436,7 +437,7 @@ async def list_security_events(
     event_type: str | None = None,
     limit: int = Query(default=100, ge=1, le=500),
     db: AsyncSession = Depends(get_db),
-    _: dict = Depends(get_current_user),
+    _: dict = Depends(require_role("admin", "operator")),
 ):
     """List security events (blocks, alerts, auth failures)."""
     q = select(SecurityEvent).order_by(SecurityEvent.created_at.desc()).limit(limit)
