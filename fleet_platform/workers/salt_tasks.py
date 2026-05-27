@@ -118,7 +118,10 @@ def _run_salt_api(
     except requests.HTTPError as exc:
         return {
             "status": "error",
-            "reason": f"salt-api HTTP error: {exc} — response: {exc.response.text[:500] if exc.response is not None else '(no response body)'}",
+            "reason": (
+                f"salt-api HTTP error: {exc} — "
+                f"response: {exc.response.text[:500] if exc.response is not None else '(no response body)'}"
+            ),
         }
     except requests.ConnectionError as exc:
         return {
