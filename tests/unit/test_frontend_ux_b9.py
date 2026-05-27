@@ -1,7 +1,6 @@
 """Unit tests for #136 (sidebar groups), #138 (icon), #140 (LLM auth guard)."""
 from pathlib import Path
 
-
 SIDEBAR = Path("frontend/src/components/Layout/Sidebar.tsx").read_text()
 APP = Path("frontend/src/App.tsx").read_text()
 
@@ -13,8 +12,8 @@ def test_sidebar_has_nav_groups():
 def test_sidebar_baselines_icon_changed():
     """Baselines must not use the same icon as Drift."""
     lines = SIDEBAR.splitlines()
-    drift_icon = next((l for l in lines if "'/drift'" in l or '"/drift"' in l), "")
-    baselines_icon = next((l for l in lines if "'/baselines'" in l or '"/baselines"' in l), "")
+    drift_icon = next((line for line in lines if "'/drift'" in line or '"/drift"' in line), "")
+    baselines_icon = next((line for line in lines if "'/baselines'" in line or '"/baselines"' in line), "")
     assert drift_icon != baselines_icon, "Drift and Baselines must have different icons"
     assert "◑" not in baselines_icon, "Baselines must not use ◑ (same as Drift)"
 
