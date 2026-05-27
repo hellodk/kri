@@ -1,7 +1,7 @@
 """Unit tests for #144 (retention) and #146 (thundering herd)."""
+from datetime import datetime
 from pathlib import Path
-from unittest.mock import MagicMock, patch, call
-from datetime import datetime, timedelta
+from unittest.mock import MagicMock, patch
 
 
 def test_cleanup_task_exists():
