@@ -71,6 +71,10 @@ celery_app.conf.update(
             "task": "fleet_platform.workers.health_tasks.collect_fleet_health",
             "schedule": 900.0,  # every 15 minutes
         },
+        "cleanup-old-health-snapshots": {
+            "task": "fleet_platform.workers.health_tasks.cleanup_old_health_snapshots",
+            "schedule": crontab(hour=3, minute=30),  # daily at 03:30 UTC
+        },
         "weekly-fleet-digest": {
             "task": "fleet_platform.workers.digest_tasks.weekly_digest",
             "schedule": crontab(hour=8, minute=0, day_of_week=1),  # Monday 08:00 UTC
