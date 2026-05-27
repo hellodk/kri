@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import json
 import urllib.request
 import uuid
@@ -241,7 +242,7 @@ async def test_webhook(
             headers={"Content-Type": "application/json"},
             method="POST",
         )
-        urllib.request.urlopen(req, timeout=10)  # nosec B310
+        await asyncio.to_thread(urllib.request.urlopen, req, timeout=10)  # nosec B310
         return {"status": "ok", "message": "Test payload delivered successfully"}
     except Exception as exc:
         raise HTTPException(
