@@ -13,6 +13,8 @@ export function LoginPage() {
   const navigate = useNavigate()
   const setUser = useAuthStore((s) => s.setUser)
 
+  const oidcError = new URLSearchParams(window.location.search).get('error')
+
   useEffect(() => {
     authApi.getOidcConfig().then((cfg) => setOidcEnabled(cfg.enabled)).catch(() => {})
   }, [])
@@ -75,6 +77,12 @@ export function LoginPage() {
 
           <h1 className="text-white text-2xl font-bold mb-1">Sign in</h1>
           <p className="text-white/35 text-sm mb-8">Enter your credentials to access the fleet dashboard</p>
+
+          {oidcError && (
+            <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700">
+              Single sign-on failed. Please try again or sign in with email and password.
+            </div>
+          )}
 
           <form onSubmit={handleSubmit} className="space-y-4">
             <div>

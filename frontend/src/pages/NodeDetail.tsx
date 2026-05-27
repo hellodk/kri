@@ -1508,7 +1508,10 @@ export function NodeDetail() {
                       </td>
                       <td className="px-4 py-3 text-right">
                         <button
-                          onClick={() => deleteSecretMutation.mutate(s.key)}
+                          onClick={() => {
+                            if (!window.confirm('Delete this secret? This cannot be undone.')) return
+                            deleteSecretMutation.mutate(s.key)
+                          }}
                           disabled={deleteSecretMutation.isPending}
                           className="text-xs text-red-600 hover:text-red-700 font-medium disabled:opacity-50"
                         >

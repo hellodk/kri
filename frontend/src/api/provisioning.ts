@@ -27,10 +27,13 @@ export const provisioningApi = {
 
   download: (id: string, filename: string) => {
     const token = localStorage.getItem('access_token')
-    fetch(`/api/v1/provisioning/${id}/download`, {
+    return fetch(`/api/v1/provisioning/${id}/download`, {
       headers: { Authorization: `Bearer ${token ?? ''}` },
     })
-      .then((r) => r.blob())
+      .then((r) => {
+        if (!r.ok) throw new Error(`Download failed: ${r.status} ${r.statusText}`)
+        return r.blob()
+      })
       .then((blob) => {
         const url = URL.createObjectURL(blob)
         const a = document.createElement('a')
@@ -39,6 +42,7 @@ export const provisioningApi = {
         a.click()
         URL.revokeObjectURL(url)
       })
+      .catch((err) => { throw err })
   },
 
   delete: (id: string) => api.delete(`/api/v1/provisioning/${id}`),

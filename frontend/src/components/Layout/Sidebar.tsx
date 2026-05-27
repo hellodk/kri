@@ -3,6 +3,7 @@ import { useFilterStore } from '../../stores/filterStore'
 import { useSaltKeysStore } from '../../stores/saltKeysStore'
 
 const links = [
+  { to: '/dashboard',  label: 'Fleet Overview', icon: '⊞' },
   { to: '/fleet',      label: 'Fleet',       icon: '⬡' },
   { to: '/drift',      label: 'Drift',       icon: '◑' },
   { to: '/sbom',       label: 'SBOM',        icon: '◉' },
@@ -58,7 +59,7 @@ export function Sidebar() {
                     open ? 'px-3 py-2.5' : 'px-2.5 py-2.5 justify-center'
                   } ${isActive
                     ? 'bg-brand-600/20 text-brand-300 border border-brand-600/30 shadow-sm shadow-brand-600/20'
-                    : 'text-white/45 hover:text-white/90 hover:bg-white/5 border border-transparent'
+                    : 'text-white/70 hover:text-white/90 hover:bg-white/5 border border-transparent'
                   }`
                 }
               >
