@@ -1,7 +1,6 @@
 """Simple Redis-based task deduplication using SETNX."""
 import functools
 import logging
-from typing import Any
 
 import redis as sync_redis
 
