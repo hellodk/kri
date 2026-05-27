@@ -24,6 +24,7 @@ import { SaltKeysPage } from './pages/SaltKeysPage'
 import { SaltOpsPage } from './pages/SaltOpsPage'
 import { AlertsPage } from './pages/AlertsPage'
 import FleetHealthPage from './pages/FleetHealthPage'
+import { DashboardPage } from './pages/DashboardPage'
 import { Navigate } from 'react-router-dom'
 import { saltKeysApi } from './api/saltKeys'
 import { useSaltKeysStore } from './stores/saltKeysStore'
@@ -111,6 +112,7 @@ export default function App() {
             <Route path="/salt-ops" element={<SaltOpsPage />} />
             <Route path="/alerts" element={<AlertsPage />} />
             <Route path="/fleet-health" element={<FleetHealthPage />} />
+            <Route path="/dashboard" element={<DashboardPage />} />
             <Route path="/settings" element={<SettingsPage />} />
           </Route>
         </Routes>

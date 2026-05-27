@@ -28,6 +28,7 @@ celery_app.conf.update(
     result_serializer="json",
     timezone="UTC",
     enable_utc=True,
+    redbeat_redis_url=settings.redis_url,
     task_track_started=True,
     worker_prefetch_multiplier=1,
     task_acks_late=True,
