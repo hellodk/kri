@@ -17,6 +17,15 @@ RUN uv sync --frozen --no-dev
 COPY fleet_platform/ ./fleet_platform/
 COPY playbooks/ ./playbooks/
 COPY alembic.ini ./
+COPY deploy/migrate.sh /app/deploy/migrate.sh
 
 ENV PYTHONPATH=/app
 ENV PYTHONUNBUFFERED=1
+
+# Create a non-root user to run the application (issue #88).
+# Docker volume mounts (salt-pillar, etc.) use UID/GID at runtime; if pillar
+# writes fail, operators must run: chown -R 1001:1001 <volume-path>
+RUN groupadd --gid 1001 appgroup && \
+    useradd --uid 1001 --gid appgroup --shell /bin/bash --create-home appuser && \
+    chown -R appuser:appgroup /app
+USER appuser

@@ -60,7 +60,9 @@ services:
     build:
       context: ..
       dockerfile: deploy/Dockerfile.api
-    command: ["sh", "-c", "uv run alembic upgrade head && uv run uvicorn fleet_platform.api.main:app --host 0.0.0.0 --port 8000 --log-level info"]
+    # migrate.sh acquires a PostgreSQL advisory lock before running alembic upgrade
+    # head, preventing concurrent migration races when multiple API replicas start.
+    command: ["sh", "-c", "bash /app/deploy/migrate.sh && uv run uvicorn fleet_platform.api.main:app --host 0.0.0.0 --port 8000 --log-level info"]
     restart: unless-stopped
     env_file: ../.env.docker
     depends_on:
@@ -82,7 +84,12 @@ services:
     restart: unless-stopped
     env_file: ../.env.docker
     environment:
-      SALT_MASTER_CONTAINER: "deploy-salt-master-1"
+      # SALT_MASTER_CONTAINER is no longer used — salt commands now dispatch via
+      # Salt HTTP API (salt-api). Set SALT_API_URL, SALT_API_USER, SALT_API_PASSWORD
+      # in .env.docker (see .env.docker.example). Issue #82.
+      SALT_API_URL: "${SALT_API_URL:-}"
+      SALT_API_USER: "${SALT_API_USER:-}"
+      SALT_API_PASSWORD: "${SALT_API_PASSWORD:-}"
     depends_on:
       db:
         condition: service_healthy
@@ -90,11 +97,17 @@ services:
         condition: service_healthy
     volumes:
       - salt-pillar:/srv/salt/pillar
-      - ~/.ssh:/root/.ssh:ro
-      - ~/.kri:/root/.kri:ro
+      # SSH keys for Ansible playbook execution.
+      # MUST be a dedicated service-account keypair — NOT your personal ~/.ssh.
+      # Create: ssh-keygen -t ed25519 -f deploy/ssh/id_ed25519 -N ""
+      # Then distribute deploy/ssh/id_ed25519.pub to target hosts.
+      # Set WORKER_SSH_DIR in .env.docker to override (default: ./ssh).
+      # Issue #91: operator personal ~/.ssh removed.
+      - ${WORKER_SSH_DIR:-./ssh}:/home/appuser/.ssh:ro
+      - ~/.kri:/home/appuser/.kri:ro
       - /home/dk/Documents/git/pulse:/mnt/pulse:ro   # host playbook repos
-      - /var/run/docker.sock:/var/run/docker.sock
-      - /usr/bin/docker:/usr/bin/docker:ro
+      # Docker socket intentionally NOT mounted — container escape risk. Issue #82.
+      # Salt commands now use Salt HTTP API instead of docker exec.
 
   salt-master:
     image: saltstack/salt:latest
