@@ -5,7 +5,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from fleet_platform.api.deps import get_db
-from fleet_platform.core.auth import require_role
+from fleet_platform.core.auth import get_current_user, require_role
 from fleet_platform.schemas.llm import (
     LLMEndpointCreate,
     LLMEndpointResponse,
@@ -24,7 +24,10 @@ router = APIRouter(prefix="/api/v1/llm", tags=["llm"])
 
 
 @router.get("/models")
-async def list_models(provider: str | None = None):
+async def list_models(
+    provider: str | None = None,
+    _: dict = Depends(get_current_user),
+):
     """Return the shared model catalog, optionally filtered by provider.
 
     Used by the UI model selector dropdown. No auth required — catalog is public.
