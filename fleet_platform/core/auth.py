@@ -134,11 +134,29 @@ async def get_current_user(
     return claims
 
 
+_ROLE_HIERARCHY = ["viewer", "operator", "admin"]
+
+
 def require_role(*roles: str):
-    """FastAPI dependency factory. Usage: Depends(require_role('admin', 'operator'))"""
+    """FastAPI dependency factory with role hierarchy.
+
+    require_role("viewer") → permits viewer, operator, admin
+    require_role("operator") → permits operator, admin
+    require_role("admin") → permits admin only
+
+    If multiple roles are passed, the MINIMUM required level is the
+    lowest-ranked role in the list.
+    """
+    # Compute the set of roles that satisfy the requirement:
+    # any role at or above the minimum required level
+    min_level = min(
+        (_ROLE_HIERARCHY.index(r) for r in roles if r in _ROLE_HIERARCHY),
+        default=len(_ROLE_HIERARCHY),
+    )
+    permitted = set(_ROLE_HIERARCHY[min_level:]) | set(roles)
 
     async def dependency(claims: dict = Depends(get_current_user)) -> dict:
-        if claims.get("role") not in roles:
+        if claims.get("role") not in permitted:
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail=f"Role '{claims.get('role')}' cannot access this endpoint",
