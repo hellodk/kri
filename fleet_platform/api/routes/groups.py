@@ -61,10 +61,15 @@ async def list_groups(
         select(Group).order_by(Group.name).offset((page - 1) * per_page).limit(per_page)
     )
     groups = result.scalars().all()
-    items = []
-    for g in groups:
-        count = await _member_count(g.id, db)
-        items.append(_to_response(g, count))
+
+    # Single aggregate query — replaces one COUNT per group (N+1 fix)
+    count_result = await db.execute(
+        select(GroupMember.group_id, func.count(GroupMember.node_id).label("cnt"))
+        .group_by(GroupMember.group_id)
+    )
+    count_map = {row.group_id: row.cnt for row in count_result}
+
+    items = [_to_response(g, count_map.get(g.id, 0)) for g in groups]
     return PaginatedResponse(items=items, total=total, page=page, per_page=per_page)
 
 
