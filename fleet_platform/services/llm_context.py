@@ -55,10 +55,8 @@ async def build_fleet_context(db: AsyncSession, intent: str) -> str:
     from fleet_platform.models.node import Node
     from fleet_platform.services.llm_svc import _redact_sensitive_data
     from fleet_platform.services.platform_settings_svc import (
-        ANSIBLE_ENDPOINT_URL as ANSIBLE_ENDPOINT_URL_KEY,
-    )
-    from fleet_platform.services.platform_settings_svc import (
         LLM_INCLUDE_NODE_IPS,
+        PLAYBOOKS_DIR as PLAYBOOKS_DIR_KEY,
         get_setting,
     )
     from fleet_platform.services.platform_settings_svc import (
@@ -75,7 +73,7 @@ async def build_fleet_context(db: AsyncSession, intent: str) -> str:
     groups: list[str] = list(groups_result.scalars().all())
 
     salt_master = await get_setting(db, SALT_MASTER_KEY) or ""
-    playbooks_dir = await get_setting(db, ANSIBLE_ENDPOINT_URL_KEY) or ""
+    playbooks_dir = await get_setting(db, PLAYBOOKS_DIR_KEY) or ""
 
     base = build_static_context(
         node_count=node_count,
