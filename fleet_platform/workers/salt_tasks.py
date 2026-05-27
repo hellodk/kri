@@ -1,5 +1,6 @@
 # fleet_platform/workers/salt_tasks.py
 """Celery tasks for Salt state application and ad-hoc commands."""
+
 import json
 import logging
 import os
@@ -60,36 +61,38 @@ def _salt_prefix() -> list[str]:
     )
     return []
 
+
 # Allowlist of Salt functions that can be executed via the ad-hoc command API.
 # This prevents operators from running arbitrary shell commands via cmd.run
 # or other dangerous Salt modules.
-_ALLOWED_SALT_FUNCTIONS: frozenset[str] = frozenset({
-    "state.apply",
-    "state.highstate",
-    "state.show_sls",
-    "pkg.install",
-    "pkg.remove",
-    "pkg.list_pkgs",
-    "pkg.upgrade",
-    "pip.install",
-    "pip.installed",
-    "pip.list",
-    "service.start",
-    "service.stop",
-    "service.restart",
-    "service.status",
-    "cmd.run",  # kept for operator flexibility; log a warning on use
-    "disk.usage",
-    "disk.inodeusage",
-    "status.loadavg",
-    "status.meminfo",
-    "grains.items",
-    "grains.get",
-    "test.ping",
-    "test.version",
-    "saltutil.sync_all",
-    "saltutil.refresh_pillar",
-})
+_ALLOWED_SALT_FUNCTIONS: frozenset[str] = frozenset(
+    {
+        "state.apply",
+        "state.highstate",
+        "state.show_sls",
+        "pkg.install",
+        "pkg.remove",
+        "pkg.list_pkgs",
+        "pkg.upgrade",
+        "pip.install",
+        "pip.installed",
+        "pip.list",
+        "service.start",
+        "service.stop",
+        "service.restart",
+        "service.status",
+        "disk.usage",
+        "disk.inodeusage",
+        "status.loadavg",
+        "status.meminfo",
+        "grains.items",
+        "grains.get",
+        "test.ping",
+        "test.version",
+        "saltutil.sync_all",
+        "saltutil.refresh_pillar",
+    }
+)
 
 
 @celery_app.task(
@@ -156,14 +159,8 @@ def run_salt_cmd(
         return {
             "status": "error",
             "reason": f"Function '{function}' is not in the allowlist. "
-                      f"Allowed functions: {sorted(_ALLOWED_SALT_FUNCTIONS)}",
+            f"Allowed functions: {sorted(_ALLOWED_SALT_FUNCTIONS)}",
         }
-    if function == "cmd.run":
-        logger.warning(
-            "run_salt_cmd: cmd.run invoked on minions=%r args=%r — ensure this is intentional",
-            target_minions,
-            args,
-        )
     target = ",".join(target_minions)
     cmd = ["salt", "-L", target, function, "--no-color", "--out=json"]
     if args:

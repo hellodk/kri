@@ -1,3 +1,4 @@
+import logging
 import uuid as _uuid_mod
 from datetime import UTC, datetime, timedelta
 from typing import Any
@@ -8,7 +9,10 @@ import redis.asyncio as aioredis
 from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
+from fleet_platform.api.deps import get_redis
 from fleet_platform.core.config import settings
+
+logger = logging.getLogger(__name__)
 
 _REVOKE_PREFIX = "rt:revoked:"
 
@@ -27,6 +31,7 @@ class TokenInvalidError(Exception):
 
 # ── Password hashing ──────────────────────────────────────────────────
 
+
 def hash_password(password: str) -> str:
     return bcrypt.hashpw(password.encode(), bcrypt.gensalt()).decode()
 
@@ -37,16 +42,14 @@ def verify_password(password: str, hashed: str) -> bool:
 
 # ── Token creation ────────────────────────────────────────────────────
 
+
 def create_access_token(
     user_id: str,
     email: str,
     role: str,
     expires_delta: timedelta | None = None,
 ) -> str:
-    expire = datetime.now(UTC) + (
-        expires_delta
-        or timedelta(minutes=settings.jwt_access_token_expire_minutes)
-    )
+    expire = datetime.now(UTC) + (expires_delta or timedelta(minutes=settings.jwt_access_token_expire_minutes))
     payload = {
         "sub": user_id,
         "email": email,
@@ -72,6 +75,7 @@ def create_refresh_token(user_id: str) -> str:
 
 
 # ── Token decoding ────────────────────────────────────────────────────
+
 
 def decode_token(token: str) -> dict[str, Any]:
     try:
@@ -105,6 +109,7 @@ def _unauthorized(detail: str) -> HTTPException:
 
 async def get_current_user(
     credentials: HTTPAuthorizationCredentials | None = Depends(_bearer),
+    redis: aioredis.Redis = Depends(get_redis),
 ) -> dict[str, Any]:
     if not credentials:
         raise _unauthorized("Missing Authorization header")
@@ -116,6 +121,16 @@ async def get_current_user(
         raise _unauthorized("Invalid token")
     if claims.get("type") != "access":
         raise _unauthorized("Refresh tokens cannot access this endpoint")
+    jti = claims.get("jti", "")
+    if jti:
+        try:
+            if await is_token_revoked(redis, jti):
+                raise _unauthorized("Token has been revoked")
+        except aioredis.RedisError:
+            logger.error("Redis unavailable during token revocation check — denying request")
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="Service temporarily unavailable"
+            )
     return claims
 
 

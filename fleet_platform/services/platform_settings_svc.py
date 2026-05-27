@@ -48,6 +48,18 @@ JENKINS_INGEST_SECRET = "jenkins_ingest_secret"
 
 
 def _fernet_key() -> bytes:
+    if settings.fernet_secret_key:
+        # Use explicitly configured key (must be a valid Fernet key: 32 url-safe base64 bytes)
+        key = settings.fernet_secret_key.encode()
+        try:
+            base64.urlsafe_b64decode(key + b"==")  # quick format check
+        except Exception:
+            raise ValueError(
+                "FERNET_SECRET_KEY must be a valid Fernet key (url-safe base64, 32 bytes). "
+                "Generate: python -c 'from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())'"
+            )
+        return key
+    # Backward-compatible fallback: derive from JWT_SECRET
     digest = hashlib.sha256(settings.jwt_secret.encode()).digest()
     return base64.urlsafe_b64encode(digest)
 
@@ -80,6 +92,7 @@ def get_setting_sync(db: Session, key: str) -> str | None:
     """Synchronous version of get_setting for use in Celery tasks."""
     from sqlalchemy import select as sa_select
     from sqlalchemy.orm import Session  # noqa: F401 — type hint only
+
     result = db.execute(sa_select(PlatformSetting).where(PlatformSetting.key == key))
     row = result.scalar_one_or_none()
     if row is None:
@@ -96,6 +109,7 @@ async def get_playbooks_dir(db: AsyncSession) -> Path:
     inside Docker containers where volumes are mounted at different prefixes.
     """
     from fleet_platform.services.playbook_sources import _translate_path
+
     custom = await get_setting(db, PLAYBOOKS_DIR)
     if custom:
         return Path(_translate_path(custom))
@@ -117,10 +131,10 @@ async def set_setting(db: AsyncSession, key: str, value: str, encrypt: bool = Fa
 # Map from env-var name → (setting_key, is_encrypted)
 # Only non-secret settings belong here — secrets must be set via the UI.
 _ENV_DEFAULTS: list[tuple[str, str]] = [
-    ("KRI_API_URL",          KRI_API_URL),
-    ("SALT_MASTER_ADDRESS",  SALT_MASTER),
-    ("PLAYBOOKS_DIR",        PLAYBOOKS_DIR),
-    ("PILLAR_DIR",           PILLAR_DIR),
+    ("KRI_API_URL", KRI_API_URL),
+    ("SALT_MASTER_ADDRESS", SALT_MASTER),
+    ("PLAYBOOKS_DIR", PLAYBOOKS_DIR),
+    ("PILLAR_DIR", PILLAR_DIR),
     ("SSH_BOOTSTRAP_USERNAME", SSH_USERNAME),
 ]
 
@@ -132,13 +146,12 @@ async def seed_settings_from_env(db: AsyncSession) -> None:
     only fills in rows that are completely missing (e.g. after a DB wipe).
     """
     import os
+
     for env_key, setting_key in _ENV_DEFAULTS:
         value = os.environ.get(env_key, "").strip()
         if not value:
             continue
-        result = await db.execute(
-            select(PlatformSetting).where(PlatformSetting.key == setting_key)
-        )
+        result = await db.execute(select(PlatformSetting).where(PlatformSetting.key == setting_key))
         row = result.scalar_one_or_none()
         if row is None:
             db.add(PlatformSetting(key=setting_key, value=value, is_encrypted=False))

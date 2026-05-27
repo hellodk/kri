@@ -1,9 +1,15 @@
 """OIDC Relying Party service — discovery, authorization URL, code exchange, user upsert."""
+
+import base64
+import json
 import secrets
 import urllib.parse
 from datetime import UTC, datetime
+from typing import cast
 
 import httpx
+import jwt as pyjwt
+from cryptography.hazmat.primitives.asymmetric.rsa import RSAPublicKey
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -16,7 +22,7 @@ _VALID_ROLES = set(_ROLE_PRIORITY)
 
 def _extract_role(claims: dict, prefix: str) -> str:
     roles = claims.get("realm_access", {}).get("roles", [])
-    kri_roles = [r[len(prefix):] for r in roles if r.startswith(prefix)]
+    kri_roles = [r[len(prefix) :] for r in roles if r.startswith(prefix)]
     valid = [r for r in kri_roles if r in _VALID_ROLES]
     if not valid:
         return "viewer"
@@ -68,6 +74,47 @@ async def exchange_code(
         )
         resp.raise_for_status()
         return resp.json()
+
+
+async def verify_id_token(id_token: str, discovery: dict, client_id: str) -> dict:
+    """Verify ID token signature using the IdP's JWKS and return the validated claims."""
+    jwks_uri = discovery.get("jwks_uri")
+    if not jwks_uri:
+        raise ValueError("JWKS URI not in discovery document")
+
+    # Fetch JWKS from the IdP
+    async with httpx.AsyncClient(timeout=10) as client:
+        resp = await client.get(jwks_uri)
+        resp.raise_for_status()
+        jwks = resp.json()
+
+    # Decode the JWT header to find the key ID (kid)
+    header_b64 = id_token.split(".")[0]
+    padding = "=" * (4 - len(header_b64) % 4)
+    header = json.loads(base64.urlsafe_b64decode(header_b64 + padding))
+    kid = header.get("kid")
+
+    # Find the matching public key in the JWKS
+    matching_key = None
+    for key in jwks.get("keys", []):
+        if key.get("kid") == kid:
+            matching_key = key
+            break
+    if matching_key is None and jwks.get("keys"):
+        matching_key = jwks["keys"][0]  # fallback: use first key if no kid match
+
+    if not matching_key:
+        raise ValueError("No matching key found in JWKS")
+
+    # Reconstruct the RSA public key and verify the token signature
+    public_key = cast(RSAPublicKey, pyjwt.algorithms.RSAAlgorithm.from_jwk(matching_key))
+    claims = pyjwt.decode(
+        id_token,
+        public_key,
+        algorithms=["RS256"],
+        audience=client_id,
+    )
+    return claims
 
 
 async def upsert_oidc_user(

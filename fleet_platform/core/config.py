@@ -23,11 +23,15 @@ class Settings(BaseSettings):
     frontend_origin: str = "http://localhost:5173"
     environment: str = "development"
 
+    fernet_secret_key: str | None = (
+        None  # separate key for encrypting platform secrets; if unset, derived from jwt_secret
+    )
+
     oidc_enabled: bool = False
-    oidc_issuer_url: str = ""          # e.g. https://keycloak.example.com/realms/kri
+    oidc_issuer_url: str = ""  # e.g. https://keycloak.example.com/realms/kri
     oidc_client_id: str = ""
     oidc_client_secret: str = ""
-    oidc_role_prefix: str = "kri-"    # Keycloak role prefix: kri-admin → admin
+    oidc_role_prefix: str = "kri-"  # Keycloak role prefix: kri-admin → admin
 
     @model_validator(mode="after")
     def validate_production_secrets(self) -> "Settings":
@@ -46,14 +50,17 @@ class Settings(BaseSettings):
 
 settings = Settings()
 
+
 def _read_version() -> str:
     from pathlib import Path
+
     for candidate in [
         Path(__file__).parent.parent.parent / "VERSION",  # repo root
-        Path("/app/VERSION"),                              # Docker container
+        Path("/app/VERSION"),  # Docker container
     ]:
         if candidate.exists():
             return candidate.read_text().strip()
     return "0.0.0"
+
 
 VERSION = _read_version()
