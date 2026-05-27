@@ -47,10 +47,10 @@ export function LoginPage() {
         </div>
         <div>
           <h2 className="text-white text-4xl font-bold leading-tight mb-4">
-            Fleet visibility<br />for Mac infrastructure
+            Fleet visibility<br />for your build infrastructure
           </h2>
           <p className="text-white/40 text-lg leading-relaxed">
-            Drift detection, SBOM analysis, and execution history for your entire Mac fleet.
+            Drift detection, SBOM scanning, and remote ops for your entire build fleet.
           </p>
         </div>
         <div className="flex gap-6 text-white/20 text-sm font-mono">

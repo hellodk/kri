@@ -65,6 +65,7 @@ services:
       - ~/.kri:/root/.kri:ro
       - /home/dk/Documents/git/pulse:/mnt/pulse:ro   # host playbook repos
       - /var/run/docker.sock:/var/run/docker.sock
+      - /usr/bin/docker:/usr/bin/docker:ro
 
   salt-master:
     image: saltstack/salt:latest
