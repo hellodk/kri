@@ -18,6 +18,7 @@ celery_app = Celery(
         "fleet_platform.workers.alert_tasks",
         "fleet_platform.workers.ios_tasks",
         "fleet_platform.workers.health_tasks",
+        "fleet_platform.workers.digest_tasks",
     ],
 )
 
@@ -64,6 +65,10 @@ celery_app.conf.update(
         "collect-fleet-health": {
             "task": "fleet_platform.workers.health_tasks.collect_fleet_health",
             "schedule": 900.0,  # every 15 minutes
+        },
+        "weekly-fleet-digest": {
+            "task": "fleet_platform.workers.digest_tasks.weekly_digest",
+            "schedule": crontab(hour=8, minute=0, day_of_week=1),  # Monday 08:00 UTC
         },
     },
 )
