@@ -27,11 +27,16 @@ def test_sidebar_has_section_labels():
 
 
 def test_llm_assistant_inside_auth_guard():
-    """LLMAssistant must be inside AuthGuard, not rendered before auth check."""
-    # LLMAssistant should appear after AuthGuard in the JSX tree
-    auth_guard_pos = APP.find("AuthGuard")
-    llm_pos = APP.find("LLMAssistant")
-    # LLMAssistant should be INSIDE AuthGuard (appears after the AuthGuard opening)
-    assert llm_pos > auth_guard_pos, (
-        "LLMAssistant must be inside AuthGuard, not rendered before auth check"
+    """LLMAssistant must be inside AuthGuard JSX, not rendered before auth check."""
+    # Search within the component body only (skip import lines)
+    jsx_start = APP.find("export default function App")
+    assert jsx_start != -1, "App function not found"
+    jsx = APP[jsx_start:]
+    auth_guard_open = jsx.find("<AuthGuard")
+    auth_guard_close = jsx.find("</AuthGuard>")
+    llm_pos = jsx.find("<LLMAssistant")
+    assert auth_guard_open != -1, "<AuthGuard not found in JSX"
+    assert llm_pos != -1, "<LLMAssistant not found in JSX"
+    assert auth_guard_open < llm_pos < auth_guard_close, (
+        "LLMAssistant must appear between <AuthGuard> and </AuthGuard> tags"
     )
