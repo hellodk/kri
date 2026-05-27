@@ -1,7 +1,7 @@
 # tests/unit/test_oidc_routes.py
 """Unit tests for OIDC route security fixes: one-time exchange code endpoint."""
 import json
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock
 
 import pytest
 
@@ -26,6 +26,7 @@ async def test_oidc_exchange_returns_tokens_for_valid_code():
 async def test_oidc_exchange_raises_400_for_missing_code():
     """GET /exchange with an unknown or expired code raises 400."""
     from fastapi import HTTPException
+
     from fleet_platform.api.routes.oidc import oidc_exchange
 
     mock_redis = AsyncMock()
