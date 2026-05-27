@@ -5,6 +5,7 @@ import os
 import tempfile
 from datetime import UTC, datetime
 
+import redis as sync_redis
 from fastapi import APIRouter, Depends, Header, HTTPException, Request, status
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
@@ -12,6 +13,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from fleet_platform.api.deps import get_db
 from fleet_platform.api.limiter import limiter
+from fleet_platform.core.config import settings
 from fleet_platform.models.execution import ExecutionJob, ExecutionResult
 from fleet_platform.models.facts import NodeFact
 from fleet_platform.models.node import Node, Tag
@@ -21,6 +23,22 @@ from fleet_platform.workers.drift_tasks import compute_drift
 from fleet_platform.workers.sbom_tasks import index_sbom, index_sbom_from_grains
 
 router = APIRouter(prefix="/api/v1/ingest")
+
+_INGEST_RATE_LIMIT = 10  # requests per minute per node
+_INGEST_RATE_WINDOW = 60  # seconds
+
+
+def _check_ingest_rate_limit(node_id: str) -> bool:
+    """Return True if allowed, False if rate limit exceeded."""
+    try:
+        r = sync_redis.Redis.from_url(settings.redis_url, decode_responses=True)
+        key = f"ingest_rl:{node_id}"
+        count = int(r.incr(key))  # type: ignore[arg-type]
+        if count == 1:
+            r.expire(key, _INGEST_RATE_WINDOW)
+        return count <= _INGEST_RATE_LIMIT
+    except Exception:
+        return True  # fail open — don't block ingest if Redis is down
 
 
 async def _resolve_node(minion_id: str, token: str, db: AsyncSession) -> Node:
@@ -48,7 +66,7 @@ def _extract_storage_gb(grains: dict) -> float | None:
         val = grains.get(key)
         if val is not None:
             try:
-                return round(float(val) / 1024, 1)  # MB → GB
+                return round(float(val) / 1024, 1)  # MB -> GB
             except (TypeError, ValueError):
                 pass
     disk_info = grains.get("disk_info", [])
@@ -56,7 +74,7 @@ def _extract_storage_gb(grains: dict) -> float | None:
         try:
             total_bytes = sum(d.get("size", 0) for d in disk_info if isinstance(d, dict))
             if total_bytes:
-                return round(total_bytes / (1024 ** 3), 1)
+                return round(total_bytes / (1024**3), 1)
         except (TypeError, ValueError):
             pass
     return None
@@ -82,17 +100,20 @@ def _extract_node_updates(grains: dict) -> dict:
     if ip is None:
         fqdn_ips = grains.get("fqdn_ip4", [])
         ip = next(
-            (a for a in fqdn_ips
-             if _is_valid_ip(a) and not any(a.startswith(p) for p in _skip_prefixes)),
+            (
+                a
+                for a in fqdn_ips
+                if _is_valid_ip(a) and not any(a.startswith(p) for p in _skip_prefixes)
+            ),
             None,
         )
 
     # Hostname resolution priority:
-    # 1. `host` grain — the actual short machine name (uname -n), always reliable
-    # 2. `fqdn` grain — only if it is NOT a reverse-DNS artefact (.ip6.arpa /
+    # 1. `host` grain -- the actual short machine name (uname -n), always reliable
+    # 2. `fqdn` grain -- only if it is NOT a reverse-DNS artefact (.ip6.arpa /
     #    .in-addr.arpa) which Salt/Ansible produces when PTR lookup returns the
     #    Tailscale IPv6 record instead of the real name
-    # 3. `id` grain — the minion ID, always present as a last resort
+    # 3. `id` grain -- the minion ID, always present as a last resort
     raw_host = grains.get("host") or ""
     raw_fqdn = grains.get("fqdn") or ""
     fqdn_valid = raw_fqdn and not raw_fqdn.lower().endswith((".ip6.arpa", ".in-addr.arpa"))
@@ -114,19 +135,21 @@ def _extract_node_updates(grains: dict) -> dict:
 
 _SYSTEM_TAG_GRAINS: list[tuple[str, str | None]] = [
     # (tag_key, grain_key)
-    ("hostname",        "fqdn"),
-    ("ip",              None),          # computed from ip4_interfaces — set below
-    ("arch",            "cpuarch"),
-    ("model",           "productname"),
-    ("macos_version",   "osrelease"),
-    ("serial",          "serialnumber"),
-    ("os",              "osfullname"),
-    ("kernel",          "kernelrelease"),
-    ("cpu",             "cpu_model"),
+    ("hostname", "fqdn"),
+    ("ip", None),  # computed from ip4_interfaces -- set below
+    ("arch", "cpuarch"),
+    ("model", "productname"),
+    ("macos_version", "osrelease"),
+    ("serial", "serialnumber"),
+    ("os", "osfullname"),
+    ("kernel", "kernelrelease"),
+    ("cpu", "cpu_model"),
 ]
 
 
-async def _upsert_system_tags(db: AsyncSession, node: Node, grains: dict, now: datetime) -> None:
+async def _upsert_system_tags(
+    db: AsyncSession, node: Node, grains: dict, now: datetime
+) -> None:
     """Write auto-populated tags from Salt grains. Existing user tags with same key are skipped."""
     tag_values: dict[str, str] = {}
 
@@ -158,8 +181,7 @@ async def _upsert_system_tags(db: AsyncSession, node: Node, grains: dict, now: d
                 tag.value = value
             # user tags with same key: do not overwrite
         else:
-            db.add(Tag(node_id=node.id, key=key, value=value,
-                       source="system", created_at=now))
+            db.add(Tag(node_id=node.id, key=key, value=value, source="system", created_at=now))
 
 
 @router.post("/grains")
@@ -171,15 +193,22 @@ async def ingest_grains(
     db: AsyncSession = Depends(get_db),
 ):
     if not x_node_token:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Missing X-Node-Token")
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED, detail="Missing X-Node-Token"
+        )
 
     node = await _resolve_node(payload.minion_id, x_node_token, db)
+    if not _check_ingest_rate_limit(str(node.id)):
+        raise HTTPException(
+            status_code=429,
+            detail="Rate limit exceeded -- max 10 ingest requests per minute per node",
+        )
     now = datetime.now(UTC)
 
     updates = _extract_node_updates(payload.grains)
     updates["last_seen_at"] = now
     for key, value in updates.items():
-        # Never overwrite an existing ip_address with None — grains may not carry
+        # Never overwrite an existing ip_address with None -- grains may not carry
         # a valid IP (e.g. Ansible gather_subset:min omits network facts).
         # Keep bootstrap_ip as the authoritative fallback.
         if key == "ip_address" and value is None:
@@ -190,16 +219,19 @@ async def ingest_grains(
     if not node.ip_address and node.bootstrap_ip:
         node.ip_address = node.bootstrap_ip
 
-    db.add(NodeFact(
-        node_id=node.id,
-        collected_at=now,
-        grains=payload.grains,
-    ))
+    db.add(
+        NodeFact(
+            node_id=node.id,
+            collected_at=now,
+            grains=payload.grains,
+        )
+    )
 
     await _upsert_system_tags(db, node, payload.grains, now)
 
     # Update iOS-specific tracking fields from grains (before commit)
     from fleet_platform.services.ios_tracking_svc import update_node_from_grains
+
     await update_node_from_grains(node.id, payload.grains, db)
 
     await db.commit()
@@ -225,7 +257,9 @@ async def ingest_executions(
     db: AsyncSession = Depends(get_db),
 ):
     if not x_node_token:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Missing X-Node-Token")
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED, detail="Missing X-Node-Token"
+        )
 
     node = await _resolve_node(payload.minion_id, x_node_token, db)
     now = datetime.now(UTC)
@@ -269,7 +303,7 @@ async def ingest_executions(
         await db.commit()
     except IntegrityError:
         await db.rollback()
-        # Race condition — another request already inserted this JID; return existing
+        # Race condition -- another request already inserted this JID; return existing
         existing = await db.execute(
             select(ExecutionJob).where(
                 ExecutionJob.salt_jid == payload.jid,
@@ -291,7 +325,9 @@ async def ingest_sbom(
     db: AsyncSession = Depends(get_db),
 ):
     if not x_node_token:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Missing X-Node-Token")
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED, detail="Missing X-Node-Token"
+        )
 
     node = await _resolve_node(minion_id, x_node_token, db)
 
