@@ -78,7 +78,8 @@ def _get_node_credentials(node) -> tuple[str, str, str]:
             password = decrypt_secret(node.ssh_password_enc)
         except Exception as e:
             logger.warning(
-                "_get_node_credentials: failed to decrypt ssh_password_enc for node_id=%s — using empty password. Cause: %s",
+                "_get_node_credentials: failed to decrypt ssh_password_enc"
+                " for node_id=%s — using empty password. Cause: %s",
                 node.id,
                 e,
             )
