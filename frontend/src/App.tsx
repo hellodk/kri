@@ -71,9 +71,7 @@ function SaltKeyWatcher() {
     poll()
     const id = setInterval(poll, 30_000)
     return () => clearInterval(id)
-    // setPendingCount and toast are stable Zustand refs — intentionally omitted
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [userId])
+  }, [userId, setPendingCount, toast])
 
   return null
 }

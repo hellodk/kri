@@ -172,6 +172,7 @@ def run_playbook(self, job_id: str, ssh_username: str | None = None, ssh_passwor
             },
             quiet=False,
             rotate_artifacts=1,
+            timeout=1200,
         )
         for event in result.events:
             msg = event.get("stdout", "")
