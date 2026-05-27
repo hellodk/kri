@@ -1,7 +1,5 @@
 """Unit tests for #120 (SSH password plaintext) and #133 (DB session excess)."""
 from pathlib import Path
-import ast
-
 
 SRC = Path("fleet_platform/workers/ansible_tasks.py").read_text()
 
@@ -12,10 +10,10 @@ def test_ssh_password_not_in_file_write():
     # Parse the source to find string literals that contain both 'write' context and ansible_ssh_pass
     # Simpler: find lines where .write_text( is called and check none contain ssh_pass
     lines = SRC.splitlines()
-    write_lines = [l for l in lines if '.write_text(' in l or '.write(' in l]
-    for line in write_lines:
-        assert 'ansible_ssh_pass' not in line, (
-            f"ansible_ssh_pass must not appear in a file-write call: {line.strip()}"
+    write_lines = [ln for ln in lines if '.write_text(' in ln or '.write(' in ln]
+    for ln in write_lines:
+        assert 'ansible_ssh_pass' not in ln, (
+            f"ansible_ssh_pass must not appear in a file-write call: {ln.strip()}"
         )
 
 
