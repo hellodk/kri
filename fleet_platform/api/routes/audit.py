@@ -46,6 +46,8 @@ async def list_audit_logs(
     actor: str | None = None,
     action: str | None = None,
     resource_type: str | None = None,
+    from_ts: datetime | None = Query(default=None),
+    to_ts: datetime | None = Query(default=None),
     page: int = Query(default=1, ge=1),
     per_page: int = Query(default=50, ge=1, le=200),
     db: AsyncSession = Depends(get_db),
@@ -59,6 +61,10 @@ async def list_audit_logs(
         query = query.where(AuditEvent.action.ilike(f"%{action}%"))
     if resource_type:
         query = query.where(AuditEvent.resource_type == resource_type)
+    if from_ts:
+        query = query.where(AuditEvent.event_at >= from_ts)
+    if to_ts:
+        query = query.where(AuditEvent.event_at <= to_ts)
 
     count_query = select(func.count()).select_from(query.subquery())
     total = (await db.execute(count_query)).scalar_one()

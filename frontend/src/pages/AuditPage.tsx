@@ -1,10 +1,21 @@
-import { useState, useRef } from 'react'
+import { useMemo } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { auditApi } from '../api/audit'
 import { Skeleton } from '../components/Skeleton'
 import { ErrorState } from '../components/ErrorState'
 import { Pagination } from '../components/Pagination'
 import { formatDistanceToNow } from 'date-fns'
+
+const RESOURCE_TYPES = ['node', 'group', 'user', 'setting', 'playbook']
+
+const PRESETS: { label: string; minutes: number }[] = [
+  { label: '1h', minutes: 60 },
+  { label: '6h', minutes: 360 },
+  { label: '24h', minutes: 1440 },
+  { label: '7d', minutes: 10080 },
+  { label: '30d', minutes: 43200 },
+]
 
 function actionBadgeClass(action: string): string {
   if (action.endsWith('.create')) return 'bg-green-100 text-green-700'
@@ -14,60 +25,172 @@ function actionBadgeClass(action: string): string {
   return 'bg-gray-100 text-gray-600'
 }
 
+function isoLocal(dt: string): string {
+  // datetime-local input value → ISO string with timezone
+  return new Date(dt).toISOString()
+}
+
 export function AuditPage() {
-  const [page, setPage] = useState(1)
-  const [actorFilter, setActorFilter] = useState('')
-  const [actionFilter, setActionFilter] = useState('')
-  const [debouncedActor, setDebouncedActor] = useState('')
-  const [debouncedAction, setDebouncedAction] = useState('')
-  const actorTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
-  const actionTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
+  const [params, setParams] = useSearchParams()
 
-  function handleActor(value: string) {
-    setActorFilter(value)
-    clearTimeout(actorTimer.current)
-    actorTimer.current = setTimeout(() => { setDebouncedActor(value); setPage(1) }, 400)
+  const actor = params.get('actor') ?? ''
+  const action = params.get('action') ?? ''
+  const resourceType = params.get('resource_type') ?? ''
+  const fromTs = params.get('from_ts') ?? ''
+  const toTs = params.get('to_ts') ?? ''
+  const page = parseInt(params.get('page') ?? '1', 10)
+
+  function set(key: string, value: string) {
+    setParams(prev => {
+      const next = new URLSearchParams(prev)
+      if (value) next.set(key, value); else next.delete(key)
+      if (key !== 'page') next.delete('page')
+      return next
+    })
   }
 
-  function handleAction(value: string) {
-    setActionFilter(value)
-    clearTimeout(actionTimer.current)
-    actionTimer.current = setTimeout(() => { setDebouncedAction(value); setPage(1) }, 400)
+  function clearAll() {
+    setParams({})
   }
+
+  function applyPreset(minutes: number) {
+    const from = new Date(Date.now() - minutes * 60 * 1000).toISOString()
+    setParams(prev => {
+      const next = new URLSearchParams(prev)
+      next.set('from_ts', from)
+      next.delete('to_ts')
+      next.delete('page')
+      return next
+    })
+  }
+
+  const activeCount = useMemo(() =>
+    [actor, action, resourceType, fromTs, toTs].filter(Boolean).length,
+    [actor, action, resourceType, fromTs, toTs]
+  )
 
   const { data, isLoading, isError, refetch } = useQuery({
-    queryKey: ['audit', debouncedActor, debouncedAction, page],
+    queryKey: ['audit', actor, action, resourceType, fromTs, toTs, page],
     queryFn: () => auditApi.list({
-      actor: debouncedActor || undefined,
-      action: debouncedAction || undefined,
+      actor: actor || undefined,
+      action: action || undefined,
+      resource_type: resourceType || undefined,
+      from_ts: fromTs || undefined,
+      to_ts: toTs || undefined,
       page,
       per_page: 50,
     }),
     staleTime: 15_000,
   })
 
+  // Format datetime-local input value from ISO string
+  function toDatetimeLocal(iso: string): string {
+    if (!iso) return ''
+    try {
+      return new Date(iso).toISOString().slice(0, 16)
+    } catch {
+      return ''
+    }
+  }
+
   return (
     <div className="space-y-6">
-      <h1 className="text-2xl font-bold text-gray-900">Audit Log</h1>
-
-      <div className="flex items-center gap-3 flex-wrap">
-        <input
-          type="search"
-          placeholder="Filter by actor email…"
-          value={actorFilter}
-          onChange={(e) => handleActor(e.target.value)}
-          className="px-3 py-1.5 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-500 w-56"
-        />
-        <input
-          type="search"
-          placeholder="Filter by action…"
-          value={actionFilter}
-          onChange={(e) => handleAction(e.target.value)}
-          className="px-3 py-1.5 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-500 w-48"
-        />
-        {data && <span className="text-sm text-gray-500">{data.total} events</span>}
+      <div className="flex items-center justify-between">
+        <h1 className="text-2xl font-bold text-gray-900">Audit Log</h1>
+        {activeCount > 0 && (
+          <button
+            onClick={clearAll}
+            className="text-sm text-gray-500 hover:text-gray-700 underline"
+          >
+            Clear all filters
+            <span className="ml-1.5 inline-flex items-center justify-center w-5 h-5 rounded-full bg-brand-600 text-white text-[10px] font-bold">
+              {activeCount}
+            </span>
+          </button>
+        )}
       </div>
 
+      {/* Filter bar */}
+      <div className="bg-white border border-gray-200 rounded-lg p-4 space-y-3 shadow-sm">
+        <div className="flex flex-wrap gap-3 items-end">
+          {/* Actor */}
+          <div className="flex flex-col gap-1">
+            <label className="text-xs font-medium text-gray-500">Actor</label>
+            <input
+              type="search"
+              placeholder="email or user ID"
+              value={actor}
+              onChange={(e) => set('actor', e.target.value)}
+              className="px-3 py-1.5 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-500 w-52"
+            />
+          </div>
+
+          {/* Action */}
+          <div className="flex flex-col gap-1">
+            <label className="text-xs font-medium text-gray-500">Action</label>
+            <input
+              type="search"
+              placeholder="e.g. login, node.delete"
+              value={action}
+              onChange={(e) => set('action', e.target.value)}
+              className="px-3 py-1.5 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-500 w-44"
+            />
+          </div>
+
+          {/* Resource type */}
+          <div className="flex flex-col gap-1">
+            <label className="text-xs font-medium text-gray-500">Resource type</label>
+            <select
+              value={resourceType}
+              onChange={(e) => set('resource_type', e.target.value)}
+              className="px-3 py-1.5 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-500 bg-white"
+            >
+              <option value="">All types</option>
+              {RESOURCE_TYPES.map(rt => (
+                <option key={rt} value={rt}>{rt}</option>
+              ))}
+            </select>
+          </div>
+
+          {data && (
+            <span className="text-sm text-gray-500 ml-auto self-end pb-1.5">
+              {data.total.toLocaleString()} events
+            </span>
+          )}
+        </div>
+
+        {/* Time range */}
+        <div className="flex flex-wrap gap-2 items-center">
+          <span className="text-xs font-medium text-gray-500 mr-1">Time range:</span>
+          {PRESETS.map(p => (
+            <button
+              key={p.label}
+              onClick={() => applyPreset(p.minutes)}
+              className="px-2.5 py-1 text-xs rounded-md border border-gray-300 text-gray-600 hover:bg-gray-50 hover:border-brand-400 hover:text-brand-600 transition-colors"
+            >
+              Last {p.label}
+            </button>
+          ))}
+          <span className="text-xs text-gray-400 mx-1">or</span>
+          <div className="flex items-center gap-2">
+            <input
+              type="datetime-local"
+              value={toDatetimeLocal(fromTs)}
+              onChange={(e) => set('from_ts', e.target.value ? isoLocal(e.target.value) : '')}
+              className="px-2 py-1 text-xs border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-brand-500"
+            />
+            <span className="text-xs text-gray-400">to</span>
+            <input
+              type="datetime-local"
+              value={toDatetimeLocal(toTs)}
+              onChange={(e) => set('to_ts', e.target.value ? isoLocal(e.target.value) : '')}
+              className="px-2 py-1 text-xs border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-brand-500"
+            />
+          </div>
+        </div>
+      </div>
+
+      {/* Table */}
       <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
         {isLoading ? (
           <Skeleton rows={12} />
@@ -89,7 +212,7 @@ export function AuditPage() {
                 {data?.items.length === 0 && (
                   <tr>
                     <td colSpan={5} className="px-4 py-8 text-center text-gray-400 text-sm">
-                      No audit events found
+                      No audit events match the current filters
                     </td>
                   </tr>
                 )}
@@ -119,7 +242,7 @@ export function AuditPage() {
                 page={page}
                 total={data.total}
                 perPage={data.per_page}
-                onPage={setPage}
+                onPage={(p) => set('page', String(p))}
               />
             )}
           </>
