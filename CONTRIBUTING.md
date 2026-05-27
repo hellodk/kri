@@ -1,6 +1,6 @@
 # Contributing to kri
 
-kri is a Mac Mini fleet management platform. This guide covers everything you need to get a development environment running, follow the project's branching and testing conventions, and get your changes merged.
+kri is a build fleet management platform. This guide covers everything you need to get a development environment running, follow the project's branching and testing conventions, and get your changes merged.
 
 ---
 
