@@ -13,7 +13,7 @@ import uuid
 from datetime import UTC, datetime
 
 import asyncssh
-from fastapi import APIRouter, Depends, WebSocket, WebSocketDisconnect
+from fastapi import APIRouter, Depends, Query, WebSocket, WebSocketDisconnect
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -378,7 +378,7 @@ async def webssh_session(
 async def list_sessions(
     node_id: uuid.UUID | None = None,
     status: str | None = None,
-    limit: int = 50,
+    limit: int = Query(default=50, ge=1, le=500),
     db: AsyncSession = Depends(get_db),
     _: dict = Depends(get_current_user),
 ):
@@ -434,7 +434,7 @@ async def get_session_recording(
 async def list_security_events(
     node_id: uuid.UUID | None = None,
     event_type: str | None = None,
-    limit: int = 100,
+    limit: int = Query(default=100, ge=1, le=500),
     db: AsyncSession = Depends(get_db),
     _: dict = Depends(get_current_user),
 ):

@@ -31,6 +31,9 @@ async def search_sbom(
             detail="Query must be at least 3 characters",
         )
 
+    # Escape LIKE metacharacters to prevent wildcard injection
+    q_safe = q.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+
     latest_scan = (
         select(func.max(SBOMScan.scanned_at).label("max_at"), SBOMScan.node_id)
         .group_by(SBOMScan.node_id)
@@ -48,7 +51,7 @@ async def search_sbom(
                 SBOMScan.scanned_at == latest_scan.c.max_at,
             ),
         )
-        .where(SBOMComponent.name.ilike(f"%{q}%"))
+        .where(SBOMComponent.name.ilike(f"%{q_safe}%", escape="\\"))
         .order_by(SBOMComponent.name, Node.hostname)
         .limit(limit)
     )
