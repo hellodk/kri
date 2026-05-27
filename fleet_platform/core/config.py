@@ -1,5 +1,9 @@
+import logging as _logging
+
 from pydantic import model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+_log = _logging.getLogger(__name__)
 
 _INSECURE_SECRETS = {
     "insecure-dev-secret",
@@ -35,11 +39,17 @@ class Settings(BaseSettings):
 
     @model_validator(mode="after")
     def validate_production_secrets(self) -> "Settings":
-        if self.environment == "production":
-            if self.jwt_secret in _INSECURE_SECRETS or len(self.jwt_secret) < 32:
+        if self.jwt_secret in _INSECURE_SECRETS or len(self.jwt_secret) < 32:
+            if self.environment == "production":
                 raise ValueError(
                     "JWT_SECRET must be at least 32 characters and not a default/example value "
                     "when ENVIRONMENT=production. Generate with: openssl rand -hex 32"
+                )
+            else:
+                _log.warning(
+                    "JWT_SECRET is insecure (%r) — all encrypted secrets use a known key. "
+                    "Set JWT_SECRET in .env before handling real data.",
+                    self.jwt_secret[:8] + "..." if len(self.jwt_secret) > 8 else self.jwt_secret,
                 )
         return self
 
