@@ -1482,6 +1482,13 @@ export function NodeDetail() {
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">
+              {executions?.items.length === 0 && (
+                <tr>
+                  <td colSpan={4} className="px-4 py-8 text-center text-sm text-gray-500">
+                    No executions for this node yet.
+                  </td>
+                </tr>
+              )}
               {executions?.items.map((j) => (
                 <tr key={j.id} className="hover:bg-gray-50">
                   <td className="px-4 py-2 font-mono text-xs">

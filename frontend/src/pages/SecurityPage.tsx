@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { api } from '../api/client'
 import { useToastStore } from '../stores/toastStore'
+import { Skeleton } from '../components/Skeleton'
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -153,12 +154,7 @@ function NodeSecurityDrawer({ nodeId, onClose }: { nodeId: string; onClose: () =
         {/* Content */}
         <div className="flex-1 overflow-y-auto">
           {isLoading ? (
-            <div className="p-6 space-y-4">
-              <div className="h-8 bg-gray-200 dark:bg-gray-700 rounded animate-pulse w-1/3" />
-              {[1, 2, 3].map((i) => (
-                <div key={i} className="h-24 bg-gray-200 dark:bg-gray-700 rounded-lg animate-pulse" />
-              ))}
-            </div>
+            <Skeleton rows={4} />
           ) : tab === 'vulns' ? (
             <div>
               {(['CRITICAL', 'HIGH', 'MEDIUM', 'LOW'] as const).map(sev => {
@@ -421,12 +417,7 @@ export function SecurityPage() {
           )}
         </div>
         {nodesLoading ? (
-          <div className="p-6 space-y-4">
-            <div className="h-8 bg-gray-200 dark:bg-gray-700 rounded animate-pulse w-1/3" />
-            {[1, 2, 3].map((i) => (
-              <div key={i} className="h-24 bg-gray-200 dark:bg-gray-700 rounded-lg animate-pulse" />
-            ))}
-          </div>
+          <Skeleton rows={4} />
         ) : !nodes?.items.length ? (
           <div className="flex flex-col items-center justify-center h-24 text-gray-400 gap-2">
             <p className="text-sm">No nodes found. Bootstrap nodes first, then run a scan.</p>

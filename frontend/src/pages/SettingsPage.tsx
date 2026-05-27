@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { Skeleton } from '../components/Skeleton'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { ansibleApi } from '../api/ansible'
 import { playbookSourcesApi, type PlaybookSource, type PlaybookSourceValidateResponse } from '../api/playbookSources'
@@ -118,7 +119,7 @@ export function SettingsPage() {
   type Tab = typeof TABS[number]
   const [activeTab, setActiveTab] = useState<Tab>('General')
 
-  if (isLoading) return <div className="p-6 text-gray-500">Loading…</div>
+  if (isLoading) return <div className="p-6"><Skeleton rows={8} /></div>
 
   const inputClass = 'w-full px-3 py-2 border border-gray-300 rounded-lg text-sm text-gray-900 focus:outline-none focus:border-brand-600'
   const monoInputClass = inputClass + ' font-mono'
@@ -962,7 +963,7 @@ function PlaybookSourcesSection() {
 
       {/* Configured sources */}
       {isLoading ? (
-        <p className="text-sm text-gray-400">Loading…</p>
+        <Skeleton rows={3} />
       ) : (sources as PlaybookSource[]).length === 0 ? (
         <p className="text-sm text-gray-400">No additional sources configured.</p>
       ) : (
@@ -1269,7 +1270,7 @@ function LLMEndpointsSection() {
         </div>
 
         {isLoading && (
-          <p className="text-sm text-gray-400">Loading…</p>
+          <Skeleton rows={3} />
         )}
 
         {isError && (

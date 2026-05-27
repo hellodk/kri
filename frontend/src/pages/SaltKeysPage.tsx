@@ -1,6 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { saltKeysApi } from '../api/saltKeys'
 import { useToastStore } from '../stores/toastStore'
+import { Skeleton } from '../components/Skeleton'
 
 const STATUS_STYLE: Record<string, { bg: string; text: string; border: string }> = {
   accepted: { bg: 'bg-emerald-50', text: 'text-emerald-700', border: 'border-emerald-200' },
@@ -60,7 +61,7 @@ export function SaltKeysPage() {
       </div>
 
       {isLoading ? (
-        <p className="text-sm text-gray-500">Loading…</p>
+        <Skeleton rows={6} />
       ) : (
         sections.map(({ status, label, items }) =>
           items.length === 0 ? null : (

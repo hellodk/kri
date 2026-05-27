@@ -76,6 +76,21 @@ function SaltKeyWatcher() {
   return null
 }
 
+function NotFoundPage() {
+  return (
+    <div className="flex flex-col items-center justify-center h-full min-h-[60vh] gap-4 text-center px-4">
+      <span className="text-6xl font-mono text-gray-300">404</span>
+      <h1 className="text-xl font-semibold text-gray-700">Page not found</h1>
+      <p className="text-sm text-gray-500 max-w-sm">
+        The page you're looking for doesn't exist or has been moved.
+      </p>
+      <a href="/fleet" className="mt-2 px-4 py-2 rounded-lg bg-brand-600 text-white text-sm font-medium hover:bg-brand-700 transition-colors">
+        Back to Fleet
+      </a>
+    </div>
+  )
+}
+
 export default function App() {
   return (
     <QueryClientProvider client={queryClient}>
@@ -115,6 +130,7 @@ export default function App() {
             <Route path="/fleet-health" element={<FleetHealthPage />} />
             <Route path="/dashboard" element={<DashboardPage />} />
             <Route path="/settings" element={<SettingsPage />} />
+            <Route path="*" element={<NotFoundPage />} />
           </Route>
         </Routes>
       </BrowserRouter>
