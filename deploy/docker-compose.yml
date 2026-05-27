@@ -1,6 +1,6 @@
 services:
   db:
-    image: timescale/timescaledb:latest-pg17
+    image: timescale/timescaledb:2.17.2-pg17
     restart: unless-stopped
     environment:
       POSTGRES_DB: fleet_demo
@@ -14,9 +14,14 @@ services:
       interval: 5s
       timeout: 3s
       retries: 15
+    deploy:
+      resources:
+        limits:
+          cpus: '2.0'
+          memory: 2G
 
   pg_backup:
-    image: timescale/timescaledb:latest-pg17
+    image: timescale/timescaledb:2.17.2-pg17
     restart: unless-stopped
     environment:
       PGPASSWORD: ${POSTGRES_PASSWORD:-fleet}
@@ -43,9 +48,14 @@ services:
           sleep 86400;
         done
       "
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 256M
 
   redis:
-    image: redis:7.4-alpine
+    image: redis:7.4.1-alpine
     restart: unless-stopped
     command: redis-server --requirepass ${REDIS_PASSWORD:?REDIS_PASSWORD must be set in .env.docker} --appendonly yes
     volumes:
@@ -55,6 +65,11 @@ services:
       interval: 5s
       timeout: 3s
       retries: 10
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 512M
 
   api:
     build:
@@ -75,6 +90,17 @@ services:
       - salt-master-pki:/etc/salt/pki/master   # read/write minion keys via API
       - /home/dk/Documents/git/pulse:/mnt/pulse:ro   # host playbook repos
       - ../salt/states:/srv/salt/states:ro
+    healthcheck:
+      test: ["CMD", "curl", "-sf", "http://localhost:8000/health/ready"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 1G
 
   worker:
     build:
@@ -108,9 +134,20 @@ services:
       - /home/dk/Documents/git/pulse:/mnt/pulse:ro   # host playbook repos
       # Docker socket intentionally NOT mounted — container escape risk. Issue #82.
       # Salt commands now use Salt HTTP API instead of docker exec.
+    healthcheck:
+      test: ["CMD-SHELL", "uv run celery -A fleet_platform.workers.celery_app inspect ping --destination=celery@$HOSTNAME || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    deploy:
+      resources:
+        limits:
+          cpus: '2.0'
+          memory: 2G
 
   salt-master:
-    image: saltstack/salt:latest
+    image: saltstack/salt:3007.1
     restart: unless-stopped
     command: salt-master
     ports:
@@ -127,12 +164,17 @@ services:
       timeout: 5s
       retries: 3
       start_period: 10s
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 1G
 
   beat:
     build:
       context: ..
       dockerfile: deploy/Dockerfile.api
-    command: ["uv", "run", "celery", "-A", "fleet_platform.workers.celery_app", "beat", "--loglevel", "info"]
+    command: ["uv", "run", "celery", "-A", "fleet_platform.workers.celery_app", "beat", "--scheduler=redbeat.RedBeatScheduler", "--loglevel", "info"]
     restart: unless-stopped
     env_file: ../.env.docker
     depends_on:
@@ -142,6 +184,17 @@ services:
         condition: service_healthy
     volumes:
       - salt-pillar:/srv/salt/pillar
+    healthcheck:
+      test: ["CMD-SHELL", "pgrep -f 'celery.*beat' || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 512M
 
   frontend:
     build:
@@ -156,6 +209,17 @@ services:
       - api
     dns: 127.0.0.11
     dns_search: ""
+    healthcheck:
+      test: ["CMD", "curl", "-sf", "http://localhost:80/"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 256M
 
 volumes:
   pgdata:
