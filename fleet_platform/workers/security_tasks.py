@@ -279,9 +279,9 @@ def _scan_cxone(node_uuid: _uuid.UUID, cyclonedx: dict, now: datetime):
             scan_resp = json.loads(resp.read())
         scan_id = scan_resp.get("id", "")
 
-        # Poll for completion (max 10 min)
-        for _ in range(60):
-            _time.sleep(10)
+        # Poll for completion (max 2.5 min)
+        for _ in range(30):
+            _time.sleep(5)
             status_req = urllib.request.Request(
                 f"{cxone_url}/api/sca/risk-management/scans/{scan_id}",
                 headers={"CX-Auth": f"Bearer {token}"},

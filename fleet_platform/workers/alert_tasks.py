@@ -1,4 +1,6 @@
 """Celery tasks for alert evaluation."""
+import asyncio
+
 from fleet_platform.workers.celery_app import celery_app
 
 
@@ -7,15 +9,12 @@ from fleet_platform.workers.celery_app import celery_app
     queue="maintenance",
 )
 def run_alert_evaluation():
-    """Evaluate all alert rules using a synchronous DB session.
+    """Evaluate all alert rules.
 
-    Avoids asyncio.run() inside a Celery worker (which may run in a thread
-    that already has an event loop attached).  The alert service layer is
-    async, so we call it via a freshly-created event loop that we own and
-    close ourselves.
+    Uses asyncio.new_event_loop() — creates an isolated loop owned by this
+    invocation. Safe for prefork Celery workers. Not compatible with gevent/eventlet;
+    if the pool is changed, refactor to use asgiref.sync.async_to_sync.
     """
-    import asyncio
-
     from fleet_platform.db.session import AsyncSessionLocal
     from fleet_platform.services.alert_svc import evaluate_alerts
 

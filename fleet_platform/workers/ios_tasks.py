@@ -35,7 +35,7 @@ def _check_jenkins_agent_sync(agent: JenkinsAgent) -> None:
 def check_all_jenkins_agents():
     """Check all Jenkins agents using a synchronous DB session.
 
-    Replaces the previous asyncio.run() pattern with get_sync_db() so the
+    Replaces the previous event-loop pattern with get_sync_db() so the
     task runs safely inside a standard Celery prefork or thread worker.
     """
     with get_sync_db() as db:
