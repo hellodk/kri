@@ -22,6 +22,8 @@ export function ExecutionHistory() {
   const [searchParams, setSearchParams] = useSearchParams()
   const statusFilter = searchParams.get('status') || 'all'
   const typeFilter = searchParams.get('type') || 'all'
+  const dateFrom = searchParams.get('from') || ''
+  const dateTo = searchParams.get('to') || ''
 
   const { data, isLoading, isError, refetch } = useQuery({
     queryKey: ['executions', executionStatus, page],
@@ -30,11 +32,13 @@ export function ExecutionHistory() {
     refetchInterval: 15_000,
   })
 
-  // Client-side filtering by status and type URL params
+  // Client-side filtering by status, type, and date range URL params
   const filteredItems = (data?.items ?? []).filter((r) => {
     const statusMatch = statusFilter === 'all' || r.status === statusFilter
     const typeMatch = typeFilter === 'all' || (r.type ?? '').toLowerCase().includes(typeFilter.toLowerCase())
-    return statusMatch && typeMatch
+    const fromMatch = !dateFrom || (r.started_at && r.started_at >= dateFrom)
+    const toMatch = !dateTo || (r.started_at && r.started_at <= dateTo + 'T23:59:59')
+    return statusMatch && typeMatch && fromMatch && toMatch
   })
 
   return (
@@ -65,7 +69,20 @@ export function ExecutionHistory() {
           <option value="drift">Drift</option>
           <option value="salt">Salt</option>
         </select>
-        {(statusFilter !== 'all' || typeFilter !== 'all') && (
+        <input
+          type="date"
+          value={dateFrom}
+          onChange={(e) => { setSearchParams((p) => { p.set('from', e.target.value); return p }); setPage(1) }}
+          className="text-sm border border-gray-200 dark:border-gray-700 rounded-md px-2 py-1.5 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100"
+        />
+        <span className="text-sm text-gray-500 self-center">–</span>
+        <input
+          type="date"
+          value={dateTo}
+          onChange={(e) => { setSearchParams((p) => { p.set('to', e.target.value); return p }); setPage(1) }}
+          className="text-sm border border-gray-200 dark:border-gray-700 rounded-md px-2 py-1.5 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100"
+        />
+        {(statusFilter !== 'all' || typeFilter !== 'all' || dateFrom || dateTo) && (
           <button
             onClick={() => { setSearchParams({}); setPage(1) }}
             className="text-sm text-gray-500 hover:text-gray-700 border border-gray-200 rounded-md px-3 py-1.5 hover:bg-gray-50"

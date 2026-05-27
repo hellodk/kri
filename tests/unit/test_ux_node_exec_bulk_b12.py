@@ -1,6 +1,6 @@
 """Unit tests for #150 (quick actions), #152 (execution filters), #161 (bulk selection)."""
-from pathlib import Path
 import glob
+from pathlib import Path
 
 
 def _find_file(patterns):
@@ -17,6 +17,7 @@ def test_node_detail_has_quick_actions():
     assert "Quick Actions" in src or "quickAction" in src or "test.ping" in src.lower(), (
         "NodeDetail must have a Quick Actions section"
     )
+    assert "Reboot" in src, "NodeDetail Quick Actions must include a Reboot button"
 
 
 def test_execution_history_has_status_filter():
@@ -25,6 +26,14 @@ def test_execution_history_has_status_filter():
         "ExecutionHistory must have status filter using URL search params"
     )
     assert "select" in src.lower() or "Select" in src, "Filter must use a select element"
+
+
+def test_execution_history_has_date_filter():
+    src = _find_file(["frontend/src/pages/ExecutionHistory.tsx", "frontend/src/**/*Execution*.tsx"])
+    assert 'type="date"' in src or "type='date'" in src or 'input type' in src.lower(), (
+        "ExecutionHistory must have date range inputs (input type=\"date\")"
+    )
+    assert "date" in src.lower(), "ExecutionHistory must include date filtering"
 
 
 def test_bulk_selection_shows_node_names():
