@@ -6,6 +6,7 @@ import logging
 import re
 import secrets
 import tempfile
+import time
 import uuid as _uuid
 from datetime import UTC, datetime
 from pathlib import Path
@@ -220,6 +221,11 @@ def bootstrap_node(
     stdout_lines: list[str] = []
     last_task: str = ""
     node_minion_id = node.minion_id  # capture before context closes
+    # Time-based batching for incremental log DB writes (Issue #133).
+    # A single DB session is opened at most every 30 s during the event loop,
+    # rather than opening a new session per task or per N lines.
+    _LOG_BATCH_INTERVAL = 30  # seconds
+    last_db_write: float = time.time()
 
     logger.info("bootstrap_node: starting ansible-runner for node_id=%s", node_id)
 
@@ -232,22 +238,22 @@ def bootstrap_node(
             key_path.chmod(0o600)
             key_file_path = str(key_path)
 
-        # Write static inventory — more reliable than dynamic.py (env var propagation issues)
+        # Write static inventory — passwords are intentionally omitted from this file
+        # to prevent plaintext credentials on disk.  They are passed via extravars
+        # (which go through ansible-runner's env/extravars mechanism, not a temp file).
         inv_path = Path(tmpdir) / "inventory.ini"
         if key_file_path:
             inv_path.write_text(
                 f"[targets]\n"
                 f"{target_ip} ansible_host={target_ip} "
                 f"ansible_user={ssh_user} "
-                f"ansible_ssh_private_key_file={key_file_path} "
-                f"ansible_become_password=''\n"
+                f"ansible_ssh_private_key_file={key_file_path}\n"
             )
         else:
             inv_path.write_text(
                 f"[targets]\n"
                 f"{target_ip} ansible_host={target_ip} "
-                f"ansible_user={ssh_user} ansible_ssh_pass={ssh_password} "
-                f"ansible_become_password={ssh_password}\n"
+                f"ansible_user={ssh_user}\n"
             )
         inv_path.chmod(0o600)
 
@@ -273,6 +279,15 @@ def bootstrap_node(
         if key_file_path:
             ssh_args += f" -i {key_file_path}"
 
+        # Passwords are passed via extravars so they never touch a file on disk.
+        # ansible_ssh_pass / ansible_become_password are standard Ansible connection
+        # variables; passing them here is equivalent to -e on the command line and
+        # is handled entirely in memory by ansible-runner.
+        password_extravars: dict[str, str] = {}
+        if not key_file_path and ssh_password:
+            password_extravars["ansible_ssh_pass"] = ssh_password
+            password_extravars["ansible_become_password"] = ssh_password
+
         result = ansible_runner.run(
             private_data_dir=tmpdir,
             playbook=str(_PLAYBOOKS_DIR / "bootstrap_mac_mini.yml"),
@@ -283,6 +298,7 @@ def bootstrap_node(
                 "controller_pubkey": controller_pubkey,
                 "ingest_url": ingest_url,
                 "node_token": raw_token,
+                **password_extravars,
             },
             envvars={
                 "ANSIBLE_COLLECTIONS_PATH": str(_PLAYBOOKS_DIR / "collections" / "installed"),
@@ -304,34 +320,37 @@ def bootstrap_node(
             event_type = event.get("event", "")
             logger.debug("bootstrap_node: ansible event type=%s node_id=%s", event_type, node_id)
 
-            # Track last executing task name for progress + failure diagnostics
+            # Track last executing task name for progress + failure diagnostics.
+            # Task name is stored in-memory; the single time-batched write below
+            # will flush it along with accumulated log lines (Issue #133: no
+            # extra DB session per task event).
             if event_type in ("runner_on_start", "playbook_on_task_start"):
                 event_data = event.get("event_data", {})
                 task_name = event_data.get("task", "") or event_data.get("task_path", "")
                 if task_name:
                     last_task = task_name
-                    # Write live progress into bootstrap_error while still bootstrapping
-                    # (no bootstrap_last_task column on model — embed in bootstrap_error)
-                    with get_sync_db() as _db:
-                        _node = _db.execute(select(Node).where(Node.id == node_uuid)).scalar_one_or_none()
-                        if _node and _node.bootstrap_status == "bootstrapping":
-                            _node.bootstrap_error = f"[blocked at: TASK {last_task}]"
-                            _db.commit()
 
             msg = event.get("stdout", "")
             if msg:
                 stdout_lines.append(msg)
-                # Write incrementally every 10 lines so UI can poll and see progress
-                if len(stdout_lines) % 10 == 0:
-                    joined = "\n".join(stdout_lines)
-                    with get_sync_db() as _db:
-                        _n = _db.execute(select(Node).where(Node.id == node_uuid)).scalar_one_or_none()
-                        _run = _db.execute(select(BootstrapRun).where(BootstrapRun.id == run_id)).scalar_one_or_none()
-                        if _n:
-                            _n.bootstrap_logs = joined
-                        if _run:
-                            _run.ansible_stdout = joined
-                        _db.commit()
+
+            # Flush accumulated log lines to DB at most once every 30 seconds so
+            # the UI can poll for progress without exhausting the connection pool
+            # (Issue #133: replaces per-task and per-10-lines session opens).
+            now = time.time()
+            if now - last_db_write >= _LOG_BATCH_INTERVAL:
+                joined = "\n".join(stdout_lines)
+                with get_sync_db() as _db:
+                    _n = _db.execute(select(Node).where(Node.id == node_uuid)).scalar_one_or_none()
+                    _run = _db.execute(select(BootstrapRun).where(BootstrapRun.id == run_id)).scalar_one_or_none()
+                    if _n:
+                        _n.bootstrap_logs = joined
+                        if _n.bootstrap_status == "bootstrapping" and last_task:
+                            _n.bootstrap_error = f"[blocked at: TASK {last_task}]"
+                    if _run:
+                        _run.ansible_stdout = joined
+                    _db.commit()
+                last_db_write = now
 
     # 5. Detect common failure modes from stdout
     full_stdout = "\n".join(stdout_lines)
