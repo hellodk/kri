@@ -31,7 +31,15 @@ def collect_fleet_health() -> dict:
     Runs as Celery beat task every 15 minutes. Also triggerable on-demand via API.
     Nodes are processed in batches of BATCH_SIZE with a short pause between
     batches to avoid thundering-herd on the Salt master.
+
+    Two-session design (fixes #124):
+    - Session 1 (read): loads online nodes, then closes immediately.
+    - Salt metric collection runs with NO open DB connection.
+    - Session 2 (write): persists snapshots after all Salt calls complete.
+    This prevents a connection pool slot being held for the entire Salt run
+    (which can take 30 s+ per batch with retries).
     """
+    # --- Session 1: read online nodes, close before any Salt calls ----------
     with get_sync_db() as db:
         nodes = db.execute(
             select(Node).where(Node.status == "online")
@@ -41,30 +49,39 @@ def collect_fleet_health() -> dict:
             _log.info("collect_fleet_health: no online nodes, skipping")
             return {"collected": 0}
 
-        node_by_minion = {n.minion_id: n for n in nodes}
-        minion_ids = list(node_by_minion.keys())
+        # Copy only primitive data out of the session-bound ORM objects so
+        # they remain usable after the session closes (detached ORM instances
+        # would raise DetachedInstanceError).
+        node_by_minion: dict[str, dict] = {
+            n.minion_id: {"id": n.id, "minion_id": n.minion_id} for n in nodes
+        }
+    # Session 1 is now closed — connection pool slot released.
 
-        _log.info(
-            "collect_fleet_health: collecting from %d nodes in batches of %d",
-            len(minion_ids),
-            BATCH_SIZE,
-        )
+    minion_ids = list(node_by_minion.keys())
+    _log.info(
+        "collect_fleet_health: collecting from %d nodes in batches of %d",
+        len(minion_ids),
+        BATCH_SIZE,
+    )
 
-        merged: dict[str, dict] = {}
-        for i in range(0, len(minion_ids), BATCH_SIZE):
-            batch = minion_ids[i : i + BATCH_SIZE]
-            batch_metrics = salt_maintenance_svc.collect_all_metrics(batch)
-            merged.update(batch_metrics)
-            if i + BATCH_SIZE < len(minion_ids):
-                time.sleep(BATCH_DELAY_S)
+    # --- Salt calls: no DB session open ------------------------------------
+    merged: dict[str, dict] = {}
+    for i in range(0, len(minion_ids), BATCH_SIZE):
+        batch = minion_ids[i : i + BATCH_SIZE]
+        batch_metrics = salt_maintenance_svc.collect_all_metrics(batch)
+        merged.update(batch_metrics)
+        if i + BATCH_SIZE < len(minion_ids):
+            time.sleep(BATCH_DELAY_S)
 
-        count = 0
+    # --- Session 2: persist snapshots -------------------------------------
+    count = 0
+    with get_sync_db() as db:
         for minion_id, metrics in merged.items():
-            node = node_by_minion.get(minion_id)
-            if node is None:
+            node_info = node_by_minion.get(minion_id)
+            if node_info is None:
                 continue
             snapshot = NodeHealthSnapshot(
-                node_id=node.id,
+                node_id=node_info["id"],
                 minion_id=minion_id,
                 disk_root_used_gb=metrics.get("disk_root_used_gb"),
                 disk_root_total_gb=metrics.get("disk_root_total_gb"),
@@ -86,10 +103,10 @@ def collect_fleet_health() -> dict:
             )
             db.add(snapshot)
             count += 1
-
         db.commit()
-        _log.info("collect_fleet_health: stored %d snapshots", count)
-        return {"collected": count}
+
+    _log.info("collect_fleet_health: stored %d snapshots", count)
+    return {"collected": count}
 
 
 @celery_app.task(
