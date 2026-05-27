@@ -2,8 +2,30 @@
 import pytest
 from datetime import UTC, datetime
 from httpx import AsyncClient
+from sqlalchemy.ext.asyncio import AsyncSession
 
 pytestmark = pytest.mark.asyncio
+
+
+async def _clean_setting(db_session: AsyncSession, key: str) -> None:
+    """Remove a platform_settings row if it exists."""
+    from fleet_platform.models.platform_setting import PlatformSetting
+    from sqlalchemy import delete
+    await db_session.execute(delete(PlatformSetting).where(PlatformSetting.key == key))
+    await db_session.commit()
+
+
+async def _clean_build(db_session: AsyncSession, job_name: str, build_number: int) -> None:
+    """Remove a jenkins_build_event row if it exists."""
+    from fleet_platform.models.jenkins_build_event import JenkinsBuildEvent
+    from sqlalchemy import delete
+    await db_session.execute(
+        delete(JenkinsBuildEvent).where(
+            JenkinsBuildEvent.job_name == job_name,
+            JenkinsBuildEvent.build_number == build_number,
+        )
+    )
+    await db_session.commit()
 
 
 async def test_ingest_build_requires_secret(client: AsyncClient):
@@ -17,15 +39,10 @@ async def test_ingest_build_requires_secret(client: AsyncClient):
     assert resp.status_code == 401
 
 
-async def test_ingest_build_wrong_secret(client: AsyncClient, db_session):
-    from fleet_platform.models.platform_setting import PlatformSetting
-    from sqlalchemy import delete
-    # Clean up any existing key first
-    await db_session.execute(
-        delete(PlatformSetting).where(PlatformSetting.key == "jenkins_ingest_secret_t2")
-    )
-    await db_session.commit()
+async def test_ingest_build_wrong_secret(client: AsyncClient, db_session: AsyncSession):
+    await _clean_setting(db_session, "jenkins_ingest_secret")
 
+    from fleet_platform.models.platform_setting import PlatformSetting
     db_session.add(PlatformSetting(
         key="jenkins_ingest_secret", value="correct-secret-t2", is_encrypted=False
     ))
@@ -44,23 +61,17 @@ async def test_ingest_build_wrong_secret(client: AsyncClient, db_session):
     )
     assert resp.status_code == 401
 
+    # Cleanup
+    await _clean_setting(db_session, "jenkins_ingest_secret")
 
-async def test_ingest_build_success(client: AsyncClient, db_session):
+
+async def test_ingest_build_success(client: AsyncClient, db_session: AsyncSession):
     from fleet_platform.models.platform_setting import PlatformSetting
     from fleet_platform.models.jenkins_build_event import JenkinsBuildEvent
-    from sqlalchemy import select, delete
+    from sqlalchemy import select
 
-    # Clean up
-    await db_session.execute(
-        delete(PlatformSetting).where(PlatformSetting.key == "jenkins_ingest_secret")
-    )
-    await db_session.execute(
-        delete(JenkinsBuildEvent).where(
-            JenkinsBuildEvent.job_name == "deploy-prod",
-            JenkinsBuildEvent.build_number == 42,
-        )
-    )
-    await db_session.commit()
+    await _clean_setting(db_session, "jenkins_ingest_secret")
+    await _clean_build(db_session, "deploy-prod", 42)
 
     secret = "test-secret-abc123"
     db_session.add(PlatformSetting(
@@ -98,24 +109,17 @@ async def test_ingest_build_success(client: AsyncClient, db_session):
     assert event.result == "SUCCESS"
     assert event.test_pass == 97
 
+    # Cleanup
+    await _clean_setting(db_session, "jenkins_ingest_secret")
+    await _clean_build(db_session, "deploy-prod", 42)
 
-async def test_ingest_build_idempotent(client: AsyncClient, db_session):
+
+async def test_ingest_build_idempotent(client: AsyncClient, db_session: AsyncSession):
     """Duplicate ingest with same job_name + build_number returns 200 without error."""
     from fleet_platform.models.platform_setting import PlatformSetting
-    from fleet_platform.models.jenkins_build_event import JenkinsBuildEvent
-    from sqlalchemy import delete
 
-    # Clean up
-    await db_session.execute(
-        delete(PlatformSetting).where(PlatformSetting.key == "jenkins_ingest_secret")
-    )
-    await db_session.execute(
-        delete(JenkinsBuildEvent).where(
-            JenkinsBuildEvent.job_name == "ci-test",
-            JenkinsBuildEvent.build_number == 9001,
-        )
-    )
-    await db_session.commit()
+    await _clean_setting(db_session, "jenkins_ingest_secret")
+    await _clean_build(db_session, "ci-test", 9001)
 
     secret = "idempotent-secret"
     db_session.add(PlatformSetting(
@@ -135,3 +139,7 @@ async def test_ingest_build_idempotent(client: AsyncClient, db_session):
     assert resp1.status_code == 200
     assert resp2.status_code == 200
     assert resp2.json()["status"] == "ok"
+
+    # Cleanup
+    await _clean_setting(db_session, "jenkins_ingest_secret")
+    await _clean_build(db_session, "ci-test", 9001)
