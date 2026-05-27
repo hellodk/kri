@@ -52,6 +52,8 @@ services:
     command: ["uv", "run", "celery", "-A", "fleet_platform.workers.celery_app", "worker", "--queues", "default,maintenance,drift,sbom", "--concurrency", "4", "--loglevel", "info"]
     restart: unless-stopped
     env_file: ../.env.docker
+    environment:
+      SALT_MASTER_CONTAINER: "deploy-salt-master-1"
     depends_on:
       db:
         condition: service_healthy

@@ -14,37 +14,6 @@ logger = logging.getLogger(__name__)
 # Set to empty string for bare-metal deployments where salt is on PATH.
 _SALT_MASTER_CONTAINER = os.environ.get("SALT_MASTER_CONTAINER", "deploy-salt-master-1")
 
-# Allowlist of Salt functions that can be executed via the ad-hoc command API.
-# This prevents operators from running arbitrary shell commands via cmd.run
-# or other dangerous Salt modules.
-_ALLOWED_SALT_FUNCTIONS: frozenset[str] = frozenset({
-    "state.apply",
-    "state.highstate",
-    "state.show_sls",
-    "pkg.install",
-    "pkg.remove",
-    "pkg.list_pkgs",
-    "pkg.upgrade",
-    "pip.install",
-    "pip.installed",
-    "pip.list",
-    "service.start",
-    "service.stop",
-    "service.restart",
-    "service.status",
-    "cmd.run",  # kept for operator flexibility; log a warning on use
-    "disk.usage",
-    "disk.inodeusage",
-    "status.loadavg",
-    "status.meminfo",
-    "grains.items",
-    "grains.get",
-    "test.ping",
-    "test.version",
-    "saltutil.sync_all",
-    "saltutil.refresh_pillar",
-})
-
 # Ordered list of container runtime candidates to try.
 _CONTAINER_RUNTIMES = ("docker", "podman")
 
@@ -85,11 +54,42 @@ def _salt_prefix() -> list[str]:
 
     # No container runtime found — try salt directly (may be installed on host).
     logger.warning(
-        "SALT_MASTER_CONTAINER=%r but no container runtime (docker/podman) found on PATH "
-        "or common locations. Attempting to run salt directly.",
+        "No container runtime (docker/podman) found on PATH or common locations "
+        "while SALT_MASTER_CONTAINER=%r is set. Attempting to run salt directly.",
         _SALT_MASTER_CONTAINER,
     )
     return []
+
+# Allowlist of Salt functions that can be executed via the ad-hoc command API.
+# This prevents operators from running arbitrary shell commands via cmd.run
+# or other dangerous Salt modules.
+_ALLOWED_SALT_FUNCTIONS: frozenset[str] = frozenset({
+    "state.apply",
+    "state.highstate",
+    "state.show_sls",
+    "pkg.install",
+    "pkg.remove",
+    "pkg.list_pkgs",
+    "pkg.upgrade",
+    "pip.install",
+    "pip.installed",
+    "pip.list",
+    "service.start",
+    "service.stop",
+    "service.restart",
+    "service.status",
+    "cmd.run",  # kept for operator flexibility; log a warning on use
+    "disk.usage",
+    "disk.inodeusage",
+    "status.loadavg",
+    "status.meminfo",
+    "grains.items",
+    "grains.get",
+    "test.ping",
+    "test.version",
+    "saltutil.sync_all",
+    "saltutil.refresh_pillar",
+})
 
 
 @celery_app.task(
