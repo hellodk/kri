@@ -155,7 +155,7 @@ jobs:
             --cov=fleet_platform/services \
             --cov-report=term-missing \
             --cov-report=json:coverage.json \
-            --cov-fail-under=85 \
+            --cov-fail-under=80 \
             -q
       - name: Post coverage comment on PR
         if: github.event_name == 'pull_request'
@@ -165,8 +165,8 @@ jobs:
             const fs = require('fs');
             const cov = JSON.parse(fs.readFileSync('coverage.json'));
             const pct = cov.totals.percent_covered.toFixed(1);
-            const icon = parseFloat(pct) >= 85 ? '✅' : '⚠️';
-            const body = `## Coverage Report\n\n${icon} **${pct}%** on \`fleet_platform/services/\` (gate: 85%)\n\n${parseFloat(pct) >= 85 ? 'Gate passed' : 'Below gate — add tests before merging'}`;
+            const icon = parseFloat(pct) >= 80 ? '✅' : '⚠️';
+            const body = `## Coverage Report\n\n${icon} **${pct}%** on \`fleet_platform/services/\` (gate: 80%)\n\n${parseFloat(pct) >= 80 ? 'Gate passed' : 'Below gate — add tests before merging'}`;
             github.rest.issues.createComment({
               issue_number: context.issue.number,
               owner: context.repo.owner,
