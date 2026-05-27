@@ -256,6 +256,7 @@ async def integration_status(
     _: dict = Depends(require_role("operator", "admin", "auditor")),
 ):
     """Check connectivity to external security tools."""
+    import asyncio
     import subprocess
     import urllib.request
 
@@ -265,28 +266,35 @@ async def integration_status(
         get_setting,
     )
 
-    # Trivy
+    # Trivy — use asyncio.to_thread to avoid blocking the event loop
     try:
-        trivy_ok = subprocess.run(["trivy", "--version"], capture_output=True, timeout=5).returncode == 0
+        result = await asyncio.to_thread(
+            subprocess.run, ["trivy", "--version"], capture_output=True, timeout=5
+        )
+        trivy_ok = result.returncode == 0
     except (FileNotFoundError, subprocess.TimeoutExpired):
         trivy_ok = False
 
-    # CxOne
+    # CxOne — use asyncio.to_thread to avoid blocking the event loop
     cxone_url = await get_setting(db, CXONE_URL)
     cxone_ok = False
     if cxone_url:
         try:
-            urllib.request.urlopen(f"{cxone_url}/api/health", timeout=5)  # nosec B310
+            await asyncio.to_thread(
+                urllib.request.urlopen, f"{cxone_url}/api/health", timeout=5  # nosec B310
+            )
             cxone_ok = True
         except Exception:
             pass
 
-    # SonarQube
+    # SonarQube — use asyncio.to_thread to avoid blocking the event loop
     sonar_url = await get_setting(db, SONARQUBE_URL)
     sonar_ok = False
     if sonar_url:
         try:
-            urllib.request.urlopen(f"{sonar_url}/api/system/health", timeout=5)  # nosec B310
+            await asyncio.to_thread(
+                urllib.request.urlopen, f"{sonar_url}/api/system/health", timeout=5  # nosec B310
+            )
             sonar_ok = True
         except Exception:
             pass
