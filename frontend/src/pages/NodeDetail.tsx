@@ -1063,11 +1063,13 @@ export function NodeDetail() {
               </button>
             </div>
             {rebootConfirm && (
-              <div className="mt-3 flex items-center gap-2 p-2 bg-red-50 border border-red-200 rounded text-xs text-red-700">
+              <div role="alertdialog" aria-label="Confirm reboot" className="mt-3 flex items-center gap-2 p-2 bg-red-50 border border-red-200 rounded text-xs text-red-700">
                 <span>Confirm reboot of {node.hostname ?? node.minion_id}?</span>
                 <button onClick={() => { runSaltCommand('system.reboot'); setRebootConfirm(false) }}
-                  className="px-2 py-1 bg-red-600 text-white rounded hover:bg-red-700 font-medium">Yes, reboot</button>
-                <button onClick={() => setRebootConfirm(false)}
+                  disabled={runningAction}
+                  className="px-2 py-1 bg-red-600 text-white rounded hover:bg-red-700 disabled:opacity-50 font-medium">Yes, reboot</button>
+                {/* autoFocus so keyboard focus lands on Cancel when confirmation strip appears */}
+                <button autoFocus onClick={() => setRebootConfirm(false)}
                   className="px-2 py-1 bg-gray-100 text-gray-700 rounded hover:bg-gray-200">Cancel</button>
               </div>
             )}

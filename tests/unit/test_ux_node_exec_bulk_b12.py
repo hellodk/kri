@@ -37,9 +37,13 @@ def test_execution_history_has_date_filter():
 
 
 def test_bulk_selection_shows_node_names():
-    # Search for the bulk action confirmation logic
-    tsx_files = glob.glob("frontend/src/**/*.tsx", recursive=True)
-    combined = "".join(Path(f).read_text() for f in tsx_files if Path(f).exists())
-    assert "and " in combined and "more" in combined, (
+    src = Path("frontend/src/pages/FleetDashboard.tsx").read_text()
+    assert "selectedNodes" in src, (
+        "BulkDeleteConfirmModal must receive selectedNodes prop"
+    )
+    assert "selectedNodes.slice(0, 5)" in src or "selectedNodes.length - 5" in src, (
         "Bulk confirmation must show node names with '...and N more' truncation"
+    )
+    assert "selectedNodes.filter" in src or "selected.has(" in src, (
+        "Call site must pass filtered selected nodes to modal"
     )

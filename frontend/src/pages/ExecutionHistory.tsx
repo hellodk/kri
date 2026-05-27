@@ -53,7 +53,6 @@ export function ExecutionHistory() {
           className="text-sm border border-gray-200 dark:border-gray-700 rounded-md px-3 py-1.5 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100"
         >
           <option value="all">All Statuses</option>
-          <option value="success">Success</option>
           <option value="completed">Completed</option>
           <option value="failed">Failed</option>
           <option value="running">Running</option>
