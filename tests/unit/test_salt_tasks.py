@@ -1,102 +1,14 @@
 # tests/unit/test_salt_tasks.py
-"""Unit tests for container runtime detection in salt_tasks."""
+"""Unit tests for salt_tasks — Salt HTTP API dispatch (issue #82 rewrite).
 
-import logging
+The docker exec approach has been removed. Salt commands now go via the Salt
+HTTP API (salt-api). These tests verify the allowlist enforcement, API URL
+not-configured error path, and the HTTP dispatch logic.
+"""
+
 from unittest.mock import MagicMock, patch
 
-
-def test_find_runtime_docker_on_path():
-    """shutil.which finds docker — returns its path."""
-    from fleet_platform.workers.salt_tasks import _find_runtime
-
-    with patch("fleet_platform.workers.salt_tasks.shutil.which") as mock_which:
-        mock_which.side_effect = lambda rt: "/usr/bin/docker" if rt == "docker" else None
-        result = _find_runtime()
-
-    assert result == "/usr/bin/docker"
-
-
-def test_find_runtime_podman_when_docker_absent():
-    """shutil.which finds podman after docker is not on PATH."""
-    from fleet_platform.workers import salt_tasks
-
-    with (
-        patch("fleet_platform.workers.salt_tasks.shutil.which") as mock_which,
-        patch.object(salt_tasks, "_EXTRA_PATHS", ()),
-    ):
-        mock_which.side_effect = lambda rt: "/usr/bin/podman" if rt == "podman" else None
-        result = salt_tasks._find_runtime()
-
-    assert result == "/usr/bin/podman"
-
-
-def test_find_runtime_extra_path_fallback(tmp_path):
-    """Falls back to extra paths when shutil.which returns None."""
-    from fleet_platform.workers import salt_tasks
-
-    fake_docker = tmp_path / "docker"
-    fake_docker.write_text("#!/bin/sh\n")
-    fake_docker.chmod(0o755)
-
-    with (
-        patch("fleet_platform.workers.salt_tasks.shutil.which", return_value=None),
-        patch.object(salt_tasks, "_EXTRA_PATHS", (str(tmp_path),)),
-    ):
-        result = salt_tasks._find_runtime()
-
-    assert result == str(fake_docker)
-
-
-def test_find_runtime_missing():
-    """Returns None when neither docker nor podman is found anywhere."""
-    from fleet_platform.workers import salt_tasks
-
-    with (
-        patch("fleet_platform.workers.salt_tasks.shutil.which", return_value=None),
-        patch.object(salt_tasks, "_EXTRA_PATHS", ("/nonexistent/path",)),
-    ):
-        result = salt_tasks._find_runtime()
-
-    assert result is None
-
-
-def test_salt_prefix_container_mode():
-    """Returns [runtime, exec, container] when runtime is found."""
-    from fleet_platform.workers import salt_tasks
-
-    with (
-        patch.object(salt_tasks, "_SALT_MASTER_CONTAINER", "deploy-salt-master-1"),
-        patch.object(salt_tasks, "_find_runtime", return_value="/usr/bin/docker"),
-    ):
-        prefix = salt_tasks._salt_prefix()
-
-    assert prefix == ["/usr/bin/docker", "exec", "deploy-salt-master-1"]
-
-
-def test_salt_prefix_bare_metal_mode():
-    """Returns empty list when SALT_MASTER_CONTAINER is empty."""
-    from fleet_platform.workers import salt_tasks
-
-    with patch.object(salt_tasks, "_SALT_MASTER_CONTAINER", ""):
-        prefix = salt_tasks._salt_prefix()
-
-    assert prefix == []
-
-
-def test_salt_prefix_no_runtime_falls_back_to_bare_metal(caplog):
-    """When container is set but no runtime found, falls back to bare-metal with a warning."""
-    from fleet_platform.workers import salt_tasks
-
-    with (
-        patch.object(salt_tasks, "_SALT_MASTER_CONTAINER", "deploy-salt-master-1"),
-        patch.object(salt_tasks, "_find_runtime", return_value=None),
-        caplog.at_level(logging.WARNING, logger="fleet_platform.workers.salt_tasks"),
-    ):
-        prefix = salt_tasks._salt_prefix()
-
-    assert prefix == []
-    assert "No container runtime" in caplog.text or "no container runtime" in caplog.text.lower()
-
+# ── Allowlist enforcement (unchanged from prior implementation) ───────────────
 
 def test_run_salt_cmd_rejects_disallowed_function():
     """run_salt_cmd returns error dict for functions not in the allowlist."""
@@ -107,37 +19,165 @@ def test_run_salt_cmd_rejects_disallowed_function():
     assert "allowlist" in result["reason"].lower()
 
 
-def test_run_salt_cmd_allows_test_ping():
-    """test.ping is in the allowlist and reaches subprocess."""
-    from fleet_platform.workers import salt_tasks
-    from fleet_platform.workers.salt_tasks import run_salt_cmd
-
-    mock_proc = MagicMock()
-    mock_proc.returncode = 0
-    mock_proc.stdout = '{"minion1": true}'
-    mock_proc.stderr = ""
-
-    with (
-        patch("fleet_platform.workers.salt_tasks.subprocess.run", return_value=mock_proc) as mock_run,
-        patch.object(salt_tasks, "_salt_prefix", return_value=[]),
-    ):
-        result = run_salt_cmd.run(function="test.ping", target_minions=["minion1"])
-
-    assert result["status"] == "ok"
-    called_cmd = mock_run.call_args[0][0]
-    assert "test.ping" in called_cmd
-
-
 def test_run_salt_cmd_rejects_cmd_run():
     """cmd.run must be rejected — it allows arbitrary shell execution on fleet nodes."""
     from fleet_platform.workers.salt_tasks import _ALLOWED_SALT_FUNCTIONS, run_salt_cmd
 
-    # Verify cmd.run is not in the allowlist at module level
     assert (
         "cmd.run" not in _ALLOWED_SALT_FUNCTIONS
-    ), "cmd.run must be removed from _ALLOWED_SALT_FUNCTIONS (security: arbitrary shell exec)"
+    ), "cmd.run must never be in _ALLOWED_SALT_FUNCTIONS (arbitrary shell exec risk)"
 
-    # Verify the task returns an error for cmd.run at runtime
     result = run_salt_cmd.run(function="cmd.run", target_minions=["minion1"], args=["id"])
     assert result["status"] == "error"
     assert "allowlist" in result["reason"].lower()
+
+
+def test_allowlist_contains_expected_safe_functions():
+    """The allowlist must contain the expected safe Salt functions."""
+    from fleet_platform.workers.salt_tasks import _ALLOWED_SALT_FUNCTIONS
+
+    required = {"test.ping", "state.apply", "grains.items", "pkg.list_pkgs"}
+    assert required.issubset(_ALLOWED_SALT_FUNCTIONS), (
+        f"Missing expected safe functions: {required - _ALLOWED_SALT_FUNCTIONS}"
+    )
+
+
+# ── SALT_API_URL not configured error ─────────────────────────────────────────
+
+def test_run_salt_cmd_returns_error_when_api_not_configured():
+    """Without SALT_API_URL set, run_salt_cmd returns a clear error."""
+    from fleet_platform.workers import salt_tasks
+    from fleet_platform.workers.salt_tasks import run_salt_cmd
+
+    with patch.object(salt_tasks, "_SALT_API_URL", ""):
+        result = run_salt_cmd.run(function="test.ping", target_minions=["minion1"])
+
+    assert result["status"] == "error"
+    assert "SALT_API_URL" in result["reason"]
+
+
+def test_apply_salt_state_returns_error_when_api_not_configured():
+    """Without SALT_API_URL set, apply_salt_state returns a clear error."""
+    from fleet_platform.workers import salt_tasks
+    from fleet_platform.workers.salt_tasks import apply_salt_state
+
+    with patch.object(salt_tasks, "_SALT_API_URL", ""):
+        result = apply_salt_state.run(
+            state_name="kri.init",
+            target_minions=["minion1"],
+        )
+
+    assert result["status"] == "error"
+    assert "SALT_API_URL" in result["reason"]
+
+
+# ── HTTP API dispatch ─────────────────────────────────────────────────────────
+
+def test_run_salt_cmd_dispatches_via_http_api():
+    """An allowlisted function triggers a POST to the salt-api /run endpoint."""
+
+    from fleet_platform.workers import salt_tasks
+    from fleet_platform.workers.salt_tasks import run_salt_cmd
+
+    fake_response = MagicMock()
+    fake_response.raise_for_status = MagicMock()
+    fake_response.json.return_value = {"return": [{"minion1": True}]}
+
+    with (
+        patch.object(salt_tasks, "_SALT_API_URL", "http://salt-master:8080"),
+        patch.object(salt_tasks, "_SALT_API_USER", "saltuser"),
+        patch.object(salt_tasks, "_SALT_API_PASSWORD", "secret"),
+        patch("fleet_platform.workers.salt_tasks.requests.post", return_value=fake_response) as mock_post,
+    ):
+        result = run_salt_cmd.run(function="test.ping", target_minions=["minion1"])
+
+    assert result["status"] == "ok"
+    assert result["result"] == [{"minion1": True}]
+    mock_post.assert_called_once()
+    call_kwargs = mock_post.call_args
+    # URL must point to /run endpoint
+    assert call_kwargs[0][0] == "http://salt-master:8080/run"
+    payload = call_kwargs[1]["json"]
+    assert payload["fun"] == "test.ping"
+    assert payload["tgt"] == "minion1"
+
+
+def test_apply_salt_state_dispatches_via_http_api():
+    """apply_salt_state sends state name and optional pillar to salt-api."""
+    from fleet_platform.workers import salt_tasks
+    from fleet_platform.workers.salt_tasks import apply_salt_state
+
+    fake_response = MagicMock()
+    fake_response.raise_for_status = MagicMock()
+    fake_response.json.return_value = {"return": [{"minion1": {"state.apply": True}}]}
+
+    with (
+        patch.object(salt_tasks, "_SALT_API_URL", "http://salt-master:8080"),
+        patch.object(salt_tasks, "_SALT_API_USER", "saltuser"),
+        patch.object(salt_tasks, "_SALT_API_PASSWORD", "secret"),
+        patch("fleet_platform.workers.salt_tasks.requests.post", return_value=fake_response) as mock_post,
+    ):
+        result = apply_salt_state.run(
+            state_name="kri.init",
+            target_minions=["minion1", "minion2"],
+            pillar_data={"key": "value"},
+        )
+
+    assert result["status"] == "ok"
+    payload = mock_post.call_args[1]["json"]
+    assert payload["fun"] == "state.apply"
+    assert payload["arg"] == ["kri.init"]
+    assert payload["kwarg"] == {"pillar": {"key": "value"}}
+    # Target should be comma-joined list
+    assert payload["tgt"] == "minion1,minion2"
+
+
+def test_run_salt_api_handles_connection_error():
+    """A ConnectionError to salt-api returns a descriptive error dict."""
+    import requests
+
+    from fleet_platform.workers import salt_tasks
+    from fleet_platform.workers.salt_tasks import run_salt_cmd
+
+    with (
+        patch.object(salt_tasks, "_SALT_API_URL", "http://salt-master:8080"),
+        patch.object(salt_tasks, "_SALT_API_USER", "u"),
+        patch.object(salt_tasks, "_SALT_API_PASSWORD", "p"),
+        patch(
+            "fleet_platform.workers.salt_tasks.requests.post",
+            side_effect=requests.ConnectionError("Connection refused"),
+        ),
+    ):
+        result = run_salt_cmd.run(function="test.ping", target_minions=["minion1"])
+
+    assert result["status"] == "error"
+    assert "salt-master:8080" in result["reason"] or "Cannot reach" in result["reason"]
+
+
+# ── No docker exec remnants ───────────────────────────────────────────────────
+
+def test_salt_tasks_does_not_import_subprocess():
+    """salt_tasks.py must not import subprocess — docker exec is removed (issue #82)."""
+    import ast
+    from pathlib import Path
+
+    src = (
+        Path(__file__).parent.parent.parent
+        / "fleet_platform" / "workers" / "salt_tasks.py"
+    ).read_text()
+    tree = ast.parse(src)
+    imports = [
+        node
+        for node in ast.walk(tree)
+        if isinstance(node, (ast.Import, ast.ImportFrom))
+    ]
+    imported_names = []
+    for node in imports:
+        if isinstance(node, ast.Import):
+            imported_names.extend(alias.name for alias in node.names)
+        elif isinstance(node, ast.ImportFrom):
+            imported_names.append(node.module or "")
+    assert "subprocess" not in imported_names, (
+        "salt_tasks.py must not import subprocess — docker exec was removed in issue #82. "
+        "Use Salt HTTP API instead."
+    )

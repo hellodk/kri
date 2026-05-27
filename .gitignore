@@ -67,3 +67,9 @@ Desktop.ini
 # ── Logs ─────────────────────────────────────────────────────────────────────
 *.log
 logs/
+
+# ── Worker SSH keys (issue #91) ───────────────────────────────────────────────
+# deploy/ssh/ holds a DEDICATED service-account keypair for the worker container.
+# Never commit private keys. The .gitkeep is kept to preserve the directory.
+deploy/ssh/*
+!deploy/ssh/.gitkeep
