@@ -2,8 +2,9 @@
 
 
 def test_docker_compose_no_insecure_postgres_default():
-    import yaml
     from pathlib import Path
+
+    import yaml
     compose = yaml.safe_load((Path(__file__).parent.parent.parent / "deploy/docker-compose.yml").read_text())
     # The POSTGRES_PASSWORD value must not contain ':-fleet' (insecure default)
     pg_pass = compose["services"]["db"]["environment"].get("POSTGRES_PASSWORD", "")

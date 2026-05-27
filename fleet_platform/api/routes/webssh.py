@@ -22,7 +22,6 @@ from fleet_platform.core.auth import (
     TokenExpiredError,
     TokenInvalidError,
     decode_token,
-    get_current_user,
     require_role,
 )
 from fleet_platform.db.session import AsyncSessionLocal
