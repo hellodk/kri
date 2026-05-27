@@ -9,6 +9,7 @@ import { DriftBadge } from '../components/DriftBadge'
 import { Skeleton } from '../components/Skeleton'
 import { ErrorState } from '../components/ErrorState'
 import { Pagination } from '../components/Pagination'
+import { ConfirmDialog } from '../components/ConfirmDialog'
 import { useToastStore } from '../stores/toastStore'
 import { formatDistanceToNow } from 'date-fns'
 
@@ -36,6 +37,9 @@ export function GroupDetail() {
   const [secretValue, setSecretValue] = useState('')
   const [secretDesc, setSecretDesc] = useState('')
   const [secretShowValue, setSecretShowValue] = useState(false)
+  // Confirm dialog state
+  const [deleteSecretConfirm, setDeleteSecretConfirm] = useState<string | null>(null)
+  const [removeMemberConfirm, setRemoveMemberConfirm] = useState<string | null>(null)
 
   const { data: group, isLoading: gLoading, isError: gError } = useQuery({
     queryKey: ['group', groupId],
@@ -472,10 +476,7 @@ export function GroupDetail() {
                       </td>
                       <td className="px-4 py-3 text-right">
                         <button
-                          onClick={() => {
-                            if (!window.confirm('Delete this secret? This cannot be undone.')) return
-                            deleteGroupSecretMutation.mutate(s.key)
-                          }}
+                          onClick={() => setDeleteSecretConfirm(s.key)}
                           disabled={deleteGroupSecretMutation.isPending}
                           className="text-xs text-red-600 hover:text-red-700 font-medium disabled:opacity-50"
                         >
@@ -626,10 +627,7 @@ export function GroupDetail() {
                     {isStatic && (
                       <td className="px-4 py-3 text-right">
                         <button
-                          onClick={() => {
-                            if (!window.confirm('Remove this node from the group?')) return
-                            removeMutation.mutate(n.id)
-                          }}
+                          onClick={() => setRemoveMemberConfirm(n.id)}
                           disabled={removeMutation.isPending}
                           className="text-xs text-red-500 hover:text-red-700 font-medium disabled:opacity-50"
                           title="Remove from group"
@@ -648,6 +646,28 @@ export function GroupDetail() {
           </>
         )}
       </div>}
+
+      {deleteSecretConfirm && (
+        <ConfirmDialog
+          title="Delete secret?"
+          message="This secret will be permanently deleted and cannot be recovered."
+          confirmLabel="Delete"
+          destructive
+          onConfirm={() => { deleteGroupSecretMutation.mutate(deleteSecretConfirm); setDeleteSecretConfirm(null) }}
+          onCancel={() => setDeleteSecretConfirm(null)}
+        />
+      )}
+
+      {removeMemberConfirm && (
+        <ConfirmDialog
+          title="Remove node from group?"
+          message="This node will be removed from the group. You can re-add it later."
+          confirmLabel="Remove"
+          destructive
+          onConfirm={() => { removeMutation.mutate(removeMemberConfirm); setRemoveMemberConfirm(null) }}
+          onCancel={() => setRemoveMemberConfirm(null)}
+        />
+      )}
     </div>
   )
 }
