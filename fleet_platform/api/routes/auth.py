@@ -38,8 +38,10 @@ async def login(request: Request, payload: LoginRequest, db: AsyncSession = Depe
     result = await db.execute(select(User).where(User.email == payload.email))
     user = result.scalar_one_or_none()
 
+    if not user:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid credentials")
     password_valid = await to_thread(verify_password, payload.password, user.password_hash)
-    if not user or not password_valid:
+    if not password_valid:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid credentials")
 
     if not user.is_active:
