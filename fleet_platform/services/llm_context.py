@@ -53,14 +53,16 @@ async def build_fleet_context(db: AsyncSession, intent: str) -> str:
     """Fetch live fleet state and build a system prompt. Stays under ~1500 tokens."""
     from fleet_platform.models.group import Group
     from fleet_platform.models.node import Node
+    from fleet_platform.services.llm_svc import _redact_sensitive_data
     from fleet_platform.services.platform_settings_svc import (
         ANSIBLE_ENDPOINT_URL as ANSIBLE_ENDPOINT_URL_KEY,
     )
     from fleet_platform.services.platform_settings_svc import (
-        SALT_MASTER as SALT_MASTER_KEY,
+        LLM_INCLUDE_NODE_IPS,
+        get_setting,
     )
     from fleet_platform.services.platform_settings_svc import (
-        get_setting,
+        SALT_MASTER as SALT_MASTER_KEY,
     )
 
     node_count_result = await db.execute(select(func.count()).select_from(Node))
@@ -83,4 +85,8 @@ async def build_fleet_context(db: AsyncSession, intent: str) -> str:
         playbooks_dir=playbooks_dir,
     )
     addendum = INTENT_ADDENDUM.get(intent, "")
-    return f"{base}\n## Your Task\n{addendum}"
+    context = f"{base}\n## Your Task\n{addendum}"
+
+    include_ips_setting = await get_setting(db, LLM_INCLUDE_NODE_IPS)
+    include_ips = (include_ips_setting or "true").lower() != "false"
+    return _redact_sensitive_data(context, include_ips=include_ips)

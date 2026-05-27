@@ -50,6 +50,9 @@ JENKINS_INGEST_SECRET = "jenkins_ingest_secret"
 NODE_STALE_THRESHOLD_MINUTES = "node_stale_threshold_minutes"
 NODE_OFFLINE_THRESHOLD_HOURS = "node_offline_threshold_hours"
 
+# LLM data minimization
+LLM_INCLUDE_NODE_IPS = "llm_include_node_ips"  # "true" | "false", default "true"
+
 
 def _fernet_key() -> bytes:
     if settings.fernet_secret_key:
