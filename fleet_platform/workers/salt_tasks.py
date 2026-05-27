@@ -1,66 +1,32 @@
 # fleet_platform/workers/salt_tasks.py
-"""Celery tasks for Salt state application and ad-hoc commands."""
+"""Celery tasks for Salt state application and ad-hoc commands.
 
-import json
+Security note (issue #82): The Docker socket is NOT mounted into the worker
+container. Salt commands are dispatched via the Salt HTTP API (salt-api)
+running in the salt-master container.  Set the following environment variables:
+
+    SALT_API_URL      URL of salt-api, e.g. http://salt-master:8080
+    SALT_API_USER     Username for salt-api (eauth: pam or auto)
+    SALT_API_PASSWORD Password for salt-api user
+
+If SALT_API_URL is not set the tasks will return an error explaining the
+required setup — no silent fallback to docker exec is provided.
+"""
+
 import logging
 import os
-import shutil
-import subprocess
+from typing import Any
+
+import requests
 
 from fleet_platform.workers.celery_app import celery_app
 
 logger = logging.getLogger(__name__)
 
-# Name of the salt-master container when running in Docker/Podman.
-# Set to empty string for bare-metal deployments where salt is on PATH.
-_SALT_MASTER_CONTAINER = os.environ.get("SALT_MASTER_CONTAINER", "deploy-salt-master-1")
-
-# Ordered list of container runtime candidates to try.
-_CONTAINER_RUNTIMES = ("docker", "podman")
-
-# Common non-standard binary locations for Docker/Podman on macOS and Linux.
-_EXTRA_PATHS = (
-    "/usr/local/bin",
-    "/usr/bin",
-    "/opt/homebrew/bin",
-    "/snap/bin",
-)
-
-
-def _find_runtime() -> str | None:
-    """Return the full path to docker or podman, checking both PATH and common locations."""
-    for rt in _CONTAINER_RUNTIMES:
-        found = shutil.which(rt)
-        if found:
-            return found
-        for prefix in _EXTRA_PATHS:
-            candidate = os.path.join(prefix, rt)
-            if os.path.isfile(candidate) and os.access(candidate, os.X_OK):
-                return candidate
-    return None
-
-
-def _salt_prefix() -> list[str]:
-    """Return the command prefix for running salt.
-
-    - Empty list  → salt is on PATH (bare-metal, salt-master on host)
-    - [runtime, "exec", container] → proxy through docker/podman exec
-    """
-    if not _SALT_MASTER_CONTAINER:
-        return []
-
-    runtime = _find_runtime()
-    if runtime:
-        return [runtime, "exec", _SALT_MASTER_CONTAINER]
-
-    # No container runtime found — try salt directly (may be installed on host).
-    logger.warning(
-        "No container runtime (docker/podman) found on PATH or common locations "
-        "while SALT_MASTER_CONTAINER=%r is set. Attempting to run salt directly.",
-        _SALT_MASTER_CONTAINER,
-    )
-    return []
-
+_SALT_API_URL = os.environ.get("SALT_API_URL", "").rstrip("/")
+_SALT_API_USER = os.environ.get("SALT_API_USER", "")
+_SALT_API_PASSWORD = os.environ.get("SALT_API_PASSWORD", "")
+_SALT_API_EAUTH = os.environ.get("SALT_API_EAUTH", "pam")
 
 # Allowlist of Salt functions that can be executed via the ad-hoc command API.
 # This prevents operators from running arbitrary shell commands via cmd.run
@@ -95,6 +61,78 @@ _ALLOWED_SALT_FUNCTIONS: frozenset[str] = frozenset(
 )
 
 
+def _salt_api_not_configured_error() -> dict:
+    return {
+        "status": "error",
+        "reason": (
+            "Salt API is not configured. Set SALT_API_URL, SALT_API_USER, and "
+            "SALT_API_PASSWORD environment variables on the worker. "
+            "The Docker socket is intentionally not mounted (security issue #82). "
+            "To enable salt-api on the salt-master container, add the rest_cherrypy "
+            "netapi module and configure it in salt-master.conf."
+        ),
+    }
+
+
+def _run_salt_api(
+    function: str,
+    target: str,
+    args: list[str] | None = None,
+    kwarg: dict[str, Any] | None = None,
+    timeout: int = 300,
+) -> dict:
+    """Execute a Salt function via the HTTP API.
+
+    Dispatches a single command using the salt-api /run endpoint (no session
+    persistence needed — credentials are passed inline for simplicity).
+    """
+    if not _SALT_API_URL:
+        return _salt_api_not_configured_error()
+
+    payload: dict[str, Any] = {
+        "client": "local",
+        "tgt": target,
+        "tgt_type": "list",
+        "fun": function,
+        "username": _SALT_API_USER,
+        "password": _SALT_API_PASSWORD,
+        "eauth": _SALT_API_EAUTH,
+    }
+    if args:
+        payload["arg"] = args
+    if kwarg:
+        payload["kwarg"] = kwarg
+
+    try:
+        resp = requests.post(
+            f"{_SALT_API_URL}/run",
+            json=payload,
+            timeout=timeout,
+        )
+        resp.raise_for_status()
+        result = resp.json().get("return", [{}])
+        return {
+            "status": "ok",
+            "result": result,
+        }
+    except requests.HTTPError as exc:
+        return {
+            "status": "error",
+            "reason": f"salt-api HTTP error: {exc} — response: {exc.response.text[:500]}",
+        }
+    except requests.ConnectionError as exc:
+        return {
+            "status": "error",
+            "reason": (
+                f"Cannot reach salt-api at {_SALT_API_URL}: {exc}. "
+                "Check that SALT_API_URL is correct and the salt-master container "
+                "is running the rest_cherrypy or rest_tornado netapi module."
+            ),
+        }
+    except Exception as exc:
+        return {"status": "error", "reason": str(exc)[:500]}
+
+
 @celery_app.task(
     name="fleet_platform.workers.salt_tasks.apply_salt_state",
     bind=True,
@@ -108,38 +146,30 @@ def apply_salt_state(
 ) -> dict:
     """Run: salt -L '{minion1,minion2}' state.apply {state_name} [pillar={...}]
 
-    Works with Docker, Podman, or bare-metal salt installs. Runtime is detected
-    automatically via SALT_MASTER_CONTAINER env var + shutil.which().
+    Dispatches via Salt HTTP API (salt-api).  Requires SALT_API_URL,
+    SALT_API_USER, and SALT_API_PASSWORD to be set on the worker.
     """
+    if not _SALT_API_URL:
+        return _salt_api_not_configured_error()
+
     target = ",".join(target_minions)
-    cmd = ["salt", "-L", target, "state.apply", state_name, "--no-color", "--out=json"]
+    kwarg: dict[str, Any] | None = None
     if pillar_data:
-        cmd += [f"pillar={json.dumps(pillar_data)}"]
+        kwarg = {"pillar": pillar_data}
 
-    full_cmd = _salt_prefix() + cmd
-    logger.info("apply_salt_state: %s", " ".join(full_cmd))
-
-    try:
-        proc = subprocess.run(full_cmd, capture_output=True, text=True, timeout=300)
-        return {
-            "status": "ok" if proc.returncode == 0 else "error",
-            "stdout": proc.stdout[:10000],
-            "stderr": proc.stderr[:2000],
-            "returncode": proc.returncode,
-        }
-    except subprocess.TimeoutExpired:
-        return {"status": "error", "reason": "timeout after 300s"}
-    except FileNotFoundError as exc:
-        return {
-            "status": "error",
-            "reason": (
-                f"Salt runner not found ({exc}). "
-                "Set SALT_MASTER_CONTAINER to the container name (docker/podman) "
-                "or to empty string if salt is installed directly on the host."
-            ),
-        }
-    except Exception as exc:
-        return {"status": "error", "reason": str(exc)[:500]}
+    logger.info(
+        "apply_salt_state: target=%s state=%s pillar=%s",
+        target,
+        state_name,
+        bool(pillar_data),
+    )
+    return _run_salt_api(
+        function="state.apply",
+        target=target,
+        args=[state_name],
+        kwarg=kwarg,
+        timeout=300,
+    )
 
 
 @celery_app.task(
@@ -161,32 +191,15 @@ def run_salt_cmd(
             "reason": f"Function '{function}' is not in the allowlist. "
             f"Allowed functions: {sorted(_ALLOWED_SALT_FUNCTIONS)}",
         }
+
+    if not _SALT_API_URL:
+        return _salt_api_not_configured_error()
+
     target = ",".join(target_minions)
-    cmd = ["salt", "-L", target, function, "--no-color", "--out=json"]
-    if args:
-        cmd += args
-
-    full_cmd = _salt_prefix() + cmd
-    logger.info("run_salt_cmd: %s", " ".join(full_cmd))
-
-    try:
-        proc = subprocess.run(full_cmd, capture_output=True, text=True, timeout=120)
-        return {
-            "status": "ok" if proc.returncode == 0 else "error",
-            "stdout": proc.stdout[:10000],
-            "stderr": proc.stderr[:2000],
-            "returncode": proc.returncode,
-        }
-    except subprocess.TimeoutExpired:
-        return {"status": "error", "reason": "timeout after 120s"}
-    except FileNotFoundError as exc:
-        return {
-            "status": "error",
-            "reason": (
-                f"Salt runner not found ({exc}). "
-                "Set SALT_MASTER_CONTAINER to the container name (docker/podman) "
-                "or to empty string if salt is installed directly on the host."
-            ),
-        }
-    except Exception as exc:
-        return {"status": "error", "reason": str(exc)[:500]}
+    logger.info("run_salt_cmd: target=%s function=%s args=%s", target, function, args)
+    return _run_salt_api(
+        function=function,
+        target=target,
+        args=args,
+        timeout=120,
+    )
