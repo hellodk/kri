@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import { authApi } from '../api/auth'
 import { useAuthStore } from '../stores/authStore'
 
@@ -12,8 +12,8 @@ export function LoginPage() {
   const [oidcEnabled, setOidcEnabled] = useState(false)
   const navigate = useNavigate()
   const setUser = useAuthStore((s) => s.setUser)
-
-  const oidcError = new URLSearchParams(window.location.search).get('error')
+  const [searchParams] = useSearchParams()
+  const [ssoError, setSsoError] = useState(!!searchParams.get('error'))
 
   useEffect(() => {
     authApi.getOidcConfig().then((cfg) => setOidcEnabled(cfg.enabled)).catch(() => {})
@@ -78,9 +78,12 @@ export function LoginPage() {
           <h1 className="text-white text-2xl font-bold mb-1">Sign in</h1>
           <p className="text-white/35 text-sm mb-8">Enter your credentials to access the fleet dashboard</p>
 
-          {oidcError && (
-            <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700">
-              Single sign-on failed. Please try again or sign in with email and password.
+          {ssoError && (
+            <div className="mb-4 flex items-start gap-3 p-4 bg-red-50 border border-red-200 rounded-lg">
+              <span className="text-red-600 text-sm font-medium flex-1">
+                Single sign-on failed. Please try again or sign in with email and password.
+              </span>
+              <button onClick={() => setSsoError(false)} className="text-red-400 hover:text-red-600 text-lg leading-none">✕</button>
             </div>
           )}
 

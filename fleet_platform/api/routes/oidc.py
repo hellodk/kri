@@ -1,6 +1,7 @@
 """OIDC SSO endpoints — login redirect, callback, one-time exchange."""
 
 import json
+import logging
 import secrets
 
 import redis.asyncio as aioredis
@@ -21,6 +22,8 @@ from fleet_platform.services.platform_settings_svc import (
 )
 
 router = APIRouter(prefix="/api/v1/auth/oidc")
+
+logger = logging.getLogger(__name__)
 
 _STATE_TTL = 300  # 5 minutes
 _STATE_PREFIX = "oidc:state:"
@@ -58,6 +61,7 @@ async def oidc_login(
     try:
         discovery = await oidc_svc.discover(issuer)
     except Exception:
+        logger.exception("OIDC login initiation failed")
         raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="OIDC discovery failed")
 
     redirect_uri = f"{app_settings.frontend_origin.rstrip('/')}/auth/callback"
@@ -91,6 +95,7 @@ async def oidc_callback(
     try:
         discovery = await oidc_svc.discover(issuer)
     except Exception:
+        logger.exception("OIDC callback failed")
         raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="OIDC discovery failed")
 
     redirect_uri = f"{app_settings.frontend_origin.rstrip('/')}/auth/callback"
@@ -103,6 +108,7 @@ async def oidc_callback(
             redirect_uri=redirect_uri,
         )
     except Exception:
+        logger.exception("OIDC token exchange failed")
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Token exchange failed")
 
     # Verify the ID token signature using the IdP's JWKS (fix #79)
@@ -114,6 +120,7 @@ async def oidc_callback(
             client_id=client_id,
         )
     except Exception:
+        logger.exception("OIDC userinfo fetch failed")
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="ID token verification failed")
 
     email = claims.get("email", "")
