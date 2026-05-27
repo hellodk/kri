@@ -49,6 +49,8 @@ _log = get_logger(__name__)
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     configure_logging()
+    from fleet_platform.api.deps import close_redis, init_redis
+    await init_redis()
     # Seed non-secret platform settings from env vars (fills gaps after DB wipe)
     from fleet_platform.db.session import AsyncSessionLocal
     from fleet_platform.services.platform_settings_svc import seed_settings_from_env
@@ -62,6 +64,7 @@ async def lifespan(app: FastAPI):
     from fleet_platform.workers.ansible_tasks import refresh_all_node_grains
     refresh_all_node_grains.delay()
     yield
+    await close_redis()
 
 
 def create_app() -> FastAPI:
