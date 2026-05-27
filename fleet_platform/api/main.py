@@ -50,8 +50,10 @@ async def lifespan(app: FastAPI):
     # Seed non-secret platform settings from env vars (fills gaps after DB wipe)
     from fleet_platform.db.session import AsyncSessionLocal
     from fleet_platform.services.platform_settings_svc import seed_settings_from_env
+    from fleet_platform.services.user_seeding import seed_local_users
     async with AsyncSessionLocal() as db:
         await seed_settings_from_env(db)
+        await seed_local_users(db)
     yield
 
 
