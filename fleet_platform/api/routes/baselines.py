@@ -1,7 +1,9 @@
 # fleet_platform/api/routes/baselines.py
 import uuid
+from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
+from pydantic import BaseModel
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -10,6 +12,12 @@ from fleet_platform.core.auth import get_current_user, require_role
 from fleet_platform.models.drift import DesiredStateBaseline
 from fleet_platform.schemas.common import PaginatedResponse
 from fleet_platform.schemas.drift import BaselineCreate, BaselineResponse
+
+
+class BaselineUpdate(BaseModel):
+    name: Optional[str] = None
+    state_json: Optional[dict] = None
+    description: Optional[str] = None
 
 router = APIRouter(prefix="/api/v1/baselines")
 
@@ -162,7 +170,7 @@ async def get_baseline(
 @router.patch("/{baseline_id}", response_model=BaselineResponse)
 async def update_baseline(
     baseline_id: uuid.UUID,
-    payload: dict,
+    payload: BaselineUpdate,
     db: AsyncSession = Depends(get_db),
     claims: dict = Depends(require_role("operator", "admin")),
 ):
@@ -173,13 +181,13 @@ async def update_baseline(
     baseline = result.scalar_one_or_none()
     if not baseline:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Baseline not found")
-    if "name" in payload:
-        baseline.name = payload["name"]
-    if "state_json" in payload:
-        baseline.state_json = payload["state_json"]
+    if payload.name is not None:
+        baseline.name = payload.name
+    if payload.state_json is not None:
+        baseline.state_json = payload.state_json
         baseline.version = baseline.version + 1
-    if "description" in payload:
-        baseline.description = payload["description"]
+    if payload.description is not None:
+        baseline.description = payload.description
     await audit(db, actor=claims["email"], action="baseline.update",
                 resource_type="baseline", resource_id=baseline_id,
                 new_value={"name": baseline.name})
