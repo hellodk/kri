@@ -43,3 +43,19 @@ def test_ci_has_container_scan() -> None:
     """CI workflow must include a Trivy container-scan job."""
     src = (REPO_ROOT / ".github" / "workflows" / "ci.yml").read_text()
     assert "trivy-action" in src, "trivy-action not found in ci.yml — add container-scan job"
+
+
+def test_dockerfile_api_runtime_has_venv_copy() -> None:
+    """Runtime stage must copy .venv from builder (otherwise app has no packages)."""
+    src = (REPO_ROOT / "deploy" / "Dockerfile.api").read_text()
+    assert "COPY --from=builder /app/.venv /app/.venv" in src, (
+        "Dockerfile.api runtime stage must copy .venv from builder"
+    )
+
+
+def test_dockerfile_api_runtime_has_venv_path() -> None:
+    """Runtime stage must set PATH to include .venv/bin (otherwise python/uvicorn not found)."""
+    src = (REPO_ROOT / "deploy" / "Dockerfile.api").read_text()
+    assert 'PATH="/app/.venv/bin:$PATH"' in src, (
+        "Dockerfile.api runtime stage must set PATH to /app/.venv/bin"
+    )

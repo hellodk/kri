@@ -182,7 +182,7 @@ jobs:
         with:
           python-version: '3.13'
       - run: pip install uv pip-audit
-      - run: uv export --no-dev --format requirements-txt > /tmp/requirements.txt
+      - run: uv export --no-dev --no-editable --format requirements-txt > /tmp/requirements.txt
       - run: pip-audit -r /tmp/requirements.txt --progress-spinner off
 
   container-scan:
@@ -193,7 +193,7 @@ jobs:
       - name: Build API image
         run: docker build -f deploy/Dockerfile.api -t kri-api:ci .
       - name: Scan for HIGH/CRITICAL CVEs
-        uses: aquasecurity/trivy-action@0.30.0
+        uses: aquasecurity/trivy-action@0.28.0
         with:
           image-ref: kri-api:ci
           format: table
