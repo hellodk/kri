@@ -47,10 +47,11 @@ def test_dockerfiles_no_latest_tags():
 
 
 def test_docker_compose_resource_limits():
-    """db, api, and worker services must have deploy.resources.limits.memory set."""
+    """All 8 services must have deploy.resources.limits.memory set."""
     compose = _load_compose()
     services = compose.get("services", {})
-    for svc_name in ("db", "api", "worker"):
+    expected = ("db", "pg_backup", "redis", "api", "worker", "salt-master", "beat", "frontend")
+    for svc_name in expected:
         svc = services[svc_name]
         memory = (
             svc.get("deploy", {})
@@ -80,6 +81,18 @@ def test_docker_compose_beat_healthcheck():
     compose = _load_compose()
     beat = compose["services"]["beat"]
     assert beat.get("healthcheck") is not None, "beat service has no healthcheck"
+
+
+def test_docker_compose_worker_healthcheck():
+    """worker service must have a healthcheck configured."""
+    compose = _load_compose()
+    assert compose["services"]["worker"].get("healthcheck") is not None, "worker service has no healthcheck"
+
+
+def test_docker_compose_frontend_healthcheck():
+    """frontend service must have a healthcheck configured."""
+    compose = _load_compose()
+    assert compose["services"]["frontend"].get("healthcheck") is not None, "frontend service has no healthcheck"
 
 
 def test_pyproject_has_celery_redbeat():

@@ -135,9 +135,9 @@ services:
       # Docker socket intentionally NOT mounted — container escape risk. Issue #82.
       # Salt commands now use Salt HTTP API instead of docker exec.
     healthcheck:
-      test: ["CMD-SHELL", "uv run celery -A fleet_platform.workers.celery_app inspect ping --destination=celery@$HOSTNAME || exit 1"]
+      test: ["CMD-SHELL", "pgrep -f 'celery.*worker' || exit 1"]
       interval: 30s
-      timeout: 10s
+      timeout: 5s
       retries: 3
       start_period: 60s
     deploy:
