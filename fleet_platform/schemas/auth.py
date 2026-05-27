@@ -25,6 +25,7 @@ class MeResponse(BaseModel):
     id: str
     email: str
     role: str
+    auth_provider: str = "local"
 
 
 class LogoutRequest(BaseModel):

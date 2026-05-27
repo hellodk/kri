@@ -1,3 +1,4 @@
+import uuid
 import uuid as _uuid
 from datetime import UTC, datetime
 
@@ -122,9 +123,15 @@ async def logout(
 
 
 @router.get("/me", response_model=MeResponse)
-async def me(claims: dict = Depends(get_current_user)):
+async def me(
+    claims: dict = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    result = await db.execute(select(User).where(User.id == uuid.UUID(claims["sub"])))
+    user = result.scalar_one_or_none()
     return MeResponse(
         id=claims["sub"],
         email=claims["email"],
         role=claims["role"],
+        auth_provider=user.auth_provider if user else "local",
     )
