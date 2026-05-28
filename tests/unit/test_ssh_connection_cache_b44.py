@@ -4,7 +4,6 @@ import time
 from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
 
-
 # ── Behavioural tests (mock asyncssh.connect) ─────────────────────────────────
 
 def _make_conn(closed: bool = False) -> MagicMock:
