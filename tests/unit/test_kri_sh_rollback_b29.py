@@ -21,15 +21,21 @@ def test_rollback_dispatched():
 
 
 def test_rolling_deploy_restarts_api_last():
-    # api should appear after worker and beat in rolling deploy
-    api_pos = KRI_SH.rfind('"api"')
-    beat_pos = KRI_SH.find('"beat"')
-    assert api_pos > beat_pos, "api should restart after beat in rolling deploy"
+    start = KRI_SH.index("cmd_rolling_deploy()")
+    end   = KRI_SH.index("cmd_rollback()")
+    rolling_body = KRI_SH[start:end]
+    beat_pos = rolling_body.find('"beat"')
+    api_pos  = rolling_body.find('"api"')
+    assert beat_pos < api_pos, "beat should restart before api in rolling deploy"
 
 
 def test_stateful_services_excluded_from_rolling():
     # db, redis, salt-master must not be in rolling restart list
-    assert "no-deps" in KRI_SH
+    start = KRI_SH.index("cmd_rolling_deploy()")
+    end   = KRI_SH.index("cmd_rollback()")
+    rolling_body = KRI_SH[start:end]
+    for stateful in ['"db"', '"redis"', '"salt-master"']:
+        assert stateful not in rolling_body, f"{stateful} must not appear in rolling deploy services"
 
 
 def test_version_tagged_before_rollback():

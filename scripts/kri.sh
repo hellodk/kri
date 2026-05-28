@@ -200,10 +200,6 @@ cmd_dev_stop() {
 
 # ── Deploy (full rebuild + restart) ──────────────────────────────────────────
 
-get_compose_project_name() {
-  docker compose -f "$COMPOSE_FILE" config --format json 2>/dev/null | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('name','deploy'))" 2>/dev/null || echo "deploy"
-}
-
 cmd_deploy() {
   local service="${2:-}"
   echo ""
@@ -215,8 +211,6 @@ cmd_deploy() {
 
   # Tag current images as :previous before building
   echo "  Tagging current images as :previous…"
-  local project_name
-  project_name=$(get_compose_project_name)
   for svc in api worker beat frontend; do
     local img
     img=$(docker compose -f "$COMPOSE_FILE" images --format json "$svc" 2>/dev/null | python3 -c "import sys,json; d=json.load(sys.stdin); print(d[0]['Image'] if d else '')" 2>/dev/null || echo "")
@@ -258,9 +252,16 @@ wait_for_healthy() {
       return 0
     fi
     sleep 1
-    ((elapsed++))
+    elapsed=$((elapsed + 1))
   done
-  warn "$svc did not become healthy within ${timeout}s, continuing anyway…"
+  # Check if container actually crashed (vs just no healthcheck)
+  local state
+  state=$(docker compose -f "$COMPOSE_FILE" ps --format json "$svc" 2>/dev/null | python3 -c "import sys,json; d=json.load(sys.stdin); print(d[0].get('State','') if isinstance(d,list) and d else '')" 2>/dev/null || echo "")
+  if [[ "$state" == "exited" || "$state" == "restarting" ]]; then
+    err "$svc is in state '$state' — rolling deploy may be broken. Continuing…"
+  else
+    warn "$svc did not become healthy within ${timeout}s, continuing anyway…"
+  fi
   return 0
 }
 
@@ -317,9 +318,6 @@ cmd_rollback() {
     warn "No previous version found (.kri-last-version does not exist)"
     return 1
   fi
-
-  local project_name
-  project_name=$(get_compose_project_name)
 
   # For each stateless service, tag :previous as :latest and restart
   local services=("frontend" "beat" "worker" "api")
