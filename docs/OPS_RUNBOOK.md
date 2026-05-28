@@ -244,6 +244,105 @@ Configuration lives in `.env` at the repo root. Never commit this file to versio
 | `JWT_REFRESH_TOKEN_EXPIRE_DAYS` | `7` | Refresh token lifetime |
 | `FRONTEND_ORIGIN` | `http://localhost:5173` | Allowed CORS origin for the API |
 | `ENVIRONMENT` | `development` | Controls debug behaviour — set to `production` to disable debug routes |
+
+---
+
+## Secret Rotation
+
+### When to rotate JWT_SECRET
+
+Rotate `JWT_SECRET` when:
+- A secret is suspected compromised
+- A team member with access to `.env` leaves the team
+- As part of quarterly security hygiene
+
+**Warning:** Rotating `JWT_SECRET` without re-encrypting stored node/group secrets makes all stored credentials unrecoverable. Always use the rotation script.
+
+### What gets encrypted with JWT_SECRET
+
+The platform uses `JWT_SECRET` to derive a Fernet encryption key that protects:
+- NodeSecrets (per-node SSH keys, API tokens, credentials)
+- GroupSecrets (per-group shared secrets)
+- PlatformSettings encrypted values (OIDC secrets, API keys)
+
+When `JWT_SECRET` changes, all encrypted values become unreadable unless re-encrypted.
+
+### Procedure
+
+#### Step 1: Dry-run to verify all secrets can be rotated
+
+Generate a new secret and test rotation without writing:
+
+```bash
+# Generate new secret
+NEW_SECRET=$(openssl rand -hex 32)
+echo "New JWT_SECRET: $NEW_SECRET"  # Save this somewhere safe!
+
+# Test rotation (dry-run — no DB changes)
+OLD_JWT_SECRET=$(grep JWT_SECRET .env | cut -d= -f2) \
+  NEW_JWT_SECRET=$NEW_SECRET \
+  python3 scripts/rotate_secrets.py
+```
+
+If the dry-run reports **0 failures**, proceed to Step 2. If there are failures, they indicate corrupted secrets — investigate before continuing.
+
+#### Step 2: Commit the rotation
+
+If dry-run succeeded:
+
+```bash
+OLD_JWT_SECRET=$(grep JWT_SECRET .env | cut -d= -f2) \
+  NEW_JWT_SECRET=$NEW_SECRET \
+  python3 scripts/rotate_secrets.py --commit
+```
+
+The script will:
+1. Decrypt all node/group/platform secrets with the old key
+2. Re-encrypt them with the new key
+3. Commit changes to the database
+4. Print a summary
+
+#### Step 3: Update .env and restart
+
+Update your `.env` file with the new JWT_SECRET:
+
+```bash
+# Update .env
+sed -i "s/JWT_SECRET=.*/JWT_SECRET=$NEW_SECRET/" .env
+
+# Restart the stack
+./scripts/kri.sh restart
+```
+
+#### Step 4: Monitor logs
+
+Check that API and Celery worker start cleanly:
+
+```bash
+./scripts/kri.sh logs api    # Should show startup without errors
+./scripts/kri.sh logs worker  # Should show worker ready
+```
+
+### JWT tokens are invalidated
+
+All existing JWT tokens become invalid when `JWT_SECRET` changes — users will need to log in again. This is expected behaviour.
+
+### Rollback (if something goes wrong)
+
+If the rotation fails at the commit step:
+
+1. The script automatically rolls back all database changes
+2. No changes are written
+3. Re-run the dry-run to identify the problem
+
+If you updated `.env` before discovering a problem, revert the `.env` change and restart:
+
+```bash
+git checkout .env
+./scripts/kri.sh restart
+```
+
+Stored secrets are still encrypted with the old `JWT_SECRET`, so the old `.env` will decrypt them correctly.
 | `ANSIBLE_VERBOSITY` | `0` | Ansible output verbosity (0–4); increase to debug stuck bootstraps |
 
 ---
