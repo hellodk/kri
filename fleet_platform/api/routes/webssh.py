@@ -32,6 +32,7 @@ from fleet_platform.core.auth import (
 from fleet_platform.db.session import AsyncSessionLocal
 from fleet_platform.models.node import Node
 from fleet_platform.models.ssh_session import SecurityEvent, SessionRecording, SSHSession
+from fleet_platform.services.ssh_connection_cache import get_connection
 
 logger = logging.getLogger(__name__)
 
@@ -64,6 +65,7 @@ class SSHProxySession:
         self._recording_chunks: list[tuple[str, datetime]] = []
         self._chunk_index = 0
         self._alert_count = 0
+        self._owns_connection = True   # False when connection comes from cache
 
     async def send_to_browser(self, data: bytes) -> None:
         """Send terminal output to browser and record it."""
@@ -142,7 +144,7 @@ class SSHProxySession:
                 self._ssh_process.close()
             except Exception as e:
                 logger.debug("close: SSH process close failed: %s", e)
-        if self._ssh_conn:
+        if self._ssh_conn and self._owns_connection:
             try:
                 self._ssh_conn.close()
             except Exception as e:
@@ -256,7 +258,7 @@ async def webssh_session(
         await ev_db.commit()
 
     try:
-        # Connect to node via asyncssh
+        # Connect to node via asyncssh (with connection cache)
         connect_kwargs: dict = dict(
             host=node.bootstrap_ip,
             port=22,
@@ -273,12 +275,24 @@ async def webssh_session(
             os.chmod(key_path, 0o600)
             try:
                 connect_kwargs["client_keys"] = [key_path]
-                proxy._ssh_conn = await asyncssh.connect(**connect_kwargs)
+                proxy._ssh_conn = await get_connection(
+                    host=node.bootstrap_ip,
+                    port=22,
+                    username=creds["ssh_user"],
+                    connect_kwargs=connect_kwargs,
+                )
+                proxy._owns_connection = False  # connection is shared via cache
             finally:
                 os.unlink(key_path)
         else:
             connect_kwargs["password"] = creds["ssh_password"]
-            proxy._ssh_conn = await asyncssh.connect(**connect_kwargs)
+            proxy._ssh_conn = await get_connection(
+                host=node.bootstrap_ip,
+                port=22,
+                username=creds["ssh_user"],
+                connect_kwargs=connect_kwargs,
+            )
+            proxy._owns_connection = False  # connection is shared via cache
 
         if proxy._ssh_conn is None:
             raise RuntimeError("SSH proxy connection was not established")
