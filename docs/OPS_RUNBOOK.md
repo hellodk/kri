@@ -11,7 +11,11 @@ Primary reference for running and troubleshooting the kri fleet management platf
 3. [Bootstrap Troubleshooting](#bootstrap-troubleshooting)
 4. [Bootstrap Telemetry](#bootstrap-telemetry)
 5. [Database Inspection](#database-inspection)
-6. [Environment Variables](#environment-variables)
+6. [Service Health Checks](#service-health-checks)
+7. [Common Failure Scenarios](#common-failure-scenarios)
+8. [Backup and Restore](#backup-and-restore)
+9. [Rolling Restart vs Full Restart](#rolling-restart-vs-full-restart)
+10. [Environment Variables](#environment-variables)
 
 ---
 
@@ -241,3 +245,257 @@ Configuration lives in `.env` at the repo root. Never commit this file to versio
 | `FRONTEND_ORIGIN` | `http://localhost:5173` | Allowed CORS origin for the API |
 | `ENVIRONMENT` | `development` | Controls debug behaviour — set to `production` to disable debug routes |
 | `ANSIBLE_VERBOSITY` | `0` | Ansible output verbosity (0–4); increase to debug stuck bootstraps |
+
+---
+
+## Service Health Checks
+
+Run from the kri server:
+
+```bash
+# All services status
+./scripts/kri.sh status
+
+# API readiness (returns {"status":"ok"})
+curl -s http://localhost:8000/health/ready
+
+# Individual Docker healthcheck status
+docker inspect --format='{{.State.Health.Status}}' deploy-api-1
+docker inspect --format='{{.State.Health.Status}}' deploy-worker-1
+```
+
+---
+
+## Common Failure Scenarios
+
+### API container crash-looping
+
+**Diagnosis:**
+
+```bash
+docker logs deploy-api-1 | tail -50
+```
+
+Look for database connection errors, Redis errors, or import failures.
+
+**Fix:**
+```bash
+# Check DB is running and accessible
+docker exec deploy-postgres-1 pg_isready -U fleet -d fleet_demo
+
+# Check Redis is running
+docker exec deploy-redis-1 redis-cli ping
+
+# Restart the API
+docker restart deploy-api-1
+```
+
+### Celery worker not processing tasks
+
+**Diagnosis:**
+
+```bash
+# Check worker is running
+ps aux | grep celery | grep -v grep
+
+# Check Redis queue depth
+docker exec deploy-redis-1 redis-cli LLEN celery
+
+# Check worker logs for errors
+tail -50 .kri-logs/worker.log
+```
+
+**Fix:**
+```bash
+# Restart the worker
+./scripts/kri.sh stop
+./scripts/kri.sh start
+
+# Or individually
+pkill -f "celery worker"
+sleep 2
+celery -A fleet_platform.workers.app worker --loglevel=info
+```
+
+### Salt minion not connecting to Salt master
+
+**Diagnosis:**
+
+```bash
+# Check if ZeroMQ ports are open on the kri server
+netstat -tlnp | grep -E '4505|4506'
+
+# Check Salt master logs
+docker logs deploy-saltmaster-1 2>&1 | tail -50
+
+# Check minion key status
+docker exec deploy-saltmaster-1 salt-key -L
+```
+
+**Fix:**
+```bash
+# Ensure firewall allows 4505/4506 from target Mac Mini
+sudo ufw allow from <target_ip> to any port 4505:4506
+
+# If minion key is unaccepted
+docker exec deploy-saltmaster-1 salt-key -A -y
+
+# Verify minion can reach Salt master
+ssh <mac_mini_ip> "ping <salt_master_ip>"
+```
+
+### Node stuck in "bootstrapping"
+
+**Diagnosis:**
+
+```bash
+# Find the node
+docker exec deploy-postgres-1 psql -U fleet -d fleet_demo -c \
+  "SELECT id, minion_id, bootstrap_status, bootstrap_error FROM nodes WHERE bootstrap_status = 'bootstrapping';"
+
+# Check the last recorded Ansible task
+curl -s http://localhost:8000/api/v1/ansible/bootstrap/<node_id>/logs \
+  -H "Authorization: Bearer <token>" | jq '.bootstrap_error'
+```
+
+**Fix:**
+```bash
+# Try to cancel via API first
+curl -s -X POST http://localhost:8000/api/v1/ansible/bootstrap/<node_id>/cancel \
+  -H "Authorization: Bearer <token>"
+
+# If API not available, reset directly in database
+docker exec deploy-postgres-1 psql -U fleet -d fleet_demo -c \
+  "UPDATE nodes SET bootstrap_status = 'failed', bootstrap_error = 'Reset by operator' WHERE id = <node_id>;"
+```
+
+### Database disk full
+
+**Diagnosis:**
+
+```bash
+# Check volume usage
+docker exec deploy-postgres-1 df -h /var/lib/postgresql
+
+# Check backup directory
+docker exec deploy-pg_backup-1 du -sh /var/backups/postgresql
+```
+
+**Fix:**
+```bash
+# Remove old backup dumps (keep last 5)
+docker exec deploy-pg_backup-1 bash -c \
+  "ls -1tr /var/backups/postgresql/*.dump 2>/dev/null | head -n -5 | xargs rm -f"
+
+# Or manually trigger a cleanup
+docker exec deploy-postgres-1 VACUUM FULL;
+```
+
+### Redis running out of memory
+
+**Diagnosis:**
+
+```bash
+docker exec deploy-redis-1 redis-cli info memory
+```
+
+Look for `used_memory_human` and `maxmemory_human`. If used is near max, OOM will trigger eviction.
+
+**Fix:**
+```bash
+# Check Celery queue and task counts
+docker exec deploy-redis-1 redis-cli DBSIZE
+
+# Flush completed tasks (use carefully)
+docker exec deploy-redis-1 redis-cli FLUSHDB
+
+# Restart Redis to clear all data
+docker restart deploy-redis-1
+./scripts/kri.sh restart  # Restart worker and API to reconnect
+```
+
+### Database migration failed at startup
+
+**Diagnosis:**
+
+```bash
+# Check API logs
+tail -100 .kri-logs/api.log | grep -i "migration\|alembic"
+
+# Check for migration advisory locks
+docker exec deploy-postgres-1 psql -U fleet -d fleet_demo -c \
+  "SELECT * FROM pg_locks WHERE NOT granted;"
+```
+
+**Fix:**
+```bash
+# Manually unlock migration (if advisory lock is stuck)
+docker exec deploy-postgres-1 psql -U fleet -d fleet_demo -c \
+  "SELECT pg_advisory_unlock_all();"
+
+# Restart the API (will retry migration)
+docker restart deploy-api-1
+```
+
+---
+
+## Backup and Restore
+
+### Verify latest backup
+
+```bash
+docker exec deploy-pg_backup-1 ls -lh /var/backups/postgresql/ | tail -5
+```
+
+### Manual backup
+
+```bash
+docker exec deploy-pg_backup-1 \
+  pg_dump -h db -U fleet -Fc fleet_demo \
+  -f /var/backups/postgresql/manual_$(date +%Y%m%d_%H%M%S).dump
+```
+
+### Restore from backup
+
+```bash
+# Stop services first
+./scripts/kri.sh stop
+
+# Restore (replace DUMPFILE with actual filename)
+docker run --rm \
+  -v pgbackups:/var/backups/postgresql \
+  -e PGPASSWORD=<POSTGRES_PASSWORD> \
+  timescale/timescaledb:2.17.2-pg17 \
+  pg_restore -h db -U fleet -d fleet_demo \
+  /var/backups/postgresql/<DUMPFILE>
+
+./scripts/kri.sh start
+```
+
+---
+
+## Rolling Restart vs Full Restart
+
+### Full restart
+```bash
+./scripts/kri.sh restart
+```
+
+Use when:
+- Database migrations are pending
+- Redis data loss is acceptable
+- A clean slate is needed (e.g., after code deployment, configuration change)
+- Debugging a hung or unresponsive state
+
+### Rolling restart (zero-downtime)
+```bash
+docker-compose -f deploy/docker-compose.yml up -d --no-deps --build api worker
+```
+
+Use when:
+- Only code changes in API/worker (no schema changes)
+- Running a task-critical bootstrap
+- Minimal disruption is required
+- Redis broker state must be preserved
+
+For most operational scenarios, a full restart via `./scripts/kri.sh restart` is recommended. Rolling restart is most useful during active deployments to avoid interrupting long-running Ansible jobs.
