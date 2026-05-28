@@ -7,11 +7,7 @@ import { StatusBadge } from '../components/StatusBadge'
 import { DriftBadge } from '../components/DriftBadge'
 import { Skeleton } from '../components/Skeleton'
 import { useToastStore } from '../stores/toastStore'
-
-interface PillarOverride {
-  key: string
-  value: string
-}
+import { SaltPillarDialog } from './SaltPillarDialog'
 
 function parseStateTree(states: SaltState[]): Record<string, SaltState[]> {
   const tree: Record<string, SaltState[]> = {}
@@ -49,8 +45,7 @@ export function SaltOpsPage() {
 
   const [selectedState, setSelectedState] = useState<SaltState | null>(null)
   const [selectedMinions, setSelectedMinions] = useState<Set<string>>(new Set())
-  const [pillarOverrides, setPillarOverrides] = useState<PillarOverride[]>([{ key: '', value: '' }])
-  const [showPillarOverrides, setShowPillarOverrides] = useState(false)
+  const [showPillarDialog, setShowPillarDialog] = useState(false)
   const [expandedFolders, setExpandedFolders] = useState<Set<string>>(new Set())
   const [taskId, setTaskId] = useState<string | null>(null)
   const [taskOutput, setTaskOutput] = useState<{ status: string; stdout?: string; stderr?: string; reason?: string } | null>(null)
@@ -119,13 +114,7 @@ export function SaltOpsPage() {
     }
   }
 
-  function getPillarDict(): Record<string, string> | undefined {
-    const entries = pillarOverrides.filter((p) => p.key.trim())
-    if (!entries.length) return undefined
-    return Object.fromEntries(entries.map((p) => [p.key.trim(), p.value]))
-  }
-
-  async function applyState() {
+  async function applyState(pillar: Record<string, string>) {
     if (!selectedState || selectedMinions.size === 0) return
     setApplying(true)
     setTaskOutput(null)
@@ -134,7 +123,7 @@ export function SaltOpsPage() {
       const resp = await saltOpsApi.apply(
         selectedState.name,
         Array.from(selectedMinions),
-        getPillarDict(),
+        Object.keys(pillar).length > 0 ? pillar : undefined,
       )
       setTaskId(resp.task_id)
       toast(`State "${selectedState.display}" queued`)
@@ -142,6 +131,11 @@ export function SaltOpsPage() {
       setApplying(false)
       toast(e instanceof Error ? e.message : 'Apply failed', 'error')
     }
+  }
+
+  function handleApplyClick() {
+    if (!selectedState || selectedMinions.size === 0) return
+    setShowPillarDialog(true)
   }
 
   const parsedOutput = taskOutput?.stdout ? renderSaltOutput(taskOutput.stdout) : []
@@ -285,69 +279,10 @@ export function SaltOpsPage() {
                 )}
               </div>
 
-              {/* Pillar overrides (advanced, collapsed) */}
-              <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
-                <button
-                  onClick={() => setShowPillarOverrides((v) => !v)}
-                  className="w-full px-4 py-3 flex items-center gap-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
-                >
-                  <span className="text-xs text-gray-400">{showPillarOverrides ? '▾' : '▸'}</span>
-                  Pillar Overrides (advanced)
-                  <span className="ml-auto text-xs text-gray-400">
-                    {pillarOverrides.filter((p) => p.key.trim()).length} set
-                  </span>
-                </button>
-                {showPillarOverrides && (
-                  <div className="px-4 pb-4 space-y-2 border-t border-gray-100">
-                    <p className="text-xs text-gray-400 pt-3">
-                      Override pillar values at runtime. These are merged on top of stored secrets.
-                    </p>
-                    {pillarOverrides.map((p, i) => (
-                      <div key={i} className="flex gap-2">
-                        <input
-                          value={p.key}
-                          onChange={(e) => {
-                            const next = [...pillarOverrides]
-                            next[i] = { ...next[i], key: e.target.value }
-                            setPillarOverrides(next)
-                          }}
-                          placeholder="key"
-                          className="flex-1 text-sm border border-gray-300 rounded px-2 py-1 font-mono focus:outline-none focus:ring-2 focus:ring-brand-400"
-                        />
-                        <input
-                          value={p.value}
-                          onChange={(e) => {
-                            const next = [...pillarOverrides]
-                            next[i] = { ...next[i], value: e.target.value }
-                            setPillarOverrides(next)
-                          }}
-                          placeholder="value"
-                          className="flex-1 text-sm border border-gray-300 rounded px-2 py-1 focus:outline-none focus:ring-2 focus:ring-brand-400"
-                        />
-                        <button
-                          type="button"
-                          onClick={() => setPillarOverrides(pillarOverrides.filter((_, j) => j !== i))}
-                          className="text-gray-400 hover:text-red-500 px-1"
-                        >
-                          ×
-                        </button>
-                      </div>
-                    ))}
-                    <button
-                      type="button"
-                      onClick={() => setPillarOverrides([...pillarOverrides, { key: '', value: '' }])}
-                      className="text-xs text-brand-600 hover:text-brand-700 font-medium"
-                    >
-                      + Add override
-                    </button>
-                  </div>
-                )}
-              </div>
-
               {/* Apply button */}
               <div className="flex justify-end">
                 <button
-                  onClick={applyState}
+                  onClick={handleApplyClick}
                   disabled={applying || selectedMinions.size === 0}
                   className="px-6 py-2.5 bg-brand-600 text-white text-sm font-semibold rounded-lg hover:bg-brand-700 disabled:opacity-50 shadow-sm flex items-center gap-2"
                 >
@@ -501,6 +436,18 @@ export function SaltOpsPage() {
           )}
         </div>
       </div>
+
+      {showPillarDialog && selectedState && (
+        <SaltPillarDialog
+          state={selectedState.display}
+          minionIds={Array.from(selectedMinions)}
+          onClose={() => setShowPillarDialog(false)}
+          onConfirm={(pillar) => {
+            setShowPillarDialog(false)
+            applyState(pillar)
+          }}
+        />
+      )}
     </div>
   )
 }
