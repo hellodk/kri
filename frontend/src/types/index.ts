@@ -133,6 +133,24 @@ export interface SBOMSearchResult {
   scanned_at: string
 }
 
+export interface SBOMPackage {
+  name: string
+  version: string
+  purl: string
+}
+
+export interface SBOMDelta {
+  node_id: string
+  has_delta: boolean
+  new_count: number
+  removed_count: number
+  new_packages: SBOMPackage[]
+  removed_packages: SBOMPackage[]
+  latest_scan_at?: string
+  previous_scan_at?: string
+  message?: string
+}
+
 export interface Group {
   id: string
   name: string
