@@ -26,6 +26,7 @@ import { SaltOpsPage } from './pages/SaltOpsPage'
 import { AlertsPage } from './pages/AlertsPage'
 import FleetHealthPage from './pages/FleetHealthPage'
 import { DashboardPage } from './pages/DashboardPage'
+import { MonitoringPage } from './pages/MonitoringPage'
 import { saltKeysApi } from './api/saltKeys'
 import { useSaltKeysStore } from './stores/saltKeysStore'
 import { useToastStore } from './stores/toastStore'
@@ -151,6 +152,7 @@ export default function App() {
             <Route path="/salt-ops" element={<SaltOpsPage />} />
             <Route path="/alerts" element={<AlertsPage />} />
             <Route path="/fleet-health" element={<FleetHealthPage />} />
+            <Route path="/monitoring" element={<MonitoringPage />} />
             <Route path="/dashboard" element={<DashboardPage />} />
             <Route path="/settings" element={<SettingsPage />} />
             <Route path="*" element={<NotFoundPage />} />
