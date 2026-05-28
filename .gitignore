@@ -73,3 +73,8 @@ logs/
 # Never commit private keys. The .gitkeep is kept to preserve the directory.
 deploy/ssh/*
 !deploy/ssh/.gitkeep
+
+# ── TLS certificates (issue #131) ──────────────────────────────────────────────
+# deploy/certs/ holds self-signed or CA certificates for nginx-tls.conf.
+# Never commit private keys. Generate with scripts/gen_self_signed_cert.sh
+deploy/certs/
