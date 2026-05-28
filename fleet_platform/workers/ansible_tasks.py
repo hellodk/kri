@@ -552,11 +552,11 @@ def collect_node_grains(self, node_id: str) -> dict:
                     pass
 
 
-@unique_task()  # singleton — one run at a time
 @celery_app.task(
     name="fleet_platform.workers.ansible_tasks.refresh_all_node_grains",
     queue="maintenance",
 )
+@unique_task()  # singleton — one run at a time; must be inner decorator so .delay is preserved
 def refresh_all_node_grains() -> dict:
     """Periodic: trigger grain collection for all bootstrapped online nodes."""
     with get_sync_db() as db:

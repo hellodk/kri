@@ -14,11 +14,10 @@ depends_on = None
 
 
 def upgrade() -> None:
-    op.create_index(
-        "idx_group_members_node_id",
-        "group_members",
-        ["node_id"],
-        unique=False,
+    # Index may already exist from the initial schema migration (001).
+    # Use IF NOT EXISTS to make this idempotent.
+    op.execute(
+        "CREATE INDEX IF NOT EXISTS idx_group_members_node_id ON group_members (node_id)"
     )
 
 

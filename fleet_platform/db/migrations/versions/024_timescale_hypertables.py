@@ -21,8 +21,10 @@ def upgrade() -> None:
         "ALTER TABLE node_health_snapshots ADD PRIMARY KEY (id, collected_at)"
     )
     op.execute(
-        "SELECT create_hypertable('node_health_snapshots', by_range('collected_at', INTERVAL '1 day'))"
+        "SELECT create_hypertable('node_health_snapshots', by_range('collected_at', INTERVAL '1 day'), migrate_data => true)"
     )
+    # Enable compression before adding compression policy (required in TimescaleDB 2.x+)
+    op.execute("ALTER TABLE node_health_snapshots SET (timescaledb.compress = true, timescaledb.compress_orderby = 'collected_at DESC')")
     op.execute(
         "SELECT add_compression_policy('node_health_snapshots', INTERVAL '7 days')"
     )
@@ -36,8 +38,10 @@ def upgrade() -> None:
         "ALTER TABLE ansible_jobs ADD PRIMARY KEY (id, created_at)"
     )
     op.execute(
-        "SELECT create_hypertable('ansible_jobs', by_range('created_at', INTERVAL '1 day'))"
+        "SELECT create_hypertable('ansible_jobs', by_range('created_at', INTERVAL '1 day'), migrate_data => true)"
     )
+    # Enable compression before adding compression policy
+    op.execute("ALTER TABLE ansible_jobs SET (timescaledb.compress = true, timescaledb.compress_orderby = 'created_at DESC')")
     op.execute(
         "SELECT add_compression_policy('ansible_jobs', INTERVAL '7 days')"
     )

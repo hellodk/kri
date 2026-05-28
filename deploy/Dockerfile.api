@@ -20,6 +20,8 @@ RUN apt-get update && apt-get upgrade -y && apt-get install -y --no-install-reco
 
 COPY --from=builder /app/.venv /app/.venv
 COPY --from=builder /app/pyproject.toml /app/pyproject.toml
+# uv binary needed by migrate.sh — builder installed it via pip, copy to runtime
+COPY --from=builder /usr/local/bin/uv /usr/local/bin/uv
 COPY fleet_platform/ ./fleet_platform/
 COPY playbooks/ ./playbooks/
 COPY alembic.ini ./

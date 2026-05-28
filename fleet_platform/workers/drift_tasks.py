@@ -14,7 +14,6 @@ from fleet_platform.services.task_lock import unique_task
 from fleet_platform.workers.celery_app import celery_app
 
 
-@unique_task(key_fn=lambda args, kwargs: f"compute_drift:{args[0]}")
 @celery_app.task(
     name="fleet_platform.workers.drift_tasks.compute_drift",
     bind=True,
@@ -25,6 +24,7 @@ from fleet_platform.workers.celery_app import celery_app
     retry_backoff_max=300,
     retry_jitter=True,
 )
+@unique_task(key_fn=lambda args, kwargs: f"compute_drift:{args[1] if len(args) > 1 else kwargs.get('node_id', '')}")
 def compute_drift(self, node_id: str) -> dict:
     """Compute drift for a node and persist the result."""
     node_uuid = uuid.UUID(node_id)
