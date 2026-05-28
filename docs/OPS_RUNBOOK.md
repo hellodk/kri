@@ -499,3 +499,40 @@ Use when:
 - Redis broker state must be preserved
 
 For most operational scenarios, a full restart via `./scripts/kri.sh restart` is recommended. Rolling restart is most useful during active deployments to avoid interrupting long-running Ansible jobs.
+
+---
+
+## TLS Configuration
+
+By default kri serves plain HTTP on port 80. For production use, enable TLS.
+
+### Option A: Self-signed certificate (home lab / Tailscale)
+
+```bash
+# Generate a self-signed cert valid for 10 years
+KRI_HOSTNAME=kri.yourdomain.com ./scripts/gen_self_signed_cert.sh
+
+# Enable TLS nginx config
+cp deploy/nginx-tls.conf deploy/nginx.conf
+
+# Add to frontend service in docker-compose.yml:
+#   volumes:
+#     - ./certs:/etc/nginx/certs:ro
+#   ports:
+#     - "443:443"
+
+./scripts/kri.sh rolling-deploy
+```
+
+### Option B: Tailscale HTTPS
+
+If kri runs within a Tailscale network, enable Tailscale HTTPS:
+
+```bash
+tailscale cert kri.tail-domain.ts.net
+# Then use the generated cert with nginx-tls.conf
+```
+
+### Option C: Caddy (automatic HTTPS)
+
+Replace the nginx frontend with Caddy for automatic certificate management via ACME/Let's Encrypt when kri has a public domain.
