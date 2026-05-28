@@ -13,8 +13,9 @@ def test_parse_tart_not_found():
 
 
 def test_parse_json_output():
-    from fleet_platform.api.routes.nodes import _parse_tart_output
     import json
+
+    from fleet_platform.api.routes.nodes import _parse_tart_output
     data = [{"name": "test-vm", "state": "Running", "cpu": 4, "memory": 8192, "source": "ghcr.io/test"}]
     result = _parse_tart_output(json.dumps(data))
     assert len(result) == 1
@@ -24,8 +25,9 @@ def test_parse_json_output():
 
 
 def test_parse_json_multiple_vms():
-    from fleet_platform.api.routes.nodes import _parse_tart_output
     import json
+
+    from fleet_platform.api.routes.nodes import _parse_tart_output
     data = [
         {"name": "vm1", "state": "Running", "cpu": 2, "memory": 4096, "source": "local"},
         {"name": "vm2", "state": "Stopped", "cpu": 4, "memory": 8192, "source": "local"},
