@@ -101,10 +101,16 @@ function CeleryQueuesCard({ data }: { data: MonitoringSummary }) {
       icon="▷"
       barColor="bg-gradient-to-r from-brand-500 to-brand-400"
     >
-      <p className="text-5xl font-black tabular-nums text-gray-900 leading-none mb-4">
-        {total}
-        <span className="text-lg font-normal text-gray-400 ml-2">pending</span>
-      </p>
+      <div className="flex items-end gap-4 mb-4">
+        <p className="text-5xl font-black tabular-nums text-gray-900 leading-none">
+          {total}
+          <span className="text-lg font-normal text-gray-400 ml-2">pending</span>
+        </p>
+        <p className="text-sm text-gray-500 mb-1">
+          <span className="font-semibold tabular-nums text-gray-700">{q.active}</span>
+          <span className="ml-1">active</span>
+        </p>
+      </div>
 
       <div className="space-y-2">
         {queues.map(({ label, count }) => {
@@ -186,7 +192,7 @@ function HttpRequestsCard({ data }: { data: MonitoringSummary }) {
 
   return (
     <SectionCard
-      title="HTTP Request Counts"
+      title="HTTP Requests (since startup)"
       icon="◈"
       barColor="bg-gradient-to-r from-gray-400 to-gray-300"
     >

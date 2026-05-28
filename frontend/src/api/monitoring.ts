@@ -19,6 +19,7 @@ export interface CeleryQueues {
   maintenance: number
   drift: number
   sbom: number
+  active: number
 }
 
 export interface HttpRequest {
