@@ -1,0 +1,16 @@
+# salt/pillar/ml/ollama.sls.example
+# Example Ollama configuration.
+# Copy and customize this file to salt/pillar/ml/ollama.sls or include in top.sls
+
+ml:
+  ollama:
+    binary_url: https://artifactory.internal/artifactory/binaries/ollama-v0.1.30-darwin
+    models:                 # optional: models to pre-pull
+      - llama2
+      - mistral
+    port: 11434             # optional: API port, default 11434
+
+# Artifactory binary repository configuration (required)
+artifactory:
+  url: https://artifactory.internal
+  binary_repo: https://artifactory.internal/artifactory/binaries
