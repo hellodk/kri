@@ -1,4 +1,4 @@
-import { apiFetch } from './client'
+import { api } from './client'
 
 export interface TartVM {
   name: string
@@ -17,5 +17,5 @@ export interface NodeVMsResponse {
 
 export const vmsApi = {
   listNodeVMs: (nodeId: string) =>
-    apiFetch<NodeVMsResponse>(`/api/v1/nodes/${nodeId}/vms`),
+    api.get<NodeVMsResponse>(`/api/v1/nodes/${nodeId}/vms`),
 }

@@ -1094,8 +1094,8 @@ export function NodeDetail() {
             <h3 className="font-semibold text-gray-700 mb-3">Virtual Machines</h3>
             {vmsLoading && (
               <div className="space-y-2">
-                <Skeleton className="h-4 w-32" />
-                <Skeleton className="h-4 w-24" />
+                <div className="h-4 w-32 bg-gray-200 rounded animate-pulse" />
+                <div className="h-4 w-24 bg-gray-200 rounded animate-pulse" />
               </div>
             )}
             {!vmsLoading && nodeVMs?.error && (
