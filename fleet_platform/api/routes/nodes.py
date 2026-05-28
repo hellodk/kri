@@ -1,5 +1,6 @@
 # fleet_platform/api/routes/nodes.py
 import asyncio
+import json
 import secrets
 import uuid
 from datetime import UTC, datetime
@@ -465,3 +466,95 @@ async def set_maintenance_mode(
     )
     node = result2.scalar_one()
     return NodeDetailResponse.model_validate(node)
+
+
+def _parse_tart_output(output: str) -> list[dict]:
+    """Parse tart list output (JSON or plain text fallback)."""
+    if not output or "tart_not_found" in output or "not found" in output.lower():
+        return []
+
+    # Try JSON first (tart list --format=json)
+    try:
+        data = json.loads(output)
+        if isinstance(data, list):
+            return [
+                {
+                    "name": vm.get("name", ""),
+                    "state": vm.get("state", "unknown"),
+                    "cpu": vm.get("cpu", None),
+                    "memory": vm.get("memory", None),
+                    "source": vm.get("source", ""),
+                }
+                for vm in data
+            ]
+    except (json.JSONDecodeError, ValueError):
+        pass
+
+    # Fallback: plain text tart list output
+    # Format: Name    Source    State
+    vms = []
+    for line in output.strip().splitlines():
+        if line.startswith("Name") or not line.strip():
+            continue
+        parts = line.split()
+        if parts:
+            vms.append({
+                "name": parts[0] if len(parts) > 0 else "",
+                "state": parts[2] if len(parts) > 2 else "unknown",
+                "cpu": None,
+                "memory": None,
+                "source": parts[1] if len(parts) > 1 else "",
+            })
+    return vms
+
+
+class NodeVMsResponse(BaseModel):
+    node_id: str
+    minion_id: str | None
+    vms: list[dict]
+    error: str | None = None
+
+
+@router.get("/{node_id}/vms", response_model=NodeVMsResponse)
+async def list_node_vms(
+    node_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+    _: dict = Depends(require_role("operator", "admin")),
+) -> NodeVMsResponse:
+    """List tart VMs on a node by running 'tart list' via Salt cmd.run."""
+    result = await db.execute(select(Node).where(Node.id == node_id))
+    node = result.scalar_one_or_none()
+    if not node:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Node not found")
+
+    minion_id = node.minion_id
+    if not minion_id:
+        return NodeVMsResponse(node_id=str(node_id), minion_id=None, vms=[], error="Node has no minion_id")
+
+    # Run tart list via Salt cmd.run
+    from fleet_platform.workers.salt_tasks import run_salt_cmd as salt_run_cmd
+    try:
+        result_dict = await asyncio.get_event_loop().run_in_executor(
+            None,
+            lambda: salt_run_cmd.delay(
+                function="cmd.run",
+                target_minions=[minion_id],
+                args=["tart list --format=json 2>/dev/null || tart list 2>/dev/null || echo 'tart_not_found'"],
+            ).get(timeout=15)
+        )
+    except Exception as e:
+        return NodeVMsResponse(
+            node_id=str(node_id),
+            minion_id=minion_id,
+            vms=[],
+            error=f"Failed to fetch VMs: {str(e)[:200]}"
+        )
+
+    raw_output = ""
+    if isinstance(result_dict, dict) and "result" in result_dict:
+        ret = result_dict["result"]
+        if isinstance(ret, list) and ret:
+            raw_output = ret[0].get(minion_id, "") or ""
+
+    vms = _parse_tart_output(raw_output)
+    return NodeVMsResponse(node_id=str(node_id), minion_id=minion_id, vms=vms)
