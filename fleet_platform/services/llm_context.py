@@ -57,10 +57,8 @@ async def build_fleet_context(db: AsyncSession, intent: str) -> str:
     from fleet_platform.services.platform_settings_svc import (
         LLM_INCLUDE_NODE_IPS,
         PLAYBOOKS_DIR as PLAYBOOKS_DIR_KEY,
-        get_setting,
-    )
-    from fleet_platform.services.platform_settings_svc import (
         SALT_MASTER as SALT_MASTER_KEY,
+        get_setting,
     )
 
     node_count_result = await db.execute(select(func.count()).select_from(Node))
