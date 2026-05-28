@@ -1,3 +1,4 @@
+import re
 import uuid
 
 from sqlalchemy import select, update
@@ -7,6 +8,20 @@ from fleet_platform.models.llm_endpoint import LLMEndpoint
 from fleet_platform.models.llm_query_log import LLMQueryLog
 from fleet_platform.schemas.llm import LLMEndpointCreate, LLMEndpointUpdate
 from fleet_platform.services.platform_settings_svc import decrypt_secret, encrypt_secret
+
+_IPV4_RE = re.compile(r"\b\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}\b")
+
+
+def _redact_sensitive_data(context: str, *, include_ips: bool) -> str:
+    """Return *context* with sensitive data selectively redacted.
+
+    When *include_ips* is False every IPv4 address is replaced with
+    ``[REDACTED_IP]``.  Hostnames are intentionally left untouched to avoid
+    false-positive breakage on non-IP tokens.
+    """
+    if include_ips:
+        return context
+    return _IPV4_RE.sub("[REDACTED_IP]", context)
 
 
 async def list_endpoints(db: AsyncSession) -> list[LLMEndpoint]:
