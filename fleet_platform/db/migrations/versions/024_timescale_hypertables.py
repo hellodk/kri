@@ -1,0 +1,55 @@
+"""Convert node_health_snapshots and ansible_jobs to TimescaleDB hypertables
+
+Revision ID: 024
+Revises: 023
+Create Date: 2026-05-28
+"""
+from alembic import op
+
+revision = "024"
+down_revision = "023"
+branch_labels = None
+depends_on = None
+
+
+def upgrade() -> None:
+    # ── node_health_snapshots ─────────────────────────────────────────
+    # TimescaleDB requires all unique constraints to include the partition column.
+    # Drop the existing UUID-only PK and recreate as (id, collected_at).
+    op.execute("ALTER TABLE node_health_snapshots DROP CONSTRAINT node_health_snapshots_pkey")
+    op.execute(
+        "ALTER TABLE node_health_snapshots ADD PRIMARY KEY (id, collected_at)"
+    )
+    op.execute(
+        "SELECT create_hypertable('node_health_snapshots', by_range('collected_at', INTERVAL '1 day'))"
+    )
+    op.execute(
+        "SELECT add_compression_policy('node_health_snapshots', INTERVAL '7 days')"
+    )
+    op.execute(
+        "SELECT add_retention_policy('node_health_snapshots', INTERVAL '90 days')"
+    )
+
+    # ── ansible_jobs ─────────────────────────────────────────────────
+    op.execute("ALTER TABLE ansible_jobs DROP CONSTRAINT ansible_jobs_pkey")
+    op.execute(
+        "ALTER TABLE ansible_jobs ADD PRIMARY KEY (id, created_at)"
+    )
+    op.execute(
+        "SELECT create_hypertable('ansible_jobs', by_range('created_at', INTERVAL '1 day'))"
+    )
+    op.execute(
+        "SELECT add_compression_policy('ansible_jobs', INTERVAL '7 days')"
+    )
+    op.execute(
+        "SELECT add_retention_policy('ansible_jobs', INTERVAL '90 days')"
+    )
+
+
+def downgrade() -> None:
+    # Hypertable conversion is not reversible without data migration.
+    # Remove policies only; tables remain as hypertables.
+    op.execute("SELECT remove_retention_policy('ansible_jobs', if_exists => true)")
+    op.execute("SELECT remove_compression_policy('ansible_jobs', if_exists => true)")
+    op.execute("SELECT remove_retention_policy('node_health_snapshots', if_exists => true)")
+    op.execute("SELECT remove_compression_policy('node_health_snapshots', if_exists => true)")
