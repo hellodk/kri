@@ -11,7 +11,6 @@ from __future__ import annotations
 import tempfile
 from pathlib import Path
 
-import pytest
 import yaml
 from hypothesis import given, settings
 from hypothesis import strategies as st
@@ -22,7 +21,6 @@ from fleet_platform.services.playbook_discovery import (
     _parse_description,
     discover_all,
 )
-
 
 # ── _parse_description ────────────────────────────────────────────────────────
 
