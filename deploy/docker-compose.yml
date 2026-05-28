@@ -162,8 +162,8 @@ services:
     restart: unless-stopped
     command: salt-master
     ports:
-      - "4505:4505"   # ZeroMQ publisher  — minions subscribe for events
-      - "4506:4506"   # ZeroMQ request/reply — minions send results here
+      - "${SALT_BIND_IP:-0.0.0.0}:4505:4505"   # ZeroMQ publisher  — minions subscribe for events
+      - "${SALT_BIND_IP:-0.0.0.0}:4506:4506"   # ZeroMQ request/reply — minions send results here
     volumes:
       - salt-pillar:/srv/salt/pillar
       - salt-master-pki:/etc/salt/pki/master   # persist accepted minion keys across restarts
