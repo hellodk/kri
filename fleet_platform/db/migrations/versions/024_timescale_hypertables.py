@@ -49,7 +49,7 @@ def upgrade() -> None:
 def downgrade() -> None:
     # Hypertable conversion is not reversible without data migration.
     # Remove policies only; tables remain as hypertables.
-    op.execute("SELECT remove_retention_policy('ansible_jobs', if_exists => true)")
-    op.execute("SELECT remove_compression_policy('ansible_jobs', if_exists => true)")
-    op.execute("SELECT remove_retention_policy('node_health_snapshots', if_exists => true)")
-    op.execute("SELECT remove_compression_policy('node_health_snapshots', if_exists => true)")
+    op.execute("SELECT remove_retention_policy('ansible_jobs', true)")
+    op.execute("SELECT remove_compression_policy('ansible_jobs', true)")
+    op.execute("SELECT remove_retention_policy('node_health_snapshots', true)")
+    op.execute("SELECT remove_compression_policy('node_health_snapshots', true)")

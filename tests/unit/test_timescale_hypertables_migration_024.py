@@ -85,13 +85,13 @@ class TestDowngradeLogic:
     """Test migration downgrade logic."""
 
     def test_remove_retention_policies(self) -> None:
-        """Test downgrade removes retention policies."""
+        """Test downgrade removes retention policies for both tables."""
         migration = load_migration_source()
-        assert "remove_retention_policy" in migration
-        assert "ansible_jobs" in migration
-        assert "node_health_snapshots" in migration
+        assert "remove_retention_policy('ansible_jobs'" in migration
+        assert "remove_retention_policy('node_health_snapshots'" in migration
 
     def test_remove_compression_policies(self) -> None:
-        """Test downgrade removes compression policies."""
+        """Test downgrade removes compression policies for both tables."""
         migration = load_migration_source()
-        assert "remove_compression_policy" in migration
+        assert "remove_compression_policy('ansible_jobs'" in migration
+        assert "remove_compression_policy('node_health_snapshots'" in migration
