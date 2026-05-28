@@ -1,0 +1,41 @@
+---
+# playbooks/group_vars/all.yml
+# Global defaults for all kri bootstrap playbooks.
+# Override per-host in host_vars/<minion_id>.yml
+
+# ── Salt version ──────────────────────────────────────────────────────────────
+# Pinned to match the kri salt-master (hellodk/salt-master:3008.0 installs 3008.x).
+# Change here to upgrade fleet-wide; always test on one node first.
+# Salt 3007.x minions are backward-compatible with 3008.x master.
+salt_version: "3007.14"
+
+# Salt pkg filename pattern: salt-<version>-py3-<arch>.pkg
+# arm64 = Apple Silicon, x86_64 = Intel
+salt_pkg_arm64: "salt-{{ salt_version }}-py3-arm64.pkg"
+salt_pkg_x86_64: "salt-{{ salt_version }}-py3-x86_64.pkg"
+
+# Checksum file (SHA512) published alongside the pkg by Salt Project
+salt_pkg_checksum_arm64: "salt-{{ salt_version }}-py3-arm64.pkg.sha512"
+salt_pkg_checksum_x86_64: "salt-{{ salt_version }}-py3-x86_64.pkg.sha512"
+
+# ── Download sources ──────────────────────────────────────────────────────────
+# Primary: Artifactory binary repo (air-gap / on-prem mirror).
+# Set artifactory_binary_url in host_vars or pass via -e to override.
+# If empty, falls through to the official Salt Project URL.
+artifactory_binary_url: ""   # e.g. https://artifactory.company.local/binary-repo
+
+# Official Salt Project download URL (internet required)
+salt_pkg_official_base: "https://packages.broadcom.com/artifactory/saltproject-generic/onedir/{{ salt_version }}"
+
+# ── Salt master ───────────────────────────────────────────────────────────────
+# salt_master_address and salt_master_pub_key must be set per environment.
+# Define them in host_vars/<minion_id>.yml or pass via -e at runtime.
+# salt_master_address: "100.89.50.27"         # Tailscale IP or hostname
+# salt_master_pub_key: |                       # contents of deploy/salt-pki/master.pub
+#   -----BEGIN PUBLIC KEY-----
+#   ...
+#   -----END PUBLIC KEY-----
+
+# ── Homebrew ──────────────────────────────────────────────────────────────────
+brew_prefix_arm64: /opt/homebrew
+brew_prefix_x86: /usr/local

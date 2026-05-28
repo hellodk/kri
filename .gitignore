@@ -78,3 +78,7 @@ deploy/ssh/*
 # deploy/certs/ holds self-signed or CA certificates for nginx-tls.conf.
 # Never commit private keys. Generate with scripts/gen_self_signed_cert.sh
 deploy/certs/
+
+# Salt-master PKI — private key is NEVER committed
+# master.pem is stored in ansible vault, backed up via `kri pki-backup`
+deploy/salt-pki/master.pem

@@ -7,7 +7,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     dumb-init \
     && rm -rf /var/lib/apt/lists/*
 
-# Install salt-master 3007.x from the Salt Project's official repo
+# Install salt-master from the Salt Project's official repo (pinned stable)
 RUN curl -fsSL https://packages.broadcom.com/artifactory/api/security/keypair/SaltProjectKey/public \
       | gpg --dearmor -o /usr/share/keyrings/salt-archive-keyring.gpg && \
     echo "deb [signed-by=/usr/share/keyrings/salt-archive-keyring.gpg arch=amd64] \
@@ -18,9 +18,16 @@ RUN curl -fsSL https://packages.broadcom.com/artifactory/api/security/keypair/Sa
     rm -rf /var/lib/apt/lists/*
 
 RUN mkdir -p /etc/salt/master.d /srv/salt/pillar /srv/salt/states \
-             /etc/salt/pki/master /var/log/salt /var/cache/salt
+             /etc/salt/pki/master/minions \
+             /etc/salt/pki/master/minions_pre \
+             /etc/salt/pki/master/minions_denied \
+             /etc/salt/pki/master/minions_autosign \
+             /etc/salt/pki/master/minions_rejected \
+             /var/log/salt /var/cache/salt
+
+COPY deploy/salt-master-entrypoint.sh /usr/local/bin/salt-master-entrypoint.sh
+RUN chmod +x /usr/local/bin/salt-master-entrypoint.sh
 
 EXPOSE 4505 4506
 
-ENTRYPOINT ["/usr/bin/dumb-init", "--"]
-CMD ["/usr/bin/salt-master", "--log-level=info", "--log-file=/dev/stdout"]
+ENTRYPOINT ["/usr/bin/dumb-init", "--", "/usr/local/bin/salt-master-entrypoint.sh"]

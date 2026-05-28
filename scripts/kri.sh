@@ -525,6 +525,73 @@ else:
   echo ""
 }
 
+# ── PKI management ───────────────────────────────────────────────────────────
+# Salt-master keys live in deploy/salt-pki/ (bind mount, not Docker volume).
+# They MUST NOT change after minions are deployed — changing them disconnects
+# every minion until they are manually re-keyed.
+#
+# pki-init:   Generate keys on first deploy (before `kri start`)
+# pki-backup: Print vault-encrypt commands for disaster recovery
+
+PKI_DIR="$REPO_DIR/deploy/salt-pki"
+
+cmd_pki_init() {
+  echo ""
+  echo "  kri pki-init — generate salt-master keys"
+  echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+
+  if [[ -f "$PKI_DIR/master.pem" ]]; then
+    err "Keys already exist in $PKI_DIR/master.pem"
+    echo "  If you intended to rotate keys, first back up the old keys,"
+    echo "  then re-bootstrap ALL minions after rotation."
+    echo "  Rotating unexpectedly disconnects the entire fleet."
+    exit 1
+  fi
+
+  mkdir -p "$PKI_DIR/minions" "$PKI_DIR/minions_pre" \
+           "$PKI_DIR/minions_denied" "$PKI_DIR/minions_autosign" \
+           "$PKI_DIR/minions_rejected"
+
+  echo "  Generating 4096-bit RSA key pair…"
+  openssl genrsa -out "$PKI_DIR/master.pem" 4096 2>/dev/null
+  openssl rsa -in "$PKI_DIR/master.pem" -pubout -out "$PKI_DIR/master.pub" 2>/dev/null
+  chmod 600 "$PKI_DIR/master.pem"
+  chmod 644 "$PKI_DIR/master.pub"
+
+  ok "Keys written to deploy/salt-pki/"
+  echo ""
+  warn "IMPORTANT: Back up master.pem immediately — run:  ./scripts/kri.sh pki-backup"
+  echo ""
+  echo "  Also set salt_master_pub_key in playbooks/host_vars/<minion>.yml:"
+  echo ""
+  cat "$PKI_DIR/master.pub"
+  echo ""
+}
+
+cmd_pki_backup() {
+  echo ""
+  echo "  kri pki-backup — print ansible-vault backup commands"
+  echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+
+  if [[ ! -f "$PKI_DIR/master.pem" ]]; then
+    err "No keys found in $PKI_DIR/master.pem — run:  ./scripts/kri.sh pki-init"
+    exit 1
+  fi
+
+  echo "  Run these commands to store the master key in ansible vault:"
+  echo ""
+  echo "    ansible-vault encrypt_string \\"
+  echo "      --stdin-name salt_master_pem \\"
+  echo "      < deploy/salt-pki/master.pem \\"
+  echo "      >> playbooks/host_vars/vault.yml"
+  echo ""
+  echo "  master.pub (add to playbooks/group_vars/all.yml as salt_master_pub_key):"
+  echo ""
+  cat "$PKI_DIR/master.pub"
+  echo ""
+  ok "Back up master.pem — anyone with it can impersonate the salt-master"
+}
+
 # ── Dispatch ──────────────────────────────────────────────────────────────────
 
 case "${1:-help}" in
@@ -541,6 +608,8 @@ case "${1:-help}" in
   dev-stop)       cmd_dev_stop ;;
   test)           cmd_test "$@" ;;
   diagnose)       cmd_diagnose "$@" ;;
+  pki-init)       cmd_pki_init ;;
+  pki-backup)     cmd_pki_backup ;;
   *)
     echo "Usage: $(basename "$0") {start|stop|restart|status|deploy [svc]|logs [svc]|seed|dev|dev-stop|test [unit|integration|all|e2e] [filter]}"
     echo ""
@@ -562,6 +631,8 @@ case "${1:-help}" in
     echo "  test e2e [grep]              — run Playwright E2E suite (needs kri running)"
     echo "  test [grep]                  — alias for test e2e [grep]"
     echo "  diagnose <ip|minion-id>      — check network, SSH, salt key, and kri status for an offline node"
+    echo "  pki-init                     — generate salt-master RSA keys (first deploy only)"
+    echo "  pki-backup                   — print ansible-vault commands to back up master.pem"
     exit 1
     ;;
 esac

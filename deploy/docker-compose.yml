@@ -6,7 +6,7 @@ x-logging: &default-logging
 
 services:
   db:
-    image: timescale/timescaledb:latest-pg17
+    image: timescale/timescaledb:2.26.4-pg17
     restart: unless-stopped
     environment:
       POSTGRES_DB: fleet_platform
@@ -28,7 +28,7 @@ services:
     logging: *default-logging
 
   pg_backup:
-    image: timescale/timescaledb:latest-pg17
+    image: timescale/timescaledb:2.26.4-pg17
     restart: unless-stopped
     environment:
       PGPASSWORD: ${POSTGRES_PASSWORD:-fleet}
@@ -96,7 +96,7 @@ services:
         condition: service_healthy
     volumes:
       - salt-pillar:/srv/salt/pillar
-      - salt-master-pki:/etc/salt/pki/master   # read/write minion keys via API
+      - ./salt-pki:/etc/salt/pki/master:ro   # read master pub for minion key acceptance
       - /home/dk/Documents/git/pulse:/mnt/pulse:ro   # host playbook repos
       - ../salt/states:/srv/salt/states:ro
     healthcheck:
@@ -120,9 +120,8 @@ services:
     restart: unless-stopped
     env_file: ../.env.docker
     environment:
-      # SALT_MASTER_CONTAINER is no longer used — salt commands now dispatch via
-      # Salt HTTP API (salt-api). Set SALT_API_URL, SALT_API_USER, SALT_API_PASSWORD
-      # in .env.docker (see .env.docker.example). Issue #82.
+      # Salt commands dispatch via Salt HTTP API — set SALT_API_URL, SALT_API_USER,
+      # SALT_API_PASSWORD in .env.docker (see .env.docker.example). Issue #82.
       SALT_API_URL: "${SALT_API_URL:-}"
       SALT_API_USER: "${SALT_API_USER:-}"
       SALT_API_PASSWORD: "${SALT_API_PASSWORD:-}"
@@ -165,7 +164,7 @@ services:
       - "${SALT_BIND_IP:-0.0.0.0}:4506:4506"   # ZeroMQ request/reply — minions send results here
     volumes:
       - salt-pillar:/srv/salt/pillar
-      - salt-master-pki:/etc/salt/pki/master   # persist accepted minion keys across restarts
+      - ./salt-pki:/etc/salt/pki/master       # bind mount — keys persist across rebuilds
       - ./salt-master.conf:/etc/salt/master.d/kri.conf:ro
       - ../salt/states:/srv/salt/states:ro
     healthcheck:
@@ -238,5 +237,4 @@ volumes:
   pgdata:
   redisdata:
   salt-pillar:
-  salt-master-pki:
   pgbackups:
