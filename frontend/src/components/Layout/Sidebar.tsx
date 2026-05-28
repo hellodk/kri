@@ -18,6 +18,7 @@ const NAV_GROUPS = [
       { to: '/drift',     label: 'Drift',     icon: '◑' },
       { to: '/baselines', label: 'Baselines', icon: '▬' },
       { to: '/sbom',      label: 'SBOM',      icon: '◉' },
+      { to: '/licenses',  label: 'Licenses',  icon: '⚖' },
       { to: '/security',  label: 'Security',  icon: '⛨' },
       { to: '/alerts',    label: 'Alerts',    icon: '◭' },
     ],

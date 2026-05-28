@@ -10,6 +10,7 @@ import { NodeDetail } from './pages/NodeDetail'
 import { DriftExplorer } from './pages/DriftExplorer'
 import { DriftComparePage } from './pages/DriftComparePage'
 import { SBOMExplorer } from './pages/SBOMExplorer'
+import { LicensePage } from './pages/LicensePage'
 import { GroupExplorer } from './pages/GroupExplorer'
 import { GroupDetail } from './pages/GroupDetail'
 import { ExecutionHistory } from './pages/ExecutionHistory'
@@ -136,6 +137,7 @@ export default function App() {
             <Route path="/drift" element={<DriftExplorer />} />
             <Route path="/drift/compare" element={<DriftComparePage />} />
             <Route path="/sbom" element={<SBOMExplorer />} />
+            <Route path="/licenses" element={<LicensePage />} />
             <Route path="/groups" element={<GroupExplorer />} />
             <Route path="/groups/:groupId" element={<GroupDetail />} />
             <Route path="/executions" element={<ExecutionHistory />} />
