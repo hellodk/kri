@@ -200,6 +200,10 @@ cmd_dev_stop() {
 
 # ── Deploy (full rebuild + restart) ──────────────────────────────────────────
 
+get_compose_project_name() {
+  docker compose -f "$COMPOSE_FILE" config --format json 2>/dev/null | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('name','deploy'))" 2>/dev/null || echo "deploy"
+}
+
 cmd_deploy() {
   local service="${2:-}"
   echo ""
@@ -208,6 +212,21 @@ cmd_deploy() {
   local version
   version=$(cat "$REPO_DIR/VERSION" 2>/dev/null || echo "?")
   export APP_VERSION="$version"
+
+  # Tag current images as :previous before building
+  echo "  Tagging current images as :previous…"
+  local project_name
+  project_name=$(get_compose_project_name)
+  for svc in api worker beat frontend; do
+    local img
+    img=$(docker compose -f "$COMPOSE_FILE" images --format json "$svc" 2>/dev/null | python3 -c "import sys,json; d=json.load(sys.stdin); print(d[0]['Image'] if d else '')" 2>/dev/null || echo "")
+    if [[ -n "$img" ]]; then
+      docker tag "$img" "${img%:*}:previous" 2>/dev/null || true
+    fi
+  done
+
+  # Save current version for rollback
+  echo "$version" > "$REPO_DIR/.kri-last-version"
 
   if [[ -n "$service" ]]; then
     echo "  Building $service → v$version"
@@ -221,6 +240,112 @@ cmd_deploy() {
 
   echo ""
   ok "Deployed v$version →  http://localhost"
+  echo ""
+}
+
+# ── Rolling deploy (stateless services only, one at a time) ────────────────────
+
+wait_for_healthy() {
+  local svc="$1"
+  local timeout="${2:-60}"
+  local elapsed=0
+  echo "  Waiting for $svc to become healthy…"
+  while [[ $elapsed -lt $timeout ]]; do
+    local health
+    health=$(docker compose -f "$COMPOSE_FILE" ps --format json "$svc" 2>/dev/null | python3 -c "import sys,json; d=json.load(sys.stdin); print(d[0].get('Health','') if isinstance(d,list) and d else d.get('Health',''))" 2>/dev/null || echo "unknown")
+    if [[ "$health" == "healthy" ]]; then
+      ok "$svc is healthy"
+      return 0
+    fi
+    sleep 1
+    ((elapsed++))
+  done
+  warn "$svc did not become healthy within ${timeout}s, continuing anyway…"
+  return 0
+}
+
+cmd_rolling_deploy() {
+  echo ""
+  echo "  kri rolling deploy (stateless services only)"
+  echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+  local version
+  version=$(cat "$REPO_DIR/VERSION" 2>/dev/null || echo "?")
+  export APP_VERSION="$version"
+
+  # Tag current images as :previous before building
+  echo "  Tagging current images as :previous…"
+  for svc in api worker beat frontend; do
+    local img
+    img=$(docker compose -f "$COMPOSE_FILE" images --format json "$svc" 2>/dev/null | python3 -c "import sys,json; d=json.load(sys.stdin); print(d[0]['Image'] if d else '')" 2>/dev/null || echo "")
+    if [[ -n "$img" ]]; then
+      docker tag "$img" "${img%:*}:previous" 2>/dev/null || true
+    fi
+  done
+
+  # Save current version for rollback
+  echo "$version" > "$REPO_DIR/.kri-last-version"
+
+  echo "  Building all services → v$version"
+  docker compose -f "$COMPOSE_FILE" build
+
+  # Rolling restart: frontend → beat → worker → api (api last because it runs migrations)
+  local services=("frontend" "beat" "worker" "api")
+  for svc in "${services[@]}"; do
+    echo ""
+    echo "  Restarting $svc…"
+    docker compose -f "$COMPOSE_FILE" up -d --no-deps "$svc"
+    wait_for_healthy "$svc" 60
+  done
+
+  echo ""
+  ok "Rolling deploy complete v$version →  http://localhost"
+  echo ""
+}
+
+# ── Rollback (restore previous :previous images) ──────────────────────────────
+
+cmd_rollback() {
+  echo ""
+  echo "  kri rollback"
+  echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+
+  local last_version
+  if [[ -f "$REPO_DIR/.kri-last-version" ]]; then
+    last_version=$(cat "$REPO_DIR/.kri-last-version" 2>/dev/null || echo "unknown")
+    echo "  Rolling back to v$last_version…"
+  else
+    warn "No previous version found (.kri-last-version does not exist)"
+    return 1
+  fi
+
+  local project_name
+  project_name=$(get_compose_project_name)
+
+  # For each stateless service, tag :previous as :latest and restart
+  local services=("frontend" "beat" "worker" "api")
+  for svc in "${services[@]}"; do
+    local img
+    img=$(docker compose -f "$COMPOSE_FILE" images --format json "$svc" 2>/dev/null | python3 -c "import sys,json; d=json.load(sys.stdin); print(d[0]['Image'] if d else '')" 2>/dev/null || echo "")
+    if [[ -z "$img" ]]; then
+      warn "Could not find image for $svc, skipping…"
+      continue
+    fi
+
+    local base_img="${img%:*}"
+    local previous_img="${base_img}:previous"
+
+    echo "  Restoring $svc from $previous_img…"
+    if docker image inspect "$previous_img" >/dev/null 2>&1; then
+      docker tag "$previous_img" "${base_img}:latest" 2>/dev/null || true
+      docker compose -f "$COMPOSE_FILE" up -d --no-deps "$svc"
+      wait_for_healthy "$svc" 60
+    else
+      warn "Previous image $previous_img not found for $svc, skipping…"
+    fi
+  done
+
+  echo ""
+  ok "Rollback complete (back to v$last_version)"
   echo ""
 }
 
@@ -257,30 +382,34 @@ cmd_test() {
 # ── Dispatch ──────────────────────────────────────────────────────────────────
 
 case "${1:-help}" in
-  start)    cmd_start ;;
-  stop)     cmd_stop ;;
-  status)   cmd_status ;;
-  restart)  cmd_restart ;;
-  deploy)   cmd_deploy "$@" ;;
-  logs)     cmd_logs "$@" ;;
-  seed)     cmd_seed ;;
-  dev)      cmd_dev ;;
-  dev-stop) cmd_dev_stop ;;
-  test)     cmd_test "$@" ;;
+  start)           cmd_start ;;
+  stop)            cmd_stop ;;
+  status)          cmd_status ;;
+  restart)         cmd_restart ;;
+  deploy)          cmd_deploy "$@" ;;
+  rolling-deploy)  cmd_rolling_deploy ;;
+  rollback)        cmd_rollback ;;
+  logs)            cmd_logs "$@" ;;
+  seed)            cmd_seed ;;
+  dev)             cmd_dev ;;
+  dev-stop)        cmd_dev_stop ;;
+  test)            cmd_test "$@" ;;
   *)
-    echo "Usage: $(basename "$0") {start|stop|restart|status|deploy [service]|logs [service]|seed|dev|dev-stop|test [grep-pattern]}"
+    echo "Usage: $(basename "$0") {start|stop|restart|status|deploy [service]|rolling-deploy|rollback|logs [service]|seed|dev|dev-stop|test [grep-pattern]}"
     echo ""
     echo "  start            — build and start all services in Docker"
     echo "  stop             — stop all Docker services"
     echo "  restart          — stop then start"
     echo "  status           — show Docker Compose service status"
-    echo "  deploy           — rebuild ALL images and redeploy (stamps current version)"
+    echo "  deploy           — rebuild ALL images and redeploy (stamps current version, tags old as :previous)"
     echo "  deploy <svc>     — rebuild and redeploy a single service (api|worker|frontend|salt-master)"
+    echo "  rolling-deploy   — rolling restart of stateless services (frontend→beat→worker→api, skips db/redis/salt)"
+    echo "  rollback         — restore :previous images and restart stateless services"
     echo "  logs [svc]       — tail logs for all or a specific service"
     echo "  seed             — create default users (admin@fleet.local / changeme)"
-    echo "  dev        — local dev: host uvicorn + celery + vite (infra in Docker)"
-    echo "  dev-stop   — stop local dev processes + infra"
-    echo "  test       — run Playwright E2E suite against running stack"
+    echo "  dev              — local dev: host uvicorn + celery + vite (infra in Docker)"
+    echo "  dev-stop         — stop local dev processes + infra"
+    echo "  test             — run Playwright E2E suite against running stack"
     exit 1
     ;;
 esac
