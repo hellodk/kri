@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # kri — start/stop/status for the kri fleet management platform
-# Usage: kri.sh [start|stop|status|restart|logs [service]|dev|test [grep]]
+# Usage: kri.sh [start|stop|status|restart|deploy|logs|seed|dev|dev-stop|test|rolling-deploy|rollback]
 
 set -euo pipefail
 
@@ -10,9 +10,23 @@ LOGS_DIR="$REPO_DIR/.kri-logs"
 PID_DIR="$REPO_DIR/.kri-pids"
 COMPOSE_FILE="$REPO_DIR/deploy/docker-compose.yml"
 COMPOSE_DEV_OVERRIDE="$REPO_DIR/deploy/docker-compose.override.yml"
+ENV_FILE="$REPO_DIR/.env.docker"
 FRONTEND_DIR="$REPO_DIR/frontend"
 
 mkdir -p "$LOGS_DIR" "$PID_DIR"
+
+# Load .env.docker for compose variable interpolation (REDIS_PASSWORD, POSTGRES_PASSWORD, etc.)
+# Services also receive it via env_file: but compose substitution needs it at parse time.
+require_env_file() {
+  if [[ ! -f "$ENV_FILE" ]]; then
+    err ".env.docker not found at $ENV_FILE"
+    echo "  Copy .env.docker.example to .env.docker and fill in the required values."
+    exit 1
+  fi
+}
+
+# Build the --env-file flag for docker compose commands that need interpolation
+compose_env() { echo "--env-file $ENV_FILE"; }
 
 GREEN='\033[0;32m'; YELLOW='\033[1;33m'; RED='\033[0;31m'; NC='\033[0m'
 ok()   { echo -e "${GREEN}✓${NC} $*"; }
@@ -22,13 +36,14 @@ err()  { echo -e "${RED}✗${NC} $*"; }
 # ── Docker Compose commands ───────────────────────────────────────────────────
 
 cmd_start() {
+  require_env_file
   echo ""
   echo "  kri fleet management platform"
   echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
   echo "  Starting all services via Docker Compose…"
   export APP_VERSION
   APP_VERSION=$(cat "$REPO_DIR/VERSION" 2>/dev/null || echo "0.0.0")
-  docker compose -f "$COMPOSE_FILE" up -d --build
+  docker compose -f "$COMPOSE_FILE" $(compose_env) up -d --build
   echo ""
   ok "kri is up →  http://localhost"
   echo "   API docs →  http://localhost/api/docs"
@@ -61,6 +76,68 @@ cmd_logs() {
   fi
 }
 
+# ── Test (unit / integration / e2e) ──────────────────────────────────────────
+
+cmd_test() {
+  local subcommand="${2:-e2e}"
+  local filter="${3:-}"
+
+  case "$subcommand" in
+    unit)
+      echo ""
+      echo "  kri test unit"
+      echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+      # shellcheck disable=SC1090
+      source "$VENV"
+      cd "$REPO_DIR"
+      if [[ -n "$filter" ]]; then
+        uv run pytest tests/unit/ -q -k "$filter"
+      else
+        uv run pytest tests/unit/ -q
+      fi
+      ;;
+    integration)
+      echo ""
+      echo "  kri test integration"
+      echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+      echo "  Requires running DB + Redis (kri dev or kri start)"
+      echo ""
+      # shellcheck disable=SC1090
+      source "$VENV"
+      cd "$REPO_DIR"
+      if [[ -n "$filter" ]]; then
+        uv run pytest tests/integration/ -q -k "$filter"
+      else
+        uv run pytest tests/integration/ -q
+      fi
+      ;;
+    all)
+      echo ""
+      echo "  kri test all"
+      echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+      # shellcheck disable=SC1090
+      source "$VENV"
+      cd "$REPO_DIR"
+      uv run pytest tests/unit/ tests/integration/ -q
+      ;;
+    e2e|*)
+      echo ""
+      echo "  kri test e2e"
+      echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+      echo "  Requires kri to be running (./scripts/kri.sh start)"
+      echo ""
+      cd "$REPO_DIR"
+      local PW="$REPO_DIR/frontend/node_modules/.bin/playwright"
+      export NODE_PATH="$REPO_DIR/frontend/node_modules"
+      if [[ -n "$filter" ]]; then
+        "$PW" test --grep "$filter" --reporter=line 2>&1
+      else
+        "$PW" test --reporter=line 2>&1
+      fi
+      ;;
+  esac
+}
+
 cmd_restart() {
   cmd_stop
   cmd_start
@@ -85,9 +162,10 @@ stop_local_service() {
 }
 
 start_infra_local() {
+  require_env_file
   echo "Starting infrastructure (postgres + redis)…"
   # Use override so db:5432 and redis:6379 are exposed to local processes
-  docker compose -f "$COMPOSE_FILE" -f "$COMPOSE_DEV_OVERRIDE" up -d db redis --quiet-pull 2>&1 | tail -2
+  docker compose -f "$COMPOSE_FILE" -f "$COMPOSE_DEV_OVERRIDE" $(compose_env) up -d db redis --quiet-pull 2>&1 | tail -2
 
   local retries=20
   while [[ $retries -gt 0 ]]; do
@@ -99,7 +177,8 @@ start_infra_local() {
       return 0
     fi
     sleep 1
-    ((retries--))
+    elapsed=$((elapsed + 1))
+    retries=$((retries - 1))
   done
   err "Infrastructure did not become healthy in time"
   exit 1
@@ -193,51 +272,12 @@ cmd_dev_stop() {
   stop_local_service "worker"
   stop_local_service "api"
   echo "  Stopping infrastructure…"
-  docker compose -f "$COMPOSE_FILE" -f "$COMPOSE_DEV_OVERRIDE" stop db redis 2>&1 | tail -1
+  docker compose -f "$COMPOSE_FILE" -f "$COMPOSE_DEV_OVERRIDE" $(compose_env) stop db redis 2>&1 | tail -1
   ok "kri dev stopped"
   echo ""
 }
 
-# ── Deploy (full rebuild + restart) ──────────────────────────────────────────
-
-cmd_deploy() {
-  local service="${2:-}"
-  echo ""
-  echo "  kri deploy${service:+ ($service)}"
-  echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-  local version
-  version=$(cat "$REPO_DIR/VERSION" 2>/dev/null || echo "?")
-  export APP_VERSION="$version"
-
-  # Tag current images as :previous before building
-  echo "  Tagging current images as :previous…"
-  for svc in api worker beat frontend; do
-    local img
-    img=$(docker compose -f "$COMPOSE_FILE" images --format json "$svc" 2>/dev/null | python3 -c "import sys,json; d=json.load(sys.stdin); print(d[0]['Image'] if d else '')" 2>/dev/null || echo "")
-    if [[ -n "$img" ]]; then
-      docker tag "$img" "${img%:*}:previous" 2>/dev/null || true
-    fi
-  done
-
-  # Save current version for rollback
-  echo "$version" > "$REPO_DIR/.kri-last-version"
-
-  if [[ -n "$service" ]]; then
-    echo "  Building $service → v$version"
-    docker compose -f "$COMPOSE_FILE" build "$service"
-    docker compose -f "$COMPOSE_FILE" up -d "$service"
-  else
-    echo "  Building all services → v$version"
-    docker compose -f "$COMPOSE_FILE" build
-    docker compose -f "$COMPOSE_FILE" up -d
-  fi
-
-  echo ""
-  ok "Deployed v$version →  http://localhost"
-  echo ""
-}
-
-# ── Rolling deploy (stateless services only, one at a time) ────────────────────
+# ── Rolling deploy + rollback ─────────────────────────────────────────────────
 
 wait_for_healthy() {
   local svc="$1"
@@ -254,7 +294,6 @@ wait_for_healthy() {
     sleep 1
     elapsed=$((elapsed + 1))
   done
-  # Check if container actually crashed (vs just no healthcheck)
   local state
   state=$(docker compose -f "$COMPOSE_FILE" ps --format json "$svc" 2>/dev/null | python3 -c "import sys,json; d=json.load(sys.stdin); print(d[0].get('State','') if isinstance(d,list) and d else '')" 2>/dev/null || echo "")
   if [[ "$state" == "exited" || "$state" == "restarting" ]]; then
@@ -266,6 +305,7 @@ wait_for_healthy() {
 }
 
 cmd_rolling_deploy() {
+  require_env_file
   echo ""
   echo "  kri rolling deploy (stateless services only)"
   echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
@@ -273,28 +313,24 @@ cmd_rolling_deploy() {
   version=$(cat "$REPO_DIR/VERSION" 2>/dev/null || echo "?")
   export APP_VERSION="$version"
 
-  # Tag current images as :previous before building
   echo "  Tagging current images as :previous…"
   for svc in api worker beat frontend; do
     local img
-    img=$(docker compose -f "$COMPOSE_FILE" images --format json "$svc" 2>/dev/null | python3 -c "import sys,json; d=json.load(sys.stdin); print(d[0]['Image'] if d else '')" 2>/dev/null || echo "")
+    img=$(docker compose -f "$COMPOSE_FILE" $(compose_env) images --format json "$svc" 2>/dev/null | python3 -c "import sys,json; d=json.load(sys.stdin); print(d[0]['Image'] if d else '')" 2>/dev/null || echo "")
     if [[ -n "$img" ]]; then
       docker tag "$img" "${img%:*}:previous" 2>/dev/null || true
     fi
   done
 
-  # Save current version for rollback
   echo "$version" > "$REPO_DIR/.kri-last-version"
-
   echo "  Building all services → v$version"
-  docker compose -f "$COMPOSE_FILE" build
+  docker compose -f "$COMPOSE_FILE" $(compose_env) build
 
-  # Rolling restart: frontend → beat → worker → api (api last because it runs migrations)
   local services=("frontend" "beat" "worker" "api")
   for svc in "${services[@]}"; do
     echo ""
     echo "  Restarting $svc…"
-    docker compose -f "$COMPOSE_FILE" up -d --no-deps "$svc"
+    docker compose -f "$COMPOSE_FILE" $(compose_env) up -d --no-deps "$svc"
     wait_for_healthy "$svc" 60
   done
 
@@ -303,9 +339,8 @@ cmd_rolling_deploy() {
   echo ""
 }
 
-# ── Rollback (restore previous :previous images) ──────────────────────────────
-
 cmd_rollback() {
+  require_env_file
   echo ""
   echo "  kri rollback"
   echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
@@ -319,23 +354,20 @@ cmd_rollback() {
     return 1
   fi
 
-  # For each stateless service, tag :previous as :latest and restart
   local services=("frontend" "beat" "worker" "api")
   for svc in "${services[@]}"; do
     local img
-    img=$(docker compose -f "$COMPOSE_FILE" images --format json "$svc" 2>/dev/null | python3 -c "import sys,json; d=json.load(sys.stdin); print(d[0]['Image'] if d else '')" 2>/dev/null || echo "")
+    img=$(docker compose -f "$COMPOSE_FILE" $(compose_env) images --format json "$svc" 2>/dev/null | python3 -c "import sys,json; d=json.load(sys.stdin); print(d[0]['Image'] if d else '')" 2>/dev/null || echo "")
     if [[ -z "$img" ]]; then
       warn "Could not find image for $svc, skipping…"
       continue
     fi
-
     local base_img="${img%:*}"
     local previous_img="${base_img}:previous"
-
     echo "  Restoring $svc from $previous_img…"
     if docker image inspect "$previous_img" >/dev/null 2>&1; then
       docker tag "$previous_img" "${base_img}:latest" 2>/dev/null || true
-      docker compose -f "$COMPOSE_FILE" up -d --no-deps "$svc"
+      docker compose -f "$COMPOSE_FILE" $(compose_env) up -d --no-deps "$svc"
       wait_for_healthy "$svc" 60
     else
       warn "Previous image $previous_img not found for $svc, skipping…"
@@ -344,6 +376,33 @@ cmd_rollback() {
 
   echo ""
   ok "Rollback complete (back to v$last_version)"
+  echo ""
+}
+
+# ── Deploy (full rebuild + restart) ──────────────────────────────────────────
+
+cmd_deploy() {
+  require_env_file
+  local service="${2:-}"
+  echo ""
+  echo "  kri deploy${service:+ ($service)}"
+  echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+  local version
+  version=$(cat "$REPO_DIR/VERSION" 2>/dev/null || echo "?")
+  export APP_VERSION="$version"
+
+  if [[ -n "$service" ]]; then
+    echo "  Building $service → v$version"
+    docker compose -f "$COMPOSE_FILE" $(compose_env) build "$service"
+    docker compose -f "$COMPOSE_FILE" $(compose_env) up -d "$service"
+  else
+    echo "  Building all services → v$version"
+    docker compose -f "$COMPOSE_FILE" $(compose_env) build
+    docker compose -f "$COMPOSE_FILE" $(compose_env) up -d
+  fi
+
+  echo ""
+  ok "Deployed v$version →  http://localhost"
   echo ""
 }
 
@@ -358,56 +417,41 @@ cmd_seed() {
   echo ""
 }
 
-# ── Test ──────────────────────────────────────────────────────────────────────
-
-cmd_test() {
-  echo ""
-  echo "  kri E2E test suite"
-  echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-  echo "  Requires kri to be running (./scripts/kri.sh start)"
-  echo ""
-  local filter="${2:-}"
-  cd "$REPO_DIR"
-  local PW="$REPO_DIR/frontend/node_modules/.bin/playwright"
-  export NODE_PATH="$REPO_DIR/frontend/node_modules"
-  if [[ -n "$filter" ]]; then
-    "$PW" test --grep "$filter" --reporter=line 2>&1
-  else
-    "$PW" test --reporter=line 2>&1
-  fi
-}
-
 # ── Dispatch ──────────────────────────────────────────────────────────────────
 
 case "${1:-help}" in
-  start)           cmd_start ;;
-  stop)            cmd_stop ;;
-  status)          cmd_status ;;
-  restart)         cmd_restart ;;
-  deploy)          cmd_deploy "$@" ;;
-  rolling-deploy)  cmd_rolling_deploy ;;
-  rollback)        cmd_rollback ;;
-  logs)            cmd_logs "$@" ;;
-  seed)            cmd_seed ;;
-  dev)             cmd_dev ;;
-  dev-stop)        cmd_dev_stop ;;
-  test)            cmd_test "$@" ;;
+  start)          cmd_start ;;
+  stop)           cmd_stop ;;
+  status)         cmd_status ;;
+  restart)        cmd_restart ;;
+  deploy)         cmd_deploy "$@" ;;
+  rolling-deploy) cmd_rolling_deploy ;;
+  rollback)       cmd_rollback ;;
+  logs)           cmd_logs "$@" ;;
+  seed)           cmd_seed ;;
+  dev)            cmd_dev ;;
+  dev-stop)       cmd_dev_stop ;;
+  test)           cmd_test "$@" ;;
   *)
-    echo "Usage: $(basename "$0") {start|stop|restart|status|deploy [service]|rolling-deploy|rollback|logs [service]|seed|dev|dev-stop|test [grep-pattern]}"
+    echo "Usage: $(basename "$0") {start|stop|restart|status|deploy [svc]|logs [svc]|seed|dev|dev-stop|test [unit|integration|all|e2e] [filter]}"
     echo ""
-    echo "  start            — build and start all services in Docker"
-    echo "  stop             — stop all Docker services"
-    echo "  restart          — stop then start"
-    echo "  status           — show Docker Compose service status"
-    echo "  deploy           — rebuild ALL images and redeploy (stamps current version, tags old as :previous)"
-    echo "  deploy <svc>     — rebuild and redeploy a single service (api|worker|frontend|salt-master)"
-    echo "  rolling-deploy   — rolling restart of stateless services (frontend→beat→worker→api, skips db/redis/salt)"
-    echo "  rollback         — restore :previous images and restart stateless services"
-    echo "  logs [svc]       — tail logs for all or a specific service"
-    echo "  seed             — create default users (admin@fleet.local / changeme)"
-    echo "  dev              — local dev: host uvicorn + celery + vite (infra in Docker)"
-    echo "  dev-stop         — stop local dev processes + infra"
-    echo "  test             — run Playwright E2E suite against running stack"
+    echo "  start                        — build and start all services in Docker"
+    echo "  stop                         — stop all Docker services"
+    echo "  restart                      — stop then start"
+    echo "  status                       — show Docker Compose service status"
+    echo "  deploy                       — rebuild ALL images and redeploy (stamps version)"
+    echo "  deploy <svc>                 — rebuild one service (api|worker|frontend|salt-master)"
+    echo "  rolling-deploy               — zero-downtime rolling restart (stateless services only)"
+    echo "  rollback                     — restore :previous images and restart stateless services"
+    echo "  logs [svc]                   — tail logs for all or a specific service"
+    echo "  seed                         — create default users (admin@fleet.local / changeme)"
+    echo "  dev                          — local dev: host uvicorn + celery + vite (infra in Docker)"
+    echo "  dev-stop                     — stop local dev processes + infra"
+    echo "  test unit [filter]           — run pytest tests/unit/ (optionally filtered)"
+    echo "  test integration [filter]    — run pytest tests/integration/ (needs DB + Redis)"
+    echo "  test all                     — run unit + integration"
+    echo "  test e2e [grep]              — run Playwright E2E suite (needs kri running)"
+    echo "  test [grep]                  — alias for test e2e [grep]"
     exit 1
     ;;
 esac

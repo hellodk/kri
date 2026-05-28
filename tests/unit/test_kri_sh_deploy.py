@@ -85,3 +85,4 @@ def test_redis_password_not_hardcoded():
 def test_env_file_missing_gives_helpful_error():
     src = _kri()
     assert ".env.docker not found" in src or "env.docker.example" in src
+
