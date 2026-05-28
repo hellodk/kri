@@ -18,7 +18,6 @@ from fleet_platform.workers.ansible_tasks import _get_bootstrap_settings
 from fleet_platform.workers.celery_app import celery_app
 
 _DEFAULT_PLAYBOOKS_DIR = Path(__file__).parent.parent.parent / "playbooks"
-_REPO_ROOT = Path(__file__).parent.parent.parent
 
 _log = logging.getLogger(__name__)
 _SAFE_PATH_RE = re.compile(r'^[a-zA-Z0-9._\-]{1,128}$')
@@ -61,21 +60,6 @@ def _write_var_file(path: Path, vars_dict: dict) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(_yaml.dump(vars_dict, default_flow_style=False, allow_unicode=True))
 
-
-def _commit_var_files(var_files: list[Path]) -> None:
-    try:
-        import git
-        repo = git.Repo(_REPO_ROOT)
-        for vf in var_files:
-            repo.index.add([str(vf.relative_to(_REPO_ROOT))])
-        if repo.index.diff("HEAD"):
-            repo.index.commit(
-                "chore(kri): update ansible var files",
-                author=git.Actor("kri", "kri@localhost"),
-                committer=git.Actor("kri", "kri@localhost"),
-            )
-    except Exception as e:
-        _log.warning("Could not commit var files to git: %s", e)
 
 
 def _resolve_hosts(db, job: AnsibleJob, ssh_user: str) -> list[tuple[str, str, str]] | None:
@@ -138,7 +122,6 @@ def run_playbook(self, job_id: str, ssh_username: str | None = None, ssh_passwor
             db.commit()
         return {"status": "error", "reason": "no_hosts"}
 
-    var_files: list[Path] = []
     with get_sync_db() as db:
         job = db.execute(select(AnsibleJob).where(AnsibleJob.id == job_uuid)).scalar_one()
         if job.extravars:
@@ -146,14 +129,9 @@ def run_playbook(self, job_id: str, ssh_username: str | None = None, ssh_passwor
                 hostname = _safe_label(hosts[0][0])
                 vf = playbooks_dir / "host_vars" / f"{hostname}.yml"
                 _write_var_file(vf, job.extravars)
-                var_files.append(vf)
             elif job.target_type == "group":
                 vf = playbooks_dir / "group_vars" / f"{_safe_label(job.target_label)}.yml"
                 _write_var_file(vf, job.extravars)
-                var_files.append(vf)
-
-    if var_files:
-        _commit_var_files(var_files)
 
     playbook_path = playbooks_dir / job.playbook
     stdout_lines = []
