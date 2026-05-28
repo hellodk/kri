@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { AuthGuard } from './components/AuthGuard'
@@ -30,6 +30,8 @@ import { useSaltKeysStore } from './stores/saltKeysStore'
 import { useToastStore } from './stores/toastStore'
 import { useAuthStore } from './stores/authStore'
 import LLMAssistant from './components/LLMAssistant'
+import { useKeyboardShortcuts } from './hooks/useKeyboardShortcuts'
+import { KeyboardShortcutsOverlay } from './components/KeyboardShortcutsOverlay'
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -92,10 +94,29 @@ function NotFoundPage() {
 }
 
 export default function App() {
+  const [shortcutsOpen, setShortcutsOpen] = useState(false)
+
+  useKeyboardShortcuts({
+    '?': () => setShortcutsOpen((v) => !v),
+    'ctrl+k': () => {
+      const input = document.querySelector<HTMLInputElement>(
+        'input[type="search"], input[placeholder*="search" i], input[placeholder*="filter" i]'
+      )
+      input?.focus()
+    },
+    '/': () => {
+      const input = document.querySelector<HTMLInputElement>(
+        'input[type="search"], input[placeholder*="search" i], input[placeholder*="filter" i]'
+      )
+      input?.focus()
+    },
+  })
+
   return (
     <QueryClientProvider client={queryClient}>
       <BrowserRouter>
         <SaltKeyWatcher />
+        <KeyboardShortcutsOverlay open={shortcutsOpen} onClose={() => setShortcutsOpen(false)} />
         <Routes>
           <Route path="/login" element={<LoginPage />} />
           <Route path="/auth/callback" element={<OidcCallbackPage />} />
