@@ -11,6 +11,8 @@ from fleet_platform.models.sbom import SBOMComponent, SBOMScan
 from fleet_platform.schemas.common import PaginatedResponse
 from fleet_platform.schemas.sbom import (
     SBOMComponentResponse,
+    SBOMDeltaResponse,
+    SBOMPackage,
     SBOMScanResponse,
     SBOMSearchResult,
 )
@@ -193,4 +195,71 @@ async def list_scan_components(
         total=total,
         page=page,
         per_page=per_page,
+    )
+
+
+@router.get("/delta/{node_id}", response_model=SBOMDeltaResponse)
+async def sbom_delta(
+    node_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+    _: dict = Depends(get_current_user),
+) -> SBOMDeltaResponse:
+    """Return packages added/removed between the two most recent SBOM scans for a node."""
+    # Get the two most recent scans for this node
+    scans_result = await db.execute(
+        select(SBOMScan)
+        .where(SBOMScan.node_id == node_id)
+        .order_by(SBOMScan.scanned_at.desc())
+        .limit(2)
+    )
+    scans = scans_result.scalars().all()
+
+    if len(scans) < 2:
+        return SBOMDeltaResponse(
+            node_id=str(node_id),
+            has_delta=False,
+            new_packages=[],
+            removed_packages=[],
+            new_count=0,
+            removed_count=0,
+            message="Need at least 2 scans to compute delta",
+        )
+
+    latest, previous = scans[0], scans[1]
+
+    # Get package identifiers from each scan (use purl if available, else name+version)
+    async def get_package_set(scan_id: uuid.UUID) -> dict[str, dict]:
+        result = await db.execute(
+            select(SBOMComponent.name, SBOMComponent.version, SBOMComponent.purl).where(
+                SBOMComponent.scan_id == scan_id
+            )
+        )
+        packages = {}
+        for name, version, purl in result.all():
+            key = purl or f"{name}@{version or 'unknown'}"
+            packages[key] = {"name": name, "version": version or "", "purl": purl or ""}
+        return packages
+
+    latest_pkgs = await get_package_set(latest.id)
+    prev_pkgs = await get_package_set(previous.id)
+
+    latest_keys = set(latest_pkgs.keys())
+    prev_keys = set(prev_pkgs.keys())
+
+    new_keys = latest_keys - prev_keys
+    removed_keys = prev_keys - latest_keys
+
+    return SBOMDeltaResponse(
+        node_id=str(node_id),
+        has_delta=True,
+        latest_scan_at=latest.scanned_at,
+        previous_scan_at=previous.scanned_at,
+        new_packages=[
+            SBOMPackage(**latest_pkgs[k]) for k in sorted(new_keys)
+        ],
+        removed_packages=[
+            SBOMPackage(**prev_pkgs[k]) for k in sorted(removed_keys)
+        ],
+        new_count=len(new_keys),
+        removed_count=len(removed_keys),
     )

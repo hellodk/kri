@@ -38,3 +38,21 @@ class SBOMSearchResult(BaseModel):
     node_id: uuid.UUID
     scan_id: uuid.UUID
     scanned_at: datetime
+
+
+class SBOMPackage(BaseModel):
+    name: str
+    version: str
+    purl: str
+
+
+class SBOMDeltaResponse(BaseModel):
+    node_id: str
+    has_delta: bool
+    new_packages: list[SBOMPackage]
+    removed_packages: list[SBOMPackage]
+    new_count: int
+    removed_count: int
+    latest_scan_at: datetime | None = None
+    previous_scan_at: datetime | None = None
+    message: str | None = None
