@@ -1,13 +1,13 @@
 # salt/states/mlx/init.sls
-# Installs Apple MLX and mlx-lm on Mac Mini nodes and runs a model as an
-# OpenAI-compatible API server via launchd.
+# Installs Apple MLX and mlx-lm on Mac Mini nodes via Artifactory PyPI proxy
+# and runs a model as an OpenAI-compatible API server via launchd.
 #
 # Pillar keys:
-#   mlx:model       (required) HuggingFace model ID, e.g. mlx-community/Llama-3.2-3B-Instruct-4bit
+#   mlx:model_path  (required) local path to pre-downloaded model, e.g. /data/models/mlx-community-Llama-3.2
 #   mlx:port        (optional, default 8080) port for mlx-lm serve
 #   mlx:host        (optional, default 127.0.0.1) bind address — use 0.0.0.0 for fleet access
 #   mlx:max_tokens  (optional, default 4096) max tokens per response
-#   mlx:hf_token    (optional) HuggingFace token for gated models
+#   artifactory:pypi_proxy  (required) e.g. https://artifactory.internal/artifactory/api/pypi/pypi-proxy/simple
 #
 # Apply to all nodes:
 #   salt '*' state.apply mlx
@@ -16,11 +16,13 @@
 # Remove service:
 #   salt '*' state.apply mlx.remove
 
-{% set model    = pillar['mlx']['model'] %}
-{% set port     = pillar.get('mlx', {}).get('port', 8080) %}
-{% set host     = pillar.get('mlx', {}).get('host', '127.0.0.1') %}
-{% set max_tok  = pillar.get('mlx', {}).get('max_tokens', 4096) %}
-{% set hf_token = pillar.get('mlx', {}).get('hf_token', '') %}
+include:
+  - common.artifactory
+
+{% set model_path = pillar['mlx']['model_path'] %}
+{% set port       = pillar.get('mlx', {}).get('port', 8080) %}
+{% set host       = pillar.get('mlx', {}).get('host', '127.0.0.1') %}
+{% set max_tok    = pillar.get('mlx', {}).get('max_tokens', 4096) %}
 {% set plist_label = 'com.kri.mlx-server' %}
 {% set plist_path  = '/Library/LaunchDaemons/' ~ plist_label ~ '.plist' %}
 {% set log_dir     = '/var/log/kri-mlx' %}
@@ -37,36 +39,11 @@ mlx_log_dir:
 
 mlx_pip_install:
   cmd.run:
-    - name: {{ pip_bin }} install --upgrade --quiet mlx mlx-lm huggingface-hub
+    - name: {{ pip_bin }} install --upgrade --quiet mlx mlx-lm
     - unless: {{ python_bin }} -c "import mlx_lm" 2>/dev/null
     - require:
       - file: mlx_log_dir
-
-{% if hf_token %}
-mlx_hf_token:
-  environ.setenv:
-    - name: HUGGING_FACE_HUB_TOKEN
-    - value: {{ hf_token }}
-    - update_minion: True
-{% endif %}
-
-# ── Pre-download the model to the HuggingFace cache ──────────────────────────
-# This can take several minutes on first run depending on model size.
-
-mlx_model_download:
-  cmd.run:
-    - name: >
-        {{ python_bin }} -m huggingface_hub.commands.huggingface_cli download
-        {{ model }}
-    - unless: >
-        {{ python_bin }} -c "
-        from huggingface_hub import snapshot_download, try_to_load_from_cache;
-        import sys;
-        p = try_to_load_from_cache('{{ model }}', 'config.json');
-        sys.exit(0 if p else 1)"
-    - timeout: 1800
-    - require:
-      - cmd: mlx_pip_install
+      - file: artifactory_pip_config
 
 # ── launchd plist ─────────────────────────────────────────────────────────────
 
@@ -86,8 +63,8 @@ mlx_server_plist:
                 <string>{{ python_bin }}</string>
                 <string>-m</string>
                 <string>mlx_lm.server</string>
-                <string>--model</string>
-                <string>{{ model }}</string>
+                <string>--model-path</string>
+                <string>{{ model_path }}</string>
                 <string>--host</string>
                 <string>{{ host }}</string>
                 <string>--port</string>
@@ -107,10 +84,6 @@ mlx_server_plist:
             <dict>
                 <key>PATH</key>
                 <string>/usr/local/bin:/usr/bin:/bin</string>
-                {% if hf_token %}
-                <key>HUGGING_FACE_HUB_TOKEN</key>
-                <string>{{ hf_token }}</string>
-                {% endif %}
             </dict>
         </dict>
         </plist>
@@ -118,7 +91,7 @@ mlx_server_plist:
     - group: wheel
     - mode: '0644'
     - require:
-      - cmd: mlx_model_download
+      - cmd: mlx_pip_install
 
 mlx_server_service:
   cmd.run:

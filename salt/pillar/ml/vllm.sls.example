@@ -1,0 +1,16 @@
+# salt/pillar/ml/vllm.sls.example
+# Example vLLM configuration.
+# Copy and customize this file to salt/pillar/ml/vllm.sls or include in top.sls
+
+ml:
+  vllm:
+    version: '0.4.0'        # optional: pin version, default latest
+    port: 8000              # optional: API port, default 8000
+    model: microsoft/phi-2  # optional: model name, default microsoft/phi-2
+    host: 0.0.0.0           # optional: bind address, default 0.0.0.0
+
+# Artifactory PyPI proxy configuration (required)
+artifactory:
+  url: https://artifactory.internal
+  pypi_proxy: https://artifactory.internal/artifactory/api/pypi/pypi-proxy/simple
+  pip_trusted_host: artifactory.internal
