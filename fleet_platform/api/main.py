@@ -1,6 +1,7 @@
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, HTTPException, Request
+from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from prometheus_client import CONTENT_TYPE_LATEST, generate_latest
@@ -88,6 +89,13 @@ def create_app() -> FastAPI:
             content={"error_code": code, "detail": exc.detail},
         )
 
+    @app.exception_handler(RequestValidationError)
+    async def structured_validation_exception_handler(request: Request, exc: RequestValidationError) -> JSONResponse:
+        return JSONResponse(
+            status_code=422,
+            content={"error_code": "UNPROCESSABLE", "detail": exc.errors()},
+        )
+
     # Prometheus middleware must be added before CORS so it sees every request.
     # Starlette applies middleware in reverse-registration order (last-added runs first),
     # so PrometheusMiddleware is registered first and therefore executes outermost.
@@ -140,7 +148,7 @@ def create_app() -> FastAPI:
         _log.error("unhandled_exception", path=str(request.url), exc_info=exc)
         return JSONResponse(
             status_code=500,
-            content={"error": {"code": "INTERNAL_ERROR", "message": "An unexpected error occurred"}},
+            content={"error_code": "INTERNAL_ERROR", "detail": "An unexpected error occurred"},
         )
 
     return app

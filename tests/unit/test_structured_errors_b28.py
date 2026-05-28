@@ -38,7 +38,7 @@ def test_app_error_is_http_exception():
 
 def test_main_registers_http_exception_handler():
     from pathlib import Path
-    src = Path("fleet_platform/api/main.py").read_text()
+    src = (Path(__file__).parent.parent.parent / "fleet_platform/api/main.py").read_text()
     assert "structured_http_exception_handler" in src
     assert "error_code" in src
     assert "AppError" in src
