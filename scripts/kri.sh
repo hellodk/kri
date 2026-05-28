@@ -417,6 +417,114 @@ cmd_seed() {
   echo ""
 }
 
+# ── Diagnose offline node ─────────────────────────────────────────────────────
+
+cmd_diagnose() {
+  local target="${2:-}"
+  if [[ -z "$target" ]]; then
+    err "Usage: $(basename "$0") diagnose <node-ip|minion-id>"
+    exit 1
+  fi
+
+  echo ""
+  echo "  kri diagnose — $target"
+  echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+  echo ""
+
+  # 1. Network reachability
+  echo "  [1/4] Network reachability…"
+  if ping -c 2 -W 2 "$target" >/dev/null 2>&1; then
+    ok "  Host $target is reachable (ICMP)"
+  else
+    warn "  Host $target does not respond to ping — may be offline or ICMP blocked"
+    echo "       Next step: verify the node is powered on and connected to the network"
+  fi
+
+  # 2. SSH port check
+  echo ""
+  echo "  [2/4] SSH port (22)…"
+  if timeout 5 bash -c "</dev/tcp/$target/22" 2>/dev/null; then
+    ok "  Port 22 is open on $target"
+  else
+    err "  Port 22 is closed or unreachable on $target"
+    echo "       Next step: ensure SSH is enabled on the Mac Mini (System Settings → Sharing → Remote Login)"
+  fi
+
+  # 3. Salt master key status
+  echo ""
+  echo "  [3/4] Salt minion key status…"
+  local salt_keys
+  salt_keys=$(docker exec deploy-saltmaster-1 salt-key -L 2>/dev/null || echo "salt-master-unavailable")
+  if [[ "$salt_keys" == "salt-master-unavailable" ]]; then
+    warn "  Cannot reach salt-master container (is kri running?)"
+  else
+    local accepted rejected pending
+    accepted=$(echo "$salt_keys" | grep -A999 "Accepted Keys:" | grep -B999 "Denied Keys:" | grep -v "Accepted Keys:\|Denied Keys:" | grep -c "$target" 2>/dev/null || echo 0)
+    rejected=$(echo "$salt_keys" | grep -A999 "Rejected Keys:" | grep -c "$target" 2>/dev/null || echo 0)
+    pending=$(echo "$salt_keys" | grep -A999 "Unaccepted Keys:" | grep -B999 "Rejected Keys:" | grep -v "Unaccepted Keys:\|Rejected Keys:" | grep -c "$target" 2>/dev/null || echo 0)
+
+    if [[ "$accepted" -gt 0 ]]; then
+      ok "  Minion key for $target is ACCEPTED"
+    elif [[ "$pending" -gt 0 ]]; then
+      warn "  Minion key for $target is PENDING acceptance"
+      echo "       Next step: run:  docker exec deploy-saltmaster-1 salt-key -A -y"
+    elif [[ "$rejected" -gt 0 ]]; then
+      err "  Minion key for $target is REJECTED"
+      echo "       Next step: delete rejected key and re-bootstrap:"
+      echo "         docker exec deploy-saltmaster-1 salt-key -d $target -y"
+    else
+      warn "  No salt key found for $target — minion may not have connected yet"
+      echo "       Next step: trigger a bootstrap from the kri UI (Fleet → node → Bootstrap)"
+    fi
+  fi
+
+  # 4. kri API node status
+  echo ""
+  echo "  [4/4] kri API node record…"
+  local api_up
+  api_up=$(curl -sf http://localhost:8000/health/ready 2>/dev/null | python3 -c "import sys,json; d=json.load(sys.stdin); print('ok' if d.get('status')=='ok' else 'err')" 2>/dev/null || echo "unreachable")
+  if [[ "$api_up" == "unreachable" ]]; then
+    warn "  kri API not reachable at localhost:8000 — is kri running?"
+  else
+    local nodes_json
+    nodes_json=$(curl -sf "http://localhost:8000/api/v1/fleet/nodes?per_page=200" \
+      -H "Authorization: Bearer $(cat "$REPO_DIR/.kri-token" 2>/dev/null || echo '')" 2>/dev/null || echo "")
+    if [[ -z "$nodes_json" ]]; then
+      warn "  Could not fetch node list (no token? run: kri.sh token)"
+    else
+      local node_status
+      node_status=$(echo "$nodes_json" | python3 -c "
+import sys,json
+nodes = json.load(sys.stdin).get('items',[])
+match = [n for n in nodes if n.get('bootstrap_ip')=='$target' or n.get('minion_id')=='$target' or n.get('hostname','').startswith('$target')]
+if match:
+    n = match[0]
+    print(f'  Node: {n.get(\"minion_id\",\"?\")} | status={n.get(\"status\",\"?\")} | bootstrap={n.get(\"bootstrap_status\",\"?\")}')
+    if n.get('bootstrap_error'):
+        print(f'  Last error: {n[\"bootstrap_error\"][:120]}')
+else:
+    print('  NOT_FOUND')
+" 2>/dev/null || echo "  parse-error")
+      if [[ "$node_status" == "  NOT_FOUND" ]]; then
+        warn "  Node $target not found in kri database"
+        echo "       Next step: add the node via Fleet → Add Node"
+      else
+        echo "$node_status"
+      fi
+    fi
+  fi
+
+  echo ""
+  echo "  ── Re-bootstrap steps ──────────────────────────────────────────────"
+  echo "  1. Ensure node is reachable (steps 1–2 above)"
+  echo "  2. Accept/delete salt key if needed (step 3 above)"
+  echo "  3. In kri UI: Fleet → select node → Bootstrap tab → Run Bootstrap"
+  echo "  4. Or via API:"
+  echo "     curl -X POST http://localhost:8000/api/v1/ansible/bootstrap/<node_id>"
+  echo "          -H 'Authorization: Bearer <token>'"
+  echo ""
+}
+
 # ── Dispatch ──────────────────────────────────────────────────────────────────
 
 case "${1:-help}" in
@@ -432,6 +540,7 @@ case "${1:-help}" in
   dev)            cmd_dev ;;
   dev-stop)       cmd_dev_stop ;;
   test)           cmd_test "$@" ;;
+  diagnose)       cmd_diagnose "$@" ;;
   *)
     echo "Usage: $(basename "$0") {start|stop|restart|status|deploy [svc]|logs [svc]|seed|dev|dev-stop|test [unit|integration|all|e2e] [filter]}"
     echo ""
@@ -452,6 +561,7 @@ case "${1:-help}" in
     echo "  test all                     — run unit + integration"
     echo "  test e2e [grep]              — run Playwright E2E suite (needs kri running)"
     echo "  test [grep]                  — alias for test e2e [grep]"
+    echo "  diagnose <ip|minion-id>      — check network, SSH, salt key, and kri status for an offline node"
     exit 1
     ;;
 esac
