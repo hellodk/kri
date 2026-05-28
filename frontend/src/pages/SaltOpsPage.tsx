@@ -50,6 +50,10 @@ export function SaltOpsPage() {
   const [taskId, setTaskId] = useState<string | null>(null)
   const [taskOutput, setTaskOutput] = useState<{ status: string; stdout?: string; stderr?: string; reason?: string } | null>(null)
   const [applying, setApplying] = useState(false)
+  const [showQuickInstall, setShowQuickInstall] = useState(false)
+  const [quickPkgManager, setQuickPkgManager] = useState<'pip' | 'brew' | 'pkg'>('pip')
+  const [quickPackage, setQuickPackage] = useState('')
+  const [showHelp, setShowHelp] = useState(false)
 
   const { data: statesData, isLoading: statesLoading } = useQuery({
     queryKey: ['salt-states'],
@@ -138,13 +142,102 @@ export function SaltOpsPage() {
     setShowPillarDialog(true)
   }
 
+  async function runQuickInstall() {
+    if (!quickPackage.trim() || selectedMinions.size === 0) return
+    setApplying(true)
+    setTaskOutput(null)
+    setTaskId(null)
+    const fn = quickPkgManager === 'pip' ? 'pip.install'
+             : quickPkgManager === 'pkg' ? 'pkg.install'
+             : 'cmd.run'
+    const args = quickPkgManager === 'brew'
+      ? ['brew install ' + quickPackage.trim()]
+      : [quickPackage.trim()]
+    try {
+      const resp = await saltOpsApi.cmd(fn, Array.from(selectedMinions), args)
+      setTaskId(resp.task_id)
+      toast(`Installing ${quickPackage} via ${quickPkgManager}…`)
+    } catch (e: unknown) {
+      setApplying(false)
+      toast(e instanceof Error ? e.message : 'Install failed', 'error')
+    }
+  }
+
   const parsedOutput = taskOutput?.stdout ? renderSaltOutput(taskOutput.stdout) : []
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold text-gray-900">Salt Ops</h1>
-        <p className="text-sm text-gray-500 mt-1">Browse and apply Salt states to fleet nodes.</p>
+      <div className="flex items-start justify-between">
+        <div>
+          <h1 className="text-2xl font-bold text-gray-900">Salt Ops</h1>
+          <p className="text-sm text-gray-500 mt-1">Browse and apply Salt states to fleet nodes.</p>
+        </div>
+        <button
+          onClick={() => setShowHelp((v) => !v)}
+          className="px-3 py-2 text-gray-600 hover:text-gray-900 font-semibold rounded-lg hover:bg-gray-100"
+          title="Show help"
+        >?</button>
+      </div>
+
+      {showHelp && (
+        <div className="bg-blue-50 border-l-4 border-blue-500 rounded-lg px-5 py-4 text-sm text-blue-900 space-y-2">
+          <p className="font-semibold">How to use Salt Ops</p>
+          <ul className="space-y-1 ml-4 list-disc">
+            <li><span className="font-mono">ml_tools.init</span> — dotted names map to files: <span className="font-mono">/srv/salt/states/ml_tools/init.sls</span></li>
+            <li><strong>Pillar data</strong> — key-value pairs passed to states via <span className="font-mono">{'{{ pillar.get("key", "default") }}'}</span></li>
+            <li><strong>Quick Install</strong> — install pip/brew/pkg packages without a state file</li>
+            <li><strong>Targeting</strong> — select individual minions or "Select all" for fleet-wide</li>
+          </ul>
+        </div>
+      )}
+
+      <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
+        <button
+          onClick={() => setShowQuickInstall((v) => !v)}
+          className="w-full px-4 py-3 flex items-center gap-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
+        >
+          <span className="text-xs text-gray-400">{showQuickInstall ? '▾' : '▸'}</span>
+          Quick Install <span className="text-xs text-gray-400 font-normal">(no state file needed)</span>
+        </button>
+        {showQuickInstall && (
+          <div className="px-4 pb-4 pt-2 border-t border-gray-100 flex items-end gap-3 flex-wrap">
+            <div>
+              <label className="block text-xs text-gray-500 mb-1">Package manager</label>
+              <select
+                value={quickPkgManager}
+                onChange={(e) => setQuickPkgManager(e.target.value as 'pip' | 'brew' | 'pkg')}
+                className="border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              >
+                <option value="pip">pip</option>
+                <option value="brew">brew</option>
+                <option value="pkg">pkg</option>
+              </select>
+            </div>
+            <div className="flex-1 min-w-48">
+              <label className="block text-xs text-gray-500 mb-1">Package name</label>
+              <input
+                type="text"
+                placeholder="e.g. vllm or vllm==0.4.0"
+                value={quickPackage}
+                onChange={(e) => setQuickPackage(e.target.value)}
+                onKeyDown={(e) => { if (e.key === 'Enter') runQuickInstall() }}
+                className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+            </div>
+            <button
+              onClick={runQuickInstall}
+              disabled={!quickPackage.trim() || selectedMinions.size === 0 || applying}
+              className="px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {applying ? 'Running…' : 'Install'}
+            </button>
+            <p className="w-full text-xs text-gray-400">
+              {selectedMinions.size === 0
+                ? 'Select minions in the panel below first'
+                : `Will run on ${selectedMinions.size} minion${selectedMinions.size === 1 ? '' : 's'}`}
+            </p>
+          </div>
+        )}
       </div>
 
       <div className="flex gap-6 items-start">
