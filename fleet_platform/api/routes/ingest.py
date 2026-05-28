@@ -28,6 +28,17 @@ _INGEST_RATE_LIMIT = 10  # requests per minute per node
 _INGEST_RATE_WINDOW = 60  # seconds
 
 
+def _strip_nulls(obj: object) -> object:
+    """Recursively remove null bytes from strings — PostgreSQL rejects  in JSONB."""
+    if isinstance(obj, str):
+        return obj.replace("\x00", "")
+    if isinstance(obj, dict):
+        return {k: _strip_nulls(v) for k, v in obj.items()}
+    if isinstance(obj, list):
+        return [_strip_nulls(v) for v in obj]
+    return obj
+
+
 def _check_ingest_rate_limit(node_id: str) -> bool:
     """Return True if allowed, False if rate limit exceeded."""
     try:
@@ -205,7 +216,9 @@ async def ingest_grains(
         )
     now = datetime.now(UTC)
 
-    updates = _extract_node_updates(payload.grains)
+    clean_grains = _strip_nulls(payload.grains)
+
+    updates = _extract_node_updates(clean_grains)
     updates["last_seen_at"] = now
     for key, value in updates.items():
         # Never overwrite an existing ip_address with None -- grains may not carry
@@ -223,16 +236,16 @@ async def ingest_grains(
         NodeFact(
             node_id=node.id,
             collected_at=now,
-            grains=payload.grains,
+            grains=clean_grains,
         )
     )
 
-    await _upsert_system_tags(db, node, payload.grains, now)
+    await _upsert_system_tags(db, node, clean_grains, now)
 
     # Update iOS-specific tracking fields from grains (before commit)
     from fleet_platform.services.ios_tracking_svc import update_node_from_grains
 
-    await update_node_from_grains(node.id, payload.grains, db)
+    await update_node_from_grains(node.id, clean_grains, db)
 
     await db.commit()
     compute_drift.delay(str(node.id))

@@ -6,7 +6,7 @@ x-logging: &default-logging
 
 services:
   db:
-    image: timescale/timescaledb:2.17.2-pg17
+    image: timescale/timescaledb:latest-pg17
     restart: unless-stopped
     environment:
       POSTGRES_DB: fleet_platform
@@ -28,7 +28,7 @@ services:
     logging: *default-logging
 
   pg_backup:
-    image: timescale/timescaledb:2.17.2-pg17
+    image: timescale/timescaledb:latest-pg17
     restart: unless-stopped
     environment:
       PGPASSWORD: ${POSTGRES_PASSWORD:-fleet}
@@ -158,9 +158,8 @@ services:
     logging: *default-logging
 
   salt-master:
-    image: saltstack/salt:3007.1
+    image: hellodk/salt-master:3008.0
     restart: unless-stopped
-    command: salt-master
     ports:
       - "${SALT_BIND_IP:-0.0.0.0}:4505:4505"   # ZeroMQ publisher  — minions subscribe for events
       - "${SALT_BIND_IP:-0.0.0.0}:4506:4506"   # ZeroMQ request/reply — minions send results here
@@ -170,11 +169,11 @@ services:
       - ./salt-master.conf:/etc/salt/master.d/kri.conf:ro
       - ../salt/states:/srv/salt/states:ro
     healthcheck:
-      test: ["CMD", "pgrep", "-f", "salt-master MainProcess"]
+      test: ["CMD-SHELL", "grep -r 'salt-master' /proc/*/cmdline 2>/dev/null | grep -q master || exit 1"]
       interval: 30s
       timeout: 5s
       retries: 3
-      start_period: 10s
+      start_period: 30s
     deploy:
       resources:
         limits:

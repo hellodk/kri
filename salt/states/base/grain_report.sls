@@ -6,13 +6,27 @@
 {% set ingest_url = pillar.get('fleet_platform', {}).get('ingest_url', '') %}
 {% set node_token = pillar.get('fleet_platform', {}).get('node_token', '') %}
 
+{% if ingest_url %}
+
 report_grains_to_fleet_platform:
-  module.run:
-    - name: http.query
-    - url: {{ ingest_url }}/grains
-    - method: POST
-    - header_list:
-        - "Content-Type: application/json"
-        - "X-Node-Token: {{ node_token }}"
-    - data: {{ {"minion_id": grains["id"], "grains": grains} | tojson }}
-    - unless: test -z "{{ ingest_url }}"
+  cmd.run:
+    - name: |
+        python3 - <<'PYEOF'
+        import subprocess, json, urllib.request
+        raw = subprocess.check_output(
+            ["/opt/salt/salt-call", "--local", "grains.items", "--out=json"],
+            text=True
+        )
+        grains = json.loads(raw)["local"]
+        payload = json.dumps({"minion_id": grains.get("id"), "grains": grains}).encode()
+        req = urllib.request.Request(
+            {{ (ingest_url ~ "/grains") | tojson }},
+            data=payload,
+            headers={"Content-Type": "application/json", "X-Node-Token": {{ node_token | tojson }}},
+            method="POST",
+        )
+        resp = urllib.request.urlopen(req, timeout=30)
+        print(resp.read().decode())
+        PYEOF
+
+{% endif %}
