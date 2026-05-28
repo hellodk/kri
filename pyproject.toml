@@ -48,7 +48,7 @@ dev = [
     "vulture>=2.11",
     "bandit[toml]>=1.7",
     "pre-commit>=3.7",
-    "hypothesis>=6.100.0",
+    "mutmut>=3.1.0",
 ]
 
 # Only package fleet_platform — exclude playbooks/ and other top-level dirs.
@@ -73,3 +73,8 @@ select = ["E", "F", "I"]
 
 [tool.ruff.lint.isort]
 known-first-party = ["fleet_platform"]
+
+[tool.mutmut]
+paths_to_mutate = "fleet_platform/services/"
+tests_dir = "tests/unit/"
+runner = "python -m pytest tests/unit/ -x -q --tb=no --no-header"
