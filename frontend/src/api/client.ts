@@ -2,9 +2,11 @@ import { useAuthStore } from '../stores/authStore'
 
 export class ApiError extends Error {
   status: number
-  constructor(status: number, message: string) {
+  errorCode: string | null
+  constructor(status: number, message: string, errorCode: string | null = null) {
     super(message)
     this.status = status
+    this.errorCode = errorCode
     this.name = 'ApiError'
   }
 }
@@ -42,7 +44,7 @@ async function request<T>(path: string, init?: RequestInit, retry = true): Promi
     // let the caller (LoginPage) handle the error and display it to the user.
     if (path.includes('/auth/login')) {
       const body = await res.json().catch(() => ({}))
-      throw new ApiError(401, body.detail ?? 'Invalid credentials')
+      throw new ApiError(401, body.detail ?? 'Invalid credentials', body.error_code ?? null)
     }
     const refreshed = await tryRefresh()
     if (refreshed) return request<T>(path, init, false)
@@ -55,7 +57,7 @@ async function request<T>(path: string, init?: RequestInit, retry = true): Promi
 
   if (!res.ok) {
     const body = await res.json().catch(() => ({}))
-    throw new ApiError(res.status, body.detail ?? res.statusText)
+    throw new ApiError(res.status, body.detail ?? res.statusText, body.error_code ?? null)
   }
 
   if (res.status === 204) return undefined as unknown as T
@@ -85,7 +87,7 @@ export const api = {
     }
     if (!res.ok) {
       const body = await res.json().catch(() => ({}))
-      throw new ApiError(res.status, body.detail ?? res.statusText)
+      throw new ApiError(res.status, body.detail ?? res.statusText, body.error_code ?? null)
     }
     return res.json()
   },
