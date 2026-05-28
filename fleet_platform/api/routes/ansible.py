@@ -1080,6 +1080,44 @@ async def update_playbook_file(
     return {"path": path, "size": target.stat().st_size, "saved": True}
 
 
+@router.get("/playbooks/{playbook_name:path}/stats")
+async def playbook_stats(
+    playbook_name: str,
+    db: AsyncSession = Depends(get_db),
+    _: dict = Depends(require_role("operator", "admin")),
+) -> dict:
+    """Return duration statistics for the last 5 completed runs of a playbook."""
+    rows = await db.execute(
+        select(AnsibleJob)
+        .where(
+            AnsibleJob.playbook == playbook_name,
+            AnsibleJob.status == "completed",
+            AnsibleJob.started_at.is_not(None),
+            AnsibleJob.completed_at.is_not(None),
+        )
+        .order_by(AnsibleJob.completed_at.desc())
+        .limit(5)
+    )
+    jobs = rows.scalars().all()
+
+    durations = []
+    for j in jobs:
+        if j.started_at and j.completed_at:
+            secs = (j.completed_at - j.started_at).total_seconds()
+            if secs > 0:
+                durations.append(int(secs))
+
+    if not durations:
+        return {"playbook": playbook_name, "run_count": 0, "last_duration_seconds": None, "avg_duration_seconds": None}
+
+    return {
+        "playbook": playbook_name,
+        "run_count": len(durations),
+        "last_duration_seconds": durations[0],
+        "avg_duration_seconds": int(sum(durations) / len(durations)),
+    }
+
+
 @router.get("/tasks/{task_id}")
 async def get_task_status(
     task_id: str,
