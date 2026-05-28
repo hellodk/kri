@@ -5,7 +5,6 @@ Verifies that _redact_sensitive_data correctly redacts IPv4 addresses when
 include_ips=False and leaves them intact when include_ips=True.
 """
 
-import pytest
 
 from fleet_platform.services.llm_svc import _redact_sensitive_data
 
