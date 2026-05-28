@@ -9,6 +9,7 @@ const NAV_GROUPS = [
       { to: '/dashboard',    label: 'Fleet Overview', icon: '⊞' },
       { to: '/fleet',        label: 'Fleet',          icon: '⬡' },
       { to: '/fleet-health', label: 'Fleet Health',   icon: '♥' },
+      { to: '/monitoring',   label: 'Monitoring',     icon: '◈' },
       { to: '/groups',       label: 'Groups',         icon: '◫' },
     ],
   },
