@@ -24,6 +24,12 @@ const STATUS_STYLE: Record<string, { label: string; colour: string }> = {
   failed:    { label: 'Failed',   colour: 'text-red-700' },
 }
 
+function fmtDuration(secs: number): string {
+  const m = Math.floor(secs / 60)
+  const s = secs % 60
+  return m > 0 ? `${m}m ${s}s` : `${s}s`
+}
+
 export function PlaybookRunModal({ playbook, onClose }: Props) {
   const [targetType, setTargetType] = useState<'node' | 'group'>('node')
   const [targetId, setTargetId] = useState('')
@@ -64,6 +70,12 @@ export function PlaybookRunModal({ playbook, onClose }: Props) {
     queryKey: ['groups-for-playbook'],
     queryFn: () => groupsApi.list({ per_page: 200 }),
     enabled: targetType === 'group',
+    staleTime: 60_000,
+  })
+
+  const { data: statsData } = useQuery({
+    queryKey: ['playbook-stats', playbook.filename],
+    queryFn: () => playbooksApi.getStats(playbook.filename),
     staleTime: 60_000,
   })
 
@@ -110,7 +122,12 @@ export function PlaybookRunModal({ playbook, onClose }: Props) {
         <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200 shrink-0">
           <div>
             <h2 className="text-lg font-bold text-gray-900">Run Playbook</h2>
-            <p className="text-sm text-gray-500">{playbook.name}</p>
+            <div className="flex items-baseline gap-2">
+              <p className="text-sm text-gray-500">{playbook.name}</p>
+              {statsData && statsData.run_count > 0 && statsData.last_duration_seconds !== null && (
+                <p className="text-sm text-gray-400">Last run: {fmtDuration(statsData.last_duration_seconds)}</p>
+              )}
+            </div>
           </div>
           <button onClick={onClose} className="flex items-center justify-center w-8 h-8 rounded-lg text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-colors text-lg">×</button>
         </div>

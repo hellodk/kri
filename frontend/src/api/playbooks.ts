@@ -32,9 +32,18 @@ export interface AnsibleJob {
   created_at: string
 }
 
+export interface PlaybookStats {
+  playbook: string
+  run_count: number
+  last_duration_seconds: number | null
+  avg_duration_seconds: number | null
+}
+
 export const playbooksApi = {
   list: () => api.get<PlaybookEntry[]>('/api/v1/ansible/playbooks'),
   run: (playbook: string, target_type: string, target_id: string, extravars: Record<string, unknown>, sshUsername?: string, sshPassword?: string) =>
     api.post<PlaybookRunResponse>('/api/v1/ansible/playbooks/run', { playbook, target_type, target_id, extravars, ssh_username: sshUsername || undefined, ssh_password: sshPassword || undefined }),
   getJob: (jobId: string) => api.get<AnsibleJob>(`/api/v1/ansible/jobs/${jobId}`),
+  getStats: (filename: string) =>
+    api.get<PlaybookStats>(`/api/v1/ansible/playbooks/${encodeURIComponent(filename)}/stats`),
 }
