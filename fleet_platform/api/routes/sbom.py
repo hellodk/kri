@@ -5,7 +5,7 @@ from sqlalchemy import and_, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from fleet_platform.api.deps import get_db
-from fleet_platform.core.auth import get_current_user
+from fleet_platform.core.auth import get_current_user, require_role
 from fleet_platform.models.node import Node
 from fleet_platform.models.sbom import SBOMComponent, SBOMScan
 from fleet_platform.schemas.common import PaginatedResponse
@@ -18,6 +18,25 @@ from fleet_platform.schemas.sbom import (
 )
 
 router = APIRouter(prefix="/api/v1/sbom")
+
+# Copyleft license identifiers that require policy attention
+_COPYLEFT_LICENSES = frozenset({
+    "GPL-2.0", "GPL-2.0-only", "GPL-2.0-or-later",
+    "GPL-3.0", "GPL-3.0-only", "GPL-3.0-or-later",
+    "LGPL-2.0", "LGPL-2.0-only", "LGPL-2.0-or-later",
+    "LGPL-2.1", "LGPL-2.1-only", "LGPL-2.1-or-later",
+    "LGPL-3.0", "LGPL-3.0-only", "LGPL-3.0-or-later",
+    "AGPL-3.0", "AGPL-3.0-only", "AGPL-3.0-or-later",
+    "EUPL-1.1", "EUPL-1.2",
+    "OSL-3.0",
+    "CC-BY-SA-4.0", "CC-BY-NC-SA-4.0",
+})
+
+_PERMISSIVE_LICENSES = frozenset({
+    "MIT", "Apache-2.0", "BSD-2-Clause", "BSD-3-Clause",
+    "ISC", "Unlicense", "0BSD", "CC0-1.0",
+    "Python-2.0", "PSF-2.0", "CDDL-1.0",
+})
 
 
 @router.get("/search", response_model=list[SBOMSearchResult])
@@ -263,3 +282,75 @@ async def sbom_delta(
         new_count=len(new_keys),
         removed_count=len(removed_keys),
     )
+
+
+@router.get("/licenses/summary")
+async def license_summary(
+    db: AsyncSession = Depends(get_db),
+    _: dict = Depends(require_role("operator", "admin")),
+) -> dict:
+    """Return license compliance summary across all latest SBOM scans."""
+    # Get latest scan per node
+    latest_scan_subq = (
+        select(func.max(SBOMScan.scanned_at).label("max_at"), SBOMScan.node_id)
+        .group_by(SBOMScan.node_id)
+        .subquery()
+    )
+
+    result = await db.execute(
+        select(SBOMComponent.name, SBOMComponent.version, SBOMComponent.purl, SBOMComponent.licenses, SBOMScan.node_id)
+        .join(SBOMScan, SBOMComponent.scan_id == SBOMScan.id)
+        .join(
+            latest_scan_subq,
+            and_(
+                SBOMScan.node_id == latest_scan_subq.c.node_id,
+                SBOMScan.scanned_at == latest_scan_subq.c.max_at,
+            ),
+        )
+    )
+
+    copyleft_packages: list[dict] = []
+    unknown_packages: list[dict] = []
+    license_counts: dict[str, int] = {}
+
+    for name, version, purl, licenses, node_id in result.all():
+        license_list = licenses if isinstance(licenses, list) else []
+
+        for lic in license_list:
+            if isinstance(lic, str):
+                license_counts[lic] = license_counts.get(lic, 0) + 1
+                if lic in _COPYLEFT_LICENSES:
+                    copyleft_packages.append({
+                        "name": name,
+                        "version": version or "",
+                        "license": lic,
+                        "node_id": str(node_id),
+                        "purl": purl or "",
+                    })
+
+        if not license_list:
+            unknown_packages.append({
+                "name": name,
+                "version": version or "",
+                "node_id": str(node_id),
+                "purl": purl or "",
+            })
+
+    # Deduplicate by name+license
+    seen = set()
+    deduped_copyleft = []
+    for p in copyleft_packages:
+        key = (p["name"], p["license"])
+        if key not in seen:
+            seen.add(key)
+            deduped_copyleft.append(p)
+
+    top_licenses = sorted(license_counts.items(), key=lambda x: -x[1])[:20]
+
+    return {
+        "copyleft_count": len(deduped_copyleft),
+        "copyleft_packages": deduped_copyleft[:100],
+        "unknown_license_count": len(unknown_packages),
+        "top_licenses": [{"license": k, "count": v} for k, v in top_licenses],
+        "total_distinct_licenses": len(license_counts),
+    }
