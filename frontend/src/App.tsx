@@ -27,6 +27,9 @@ import { AlertsPage } from './pages/AlertsPage'
 import FleetHealthPage from './pages/FleetHealthPage'
 import { DashboardPage } from './pages/DashboardPage'
 import { MonitoringPage } from './pages/MonitoringPage'
+import { OverviewHub } from './pages/OverviewHub'
+import { ComplianceHub } from './pages/ComplianceHub'
+import { AutomationHub } from './pages/AutomationHub'
 import { saltKeysApi } from './api/saltKeys'
 import { useSaltKeysStore } from './stores/saltKeysStore'
 import { useToastStore } from './stores/toastStore'
@@ -132,7 +135,10 @@ export default function App() {
               </AuthGuard>
             }
           >
-            <Route index element={<Navigate to="/fleet" replace />} />
+            <Route index element={<Navigate to="/overview" replace />} />
+            <Route path="/overview" element={<OverviewHub />} />
+            <Route path="/compliance" element={<ComplianceHub />} />
+            <Route path="/automation" element={<AutomationHub />} />
             <Route path="/fleet" element={<FleetDashboard />} />
             <Route path="/nodes/:nodeId" element={<NodeDetail />} />
             <Route path="/drift" element={<DriftExplorer />} />
