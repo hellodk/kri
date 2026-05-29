@@ -1,6 +1,6 @@
 import { api } from './client'
 
-export type LLMProvider = 'openai_compat' | 'anthropic'
+export type LLMProvider = 'openai_compat' | 'anthropic' | 'ollama' | 'vllm' | 'llamacpp'
 export type LLMIntent = 'salt_state' | 'ansible_playbook' | 'fleet_command' | 'explain'
 
 export interface LLMEndpoint {
@@ -73,5 +73,7 @@ export const llmApi = {
     api.post<LLMEndpointTestResult>(`/api/v1/llm/endpoints/${id}/test`),
   submitQuery: (data: LLMQueryRequest) => api.post<LLMQueryResponse>('/api/v1/llm/query', data),
   listQueries: () => api.get<LLMQueryLogEntry[]>('/api/v1/llm/queries'),
+  discoverModels: (url: string, provider: string) =>
+    api.post<{ models: Array<{ id: string; name: string }> }>('/api/v1/llm/discover-models', { url, provider }),
 }
 

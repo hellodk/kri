@@ -9,9 +9,12 @@ interface Props {
   onSaved: () => void
 }
 
-const PROVIDERS: { value: LLMProvider; label: string }[] = [
-  { value: 'openai_compat', label: 'OpenAI-compatible (Ollama, vLLM, etc.)' },
-  { value: 'anthropic', label: 'Anthropic' },
+const PROVIDERS: { value: LLMProvider; label: string; needsUrl: boolean; defaultKey: string }[] = [
+  { value: 'ollama',        label: 'Ollama (local)',                  needsUrl: true,  defaultKey: 'dummy' },
+  { value: 'vllm',          label: 'vLLM',                            needsUrl: true,  defaultKey: 'dummy' },
+  { value: 'llamacpp',      label: 'llama.cpp (server)',              needsUrl: true,  defaultKey: 'dummy' },
+  { value: 'openai_compat', label: 'OpenAI-compatible (generic)',     needsUrl: true,  defaultKey: '' },
+  { value: 'anthropic',     label: 'Anthropic',                       needsUrl: false, defaultKey: '' },
 ]
 
 export function LLMEndpointForm({ endpoint, onClose, onSaved }: Props) {
@@ -19,7 +22,7 @@ export function LLMEndpointForm({ endpoint, onClose, onSaved }: Props) {
   const toast = useToastStore((s) => s.add)
 
   const [name, setName] = useState(endpoint?.name ?? '')
-  const [provider, setProvider] = useState<LLMProvider>(endpoint?.provider ?? 'openai_compat')
+  const [provider, setProvider] = useState<LLMProvider>(endpoint?.provider ?? 'ollama')
   const [baseUrl, setBaseUrl] = useState(endpoint?.base_url ?? '')
   const [model, setModel] = useState(endpoint?.model ?? '')
   const [maxTokens, setMaxTokens] = useState(String(endpoint?.max_tokens ?? 4096))
@@ -27,6 +30,10 @@ export function LLMEndpointForm({ endpoint, onClose, onSaved }: Props) {
   const [isDefault, setIsDefault] = useState(endpoint?.is_default ?? false)
   const [enabled, setEnabled] = useState(endpoint?.enabled ?? true)
   const [formError, setFormError] = useState<string | null>(null)
+
+  const [discoveredModels, setDiscoveredModels] = useState<Array<{ id: string; name: string }>>([])
+  const [discovering, setDiscovering] = useState(false)
+  const [discoveryError, setDiscoveryError] = useState<string | null>(null)
 
   // Reset form when endpoint prop changes (edit-mode) or clears (add-mode)
   useEffect(() => {
@@ -42,7 +49,7 @@ export function LLMEndpointForm({ endpoint, onClose, onSaved }: Props) {
     } else {
       // reset to defaults for add-mode
       setName('')
-      setProvider('openai_compat')
+      setProvider('ollama')
       setBaseUrl('')
       setModel('')
       setMaxTokens('4096')
@@ -52,12 +59,51 @@ export function LLMEndpointForm({ endpoint, onClose, onSaved }: Props) {
     }
   }, [endpoint])
 
+  // Auto-fill API key when provider changes (add mode only)
+  useEffect(() => {
+    const p = PROVIDERS.find((p) => p.value === provider)
+    if (p?.defaultKey && !isEdit) {
+      setApiKey(p.defaultKey)
+    }
+  }, [provider]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Reset discovered models when provider changes
+  useEffect(() => {
+    setDiscoveredModels([])
+    setDiscoveryError(null)
+  }, [provider])
+
+  // Auto-discover models on URL change (debounced 600ms)
+  useEffect(() => {
+    if (!baseUrl.trim() || provider === 'anthropic') {
+      setDiscoveredModels([])
+      return
+    }
+    const t = setTimeout(async () => {
+      setDiscovering(true)
+      setDiscoveryError(null)
+      try {
+        const res = await llmApi.discoverModels(baseUrl.trim(), provider)
+        setDiscoveredModels(res.models)
+        if (res.models.length > 0 && !model) {
+          setModel(res.models[0].id)
+        }
+      } catch {
+        setDiscoveryError('Could not reach endpoint')
+        setDiscoveredModels([])
+      } finally {
+        setDiscovering(false)
+      }
+    }, 600)
+    return () => clearTimeout(t)
+  }, [baseUrl, provider]) // eslint-disable-line react-hooks/exhaustive-deps
+
   const mutation = useMutation({
     mutationFn: () => {
       const payload: LLMEndpointCreate = {
         name: name.trim(),
         provider,
-        base_url: provider === 'openai_compat' ? (baseUrl.trim() || null) : null,
+        base_url: provider !== 'anthropic' ? (baseUrl.trim() || null) : null,
         model: model.trim(),
         max_tokens: parseInt(maxTokens, 10) || 4096,
         is_default: isDefault,
@@ -123,7 +169,7 @@ export function LLMEndpointForm({ endpoint, onClose, onSaved }: Props) {
               type="text"
               value={name}
               onChange={(e) => setName(e.target.value)}
-              placeholder="e.g. Local Ollama, OpenAI GPT-4o"
+              placeholder="e.g. Local Ollama, vLLM GPU Server"
               className={inputClass}
               required
             />
@@ -146,36 +192,74 @@ export function LLMEndpointForm({ endpoint, onClose, onSaved }: Props) {
             </select>
           </div>
 
-          {/* Base URL — only for openai_compat */}
-          {provider === 'openai_compat' && (
+          {/* Base URL — all providers except anthropic */}
+          {provider !== 'anthropic' && (
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Base URL</label>
               <input
                 type="text"
                 value={baseUrl}
                 onChange={(e) => setBaseUrl(e.target.value)}
-                placeholder="http://localhost:11434/v1"
+                placeholder={
+                  provider === 'ollama' ? 'http://localhost:11434' :
+                  provider === 'vllm'   ? 'http://localhost:8000' :
+                  provider === 'llamacpp' ? 'http://localhost:8080' :
+                  'http://localhost:11434/v1'
+                }
                 className={inputClass + ' font-mono'}
               />
               <p className="text-xs text-gray-400 mt-1">
-                Leave blank to use the provider's default endpoint.
+                {discovering
+                  ? 'Querying endpoint for available models…'
+                  : discoveredModels.length > 0
+                    ? `${discoveredModels.length} model(s) discovered from this endpoint.`
+                    : 'Enter URL to auto-discover available models.'}
               </p>
             </div>
           )}
 
           {/* Model */}
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
+            <label className="block text-sm font-medium text-gray-700 mb-1 flex items-center gap-2">
               Model <span className="text-red-500">*</span>
+              {discovering && (
+                <span className="text-xs text-brand-500 font-normal">Discovering…</span>
+              )}
+              {!discovering && discoveredModels.length > 0 && (
+                <span className="text-xs text-emerald-600 font-normal">
+                  &#10003; {discoveredModels.length} models found
+                </span>
+              )}
+              {discoveryError && (
+                <span className="text-xs text-amber-600 font-normal">&#9888; {discoveryError}</span>
+              )}
             </label>
-            <input
-              type="text"
-              value={model}
-              onChange={(e) => setModel(e.target.value)}
-              placeholder={provider === 'anthropic' ? 'claude-3-5-sonnet-20241022' : 'llama3.2'}
-              className={inputClass + ' font-mono'}
-              required
-            />
+            {discoveredModels.length > 0 ? (
+              <select
+                value={model}
+                onChange={(e) => setModel(e.target.value)}
+                className={inputClass + ' font-mono'}
+                required
+              >
+                <option value="">Select a model…</option>
+                {discoveredModels.map((m) => (
+                  <option key={m.id} value={m.id}>{m.name}</option>
+                ))}
+              </select>
+            ) : (
+              <input
+                type="text"
+                value={model}
+                onChange={(e) => setModel(e.target.value)}
+                placeholder={
+                  provider === 'anthropic' ? 'claude-sonnet-4-6' :
+                  provider === 'ollama'    ? 'llama3.2' :
+                  'model-id'
+                }
+                className={inputClass + ' font-mono'}
+                required
+              />
+            )}
           </div>
 
           {/* Max tokens */}
@@ -201,7 +285,13 @@ export function LLMEndpointForm({ endpoint, onClose, onSaved }: Props) {
               type="password"
               value={apiKey}
               onChange={(e) => setApiKey(e.target.value)}
-              placeholder={isEdit && endpoint?.has_api_key ? 'Leave blank to keep existing' : 'Paste API key'}
+              placeholder={
+                isEdit && endpoint?.has_api_key
+                  ? 'Leave blank to keep existing'
+                  : provider === 'ollama' || provider === 'vllm' || provider === 'llamacpp'
+                    ? 'Pre-filled: dummy (edit if needed)'
+                    : 'Paste API key'
+              }
               className={inputClass}
             />
           </div>

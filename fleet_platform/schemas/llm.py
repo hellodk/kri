@@ -4,7 +4,7 @@ from typing import Literal
 
 from pydantic import BaseModel, Field
 
-VALID_PROVIDERS = Literal["openai_compat", "anthropic"]
+VALID_PROVIDERS = Literal["openai_compat", "anthropic", "ollama", "vllm", "llamacpp"]
 VALID_INTENTS = Literal["salt_state", "ansible_playbook", "fleet_command", "explain"]
 
 

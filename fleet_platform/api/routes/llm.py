@@ -2,6 +2,7 @@ import time
 import uuid
 
 from fastapi import APIRouter, Depends, HTTPException
+from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from fleet_platform.api.deps import get_db
@@ -20,6 +21,7 @@ from fleet_platform.services import llm_svc
 from fleet_platform.services.llm_caller import LLMCallError, call_anthropic, call_openai_compat
 from fleet_platform.services.llm_context import build_fleet_context
 from fleet_platform.services.model_catalog import get_models
+from fleet_platform.services.model_discovery import discover_models
 
 router = APIRouter(prefix="/api/v1/llm", tags=["llm"])
 
@@ -34,6 +36,21 @@ async def list_models(
     Used by the UI model selector dropdown.
     """
     return get_models(provider)
+
+
+class DiscoverModelsRequest(BaseModel):
+    url: str
+    provider: str
+
+
+@router.post("/discover-models")
+async def discover_endpoint_models(
+    req: DiscoverModelsRequest,
+    _: dict = Depends(require_role("operator", "admin")),
+):
+    """Query a provider endpoint and return available model IDs."""
+    models = await discover_models(req.url, req.provider)
+    return {"models": models}
 
 
 def _to_response(endpoint) -> LLMEndpointResponse:

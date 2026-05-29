@@ -22,7 +22,7 @@ class LLMEndpoint(Base):
     name: Mapped[str] = mapped_column(String(255), nullable=False)
     # "openai_compat" covers OpenAI, Ollama, LM Studio, vLLM, Groq, Mistral
     # "anthropic" uses the native Anthropic SDK
-    provider: Mapped[str] = mapped_column(String(20), nullable=False)
+    provider: Mapped[str] = mapped_column(String(50), nullable=False)
     base_url: Mapped[str] = mapped_column(String(500), nullable=False)
     # Fernet-encrypted ciphertext; None for keyless providers (e.g. local Ollama)
     api_key_encrypted: Mapped[str | None] = mapped_column(Text, nullable=True)
