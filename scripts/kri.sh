@@ -568,6 +568,91 @@ cmd_pki_init() {
   echo ""
 }
 
+cmd_pki_push() {
+  # M-1 fix: salt 3008 rotates its RSA key on every container startup (by design).
+  # This command pushes the CURRENT master.pub to all known minions so they can
+  # reconnect. Must be run after every `kri deploy salt-master` or `kri restart`.
+  #
+  # Usage: kri pki-push [<minion-ip> ...]
+  #   No args:  reads minion IPs from docker exec salt-key -L
+  #   With IPs: pushes to specified hosts only
+  echo ""
+  echo "  kri pki-push — push current master.pub to all minions"
+  echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+
+  # Get current master.pub from running container
+  local MASTER_PUB
+  MASTER_PUB=$(docker exec deploy-salt-master-1 cat /etc/salt/pki/master/master.pub 2>/dev/null)
+  if [[ -z "$MASTER_PUB" ]]; then
+    err "Cannot read master.pub from salt-master container — is it running?"
+    exit 1
+  fi
+  ok "Got master.pub (fingerprint: $(echo "$MASTER_PUB" | openssl pkey -pubin -noout -text 2>/dev/null | grep -i "key\|bit" | head -1 || echo "ok"))"
+
+  # Collect target IPs: args or from salt-key accepted list
+  local TARGETS=("${@:2}")  # args after 'pki-push'
+  if [[ ${#TARGETS[@]} -eq 0 ]]; then
+    # Read accepted minion keys and get their IPs from DB via API
+    echo "  No IPs specified — reading from salt accepted keys + node DB…"
+    # Get IPs via direct DB query (requires kri to be running)
+    local DB_IPS
+    DB_IPS=$(docker exec deploy-db-1 psql -U fleet -d fleet_demo -t -c \
+      "SELECT bootstrap_ip FROM nodes WHERE bootstrap_ip IS NOT NULL AND minion_id IN \
+       (SELECT name FROM (SELECT unnest(string_to_array(accepted_keys, ',')) AS name FROM \
+       (SELECT string_agg(f.relname::text, ',') AS accepted_keys FROM \
+        pg_class f WHERE f.relname = 'nodes') x) y) UNION \
+       SELECT bootstrap_ip FROM nodes WHERE bootstrap_ip IS NOT NULL;" \
+      2>/dev/null | tr -d ' ' | grep -v '^$' || true)
+
+    # Simpler: just get all node IPs
+    DB_IPS=$(docker exec deploy-db-1 psql -U fleet -d fleet_demo -t -c \
+      "SELECT bootstrap_ip FROM nodes WHERE bootstrap_ip IS NOT NULL;" \
+      2>/dev/null | tr -d ' ' | grep -v '^$' || true)
+
+    if [[ -z "$DB_IPS" ]]; then
+      err "No node IPs found in DB — specify IPs manually: kri pki-push <ip1> <ip2>"
+      exit 1
+    fi
+    mapfile -t TARGETS <<< "$DB_IPS"
+  fi
+
+  echo "  Pushing to ${#TARGETS[@]} host(s)…"
+  echo "$MASTER_PUB" > /tmp/kri_master_push.pub
+
+  local ok_count=0
+  local fail_count=0
+  for ip in "${TARGETS[@]}"; do
+    [[ -z "$ip" ]] && continue
+    echo -n "  → $ip … "
+    if scp -q -o StrictHostKeyChecking=no -o ConnectTimeout=5 \
+        /tmp/kri_master_push.pub "${ip}:/tmp/kri_master_push.pub" 2>/dev/null && \
+       ssh -q -o StrictHostKeyChecking=no -o ConnectTimeout=5 "$ip" \
+        "sudo cp /tmp/kri_master_push.pub /etc/salt/pki/minion/minion_master.pub && \
+         sudo chmod 644 /etc/salt/pki/minion/minion_master.pub && \
+         sudo launchctl stop com.saltstack.salt.minion 2>/dev/null; sleep 2; \
+         sudo launchctl start com.saltstack.salt.minion 2>/dev/null" 2>/dev/null; then
+      ok "done"
+      ok_count=$((ok_count + 1))
+    else
+      warn "unreachable or SSH failed (push manually)"
+      fail_count=$((fail_count + 1))
+    fi
+  done
+  rm -f /tmp/kri_master_push.pub
+
+  echo ""
+  ok "$ok_count host(s) updated"
+  [[ $fail_count -gt 0 ]] && warn "$fail_count host(s) unreachable — push manually"
+  echo ""
+  echo "  Waiting 15s for minions to reconnect, then triggering grain report…"
+  sleep 15
+  docker exec deploy-salt-master-1 salt '*' state.apply base.grain_report \
+    --timeout=60 --async 2>/dev/null && \
+  ok "Grain report queued — nodes should appear online in ~30s" || \
+  warn "Grain report queue failed — run manually after minions reconnect"
+  echo ""
+}
+
 cmd_pki_backup() {
   echo ""
   echo "  kri pki-backup — print ansible-vault backup commands"
@@ -610,6 +695,7 @@ case "${1:-help}" in
   diagnose)       cmd_diagnose "$@" ;;
   pki-init)       cmd_pki_init ;;
   pki-backup)     cmd_pki_backup ;;
+  pki-push)       cmd_pki_push "$@" ;;
   *)
     echo "Usage: $(basename "$0") {start|stop|restart|status|deploy [svc]|logs [svc]|seed|dev|dev-stop|test [unit|integration|all|e2e] [filter]}"
     echo ""
@@ -633,6 +719,7 @@ case "${1:-help}" in
     echo "  diagnose <ip|minion-id>      — check network, SSH, salt key, and kri status for an offline node"
     echo "  pki-init                     — generate salt-master RSA keys (first deploy only)"
     echo "  pki-backup                   — print ansible-vault commands to back up master.pem"
+  echo "  pki-push [ip ...]            — push current master.pub to minions after salt-master restart"
     exit 1
     ;;
 esac

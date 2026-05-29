@@ -177,6 +177,29 @@ def parse_http_request_total(metrics_text: str) -> list[dict]:
     return results
 
 
+async def get_maintenance_heartbeat() -> dict:
+    """Read the dead-man's-switch timestamp written by mark_stale_nodes.
+    Returns age in seconds and a flag if the beat worker appears stuck.
+    H-4 fix (SRE audit): makes a hung beat worker immediately visible in monitoring.
+    """
+    from fleet_platform.workers.maintenance import _MAINTENANCE_HEARTBEAT_KEY  # noqa: PLC0415
+    try:
+        redis_client = await get_redis()
+        value = await redis_client.get(_MAINTENANCE_HEARTBEAT_KEY)
+        if value is None:
+            # Key expired or never set — beat worker hasn't run in > 10 min
+            return {"last_run_at": None, "age_seconds": None, "beat_ok": False}
+        last_run_at = value.decode() if isinstance(value, bytes) else value
+        age = (datetime.now(UTC) - datetime.fromisoformat(last_run_at)).total_seconds()
+        return {
+            "last_run_at": last_run_at,
+            "age_seconds": round(age),
+            "beat_ok": age < 600,  # warn if > 10 min since last run (2x scheduled interval)
+        }
+    except Exception:
+        return {"last_run_at": None, "age_seconds": None, "beat_ok": None}
+
+
 async def get_monitoring_summary(db: AsyncSession, metrics_text: str = "") -> dict:
     """Aggregate all monitoring data into a single summary."""
     # DB queries must run sequentially — a single AsyncSession cannot serve
@@ -186,6 +209,7 @@ async def get_monitoring_summary(db: AsyncSession, metrics_text: str = "") -> di
     alert_events = await get_alert_events_24h(db)
     fleet_health = await get_fleet_health_aggregates(db)
     celery_stats = await get_celery_queue_stats()
+    maintenance_hb = await get_maintenance_heartbeat()
     http_stats = parse_http_request_total(metrics_text) if metrics_text else []
 
     return {
@@ -195,5 +219,6 @@ async def get_monitoring_summary(db: AsyncSession, metrics_text: str = "") -> di
         "celery_queues": celery_stats,
         "http_requests": http_stats[:20],  # top 20
         "fleet_health": fleet_health,
+        "maintenance_heartbeat": maintenance_hb,
         "generated_at": datetime.now(UTC).isoformat(),
     }

@@ -43,6 +43,12 @@ class FleetHealthSchema(BaseModel):
     total_gpu_vram_mb: int
 
 
+class MaintenanceHeartbeatSchema(BaseModel):
+    last_run_at: str | None
+    age_seconds: int | None
+    beat_ok: bool | None   # None = Redis unavailable
+
+
 class MonitoringSummarySchema(BaseModel):
     node_counts: NodeCountsSchema
     alert_events_24h: list[AlertEventSchema]
@@ -50,4 +56,5 @@ class MonitoringSummarySchema(BaseModel):
     celery_queues: CeleryQueuesSchema
     http_requests: list[HttpRequestSchema]
     fleet_health: FleetHealthSchema
+    maintenance_heartbeat: MaintenanceHeartbeatSchema
     generated_at: str

@@ -1,7 +1,9 @@
+import redis as sync_redis
 from datetime import UTC, datetime, timedelta
 
 from sqlalchemy import select, update
 
+from fleet_platform.core.config import settings
 from fleet_platform.db.session import get_sync_db
 from fleet_platform.models.bootstrap_run import BootstrapRun
 from fleet_platform.models.node import Node
@@ -12,6 +14,11 @@ from fleet_platform.services.platform_settings_svc import (
     get_setting_sync,
 )
 from fleet_platform.workers.celery_app import celery_app
+
+# H-4 fix (SRE audit): dead-man's-switch key. Updated every time mark_stale_nodes
+# runs successfully. Monitoring endpoint reads this to detect a stuck beat worker.
+_MAINTENANCE_HEARTBEAT_KEY = "kri:maintenance:last_run"
+_MAINTENANCE_HEARTBEAT_TTL = 600  # 10 min — expires if beat dies
 
 _DEFAULT_STALE_MINUTES = 15  # 3 missed heartbeats
 _DEFAULT_OFFLINE_HOURS = 4  # raised from 1h — 1h caused false-offline during kri maintenance
@@ -54,6 +61,13 @@ def mark_stale_nodes() -> dict:
             .values(status="offline", updated_at=now)
         )
         db.commit()
+
+    # H-4: Update dead-man's-switch — monitoring reads this to detect a hung beat worker
+    try:
+        r = sync_redis.Redis.from_url(settings.redis_url)
+        r.setex(_MAINTENANCE_HEARTBEAT_KEY, _MAINTENANCE_HEARTBEAT_TTL, now.isoformat())
+    except Exception:
+        pass  # Redis unavailable — don't fail the task, just skip the heartbeat
 
     return {"stale": stale.rowcount, "offline": offline.rowcount}  # type: ignore[attr-defined]
 

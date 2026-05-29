@@ -39,6 +39,12 @@ export interface FleetHealth {
   total_gpu_vram_mb: number
 }
 
+export interface MaintenanceHeartbeat {
+  last_run_at: string | null
+  age_seconds: number | null
+  beat_ok: boolean | null
+}
+
 export interface MonitoringSummary {
   node_counts: NodeCounts
   alert_events_24h: AlertEvent[]
@@ -46,6 +52,7 @@ export interface MonitoringSummary {
   celery_queues: CeleryQueues
   http_requests: HttpRequest[]
   fleet_health: FleetHealth
+  maintenance_heartbeat: MaintenanceHeartbeat
   generated_at: string
 }
 

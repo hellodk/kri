@@ -427,6 +427,24 @@ export function MonitoringPage() {
         </div>
       )}
 
+      {/* Beat dead-man's-switch warning */}
+      {data && data.maintenance_heartbeat.beat_ok === false && (
+        <div className="mb-4 flex items-start gap-3 px-4 py-3 bg-red-50 border border-red-200 rounded-xl text-sm text-red-800">
+          <span className="text-lg leading-none flex-shrink-0">⚠</span>
+          <div>
+            <p className="font-semibold">Celery Beat worker appears stuck or down</p>
+            <p className="text-red-700 mt-0.5">
+              <code className="font-mono">mark_stale_nodes</code> has not run in the last 10 minutes.
+              Node status transitions (online → stale → offline) are frozen.
+              {data.maintenance_heartbeat.last_run_at
+                ? ` Last run: ${format(parseISO(data.maintenance_heartbeat.last_run_at), 'HH:mm:ss')}.`
+                : ' No run recorded since kri started.'}
+            </p>
+            <p className="text-red-600 mt-1 text-xs">Check: <code className="font-mono">kri logs beat</code></p>
+          </div>
+        </div>
+      )}
+
       {/* Content */}
       {data && (
         <>
