@@ -22,58 +22,29 @@ interface DriftSummaryItem {
 
 // ── Card component ─────────────────────────────────────────────────────────────
 
-type CardVariant = 'green' | 'amber' | 'red' | 'blue' | 'neutral'
-
-const CARD_STYLES: Record<CardVariant, {
-  bar: string
-  num: string
-  bg: string
-  border: string
-  icon: string
-}> = {
-  green:   { bar: 'bg-gradient-to-r from-emerald-500 to-emerald-400', num: 'text-emerald-700', bg: 'bg-emerald-50/60',  border: 'border-emerald-100', icon: 'text-emerald-400' },
-  amber:   { bar: 'bg-gradient-to-r from-amber-500 to-amber-400',    num: 'text-amber-700',   bg: 'bg-amber-50/60',    border: 'border-amber-100',   icon: 'text-amber-400'   },
-  red:     { bar: 'bg-gradient-to-r from-red-500 to-red-400',        num: 'text-red-700',     bg: 'bg-red-50/60',      border: 'border-red-100',     icon: 'text-red-400'     },
-  blue:    { bar: 'bg-gradient-to-r from-brand-500 to-brand-400',    num: 'text-brand-700',   bg: 'bg-brand-50/60',    border: 'border-brand-100',   icon: 'text-brand-400'   },
-  neutral: { bar: 'bg-gradient-to-r from-gray-400 to-gray-300',      num: 'text-gray-900',    bg: 'bg-white',          border: 'border-gray-200',    icon: 'text-gray-300'    },
-}
-
 function StatCard({
   title,
   to,
-  variant = 'neutral',
+  accent,
+  numColor,
   value,
-  icon,
   detail,
-  sub,
 }: {
   title: string
   to: string
-  variant?: CardVariant
+  accent: string
+  numColor: string
   value: React.ReactNode
-  icon: string
   detail?: React.ReactNode
-  sub?: React.ReactNode
 }) {
-  const s = CARD_STYLES[variant]
   return (
     <Link
       to={to}
-      className={`block rounded-xl border ${s.border} ${s.bg} shadow-sm hover:shadow-md transition-all overflow-hidden`}
+      className={`block bg-white rounded-xl border border-gray-200 border-l-4 ${accent} p-5 shadow-sm hover:shadow-md transition-shadow`}
     >
-      {/* Coloured top bar */}
-      <div className={`h-1 w-full ${s.bar}`} />
-      <div className="p-5">
-        <div className="flex items-start justify-between mb-3">
-          <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">{title}</p>
-          <span className={`text-2xl leading-none ${s.icon}`}>{icon}</span>
-        </div>
-        <p className={`text-4xl font-black tabular-nums leading-none mb-2 ${s.num}`}>
-          {value}
-        </p>
-        {detail && <div className="text-xs space-y-0.5">{detail}</div>}
-        {sub && <div className="mt-2 pt-2 border-t border-black/5 text-xs">{sub}</div>}
-      </div>
+      <p className="text-xs font-semibold uppercase tracking-wide text-gray-500 mb-2">{title}</p>
+      <p className={`text-4xl font-black tabular-nums leading-none mb-2 ${numColor}`}>{value}</p>
+      {detail && <div className="text-xs space-y-0.5 text-gray-500">{detail}</div>}
     </Link>
   )
 }
@@ -215,18 +186,14 @@ export function DashboardPage() {
   // Security variant
   const criticalCount = security?.vulnerabilities?.critical ?? 0
   const highCount = security?.vulnerabilities?.high ?? 0
-  const secVariant: CardVariant = criticalCount > 0 ? 'red' : highCount > 0 ? 'amber' : 'green'
 
   // Drift variant
   const avgDrift = overview?.avg_drift_score ?? 0
   const driftedCount = (overview?.nodes_medium ?? 0) + (overview?.nodes_high ?? 0) + (overview?.nodes_critical ?? 0)
-  const driftVariant: CardVariant = driftedCount === 0 ? 'green' : avgDrift > 50 ? 'red' : 'amber'
 
   // Keys variant (value comes from SaltKeyWatcher store)
-  const keysVariant: CardVariant = pendingKeys > 0 ? 'amber' : 'green'
 
   // Nodes variant
-  const nodesVariant: CardVariant = offlineCount > 0 ? 'amber' : 'green'
 
   // Most drifted nodes (top 5 with drift > 0)
   const topDrifted = (driftData?.items ?? []).filter((d) => d.drift_score > 0).slice(0, 5)
@@ -273,16 +240,16 @@ export function DashboardPage() {
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         {/* Nodes card */}
         <StatCard
-          title="Nodes"
+          title="Total Nodes"
           to="/fleet"
-          variant={nodesVariant}
+          accent="border-l-brand-600"
+          numColor="text-gray-900"
           value={totalNodes || '—'}
-          icon="🖥️"
           detail={
             <>
-              <p className="text-emerald-600 font-medium">{onlineCount} online</p>
-              {offlineCount > 0 && <p className="text-red-500">{offlineCount} offline/stale</p>}
-              {maintCount > 0 && <p className="text-amber-600">{maintCount} in maintenance</p>}
+              <span className="text-emerald-600 font-medium">{onlineCount} online</span>
+              {offlineCount > 0 && <span className="ml-2 text-red-500">{offlineCount} offline/stale</span>}
+              {maintCount > 0 && <span className="ml-2 text-amber-600">{maintCount} maintenance</span>}
             </>
           }
         />
@@ -290,50 +257,35 @@ export function DashboardPage() {
         {/* Drift card */}
         <StatCard
           title="Drift"
-          to="/drift"
-          variant={driftVariant}
+          to="/compliance?tab=drift"
+          accent={driftedCount === 0 ? 'border-l-emerald-500' : avgDrift > 50 ? 'border-l-red-500' : 'border-l-amber-500'}
+          numColor={driftedCount === 0 ? 'text-emerald-700' : avgDrift > 50 ? 'text-red-700' : 'text-amber-700'}
           value={driftedCount}
-          icon="📊"
-          detail={
-            <>
-              <p className="text-gray-600">drifted nodes</p>
-              <p className="text-gray-500">avg score {avgDrift}</p>
-            </>
-          }
+          detail={<>drifted nodes · avg score {avgDrift}</>}
         />
 
         {/* Security card */}
         <StatCard
           title="Security"
-          to="/security"
-          variant={secVariant}
-          value={criticalCount}
-          icon="🛡️"
+          to="/compliance?tab=security"
+          accent={criticalCount > 0 ? 'border-l-red-500' : highCount > 0 ? 'border-l-amber-500' : 'border-l-emerald-500'}
+          numColor={criticalCount > 0 ? 'text-red-700' : highCount > 0 ? 'text-amber-700' : 'text-emerald-700'}
+          value={criticalCount + highCount}
           detail={
-            <>
-              <div className="flex gap-3 mt-0.5">
-                {criticalCount > 0 && <span className="text-red-600 font-semibold">{criticalCount} critical</span>}
-                {highCount > 0 && <span className="text-orange-600">{highCount} high</span>}
-                {criticalCount === 0 && highCount === 0 && (
-                  <span className="text-emerald-600">No critical/high</span>
-                )}
-              </div>
-            </>
+            criticalCount === 0 && highCount === 0
+              ? 'No critical/high findings'
+              : `${criticalCount} critical · ${highCount} high`
           }
         />
 
         {/* Salt Keys card */}
         <StatCard
           title="Minion Keys"
-          to="/salt-keys"
-          variant={keysVariant}
+          to="/automation?tab=salt-keys"
+          accent={pendingKeys > 0 ? 'border-l-amber-500' : 'border-l-gray-300'}
+          numColor={pendingKeys > 0 ? 'text-amber-700' : 'text-gray-900'}
           value={pendingKeys}
-          icon="🔑"
-          detail={
-            <p className={pendingKeys > 0 ? 'text-amber-600 font-medium' : 'text-gray-500'}>
-              {pendingKeys > 0 ? `${pendingKeys} pending approval` : 'no pending keys'}
-            </p>
-          }
+          detail={pendingKeys > 0 ? `${pendingKeys} pending approval` : 'no pending keys'}
         />
       </div>
 
