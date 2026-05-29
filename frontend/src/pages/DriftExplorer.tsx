@@ -23,7 +23,8 @@ export const GRAIN_DISPLAY_NAMES: Record<string, string> = {
   'os.release': 'OS Release',
 }
 
-export function formatGrainKey(key: string): string {
+export function formatGrainKey(key: string | undefined | null): string {
+  if (!key) return '—'
   return GRAIN_DISPLAY_NAMES[key] ??
     key.split(/[._]/).map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ')
 }

@@ -97,7 +97,7 @@ export interface DriftRecord {
   missing_packages: Array<{ name: string; required_version: string | null }>
   extra_packages: Array<{ name: string; installed_version: string }>
   version_mismatches: Array<{ name: string; expected: string; actual: string }>
-  service_drift: Array<{ name: string; expected: string; actual: string }>
+  service_drift: Array<{ service?: string; name?: string; expected: string; actual: string }>
   config_drift: unknown[]
 }
 

@@ -1335,8 +1335,8 @@ export function NodeDetail() {
                       <tbody className="divide-y divide-gray-50">
                         {latestDrift.service_drift.map((svc, i) => (
                           <tr key={i} className="hover:bg-gray-50">
-                            <td className="px-4 py-2 font-medium text-gray-900" title={svc.name}>
-                              {formatGrainKey(svc.name)}
+                            <td className="px-4 py-2 font-medium text-gray-900" title={svc.service ?? svc.name}>
+                              {formatGrainKey(svc.service ?? svc.name ?? '')}
                             </td>
                             <td className="px-4 py-2 text-gray-600">{svc.expected}</td>
                             <td className="px-4 py-2 text-red-600">{svc.actual}</td>
