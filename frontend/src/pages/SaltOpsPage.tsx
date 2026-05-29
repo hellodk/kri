@@ -3,8 +3,6 @@ import { useQuery } from '@tanstack/react-query'
 import { saltOpsApi, type SaltState } from '../api/saltOps'
 import { fleetApi } from '../api/fleet'
 import { api } from '../api/client'
-import { StatusBadge } from '../components/StatusBadge'
-import { DriftBadge } from '../components/DriftBadge'
 import { Skeleton } from '../components/Skeleton'
 import { useToastStore } from '../stores/toastStore'
 import { SaltPillarDialog } from './SaltPillarDialog'
@@ -54,6 +52,7 @@ export function SaltOpsPage() {
   const [quickPkgManager, setQuickPkgManager] = useState<'pip' | 'brew' | 'pkg'>('pip')
   const [quickPackage, setQuickPackage] = useState('')
   const [showHelp, setShowHelp] = useState(false)
+  const [stateFilter, setStateFilter] = useState('')
 
   const { data: statesData, isLoading: statesLoading } = useQuery({
     queryKey: ['salt-states'],
@@ -165,20 +164,37 @@ export function SaltOpsPage() {
 
   const parsedOutput = taskOutput?.stdout ? renderSaltOutput(taskOutput.stdout) : []
 
+  // Filter states by search string
+  const filterStr = stateFilter.toLowerCase()
+  function stateMatchesFilter(s: SaltState) {
+    return !filterStr || s.name.toLowerCase().includes(filterStr) || s.display.toLowerCase().includes(filterStr)
+  }
+
   return (
     <div className="space-y-6">
-      <div className="flex items-start justify-between">
+      {/* Header */}
+      <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold text-gray-900">Salt Ops</h1>
-          <p className="text-sm text-gray-500 mt-1">Browse and apply Salt states to fleet nodes.</p>
+          <p className="text-sm text-gray-500 mt-1">Apply Salt states to fleet nodes.</p>
         </div>
-        <button
-          onClick={() => setShowHelp((v) => !v)}
-          className="px-3 py-2 text-gray-600 hover:text-gray-900 font-semibold rounded-lg hover:bg-gray-100"
-          title="Show help"
-        >?</button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => setShowHelp((v) => !v)}
+            className="px-3 py-2 text-sm text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-lg"
+          >
+            Help
+          </button>
+          <button
+            onClick={() => setShowQuickInstall(true)}
+            className="px-4 py-2 text-sm font-medium bg-white border border-gray-200 text-gray-700 rounded-lg hover:bg-gray-50 shadow-sm"
+          >
+            ⚡ Quick Install
+          </button>
+        </div>
       </div>
 
+      {/* Help panel */}
       {showHelp && (
         <div className="bg-blue-50 border-l-4 border-blue-500 rounded-lg px-5 py-4 text-sm text-blue-900 space-y-2">
           <p className="font-semibold">How to use Salt Ops</p>
@@ -191,61 +207,88 @@ export function SaltOpsPage() {
         </div>
       )}
 
-      <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
-        <button
-          onClick={() => setShowQuickInstall((v) => !v)}
-          className="w-full px-4 py-3 flex items-center gap-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
+      {/* Quick Install modal */}
+      {showQuickInstall && (
+        <div
+          className="fixed inset-0 bg-black/40 flex items-center justify-center z-50"
+          onClick={() => setShowQuickInstall(false)}
         >
-          <span className="text-xs text-gray-400">{showQuickInstall ? '▾' : '▸'}</span>
-          Quick Install <span className="text-xs text-gray-400 font-normal">(no state file needed)</span>
-        </button>
-        {showQuickInstall && (
-          <div className="px-4 pb-4 pt-2 border-t border-gray-100 flex items-end gap-3 flex-wrap">
-            <div>
-              <label className="block text-xs text-gray-500 mb-1">Package manager</label>
-              <select
-                value={quickPkgManager}
-                onChange={(e) => setQuickPkgManager(e.target.value as 'pip' | 'brew' | 'pkg')}
-                className="border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+          <div
+            className="bg-white rounded-2xl shadow-2xl p-6 w-full max-w-md mx-4 space-y-4"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between">
+              <h2 className="text-lg font-bold text-gray-900">⚡ Quick Install</h2>
+              <button
+                onClick={() => setShowQuickInstall(false)}
+                className="text-gray-400 hover:text-gray-600 text-xl leading-none"
               >
-                <option value="pip">pip</option>
-                <option value="brew">brew</option>
-                <option value="pkg">pkg</option>
-              </select>
+                ✕
+              </button>
             </div>
-            <div className="flex-1 min-w-48">
-              <label className="block text-xs text-gray-500 mb-1">Package name</label>
-              <input
-                type="text"
-                placeholder="e.g. vllm or vllm==0.4.0"
-                value={quickPackage}
-                onChange={(e) => setQuickPackage(e.target.value)}
-                onKeyDown={(e) => { if (e.key === 'Enter') runQuickInstall() }}
-                className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-              />
+            <div className="space-y-3">
+              <div>
+                <label className="block text-xs font-medium text-gray-600 mb-1">Package manager</label>
+                <select
+                  value={quickPkgManager}
+                  onChange={(e) => setQuickPkgManager(e.target.value as 'pip' | 'brew' | 'pkg')}
+                  className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
+                >
+                  <option value="pip">pip</option>
+                  <option value="brew">brew</option>
+                  <option value="pkg">pkg</option>
+                </select>
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-gray-600 mb-1">Package name</label>
+                <input
+                  type="text"
+                  placeholder="e.g. vllm or vllm==0.4.0"
+                  value={quickPackage}
+                  onChange={(e) => setQuickPackage(e.target.value)}
+                  onKeyDown={(e) => { if (e.key === 'Enter') runQuickInstall() }}
+                  className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
+                />
+              </div>
+              <p className="text-xs text-gray-400">
+                {selectedMinions.size === 0
+                  ? '⚠ Select minions in the main panel first'
+                  : `Will run on ${selectedMinions.size} minion${selectedMinions.size === 1 ? '' : 's'}`}
+              </p>
             </div>
-            <button
-              onClick={runQuickInstall}
-              disabled={!quickPackage.trim() || selectedMinions.size === 0 || applying}
-              className="px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              {applying ? 'Running…' : 'Install'}
-            </button>
-            <p className="w-full text-xs text-gray-400">
-              {selectedMinions.size === 0
-                ? 'Select minions in the panel below first'
-                : `Will run on ${selectedMinions.size} minion${selectedMinions.size === 1 ? '' : 's'}`}
-            </p>
+            <div className="flex gap-3 pt-2">
+              <button
+                onClick={() => setShowQuickInstall(false)}
+                className="flex-1 py-2 border border-gray-200 text-gray-600 rounded-lg text-sm hover:bg-gray-50"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => { runQuickInstall(); setShowQuickInstall(false) }}
+                disabled={!quickPackage.trim() || selectedMinions.size === 0 || applying}
+                className="flex-1 py-2 bg-brand-600 text-white rounded-lg text-sm font-medium hover:bg-brand-700 disabled:opacity-50"
+              >
+                {applying ? 'Installing…' : 'Install'}
+              </button>
+            </div>
           </div>
-        )}
-      </div>
+        </div>
+      )}
 
-      <div className="flex gap-6 items-start">
-        {/* Left panel — state browser */}
-        <div className="w-1/3 bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden flex-shrink-0">
-          <div className="px-4 py-3 border-b border-gray-200">
-            <p className="text-sm font-semibold text-gray-700">States</p>
-            <p className="text-xs text-gray-400 mt-0.5">{statesData?.states_dir ?? '/srv/salt/states'}</p>
+      {/* Main two-panel layout: 40/60 */}
+      <div className="flex gap-5 items-start">
+        {/* Left: States browser — 40% */}
+        <div className="w-2/5 bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden flex-shrink-0">
+          <div className="px-4 py-3 border-b border-gray-100">
+            <p className="text-sm font-semibold text-gray-700 mb-2">Salt States</p>
+            <input
+              type="search"
+              placeholder="Filter states…"
+              value={stateFilter}
+              onChange={(e) => setStateFilter(e.target.value)}
+              className="w-full px-3 py-1.5 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-500 bg-gray-50"
+            />
+            <p className="text-xs text-gray-400 mt-1.5">{statesData?.states_dir ?? '/srv/salt/states'}</p>
           </div>
           {statesLoading ? (
             <Skeleton rows={4} />
@@ -255,10 +298,12 @@ export function SaltOpsPage() {
             <ul className="py-2">
               {folders.map((folder) => {
                 const folderStates = stateTree[folder]
-                const isOpen = expandedFolders.has(folder)
+                const filteredFolderStates = folderStates.filter(stateMatchesFilter)
+                if (filteredFolderStates.length === 0) return null
+                const isOpen = expandedFolders.has(folder) || !!filterStr
                 if (!folder) {
                   // Root-level states
-                  return folderStates.map((s) => (
+                  return filteredFolderStates.map((s) => (
                     <li key={s.name}>
                       <button
                         onClick={() => setSelectedState(s)}
@@ -281,11 +326,11 @@ export function SaltOpsPage() {
                     >
                       <span className="text-xs text-gray-400">{isOpen ? '▾' : '▸'}</span>
                       <span className="font-mono">{folder}</span>
-                      <span className="ml-auto text-xs text-gray-400">{folderStates.length}</span>
+                      <span className="ml-auto text-xs text-gray-400">{filteredFolderStates.length}</span>
                     </button>
                     {isOpen && (
                       <ul>
-                        {folderStates.map((s) => (
+                        {filteredFolderStates.map((s) => (
                           <li key={s.name}>
                             <button
                               onClick={() => setSelectedState(s)}
@@ -308,81 +353,69 @@ export function SaltOpsPage() {
           )}
         </div>
 
-        {/* Right panel */}
+        {/* Right: Action panel — 60% */}
         <div className="flex-1 space-y-4">
-          {!selectedState ? (
-            <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-8 text-center text-gray-400">
-              <p className="text-base">Select a state from the left panel to apply it.</p>
+          {/* Node selector — always visible */}
+          <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-4">
+            <div className="flex items-center justify-between mb-3">
+              <span className="text-sm font-semibold text-gray-700">Target Nodes</span>
+              <div className="flex items-center gap-3">
+                <span className="text-xs text-gray-400">{selectedMinions.size} of {nodes.length} selected</span>
+                <button
+                  onClick={toggleAll}
+                  className="text-xs text-brand-600 hover:underline font-medium"
+                >
+                  {allSelected ? 'Deselect all' : 'Select all'}
+                </button>
+              </div>
             </div>
-          ) : (
-            <>
-              {/* State header */}
-              <div className="bg-white rounded-xl border border-gray-200 shadow-sm px-4 py-3 flex items-center gap-3">
-                <span className="text-lg text-gray-400">⚡</span>
-                <div>
-                  <p className="font-mono font-semibold text-gray-900">{selectedState.display}</p>
-                  <p className="text-xs text-gray-400 font-mono">{selectedState.path}</p>
-                </div>
+            {nodesLoading ? (
+              <span className="text-sm text-gray-400">Loading…</span>
+            ) : nodes.length === 0 ? (
+              <p className="text-sm text-gray-400">No nodes registered.</p>
+            ) : (
+              <div className="flex flex-wrap gap-2">
+                {nodes.map((n) => {
+                  const mid = n.minion_id ?? n.id
+                  const checked = selectedMinions.has(mid)
+                  return (
+                    <button
+                      key={mid}
+                      onClick={() => toggleMinion(mid)}
+                      className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-sm font-medium transition-colors ${
+                        checked
+                          ? 'bg-brand-50 border-brand-300 text-brand-700'
+                          : 'bg-white border-gray-200 text-gray-600 hover:bg-gray-50'
+                      }`}
+                    >
+                      <span className={`w-2 h-2 rounded-full flex-shrink-0 ${n.status === 'online' ? 'bg-emerald-500' : 'bg-gray-300'}`} />
+                      {n.hostname ?? n.minion_id}
+                    </button>
+                  )
+                })}
               </div>
+            )}
+          </div>
 
-              {/* Node selector */}
-              <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
-                <div className="px-4 py-3 border-b border-gray-200 flex items-center gap-3">
-                  <label className="flex items-center gap-2 text-sm font-medium text-gray-700 cursor-pointer">
-                    <input
-                      type="checkbox"
-                      checked={allSelected}
-                      onChange={toggleAll}
-                      className="accent-brand-600"
-                    />
-                    Select all
-                  </label>
-                  <span className="ml-auto text-xs text-gray-400">
-                    {selectedMinions.size} of {nodes.length} selected
+          {/* Selected state + Apply, or empty state */}
+          {selectedState ? (
+            <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-4">
+              <div className="flex items-center justify-between mb-4">
+                <div className="flex items-center gap-2">
+                  <span className="text-xs font-mono px-2 py-1 bg-brand-50 text-brand-700 rounded border border-brand-200">
+                    {selectedState.display}
                   </span>
+                  <span className="text-xs text-gray-400 font-mono">{selectedState.path}</span>
                 </div>
-                {nodesLoading ? (
-                  <Skeleton rows={3} />
-                ) : nodes.length === 0 ? (
-                  <div className="px-4 py-6 text-center text-gray-400 text-sm">No nodes registered.</div>
-                ) : (
-                  <ul className="divide-y divide-gray-100 max-h-64 overflow-y-auto">
-                    {nodes.map((n) => {
-                      const minionId = n.minion_id ?? n.id
-                      const checked = selectedMinions.has(minionId)
-                      return (
-                        <li key={n.id}>
-                          <label className="flex items-center gap-3 px-4 py-2.5 hover:bg-gray-50 cursor-pointer">
-                            <input
-                              type="checkbox"
-                              checked={checked}
-                              onChange={() => toggleMinion(minionId)}
-                              className="accent-brand-600"
-                            />
-                            <span className="font-medium text-sm text-gray-900 flex-1">
-                              {n.hostname ?? n.minion_id}
-                            </span>
-                            <StatusBadge status={n.status} />
-                            <DriftBadge score={n.drift_score} />
-                          </label>
-                        </li>
-                      )
-                    })}
-                  </ul>
-                )}
-              </div>
-
-              {/* Apply button */}
-              <div className="flex justify-end">
                 <button
                   onClick={handleApplyClick}
-                  disabled={applying || selectedMinions.size === 0}
-                  className="px-6 py-2.5 bg-brand-600 text-white text-sm font-semibold rounded-lg hover:bg-brand-700 disabled:opacity-50 shadow-sm flex items-center gap-2"
+                  disabled={selectedMinions.size === 0 || applying}
+                  className="px-5 py-2 bg-brand-600 text-white font-semibold text-sm rounded-lg hover:bg-brand-700 disabled:opacity-50 transition-colors flex items-center gap-2"
                 >
                   {applying && (
                     <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
                   )}
-                  {applying ? 'Applying…' : `⚡ Apply State`}
+                  {applying ? '⏳ Applying…' : '▷ Apply State'}
                 </button>
               </div>
 
@@ -428,9 +461,9 @@ export function SaltOpsPage() {
                         const failed = stateResults.filter((s) => !s.result).length
                         const changed = stateResults.filter((s) => s.changes).length
                         return (
-                          <div key={minion} className="border border-gray-200 dark:border-gray-700 rounded-lg mb-3 last:mb-0 overflow-hidden">
-                            <div className="flex items-center justify-between px-4 py-2 bg-gray-50 dark:bg-gray-800 rounded-t-lg gap-3">
-                              <span className="font-mono font-semibold text-gray-900 dark:text-gray-100 text-sm">{minion}</span>
+                          <div key={minion} className="border border-gray-200 rounded-lg mb-3 last:mb-0 overflow-hidden">
+                            <div className="flex items-center justify-between px-4 py-2 bg-gray-50 rounded-t-lg gap-3">
+                              <span className="font-mono font-semibold text-gray-900 text-sm">{minion}</span>
                               <div className="flex items-center gap-2 ml-auto">
                                 {failed > 0 && (
                                   <span className="text-xs px-2 py-0.5 bg-red-100 text-red-700 rounded-full font-medium">
@@ -447,7 +480,7 @@ export function SaltOpsPage() {
                                 </span>
                                 <button
                                   onClick={() => navigator.clipboard.writeText(JSON.stringify(stateResults, null, 2))}
-                                  className="text-xs text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 px-2 py-0.5 rounded border border-gray-200 dark:border-gray-600"
+                                  className="text-xs text-gray-500 hover:text-gray-700 px-2 py-0.5 rounded border border-gray-200"
                                 >
                                   Copy
                                 </button>
@@ -487,17 +520,17 @@ export function SaltOpsPage() {
                         return (
                           <div className="divide-y divide-gray-200">
                             {Object.entries(parsed as Record<string, unknown>).map(([minion, result]) => (
-                              <div key={minion} className="border border-gray-200 dark:border-gray-700 rounded-lg mb-3 last:mb-0 overflow-hidden">
-                                <div className="flex items-center justify-between px-4 py-2 bg-gray-50 dark:bg-gray-800 rounded-t-lg">
-                                  <span className="font-mono text-sm font-medium text-gray-900 dark:text-gray-100">{minion}</span>
+                              <div key={minion} className="border border-gray-200 rounded-lg mb-3 last:mb-0 overflow-hidden">
+                                <div className="flex items-center justify-between px-4 py-2 bg-gray-50 rounded-t-lg">
+                                  <span className="font-mono text-sm font-medium text-gray-900">{minion}</span>
                                   <button
                                     onClick={() => navigator.clipboard.writeText(JSON.stringify(result, null, 2))}
-                                    className="text-xs text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 px-2 py-0.5 rounded border border-gray-200 dark:border-gray-600"
+                                    className="text-xs text-gray-500 hover:text-gray-700 px-2 py-0.5 rounded border border-gray-200"
                                   >
                                     Copy
                                   </button>
                                 </div>
-                                <pre className="p-4 text-xs font-mono text-gray-800 dark:text-gray-200 overflow-auto max-h-64 bg-white dark:bg-gray-900 rounded-b-lg">
+                                <pre className="p-4 text-xs font-mono text-gray-800 overflow-auto max-h-64 bg-white rounded-b-lg">
                                   {typeof result === 'string' ? result : JSON.stringify(result, null, 2)}
                                 </pre>
                               </div>
@@ -506,12 +539,12 @@ export function SaltOpsPage() {
                         )
                       }
                       return (
-                        <div className="border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden">
-                          <div className="flex items-center justify-between px-4 py-2 bg-gray-50 dark:bg-gray-800">
-                            <span className="font-mono text-sm font-medium text-gray-900 dark:text-gray-100">stdout</span>
+                        <div className="border border-gray-200 rounded-lg overflow-hidden">
+                          <div className="flex items-center justify-between px-4 py-2 bg-gray-50">
+                            <span className="font-mono text-sm font-medium text-gray-900">stdout</span>
                             <button
                               onClick={() => navigator.clipboard.writeText(taskOutput.stdout ?? '')}
-                              className="text-xs text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 px-2 py-0.5 rounded border border-gray-200 dark:border-gray-600"
+                              className="text-xs text-gray-500 hover:text-gray-700 px-2 py-0.5 rounded border border-gray-200"
                             >
                               Copy
                             </button>
@@ -525,7 +558,13 @@ export function SaltOpsPage() {
                   ) : null}
                 </div>
               )}
-            </>
+            </div>
+          ) : (
+            <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-8 text-center">
+              <div className="text-4xl mb-3 text-gray-300">▹</div>
+              <p className="text-sm font-medium text-gray-700 mb-1">No state selected</p>
+              <p className="text-xs text-gray-400">Choose a Salt state from the left panel to apply it to the selected nodes.</p>
+            </div>
           )}
         </div>
       </div>
@@ -544,3 +583,4 @@ export function SaltOpsPage() {
     </div>
   )
 }
+

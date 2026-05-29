@@ -6,12 +6,13 @@ import logging
 import re
 from datetime import UTC, datetime, timedelta
 
-from sqlalchemy import func, select
+from sqlalchemy import and_, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from fleet_platform.api.deps import get_redis
 from fleet_platform.models.alert import AlertEvent
 from fleet_platform.models.node import Node
+from fleet_platform.models.node_health_snapshot import NodeHealthSnapshot
 
 _log = logging.getLogger(__name__)
 
@@ -81,6 +82,74 @@ async def get_celery_queue_stats() -> dict[str, int]:
     return stats
 
 
+async def get_fleet_health_aggregates(db: AsyncSession) -> dict:
+    """Aggregate latest health snapshot per node (last 2h).
+
+    Returns dict with node_count, avg_cpu_load_1m, avg_mem_used_pct, avg_disk_pct,
+    thermal_ok, nodes_with_gpu, total_gpu_vram_mb.
+    """
+    cutoff = datetime.now(UTC) - timedelta(hours=2)
+    # Subquery to get latest collected_at per node within cutoff
+    subq = (
+        select(
+            NodeHealthSnapshot.node_id,
+            func.max(NodeHealthSnapshot.collected_at).label("latest"),
+        )
+        .where(NodeHealthSnapshot.collected_at >= cutoff)
+        .group_by(NodeHealthSnapshot.node_id)
+        .subquery()
+    )
+
+    # Join to fetch the full snapshots at the latest timestamp
+    rows = await db.execute(
+        select(NodeHealthSnapshot).join(
+            subq,
+            and_(
+                NodeHealthSnapshot.node_id == subq.c.node_id,
+                NodeHealthSnapshot.collected_at == subq.c.latest,
+            ),
+        )
+    )
+    snapshots = rows.scalars().all()
+
+    if not snapshots:
+        return {
+            "node_count": 0,
+            "avg_cpu_load_1m": None,
+            "avg_mem_used_pct": None,
+            "avg_disk_pct": None,
+            "thermal_ok": None,
+            "nodes_with_gpu": 0,
+            "total_gpu_vram_mb": 0,
+        }
+
+    def avg(lst: list[float]) -> float | None:
+        return round(sum(lst) / len(lst), 1) if lst else None
+
+    # Collect numeric values, filtering out None
+    cpu_vals = [float(s.cpu_load_1m) for s in snapshots if s.cpu_load_1m is not None]
+    mem_vals = [float(s.mem_used_pct) for s in snapshots if s.mem_used_pct is not None]
+    disk_vals = [float(s.disk_root_pct) for s in snapshots if s.disk_root_pct is not None]
+
+    # Count nodes with acceptable thermal pressure (None, empty, "nominal", "fair")
+    thermal_ok = sum(
+        1 for s in snapshots if s.thermal_pressure in (None, "", "nominal", "fair")
+    )
+
+    # GPU aggregates
+    gpu_nodes = [s for s in snapshots if s.gpu_name]
+
+    return {
+        "node_count": len(snapshots),
+        "avg_cpu_load_1m": avg(cpu_vals),
+        "avg_mem_used_pct": avg(mem_vals),
+        "avg_disk_pct": avg(disk_vals),
+        "thermal_ok": thermal_ok,
+        "nodes_with_gpu": len(gpu_nodes),
+        "total_gpu_vram_mb": sum(s.gpu_vram_mb or 0 for s in gpu_nodes),
+    }
+
+
 def parse_http_request_total(metrics_text: str) -> list[dict]:
     """Parse http_requests_total counter from Prometheus text format.
 
@@ -110,9 +179,13 @@ def parse_http_request_total(metrics_text: str) -> list[dict]:
 
 async def get_monitoring_summary(db: AsyncSession, metrics_text: str = "") -> dict:
     """Aggregate all monitoring data into a single summary."""
-    node_counts = await get_node_counts(db)
-    alert_events = await get_alert_events_24h(db)
-    celery_stats = await get_celery_queue_stats()
+    # Run independent async operations in parallel
+    node_counts, alert_events, celery_stats, fleet_health = await asyncio.gather(
+        get_node_counts(db),
+        get_alert_events_24h(db),
+        get_celery_queue_stats(),
+        get_fleet_health_aggregates(db),
+    )
     http_stats = parse_http_request_total(metrics_text) if metrics_text else []
 
     return {
@@ -121,5 +194,6 @@ async def get_monitoring_summary(db: AsyncSession, metrics_text: str = "") -> di
         "alert_count_24h": len(alert_events),
         "celery_queues": celery_stats,
         "http_requests": http_stats[:20],  # top 20
+        "fleet_health": fleet_health,
         "generated_at": datetime.now(UTC).isoformat(),
     }

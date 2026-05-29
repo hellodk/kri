@@ -94,27 +94,12 @@ export function Sidebar() {
       {/* Nav */}
       <ul className="flex-1 py-4 px-2 space-y-0.5 overflow-y-auto">
         {/* Hub links */}
-        {open && (
-          <li>
-            <p className="text-white/40 text-[10px] font-semibold tracking-widest uppercase px-3 pt-3 pb-1 select-none">
-              Navigation
-            </p>
-          </li>
-        )}
         {HUB_LINKS.map((link) => renderLink(link, true))}
 
-        {/* System group separator */}
-        {open ? (
-          <li>
-            <p className="text-white/40 text-[10px] font-semibold tracking-widest uppercase px-3 pt-5 pb-1 select-none">
-              System
-            </p>
-          </li>
-        ) : (
-          <li>
-            <div className="mx-2 my-3 border-t border-white/10" />
-          </li>
-        )}
+        {/* Divider before system links */}
+        <li>
+          <div className="mx-2 my-3 border-t border-white/10" />
+        </li>
 
         {/* System links */}
         {SYSTEM_LINKS.map((link) => renderLink(link, false))}

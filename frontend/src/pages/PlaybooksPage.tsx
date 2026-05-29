@@ -3,7 +3,6 @@ import { useQuery } from '@tanstack/react-query'
 import { playbooksApi } from '../api/playbooks'
 import { ansibleApi } from '../api/ansible'
 import type { PlaybookEntry } from '../api/playbooks'
-import type { PlatformSettings } from '../api/ansible'
 import { Skeleton } from '../components/Skeleton'
 import { ErrorState } from '../components/ErrorState'
 import { PlaybookRunModal } from './PlaybookRunModal'
@@ -30,7 +29,7 @@ export function PlaybooksPage() {
   const roles = data?.filter((e) => e.entry_type === 'role') ?? []
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-6">
       <div>
         <h1 className="text-2xl font-bold text-gray-900">Playbooks</h1>
         <p className="text-gray-500 mt-1 text-sm">
@@ -44,43 +43,162 @@ export function PlaybooksPage() {
         <ErrorState message="Failed to load playbooks" retry={refetch} />
       ) : (
         <>
-          {playbooks.length > 0 && (
-            <section className="space-y-3">
-              <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wide">Playbooks</h2>
-              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-                {playbooks.map((p) => (
-                  <PlaybookCard
-                    key={p.filename}
-                    entry={p}
-                    settings={settings ?? null}
-                    onRun={() => setPendingRun(p)}
-                    onExplore={() => setOpenPlaybook(p)}
-                  />
-                ))}
+          {/* Stat row */}
+          <div className="grid grid-cols-3 gap-4 mb-6">
+            <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-5">
+              <div className="text-xs font-semibold uppercase tracking-wide text-gray-400 mb-2">▤ Playbooks</div>
+              <div className="text-4xl font-black text-gray-900">{playbooks.length}</div>
+            </div>
+            <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-5">
+              <div className="text-xs font-semibold uppercase tracking-wide text-gray-400 mb-2">⊡ Roles</div>
+              <div className="text-4xl font-black text-gray-900">{roles.length}</div>
+            </div>
+            <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-5">
+              <div className="text-xs font-semibold uppercase tracking-wide text-gray-400 mb-2">⊞ Ansible</div>
+              <div className={`text-lg font-bold ${settings?.ansible_endpoint_url ? 'text-emerald-600' : 'text-amber-600'}`}>
+                {settings?.ansible_endpoint_url ? 'Connected' : 'Not configured'}
               </div>
-            </section>
-          )}
-
-          {roles.length > 0 && (
-            <section className="space-y-3">
-              <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wide">Roles</h2>
-              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-                {roles.map((r) => (
-                  <PlaybookCard
-                    key={r.filename}
-                    entry={r}
-                    settings={settings ?? null}
-                    onRun={() => setPendingRun(r)}
-                    onExplore={() => setOpenPlaybook(r)}
-                  />
-                ))}
-              </div>
-            </section>
-          )}
+              <div className="text-xs text-gray-400 mt-1 truncate">{settings?.ansible_endpoint_url ?? 'Set in Settings'}</div>
+            </div>
+          </div>
 
           {playbooks.length === 0 && roles.length === 0 && (
             <div className="bg-white rounded-xl border border-gray-200 p-10 text-center text-gray-400 text-sm">
               No <code>.yml</code> files or roles found in <code>playbooks/</code>.
+            </div>
+          )}
+
+          {/* Playbooks table */}
+          {playbooks.length > 0 && (
+            <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden mb-6">
+              <div className="px-5 py-3 border-b border-gray-100 flex items-center justify-between">
+                <span className="text-sm font-semibold text-gray-700">Playbooks</span>
+                <span className="text-xs text-gray-400">{playbooks.length} total</span>
+              </div>
+              <table className="w-full">
+                <thead>
+                  <tr className="border-b border-gray-100 bg-gray-50">
+                    <th className="px-5 py-2.5 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide">Name</th>
+                    <th className="px-5 py-2.5 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide hidden md:table-cell">File</th>
+                    <th className="px-5 py-2.5 text-center text-xs font-semibold text-gray-500 uppercase tracking-wide">Vars</th>
+                    <th className="px-5 py-2.5 text-right text-xs font-semibold text-gray-500 uppercase tracking-wide">Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {playbooks.map((p) => (
+                    <tr key={p.filename} className="border-b border-gray-50 hover:bg-gray-50 transition-colors last:border-0">
+                      <td className="px-5 py-3">
+                        <div className="flex items-center gap-2">
+                          <span className="text-xs px-1.5 py-0.5 rounded bg-brand-50 text-brand-700 font-semibold">▤</span>
+                          <span className="font-medium text-gray-900 text-sm">{p.name}</span>
+                          {p.lint_errors.length > 0 && (
+                            <span className="text-xs px-1.5 py-0.5 rounded bg-red-50 text-red-600 font-medium border border-red-200" title={p.lint_errors.join('\n')}>
+                              ⚠ errors
+                            </span>
+                          )}
+                        </div>
+                        {p.description && (
+                          <p className="text-xs text-gray-400 mt-0.5 ml-7">{p.description}</p>
+                        )}
+                      </td>
+                      <td className="px-5 py-3 hidden md:table-cell">
+                        <span className="font-mono text-xs text-gray-400">{p.filename}</span>
+                      </td>
+                      <td className="px-5 py-3 text-center">
+                        {Object.keys(p.default_vars).length > 0 && (
+                          <span className="text-xs px-2 py-0.5 rounded-full bg-gray-100 text-gray-600 font-medium">
+                            {Object.keys(p.default_vars).length} vars
+                          </span>
+                        )}
+                      </td>
+                      <td className="px-5 py-3">
+                        <div className="flex items-center justify-end gap-2">
+                          <button
+                            onClick={() => setOpenPlaybook(p)}
+                            className="px-3 py-1.5 text-xs font-medium border border-gray-200 text-gray-600 rounded-lg hover:bg-gray-50 transition-colors"
+                          >
+                            📁 Files
+                          </button>
+                          <button
+                            onClick={() => setPendingRun(p)}
+                            disabled={p.lint_errors.length > 0}
+                            className="px-3 py-1.5 text-xs font-medium bg-brand-600 text-white rounded-lg hover:bg-brand-700 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                          >
+                            ▷ Run
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+
+          {/* Roles table */}
+          {roles.length > 0 && (
+            <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden mb-6">
+              <div className="px-5 py-3 border-b border-gray-100 flex items-center justify-between">
+                <span className="text-sm font-semibold text-gray-700">Roles</span>
+                <span className="text-xs text-gray-400">{roles.length} total</span>
+              </div>
+              <table className="w-full">
+                <thead>
+                  <tr className="border-b border-gray-100 bg-gray-50">
+                    <th className="px-5 py-2.5 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide">Name</th>
+                    <th className="px-5 py-2.5 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide hidden md:table-cell">File</th>
+                    <th className="px-5 py-2.5 text-center text-xs font-semibold text-gray-500 uppercase tracking-wide">Vars</th>
+                    <th className="px-5 py-2.5 text-right text-xs font-semibold text-gray-500 uppercase tracking-wide">Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {roles.map((r) => (
+                    <tr key={r.filename} className="border-b border-gray-50 hover:bg-gray-50 transition-colors last:border-0">
+                      <td className="px-5 py-3">
+                        <div className="flex items-center gap-2">
+                          <span className="text-xs px-1.5 py-0.5 rounded bg-gray-100 text-gray-600 font-semibold">⊡</span>
+                          <span className="font-medium text-gray-900 text-sm">{r.name}</span>
+                          {r.lint_errors.length > 0 && (
+                            <span className="text-xs px-1.5 py-0.5 rounded bg-red-50 text-red-600 font-medium border border-red-200" title={r.lint_errors.join('\n')}>
+                              ⚠ errors
+                            </span>
+                          )}
+                        </div>
+                        {r.description && (
+                          <p className="text-xs text-gray-400 mt-0.5 ml-7">{r.description}</p>
+                        )}
+                      </td>
+                      <td className="px-5 py-3 hidden md:table-cell">
+                        <span className="font-mono text-xs text-gray-400">{r.filename}</span>
+                      </td>
+                      <td className="px-5 py-3 text-center">
+                        {Object.keys(r.default_vars).length > 0 && (
+                          <span className="text-xs px-2 py-0.5 rounded-full bg-gray-100 text-gray-600 font-medium">
+                            {Object.keys(r.default_vars).length} vars
+                          </span>
+                        )}
+                      </td>
+                      <td className="px-5 py-3">
+                        <div className="flex items-center justify-end gap-2">
+                          <button
+                            onClick={() => setOpenPlaybook(r)}
+                            className="px-3 py-1.5 text-xs font-medium border border-gray-200 text-gray-600 rounded-lg hover:bg-gray-50 transition-colors"
+                          >
+                            📁 Files
+                          </button>
+                          <button
+                            onClick={() => setPendingRun(r)}
+                            disabled={r.lint_errors.length > 0}
+                            className="px-3 py-1.5 text-xs font-medium bg-brand-600 text-white rounded-lg hover:bg-brand-700 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                          >
+                            ▷ Run
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
             </div>
           )}
         </>
@@ -111,124 +229,6 @@ export function PlaybooksPage() {
       {selected && <PlaybookRunModal playbook={selected} onClose={() => setSelected(null)} />}
 
       {openPlaybook && <PlaybookDrawer playbook={openPlaybook} onClose={() => setOpenPlaybook(null)} />}
-    </div>
-  )
-}
-
-function PlaybookCard({
-  entry,
-  settings,
-  onRun,
-  onExplore,
-}: {
-  entry: PlaybookEntry
-  settings: PlatformSettings | null
-  onRun: () => void
-  onExplore: () => void
-}) {
-  const varCount = Object.keys(entry.default_vars).length
-
-  const kriApiUrl = settings?.kri_api_url ?? null
-  const saltMaster = settings?.salt_master_address ?? null
-  const ingestUrl = kriApiUrl
-    ? `${kriApiUrl.replace(/\/$/, '')}/api/v1/ingest`
-    : saltMaster
-      ? `http://${saltMaster}/api/v1/ingest`
-      : null
-
-  const configRows: { label: string; value: string; warn?: boolean }[] = [
-    {
-      label: 'salt_master_address',
-      value: saltMaster ?? '(not configured)',
-      warn: !saltMaster,
-    },
-    {
-      label: 'ingest_url',
-      value: ingestUrl ?? '(not configured — set kri External URL in Settings)',
-      warn: !ingestUrl,
-    },
-    {
-      label: 'controller_pubkey',
-      value: settings?.controller_pubkey ? 'configured' : '(not generated)',
-      warn: !settings?.controller_pubkey,
-    },
-    {
-      label: 'ssh_user (default)',
-      value: settings?.ssh_bootstrap_username ?? '(not set — per-node creds required)',
-      warn: !settings?.ssh_bootstrap_username,
-    },
-    {
-      label: 'playbooks_dir',
-      value: settings?.playbooks_dir ?? '<repo>/playbooks (default)',
-    },
-    {
-      label: 'pillar_dir',
-      value: settings?.pillar_dir ?? '/srv/salt/pillar (default)',
-    },
-  ]
-  // configRows is kept for future use (e.g. tooltip or info panel)
-  void configRows
-
-  return (
-    <div className="bg-white rounded-xl border border-gray-200 shadow-sm flex flex-col hover:border-brand-300 transition-colors">
-      {/* Header */}
-      <div className="p-5 flex flex-col gap-3 flex-1">
-        <div className="flex items-start justify-between gap-2">
-          <div>
-            <p className="font-semibold text-gray-900 text-sm">{entry.name}</p>
-            <p className="text-xs text-gray-400 font-mono mt-0.5">{entry.filename}</p>
-          </div>
-          <span className={`text-xs px-2 py-0.5 rounded font-medium flex-shrink-0 ${
-            entry.entry_type === 'role'
-              ? 'bg-purple-100 text-purple-700 border border-purple-200'
-              : 'bg-brand-50 text-brand-700 border border-brand-200'
-          }`}>
-            {entry.entry_type}
-          </span>
-        </div>
-
-        {entry.description && (
-          <p className="text-sm text-gray-600">{entry.description}</p>
-        )}
-
-        {entry.lint_errors.length > 0 && (
-          <div className="bg-red-50 border border-red-200 rounded-lg p-2.5">
-            <p className="text-xs font-semibold text-red-600 mb-1">⚠ YAML syntax errors — not runnable</p>
-            {entry.lint_errors.map((e, i) => (
-              <p key={i} className="text-xs font-mono text-red-500">{e}</p>
-            ))}
-          </div>
-        )}
-
-        {varCount > 0 && (
-          <div className="bg-gray-50 rounded-lg border border-gray-100 p-2.5 space-y-1">
-            <p className="text-xs font-medium text-gray-400 uppercase tracking-wide mb-1">Default Variables ({varCount})</p>
-            {Object.entries(entry.default_vars).map(([k, v]) => (
-              <div key={k} className="flex items-center gap-2 text-xs">
-                <span className="font-mono text-gray-600 w-36 truncate">{k}</span>
-                <span className="font-mono text-gray-400 truncate">{String(v)}</span>
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
-
-      {/* Footer actions */}
-      <div className="px-5 pb-5 pt-3 flex gap-2 border-t border-gray-100 mt-auto">
-        <button
-          onClick={onExplore}
-          className="flex-1 px-3 py-2 border border-gray-200 text-gray-600 text-xs font-medium rounded-lg hover:bg-gray-50"
-        >
-          🗂 Files
-        </button>
-        <button
-          onClick={onRun}
-          disabled={entry.lint_errors.length > 0}
-          className="flex-1 px-3 py-2 bg-brand-600 text-white text-xs font-medium rounded-lg hover:bg-brand-700 shadow-sm disabled:opacity-40 disabled:cursor-not-allowed"
-        >
-          ▶ Run
-        </button>
-      </div>
     </div>
   )
 }

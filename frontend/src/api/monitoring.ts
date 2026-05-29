@@ -29,12 +29,23 @@ export interface HttpRequest {
   count: number
 }
 
+export interface FleetHealth {
+  node_count: number
+  avg_cpu_load_1m: number | null
+  avg_mem_used_pct: number | null
+  avg_disk_pct: number | null
+  thermal_ok: number | null
+  nodes_with_gpu: number
+  total_gpu_vram_mb: number
+}
+
 export interface MonitoringSummary {
   node_counts: NodeCounts
   alert_events_24h: AlertEvent[]
   alert_count_24h: number
   celery_queues: CeleryQueues
   http_requests: HttpRequest[]
+  fleet_health: FleetHealth
   generated_at: string
 }
 

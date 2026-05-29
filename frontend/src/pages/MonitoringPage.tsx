@@ -1,6 +1,6 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { format, parseISO } from 'date-fns'
-import { monitoringApi, type MonitoringSummary } from '../api/monitoring'
+import { monitoringApi, type MonitoringSummary, type FleetHealth } from '../api/monitoring'
 
 // ── Shared card wrapper ────────────────────────────────────────────────────────
 
@@ -25,6 +25,115 @@ function SectionCard({
         </div>
         {children}
       </div>
+    </div>
+  )
+}
+
+// ── Fleet Health metric row ────────────────────────────────────────────────────
+
+function cpuColor(val: number | null): string {
+  if (val == null) return 'text-gray-400'
+  if (val < 70) return 'text-emerald-600'
+  if (val <= 90) return 'text-amber-600'
+  return 'text-red-600'
+}
+
+function memColor(val: number | null): string {
+  if (val == null) return 'text-gray-400'
+  if (val < 75) return 'text-emerald-600'
+  if (val <= 90) return 'text-amber-600'
+  return 'text-red-600'
+}
+
+function diskColor(val: number | null): string {
+  if (val == null) return 'text-gray-400'
+  if (val < 80) return 'text-emerald-600'
+  if (val <= 90) return 'text-amber-600'
+  return 'text-red-600'
+}
+
+function MetricCard({
+  label,
+  badge,
+  value,
+  colorClass,
+  sub,
+}: {
+  label: string
+  badge?: string
+  value: string
+  colorClass: string
+  sub: string
+}) {
+  return (
+    <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-4">
+      <div className="flex items-center justify-between mb-2">
+        <span className="text-xs font-semibold uppercase tracking-wide text-gray-400">{label}</span>
+        {badge && <span className="text-xs text-gray-300">{badge}</span>}
+      </div>
+      <div className={`text-3xl font-black tabular-nums ${colorClass}`}>{value}</div>
+      <div className="text-xs text-gray-400 mt-1">{sub}</div>
+    </div>
+  )
+}
+
+function FleetHealthRow({ fh }: { fh: FleetHealth }) {
+  if (fh.node_count === 0) {
+    return (
+      <div className="bg-gray-50 border border-gray-200 rounded-xl p-4 text-sm text-gray-500 mb-6">
+        No fleet health data available. Go to <strong>Fleet Health</strong> tab and click{' '}
+        <strong>Collect Now</strong>.
+      </div>
+    )
+  }
+
+  const cpuVal = fh.avg_cpu_load_1m != null ? Math.round(fh.avg_cpu_load_1m) : null
+  const memVal = fh.avg_mem_used_pct != null ? Math.round(fh.avg_mem_used_pct) : null
+  const diskVal = fh.avg_disk_pct != null ? Math.round(fh.avg_disk_pct) : null
+
+  const gpuLabel =
+    fh.nodes_with_gpu === 0
+      ? '—'
+      : `${fh.nodes_with_gpu} node${fh.nodes_with_gpu !== 1 ? 's' : ''} · ${(fh.total_gpu_vram_mb / 1024).toFixed(0)} GB`
+
+  const thermalOk = fh.thermal_ok !== null && fh.thermal_ok === fh.node_count
+  const thermalVal =
+    fh.thermal_ok == null ? '—' : `${fh.thermal_ok}/${fh.node_count}`
+  const thermalColor = fh.thermal_ok == null ? 'text-gray-400' : thermalOk ? 'text-emerald-600' : 'text-amber-600'
+
+  return (
+    <div className="grid grid-cols-5 gap-4 mb-6">
+      <MetricCard
+        label="CPU Load Avg"
+        badge="1m"
+        value={cpuVal != null ? `${cpuVal}%` : '—'}
+        colorClass={cpuColor(cpuVal)}
+        sub={`${fh.node_count} node${fh.node_count !== 1 ? 's' : ''} reporting`}
+      />
+      <MetricCard
+        label="Memory Avg"
+        value={memVal != null ? `${memVal}%` : '—'}
+        colorClass={memColor(memVal)}
+        sub={`${fh.node_count} node${fh.node_count !== 1 ? 's' : ''} reporting`}
+      />
+      <MetricCard
+        label="Disk Avg"
+        value={diskVal != null ? `${diskVal}%` : '—'}
+        colorClass={diskColor(diskVal)}
+        sub={`${fh.node_count} node${fh.node_count !== 1 ? 's' : ''} reporting`}
+      />
+      <MetricCard
+        label="GPU Nodes"
+        value={gpuLabel}
+        colorClass="text-[#444ce7]"
+        sub={fh.nodes_with_gpu === 0 ? 'No GPU nodes' : `${fh.total_gpu_vram_mb.toLocaleString()} MB total VRAM`}
+      />
+      <MetricCard
+        label="Thermal"
+        value={thermalVal}
+        colorClass={thermalColor}
+        sub={thermalOk ? 'All nodes OK' : 'Some nodes hot'}
+      />
     </div>
   )
 }
@@ -203,9 +312,7 @@ function HttpRequestsCard({ data }: { data: MonitoringSummary }) {
           <table className="w-full text-xs">
             <thead>
               <tr className="border-b border-gray-100">
-                <th className="text-left py-1.5 px-1 font-semibold text-gray-500 uppercase tracking-wide">Handler</th>
-                <th className="text-left py-1.5 px-1 font-semibold text-gray-500 uppercase tracking-wide">Method</th>
-                <th className="text-left py-1.5 px-1 font-semibold text-gray-500 uppercase tracking-wide">Status</th>
+                <th className="text-left py-1.5 px-1 font-semibold text-gray-500 uppercase tracking-wide">Endpoint</th>
                 <th className="text-right py-1.5 px-1 font-semibold text-gray-500 uppercase tracking-wide">Count</th>
               </tr>
             </thead>
@@ -213,18 +320,15 @@ function HttpRequestsCard({ data }: { data: MonitoringSummary }) {
               {http_requests.map((r, i) => {
                 const pct = (r.count / maxCount) * 100
                 const isError = r.status_code.startsWith('4') || r.status_code.startsWith('5')
+                const endpointLabel = `${r.method} ${r.status_code}`
                 return (
                   <tr
                     key={i}
                     className="border-b border-gray-50 hover:bg-gray-50 transition-colors"
                   >
-                    <td className="py-1.5 px-1 text-gray-700 font-mono max-w-[200px] truncate" title={r.handler}>
-                      {r.handler}
-                    </td>
-                    <td className="py-1.5 px-1 text-gray-600">{r.method}</td>
                     <td className="py-1.5 px-1">
-                      <span className={`px-1.5 py-0.5 rounded font-medium ${isError ? 'bg-red-50 text-red-700' : 'bg-green-50 text-green-700'}`}>
-                        {r.status_code}
+                      <span className={`inline-flex items-center gap-1.5 px-1.5 py-0.5 rounded font-medium font-mono ${isError ? 'bg-red-50 text-red-700' : 'bg-green-50 text-green-700'}`}>
+                        {endpointLabel}
                       </span>
                     </td>
                     <td className="py-1.5 px-1 text-right">
@@ -285,7 +389,7 @@ export function MonitoringPage() {
     : null
 
   return (
-    <div className="p-6 max-w-screen-xl mx-auto">
+    <div className="max-w-screen-xl mx-auto">
       {/* Page header */}
       <div className="flex items-center justify-between mb-6">
         <div>
@@ -323,14 +427,20 @@ export function MonitoringPage() {
         </div>
       )}
 
-      {/* Content grid */}
+      {/* Content */}
       {data && (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          <NodeStatusCard data={data} />
-          <CeleryQueuesCard data={data} />
-          <AlertEventsCard data={data} />
-          <HttpRequestsCard data={data} />
-        </div>
+        <>
+          {/* Fleet health metric row */}
+          <FleetHealthRow fh={data.fleet_health} />
+
+          {/* Main 2-col grid */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <NodeStatusCard data={data} />
+            <CeleryQueuesCard data={data} />
+            <AlertEventsCard data={data} />
+            <HttpRequestsCard data={data} />
+          </div>
+        </>
       )}
     </div>
   )

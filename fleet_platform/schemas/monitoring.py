@@ -33,10 +33,21 @@ class HttpRequestSchema(BaseModel):
     count: int
 
 
+class FleetHealthSchema(BaseModel):
+    node_count: int
+    avg_cpu_load_1m: float | None
+    avg_mem_used_pct: float | None
+    avg_disk_pct: float | None
+    thermal_ok: int | None
+    nodes_with_gpu: int
+    total_gpu_vram_mb: int
+
+
 class MonitoringSummarySchema(BaseModel):
     node_counts: NodeCountsSchema
     alert_events_24h: list[AlertEventSchema]
     alert_count_24h: int
     celery_queues: CeleryQueuesSchema
     http_requests: list[HttpRequestSchema]
+    fleet_health: FleetHealthSchema
     generated_at: str
