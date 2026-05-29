@@ -179,13 +179,13 @@ def parse_http_request_total(metrics_text: str) -> list[dict]:
 
 async def get_monitoring_summary(db: AsyncSession, metrics_text: str = "") -> dict:
     """Aggregate all monitoring data into a single summary."""
-    # Run independent async operations in parallel
-    node_counts, alert_events, celery_stats, fleet_health = await asyncio.gather(
-        get_node_counts(db),
-        get_alert_events_24h(db),
-        get_celery_queue_stats(),
-        get_fleet_health_aggregates(db),
-    )
+    # DB queries must run sequentially — a single AsyncSession cannot serve
+    # concurrent coroutines (SQLAlchemy raises InvalidRequestError if you try).
+    # Only get_celery_queue_stats() is safe to overlap because it uses Redis.
+    node_counts = await get_node_counts(db)
+    alert_events = await get_alert_events_24h(db)
+    fleet_health = await get_fleet_health_aggregates(db)
+    celery_stats = await get_celery_queue_stats()
     http_stats = parse_http_request_total(metrics_text) if metrics_text else []
 
     return {

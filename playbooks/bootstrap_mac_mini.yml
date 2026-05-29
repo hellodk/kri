@@ -324,6 +324,30 @@
       loop: "{{ brew_list_result.stdout_lines | default([]) | select('match', '^[a-zA-Z].*') | list }}"
       when: brew_list_result.rc == 0 and brew_list_result.stdout != ''
 
+    # ── Install kri heartbeat schedule via Salt ───────────────────────────────
+    # This runs base.heartbeat on the minion so grain_report is sent every
+    # 5 minutes automatically. Without this, nodes go offline after 15 min.
+    # Waits for salt-master to accept the minion key first (may take ~10s).
+    - name: Wait for salt-master to accept minion key
+      command: >
+        /opt/salt/salt-call --local test.ping
+      register: salt_ping
+      retries: 12
+      delay: 5
+      until: salt_ping.rc == 0
+      become: true
+      changed_when: false
+      failed_when: false
+
+    - name: Apply kri heartbeat schedule via salt-call
+      shell: |
+        /opt/salt/salt-call state.apply base.heartbeat
+      become: true
+      changed_when: false
+      failed_when: false
+      when: salt_ping.rc == 0
+
+    # ── Push initial grains to kri Fleet Platform ─────────────────────────────
     - name: Push Ansible facts + packages as grains to kri ingest API
       uri:
         url: "{{ ingest_url }}/grains"
