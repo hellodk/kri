@@ -28,5 +28,15 @@ if [ ! -L "${PKI}/master.pem.link" ]; then
     echo "[salt-master] PKI keys present (pub: $(head -2 ${PKI}/master.pub | tail -1 | cut -c1-20)...)"
 fi
 
+# Make the PKI directory traversable by other containers (e.g. the API)
+# that mount this same bind-mount. The minions/ directories stay 755 so
+# the API can list accepted/pending keys without needing to run as salt.
+# master.pem remains 400 (private key — only salt user reads it).
+chmod 755 "${PKI}" 2>/dev/null || true
+for sub in minions minions_pre minions_rejected minions_denied minions_autosign; do
+    mkdir -p "${PKI}/${sub}"
+    chmod 755 "${PKI}/${sub}" 2>/dev/null || true
+done
+
 echo "[salt-master] Starting salt-master $(salt-master --version)"
 exec /usr/bin/salt-master --log-level=info --log-file=/dev/stdout
