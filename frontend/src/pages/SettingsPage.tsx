@@ -115,7 +115,7 @@ export function SettingsPage() {
       ? `http://${master}/api/v1/ingest/grains`
       : null
 
-  const TABS = ['General', 'Bootstrap', 'Remote Access', 'Integrations', 'Advanced', 'AI / LLM', 'Notifications'] as const
+  const TABS = ['General', 'Bootstrap', 'Remote Access', 'Integrations', 'Advanced', 'LLM', 'Notifications'] as const
   type Tab = typeof TABS[number]
   const [activeTab, setActiveTab] = useState<Tab>('General')
 
@@ -542,8 +542,8 @@ export function SettingsPage() {
         </div>
       )}
 
-      {/* AI / LLM tab */}
-      {activeTab === 'AI / LLM' && (
+      {/* LLM tab */}
+      {activeTab === 'LLM' && (
         <div className="space-y-6">
           <LLMEndpointsSection />
         </div>
@@ -743,8 +743,8 @@ export function SettingsPage() {
         </div>
       )}
 
-      {/* Save button — visible for all tabs except AI / LLM and Notifications (which manages its own save button) */}
-      {activeTab !== 'AI / LLM' && activeTab !== 'Notifications' && (
+      {/* Save button — visible for all tabs except LLM and Notifications (which manages its own save button) */}
+      {activeTab !== 'LLM' && activeTab !== 'Notifications' && (
         <div className="flex justify-end pt-2">
           <button
             onClick={() => saveMutation.mutate()}
@@ -1256,7 +1256,7 @@ function LLMEndpointsSection() {
       <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-6 space-y-5">
         <div className="flex items-start justify-between">
           <div>
-            <h2 className="text-base font-semibold text-gray-900">AI / LLM Endpoints</h2>
+            <h2 className="text-base font-semibold text-gray-900">LLM Endpoints</h2>
             <p className="text-sm text-gray-500 mt-0.5">
               Configure LLM providers for AI-assisted fleet operations. Supports Ollama, OpenAI-compatible endpoints, and Anthropic.
             </p>
