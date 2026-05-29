@@ -13,8 +13,8 @@ from fleet_platform.services.platform_settings_svc import (
 )
 from fleet_platform.workers.celery_app import celery_app
 
-_DEFAULT_STALE_MINUTES = 15
-_DEFAULT_OFFLINE_HOURS = 1
+_DEFAULT_STALE_MINUTES = 15  # 3 missed heartbeats
+_DEFAULT_OFFLINE_HOURS = 4  # raised from 1h — 1h caused false-offline during kri maintenance
 
 
 @celery_app.task(name="fleet_platform.workers.maintenance.mark_stale_nodes")

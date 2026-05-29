@@ -1,15 +1,42 @@
 # salt/states/base/heartbeat.sls
-# Installs a salt minion schedule that runs grain_report every 5 minutes.
-# Apply once during bootstrap or manually:
-#   salt '*' state.apply base.heartbeat
+# Installs the kri heartbeat — two complementary layers:
 #
-# This gives kri a heartbeat so nodes stay "online" without manual triggers.
+# Layer 1 (config file): writes /etc/salt/minion.d/kri-heartbeat.conf
+#   This is a persistent static config file in the minion's config directory.
+#   It survives: minion restarts, cache clears, salt upgrades, system reboots.
+#   The schedule entry is read directly from the config, not from volatile cache.
+#
+# Layer 2 (script): writes /usr/local/bin/kri_heartbeat.py
+#   The script that posts grains to kri. Called by the schedule every 5 minutes.
+#
+# Apply once during bootstrap, then idempotent on every salt highstate:
+#   salt '*' state.apply base.heartbeat
 
 {% set ingest_url = pillar.get('fleet_platform', {}).get('ingest_url', '') %}
 {% set node_token = pillar.get('fleet_platform', {}).get('node_token', '') %}
 
 {% if ingest_url %}
 
+# Layer 1: persistent schedule config in minion.d — survives cache clears
+kri_heartbeat_minion_conf:
+  file.managed:
+    - name: /etc/salt/minion.d/kri-heartbeat.conf
+    - user: root
+    - group: wheel
+    - mode: "0644"
+    - contents: |
+        # kri heartbeat schedule — written by salt/states/base/heartbeat.sls
+        # DO NOT EDIT: managed by kri. Remove to disable.
+        schedule:
+          kri_heartbeat:
+            function: cmd.run
+            job_kwargs:
+              cmd: /opt/salt/bin/python3.10 /usr/local/bin/kri_heartbeat.py
+            minutes: 5
+            enabled: True
+            run_on_start: True
+
+# Layer 2: heartbeat script
 kri_heartbeat_script:
   file.managed:
     - name: /usr/local/bin/kri_heartbeat.py
@@ -42,16 +69,14 @@ kri_heartbeat_script:
         except Exception as exc:
             print(f"[kri_heartbeat] ingest failed: {exc}", file=sys.stderr)
             sys.exit(1)
-
-kri_heartbeat_schedule:
-  schedule.present:
-    - name: kri_heartbeat
-    - function: cmd.run
-    - job_kwargs:
-        cmd: /opt/salt/bin/python3.10 /usr/local/bin/kri_heartbeat.py
-    - minutes: 5
-    - enabled: True
     - require:
-      - file: kri_heartbeat_script
+      - file: kri_heartbeat_minion_conf
+
+# Restart salt-minion to pick up the new schedule from minion.d
+kri_heartbeat_reload_minion:
+  cmd.run:
+    - name: launchctl stop com.saltstack.salt.minion && sleep 2 && launchctl start com.saltstack.salt.minion
+    - onchanges:
+      - file: kri_heartbeat_minion_conf
 
 {% endif %}
