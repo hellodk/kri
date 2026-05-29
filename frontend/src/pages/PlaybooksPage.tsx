@@ -7,11 +7,22 @@ import { Skeleton } from '../components/Skeleton'
 import { ErrorState } from '../components/ErrorState'
 import { PlaybookRunModal } from './PlaybookRunModal'
 import { PlaybookDrawer } from '../components/PlaybookDrawer'
+import { fuzzyAny } from '../utils/fuzzy'
+
+function filterAndSort(entries: PlaybookEntry[], q: string): PlaybookEntry[] {
+  if (!q) return entries
+  return entries
+    .map((e) => ({ e, score: fuzzyAny([e.name, e.filename], q) }))
+    .filter(({ score }) => score > 0)
+    .sort((a, b) => b.score - a.score)
+    .map(({ e }) => e)
+}
 
 export function PlaybooksPage() {
   const [selected, setSelected] = useState<PlaybookEntry | null>(null)
   const [pendingRun, setPendingRun] = useState<PlaybookEntry | null>(null)
   const [openPlaybook, setOpenPlaybook] = useState<PlaybookEntry | null>(null)
+  const [search, setSearch] = useState('')
 
   const { data, isLoading, isError, refetch } = useQuery({
     queryKey: ['playbooks'],
@@ -25,8 +36,10 @@ export function PlaybooksPage() {
     staleTime: 60_000,
   })
 
-  const playbooks = data?.filter((e) => e.entry_type === 'playbook') ?? []
-  const roles = data?.filter((e) => e.entry_type === 'role') ?? []
+  const allPlaybooks = data?.filter((e) => e.entry_type === 'playbook') ?? []
+  const allRoles = data?.filter((e) => e.entry_type === 'role') ?? []
+  const playbooks = filterAndSort(allPlaybooks, search)
+  const roles = filterAndSort(allRoles, search)
 
   return (
     <div className="space-y-6">
@@ -47,11 +60,11 @@ export function PlaybooksPage() {
           <div className="grid grid-cols-3 gap-4 mb-6">
             <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-5">
               <div className="text-xs font-semibold uppercase tracking-wide text-gray-400 mb-2">▤ Playbooks</div>
-              <div className="text-4xl font-black text-gray-900">{playbooks.length}</div>
+              <div className="text-4xl font-black text-gray-900">{allPlaybooks.length}</div>
             </div>
             <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-5">
               <div className="text-xs font-semibold uppercase tracking-wide text-gray-400 mb-2">⊡ Roles</div>
-              <div className="text-4xl font-black text-gray-900">{roles.length}</div>
+              <div className="text-4xl font-black text-gray-900">{allRoles.length}</div>
             </div>
             <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-5">
               <div className="text-xs font-semibold uppercase tracking-wide text-gray-400 mb-2">⊞ Ansible</div>
@@ -62,9 +75,36 @@ export function PlaybooksPage() {
             </div>
           </div>
 
-          {playbooks.length === 0 && roles.length === 0 && (
+          {/* Fuzzy search */}
+          <div className="relative">
+            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-sm select-none">⌕</span>
+            <input
+              type="search"
+              placeholder="Search playbooks and roles… (fuzzy: type 'bsmc' to match 'bootstrap_mac_mini')"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              className="w-full pl-8 pr-4 py-2.5 bg-white border border-gray-200 rounded-xl text-sm text-gray-900 placeholder-gray-400 shadow-sm focus:outline-none focus:border-brand-500 focus:ring-1 focus:ring-brand-500 transition-colors"
+            />
+            {search && (
+              <button
+                onClick={() => setSearch('')}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 text-lg leading-none"
+              >
+                ×
+              </button>
+            )}
+          </div>
+
+          {playbooks.length === 0 && roles.length === 0 && !search && (
             <div className="bg-white rounded-xl border border-gray-200 p-10 text-center text-gray-400 text-sm">
               No <code>.yml</code> files or roles found in <code>playbooks/</code>.
+            </div>
+          )}
+
+          {playbooks.length === 0 && roles.length === 0 && search && (
+            <div className="bg-white rounded-xl border border-gray-200 p-10 text-center text-gray-400 text-sm">
+              No matches for <strong className="text-gray-600">"{search}"</strong>
+              <button onClick={() => setSearch('')} className="ml-2 text-brand-600 hover:underline">clear</button>
             </div>
           )}
 
@@ -73,7 +113,9 @@ export function PlaybooksPage() {
             <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden mb-6">
               <div className="px-5 py-3 border-b border-gray-100 flex items-center justify-between">
                 <span className="text-sm font-semibold text-gray-700">Playbooks</span>
-                <span className="text-xs text-gray-400">{playbooks.length} total</span>
+                <span className="text-xs text-gray-400">
+                  {search ? `${playbooks.length} of ${allPlaybooks.length}` : `${allPlaybooks.length} total`}
+                </span>
               </div>
               <table className="w-full">
                 <thead>
@@ -140,7 +182,9 @@ export function PlaybooksPage() {
             <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden mb-6">
               <div className="px-5 py-3 border-b border-gray-100 flex items-center justify-between">
                 <span className="text-sm font-semibold text-gray-700">Roles</span>
-                <span className="text-xs text-gray-400">{roles.length} total</span>
+                <span className="text-xs text-gray-400">
+                  {search ? `${roles.length} of ${allRoles.length}` : `${allRoles.length} total`}
+                </span>
               </div>
               <table className="w-full">
                 <thead>

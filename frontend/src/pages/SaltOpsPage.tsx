@@ -6,6 +6,7 @@ import { api } from '../api/client'
 import { Skeleton } from '../components/Skeleton'
 import { useToastStore } from '../stores/toastStore'
 import { SaltPillarDialog } from './SaltPillarDialog'
+import { fuzzyAny } from '../utils/fuzzy'
 
 function parseStateTree(states: SaltState[]): Record<string, SaltState[]> {
   const tree: Record<string, SaltState[]> = {}
@@ -164,10 +165,19 @@ export function SaltOpsPage() {
 
   const parsedOutput = taskOutput?.stdout ? renderSaltOutput(taskOutput.stdout) : []
 
-  // Filter states by search string
-  const filterStr = stateFilter.toLowerCase()
+  // Fuzzy filter — matches if every char of the query appears in order in the state name/display
   function stateMatchesFilter(s: SaltState) {
-    return !filterStr || s.name.toLowerCase().includes(filterStr) || s.display.toLowerCase().includes(filterStr)
+    if (!stateFilter) return true
+    const score = fuzzyAny([s.name, s.display], stateFilter)
+    return score > 0
+  }
+
+  // When a filter is active, sort matching states by relevance score (best match first)
+  function sortedFolderStates(states: SaltState[]): SaltState[] {
+    if (!stateFilter) return states
+    return [...states]
+      .filter(stateMatchesFilter)
+      .sort((a, b) => fuzzyAny([b.name, b.display], stateFilter) - fuzzyAny([a.name, a.display], stateFilter))
   }
 
   return (
@@ -298,9 +308,9 @@ export function SaltOpsPage() {
             <ul className="py-2">
               {folders.map((folder) => {
                 const folderStates = stateTree[folder]
-                const filteredFolderStates = folderStates.filter(stateMatchesFilter)
+                const filteredFolderStates = sortedFolderStates(folderStates)
                 if (filteredFolderStates.length === 0) return null
-                const isOpen = expandedFolders.has(folder) || !!filterStr
+                const isOpen = expandedFolders.has(folder) || !!stateFilter
                 if (!folder) {
                   // Root-level states
                   return filteredFolderStates.map((s) => (
