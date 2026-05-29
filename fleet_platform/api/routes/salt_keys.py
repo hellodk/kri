@@ -28,7 +28,13 @@ async def list_keys(_: dict = Depends(get_current_user)):
     """List all minion keys grouped by status."""
     result: dict[str, list[str]] = {}
     for status, path in _dirs().items():
-        result[status] = sorted(f.name for f in path.iterdir() if f.is_file()) if path.exists() else []
+        try:
+            result[status] = sorted(f.name for f in path.iterdir() if f.is_file()) if path.exists() else []
+        except PermissionError:
+            # salt-master owns the PKI dir with mode 700; the API container may not
+            # have permission to traverse it right after a container restart.
+            # Gracefully return an empty list so the UI shows "no keys" instead of 500.
+            result[status] = []
     result["pending_count"] = len(result["pending"])  # type: ignore[assignment]
     return result
 

@@ -63,7 +63,9 @@ function SingleTerminalPanel({
       const fitAddon = new FitAddon()
       terminal.loadAddon(fitAddon)
       terminal.open(termRef.current!)
-      fitAddon.fit()
+      // Defer fit() to next animation frame — the container may have zero dimensions
+      // immediately after open() if the terminal overlay was just mounted.
+      requestAnimationFrame(() => { try { fitAddon.fit() } catch { /* ignore */ } })
       terminalRef.current = terminal
 
       const token = localStorage.getItem('access_token') || ''

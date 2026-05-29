@@ -257,6 +257,19 @@ async def webssh_session(
         ))
         await ev_db.commit()
 
+    # Guard: if credentials could not be decrypted the password will be empty string.
+    # Surface this clearly in the terminal rather than letting SSH auth silently fail.
+    if creds["auth_mode"] == "password" and not creds.get("ssh_password"):
+        await proxy.send_to_browser(
+            b"\r\n\x1b[31m[SSH Error] Credentials could not be decrypted.\x1b[0m\r\n"
+            b"\x1b[33mThe SSH password stored for this node was encrypted with a different\r\n"
+            b"JWT_SECRET than the one currently in .env.docker.\r\n"
+            b"\r\nFix: go to Node \xe2\x86\x92 Secrets tab and re-enter the SSH password.\x1b[0m\r\n"
+        )
+        await proxy._flush_recording()
+        await proxy.close(status="failed")
+        return
+
     try:
         # Connect to node via asyncssh (with connection cache)
         connect_kwargs: dict = dict(

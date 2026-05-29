@@ -43,7 +43,7 @@ export function WebSSHTerminal({ nodeId, nodeName, onClose, sessionId }: WebSSHT
       const fitAddon = new FitAddon()
       terminal.loadAddon(fitAddon)
       terminal.open(termRef.current)
-      fitAddon.fit()
+      requestAnimationFrame(() => { try { fitAddon.fit() } catch { /* ignore */ } })
       terminalRef.current = terminal
 
       // Get auth token from localStorage
