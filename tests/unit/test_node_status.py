@@ -10,13 +10,13 @@ def test_classify_online_within_15_minutes():
     assert classify_status(last_seen) == "online"
 
 
-def test_classify_stale_between_15_and_60_minutes():
-    last_seen = datetime.now(UTC) - timedelta(minutes=30)
+def test_classify_stale_between_15_and_240_minutes():
+    last_seen = datetime.now(UTC) - timedelta(hours=2)
     assert classify_status(last_seen) == "stale"
 
 
-def test_classify_offline_over_60_minutes():
-    last_seen = datetime.now(UTC) - timedelta(hours=2)
+def test_classify_offline_over_240_minutes():
+    last_seen = datetime.now(UTC) - timedelta(hours=5)
     assert classify_status(last_seen) == "offline"
 
 

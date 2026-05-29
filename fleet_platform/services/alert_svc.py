@@ -72,12 +72,19 @@ async def evaluate_alerts(db: AsyncSession) -> None:
 
 
 async def _check_node_offline(rule: AlertRule, now: datetime, db: AsyncSession) -> None:
-    """Fire node_offline for nodes offline for > 10 minutes, once per 30 min."""
-    cutoff = now - timedelta(minutes=10)
+    """Fire node_offline for nodes that haven't reported for > 30 minutes, once per 30 min.
+
+    Alert is based on last_seen_at age, NOT the status column. This decouples alerting
+    from the 4-hour offline status threshold (audit finding C-1: requiring status=="offline"
+    delayed alerting by up to 4 hours because mark_stale_nodes only sets offline after 4h).
+    A node that hasn't reported for 30 min is flagged regardless of its display status.
+    30 min = 6 missed heartbeats — a genuine signal, not a transient blip.
+    """
+    cutoff = now - timedelta(minutes=30)
     result = await db.execute(
         select(Node).where(
-            Node.status == "offline",
             Node.last_seen_at < cutoff,
+            Node.last_seen_at.is_not(None),   # skip nodes that were never seen
         )
     )
     nodes = result.scalars().all()

@@ -167,7 +167,8 @@ services:
       - ./salt-pki:/etc/salt/pki/master       # bind mount — keys persist across rebuilds
       - ./salt-master.conf:/etc/salt/master.d/kri.conf:ro
       - ../salt/states:/srv/salt/states:ro
-      - ../salt/reactor:/srv/salt/reactor:ro  # reactor fires grain_report on minion start
+      # Reactor SLS lives under salt/states/reactor/ — already served by file_roots above.
+      # No separate mount needed (audit C1 fix).
     healthcheck:
       test: ["CMD-SHELL", "grep -r 'salt-master' /proc/*/cmdline 2>/dev/null | grep -q master || exit 1"]
       interval: 30s

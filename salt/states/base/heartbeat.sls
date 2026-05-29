@@ -72,10 +72,20 @@ kri_heartbeat_script:
     - require:
       - file: kri_heartbeat_minion_conf
 
-# Restart salt-minion to pick up the new schedule from minion.d
+# Restart salt-minion to pick up the new schedule from minion.d.
+# H2-fix (audit): the restart is detached with nohup so it outlives the salt state
+# that triggers it. Without detach, 'launchctl stop' kills the minion mid-state-run
+# (the state is executing INSIDE the process being killed), producing non-deterministic
+# results ranging from partial-apply to the minion not restarting at all.
 kri_heartbeat_reload_minion:
   cmd.run:
-    - name: launchctl stop com.saltstack.salt.minion && sleep 2 && launchctl start com.saltstack.salt.minion
+    - name: >
+        nohup sh -c
+        'sleep 3 &&
+        launchctl stop com.saltstack.salt.minion &&
+        sleep 2 &&
+        launchctl start com.saltstack.salt.minion'
+        >/dev/null 2>&1 &
     - onchanges:
       - file: kri_heartbeat_minion_conf
 

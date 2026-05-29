@@ -4,7 +4,7 @@ from datetime import UTC, datetime, timedelta
 import bcrypt
 
 _STALE_THRESHOLD = timedelta(minutes=15)
-_OFFLINE_THRESHOLD = timedelta(hours=1)
+_OFFLINE_THRESHOLD = timedelta(hours=4)  # synced with maintenance._DEFAULT_OFFLINE_HOURS
 
 
 def classify_status(last_seen_at: datetime | None) -> str:
