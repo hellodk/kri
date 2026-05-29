@@ -132,10 +132,34 @@ async def bootstrap_status(
     db: AsyncSession = Depends(get_db),
     _: dict = Depends(require_role("operator", "admin")),
 ):
+    from datetime import UTC, datetime, timedelta  # noqa: PLC0415
+    from fleet_platform.models.bootstrap_run import BootstrapRun  # noqa: PLC0415
     result = await db.execute(select(Node).where(Node.id == node_id))
     node = result.scalar_one_or_none()
     if not node:
         raise HTTPException(status_code=404, detail="Node not found")
+
+    # Auto-heal: if node is stuck in 'bootstrapping' but all bootstrap runs
+    # for it have terminal status, reset to 'failed' so the UI doesn't hang.
+    if node.bootstrap_status == "bootstrapping":
+        stale_cutoff = datetime.now(UTC) - timedelta(minutes=30)
+        runs = await db.execute(
+            select(BootstrapRun)
+            .where(BootstrapRun.node_id == node_id)
+            .order_by(BootstrapRun.started_at.desc())
+            .limit(1)
+        )
+        latest_run = runs.scalar_one_or_none()
+        is_stale = (
+            latest_run is None
+            or latest_run.status in ("completed", "failed")
+            or (latest_run.finished_at is None and latest_run.started_at < stale_cutoff)
+        )
+        if is_stale:
+            node.bootstrap_status = "failed"
+            node.bootstrap_error = "Bootstrap timed out or state was lost — use Cancel Bootstrap to reset."
+            await db.commit()
+
     return {
         "node_id": str(node.id),
         "minion_id": node.minion_id,
