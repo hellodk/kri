@@ -628,12 +628,16 @@ cmd_diagnose() {
     info "[3/4] Salt minion key status (via mm1 salt-api)…"
     local salt_api_url="${SALT_API_URL:-http://100.102.68.75:8080}"
     local salt_keys
-    # Query mm1 salt-api for accepted keys
+    # Query mm1 salt-api for accepted keys (auth via SALT_API_USER/SALT_API_PASSWORD env vars)
+    local salt_pass="${SALT_API_PASSWORD:-}"
+    local salt_user="${SALT_API_USER:-krisalt}"
     if curl -sf --max-time 5 "$salt_api_url/health" >/dev/null 2>&1; then
-        salt_keys=$(curl -sf --max-time 10 \
-            -H "X-Auth-Token: $(curl -sf -d username="${SALT_API_USER:-krisalt}" \
-                -d password="${SALT_API_PASSWORD:-}" \
-                -d eauth=pam "$salt_api_url/login" 2>/dev/null | python3 -c "import sys,json;d=json.load(sys.stdin);print(d.get('return',[{}])[0].get('token',''))" 2>/dev/null)" \
+        local salt_token
+        salt_token=$(curl -sf --max-time 10 \
+            -d "username=${salt_user}" -d "passwd=${salt_pass}" -d "eauth=pam" \
+            "$salt_api_url/login" 2>/dev/null \
+            | python3 -c "import sys,json;d=json.load(sys.stdin);print(d.get('return',[{}])[0].get('token',''))" 2>/dev/null || echo "")
+        salt_keys=$(curl -sf --max-time 10 -H "X-Auth-Token: ${salt_token}" \
             "$salt_api_url/keys" 2>/dev/null \
             | python3 -c "import sys,json;d=json.load(sys.stdin);print('\n'.join(d.get('return',{}).get('minions',[])))" 2>/dev/null || echo "")
         if echo "$salt_keys" | grep -q "$target"; then
