@@ -396,6 +396,9 @@ export function NodeDetail() {
   const [actionResult, setActionResult] = useState<string | null>(null)
   const [runningAction, setRunningAction] = useState(false)
   const [rebootConfirm, setRebootConfirm] = useState(false)
+  const [quickActionTaskId, setQuickActionTaskId] = useState<string | null>(null)
+  const [quickActionPolling, setQuickActionPolling] = useState(false)
+  const [quickTaskOutput, setQuickTaskOutput] = useState<{ status: string; stdout?: string; stderr?: string; reason?: string } | null>(null)
   const qc = useQueryClient()
   const toast = useToastStore((s) => s.add)
 
@@ -457,6 +460,23 @@ export function NodeDetail() {
     refetchInterval: (q) => {
       const state = q.state.data?.state
       return state === 'PENDING' || state === 'STARTED' ? 2000 : false
+    },
+  })
+
+  useQuery({
+    queryKey: ['quick-action-task', quickActionTaskId],
+    queryFn: () => api.get<{ task_id: string; state: string; result?: { status: string; stdout?: string; stderr?: string; reason?: string } }>(
+      `/api/v1/ansible/tasks/${quickActionTaskId}`
+    ),
+    enabled: !!quickActionTaskId && quickActionPolling,
+    refetchInterval: (q) => {
+      const state = q.state.data?.state
+      if (state === 'SUCCESS' || state === 'FAILURE') {
+        setQuickActionPolling(false)
+        if (q.state.data?.result) setQuickTaskOutput(q.state.data.result)
+        return false
+      }
+      return 2000
     },
   })
 
@@ -613,9 +633,14 @@ export function NodeDetail() {
     if (!node) return
     setRunningAction(true)
     setActionResult(null)
+    setQuickTaskOutput(null)
+    setQuickActionTaskId(null)
+    setQuickActionPolling(false)
     try {
       const resp = await saltOpsApi.cmd(fn, [node.minion_id])
       setActionResult(`Queued: ${fn} (task ${resp.task_id})`)
+      setQuickActionTaskId(resp.task_id)
+      setQuickActionPolling(true)
       toast(`Salt command '${fn}' queued`)
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : 'Command failed'
@@ -722,6 +747,16 @@ export function NodeDetail() {
               : node.maintenance_mode
               ? '⚙ Exit Maintenance'
               : '⚙ Maintenance'}
+          </button>
+          <button
+            onClick={() => {
+              setRebootstrapIp(node.bootstrap_ip ?? node.ip_address ?? '')
+              setShowRebootstrap(true)
+            }}
+            className="px-4 py-2 bg-brand-600 text-white text-sm font-medium rounded-lg hover:bg-brand-700 shadow-sm transition-colors"
+            title="Run Ansible bootstrap playbook on this node"
+          >
+            ⊡ Bootstrap
           </button>
           <button
             onClick={() => {
@@ -1085,6 +1120,29 @@ export function NodeDetail() {
             {actionResult && (
               <div className="mt-3 p-2 text-xs font-mono bg-gray-50 dark:bg-gray-900 rounded text-gray-800 dark:text-gray-200 border border-gray-200 dark:border-gray-700">
                 {actionResult}
+                {quickActionPolling && (
+                  <span className="ml-2 text-gray-400 animate-pulse">polling…</span>
+                )}
+              </div>
+            )}
+            {quickTaskOutput && (
+              <div className={`mt-2 p-3 text-xs rounded border ${quickTaskOutput.status === 'ok' ? 'bg-green-50 border-green-200 dark:bg-green-950 dark:border-green-800' : 'bg-red-50 border-red-200 dark:bg-red-950 dark:border-red-800'}`}>
+                <div className={`font-semibold mb-1 ${quickTaskOutput.status === 'ok' ? 'text-green-700 dark:text-green-300' : 'text-red-700 dark:text-red-300'}`}>
+                  {quickTaskOutput.status === 'ok' ? '✓ Success' : '✗ Failed'}
+                </div>
+                {quickTaskOutput.stdout && (
+                  <pre className="font-mono whitespace-pre-wrap text-gray-800 dark:text-gray-200 bg-gray-50 dark:bg-gray-900 rounded p-2 mt-1 max-h-48 overflow-y-auto">
+                    {quickTaskOutput.stdout}
+                  </pre>
+                )}
+                {quickTaskOutput.stderr && (
+                  <pre className="font-mono whitespace-pre-wrap text-red-700 dark:text-red-300 bg-red-50 dark:bg-red-950 rounded p-2 mt-1 max-h-48 overflow-y-auto">
+                    {quickTaskOutput.stderr}
+                  </pre>
+                )}
+                {quickTaskOutput.reason && (
+                  <p className="text-gray-600 dark:text-gray-400 mt-1">{quickTaskOutput.reason}</p>
+                )}
               </div>
             )}
           </div>
