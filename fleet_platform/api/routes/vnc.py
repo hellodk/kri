@@ -89,36 +89,44 @@ async def _rfb_auth(
     # Type 2 (VNC Auth) — require a password
     if 2 in sec_types:
         if not password:
-            # Server requires auth but we have no password stored — fail cleanly
+            # Cannot complete VNC auth without password — fall through to "no supported type"
+            pass
+        else:
             writer.write(b"\x02")
             await writer.drain()
-            return False
 
-        writer.write(b"\x02")
-        await writer.drain()
+            challenge = await reader.read(16)
+            if len(challenge) < 16:
+                return False
 
-        challenge = await reader.read(16)
-        if len(challenge) < 16:
-            return False
+            key = _vnc_des_key(password)
+            # DES/ECB — encrypt two 8-byte blocks independently.
+            # Use TripleDES(key * 3) which degenerates to plain DES when all three
+            # sub-keys are identical — standard VNC RFB behaviour.
+            cipher = Cipher(_TripleDES(key * 3), modes.ECB())
+            encryptor = cipher.encryptor()
+            response = encryptor.update(challenge[:8]) + encryptor.update(challenge[8:]) + encryptor.finalize()
 
-        key = _vnc_des_key(password)
-        # DES/ECB — encrypt two 8-byte blocks independently.
-        # Use TripleDES(key * 3) which degenerates to plain DES when all three
-        # sub-keys are identical — standard VNC RFB behaviour.
-        cipher = Cipher(_TripleDES(key * 3), modes.ECB())
-        encryptor = cipher.encryptor()
-        response = encryptor.update(challenge[:8]) + encryptor.update(challenge[8:]) + encryptor.finalize()
+            writer.write(response)
+            await writer.drain()
 
-        writer.write(response)
-        await writer.drain()
+            result_bytes = await reader.read(4)
+            if len(result_bytes) < 4:
+                return False
+            status = struct.unpack(">I", result_bytes)[0]
+            return status == 0
 
-        result_bytes = await reader.read(4)
-        if len(result_bytes) < 4:
-            return False
-        status = struct.unpack(">I", result_bytes)[0]
-        return status == 0
-
-    # No supported security type
+    # No supported security type — log a diagnostic to help operators
+    import logging
+    _log = logging.getLogger(__name__)
+    _log.warning(
+        "_rfb_auth: server offered security types %s — none supported. "
+        "macOS Screen Sharing uses type 30 (Apple Remote Desktop) by default. "
+        "To enable VNC type-2 auth: System Settings → Sharing → Screen Sharing → "
+        "check 'VNC viewers may control screen with password' and set a password, "
+        "then store it in kri Node → Secrets → VNC Password.",
+        sec_types,
+    )
     return False
 
 
@@ -210,7 +218,13 @@ async def vnc_session(
             writer.close()
         except Exception:
             pass
-        await websocket.close(code=4006, reason="VNC authentication failed")
+        if vnc_password is None:
+            await websocket.close(
+                code=4005,
+                reason="VNC requires a password — go to Node → Secrets → VNC Password",
+            )
+        else:
+            await websocket.close(code=4006, reason="VNC authentication failed")
         await _close_session(session_id, "failed")
         return
 

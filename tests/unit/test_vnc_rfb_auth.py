@@ -175,12 +175,16 @@ async def test_rfb_auth_fails_when_server_returns_status_1():
 
 @pytest.mark.asyncio
 async def test_rfb_auth_fails_gracefully_when_no_password_for_type2():
-    """If the server only offers type-2 and we have no password, return False."""
+    """If the server only offers type-2 and we have no password, return False.
+
+    The fix ensures we do NOT send \\x02 before bailing out — doing so would leave
+    the server stuck waiting for a 16-byte DES challenge response that never arrives.
+    We fall through to "no supported type" and return False without writing anything.
+    """
     challenge = b"\xAA\xBB\xCC\xDD" * 4
-    # Build data: version + sec_list (type 2 only) + challenge + status=1
-    # (status doesn't matter — we return False before reading it in the no-password path)
     version = b"RFB 003.008\n"
     sec_list = bytes([1, 2])  # n_types=1, types=[2]
+    # Challenge + status are present in the stream but must NOT be consumed
     data = version + sec_list + challenge + struct.pack(">I", 0)
     reader = _MockReader(data)
     writer = _MockWriter()
@@ -188,6 +192,9 @@ async def test_rfb_auth_fails_gracefully_when_no_password_for_type2():
     ok = await _rfb_auth(reader, writer, password=None)
 
     assert ok is False
+    # Critical: we must NOT have selected type 2 — that would leave the server
+    # waiting for a DES response that never comes.
+    assert b"\x02" not in bytes(writer.written)
 
 
 # ---------------------------------------------------------------------------
