@@ -71,4 +71,111 @@ test.describe('VNC Feature Flag', () => {
     const vncBtn = page.locator('button:has-text("VNC")')
     await expect(vncBtn).toHaveCount(0)
   })
+
+  test('VNC-05 VNC button is shown when vnc_enabled is true and node exists', async ({ page, request }) => {
+    test.setTimeout(90000)
+    const token = await getToken(request)
+
+    // Enable VNC via API
+    await request.put(`${API}/api/v1/settings`, {
+      headers: { Authorization: `Bearer ${token}` },
+      data: { vnc_enabled: true },
+    })
+
+    await loginViaApi(page)
+
+    // Get any node
+    const nodesRes = await request.get(`${API}/api/v1/nodes?per_page=1`, {
+      headers: { Authorization: `Bearer ${token}` },
+    })
+    const { items } = await nodesRes.json()
+    if (!items?.length) {
+      test.skip()
+      return
+    }
+
+    await page.goto(`/nodes/${items[0].id}`)
+    await page.waitForSelector('h1', { timeout: 8000 })
+
+    // VNC button should be visible
+    const vncBtn = page.locator('button:has-text("VNC")').first()
+    await expect(vncBtn).toBeVisible({ timeout: 5000 })
+  })
+
+  test('VNC-06 clicking VNC button opens a viewer panel', async ({ page, request }) => {
+    test.setTimeout(90000)
+    const token = await getToken(request)
+
+    // Enable VNC
+    await request.put(`${API}/api/v1/settings`, {
+      headers: { Authorization: `Bearer ${token}` },
+      data: { vnc_enabled: true },
+    })
+
+    await loginViaApi(page)
+
+    // Find a node
+    const nodesRes = await request.get(`${API}/api/v1/nodes?per_page=1`, {
+      headers: { Authorization: `Bearer ${token}` },
+    })
+    const { items } = await nodesRes.json()
+    if (!items?.length) {
+      test.skip()
+      return
+    }
+
+    await page.goto(`/nodes/${items[0].id}`)
+    await page.waitForSelector('h1', { timeout: 8000 })
+
+    // Click VNC button
+    const vncBtn = page.locator('button:has-text("VNC")').first()
+    await vncBtn.click()
+
+    // Verify VNC panel appears (with "VNC →" text or viewer canvas)
+    const vncPanel = page.locator('text=VNC →').first()
+    await expect(vncPanel).toBeVisible({ timeout: 8000 })
+
+    // Verify close button exists
+    const closeBtn = page.locator('button').filter({ hasText: '×' }).first()
+    await expect(closeBtn).toBeVisible({ timeout: 5000 })
+  })
+
+  test('VNC-07 VNC panel shows error or spinner when connection fails', async ({ page, request }) => {
+    test.setTimeout(90000)
+    const token = await getToken(request)
+
+    // Enable VNC
+    await request.put(`${API}/api/v1/settings`, {
+      headers: { Authorization: `Bearer ${token}` },
+      data: { vnc_enabled: true },
+    })
+
+    await loginViaApi(page)
+
+    // Find a node
+    const nodesRes = await request.get(`${API}/api/v1/nodes?per_page=1`, {
+      headers: { Authorization: `Bearer ${token}` },
+    })
+    const { items } = await nodesRes.json()
+    if (!items?.length) {
+      test.skip()
+      return
+    }
+
+    await page.goto(`/nodes/${items[0].id}`)
+    await page.waitForSelector('h1', { timeout: 8000 })
+
+    // Click VNC button
+    const vncBtn = page.locator('button:has-text("VNC")').first()
+    await vncBtn.click()
+
+    // Panel should appear even if connection fails (not a crash)
+    const vncPanel = page.locator('text=VNC →').first()
+    await expect(vncPanel).toBeVisible({ timeout: 8000 })
+
+    // Page should still be healthy (title intact, no console errors)
+    const pageTitle = await page.title()
+    expect(pageTitle).toBeTruthy()
+    expect(pageTitle).not.toContain('Error')
+  })
 })

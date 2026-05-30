@@ -5,11 +5,15 @@ Security:
   - JWT auth required (same as SSH)
   - Session logged to ssh_sessions table (type='vnc')
   - Node must be online and have a known IP
+  - RFB authentication is performed server-side using the node's stored VNC password
 """
 import asyncio
+import struct
 import uuid
 from datetime import UTC, datetime
 
+from cryptography.hazmat.decrepit.ciphers.algorithms import TripleDES as _TripleDES
+from cryptography.hazmat.primitives.ciphers import Cipher, modes
 from fastapi import APIRouter, Depends, WebSocket, WebSocketDisconnect
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -18,11 +22,104 @@ from fleet_platform.api.deps import get_db
 from fleet_platform.db.session import AsyncSessionLocal
 from fleet_platform.models.node import Node
 from fleet_platform.models.ssh_session import SSHSession
-from fleet_platform.services.platform_settings_svc import VNC_ENABLED, get_setting
+from fleet_platform.services.platform_settings_svc import VNC_ENABLED, decrypt_secret, get_setting
 
 router = APIRouter(prefix="/api/v1/vnc")
 
 VNC_PORT = 5900
+
+
+def _vnc_des_key(password: str) -> bytes:
+    """Return the 8-byte DES key used by VNC RFB auth.
+
+    VNC uses standard DES with a peculiar key encoding: the bits within each
+    key byte are reversed (LSB becomes MSB).  A password longer than 8 chars
+    is truncated; shorter passwords are right-padded with NUL bytes.
+    """
+    raw = password.encode("utf-8")[:8].ljust(8, b"\x00")
+    return bytes(int(f"{b:08b}"[::-1], 2) for b in raw)
+
+
+async def _rfb_auth(
+    reader: asyncio.StreamReader,
+    writer: asyncio.StreamWriter,
+    password: str | None,
+) -> bool:
+    """Perform the RFB handshake server-side.
+
+    Supports:
+      - Security type 1 (None) — accepted unconditionally.
+      - Security type 2 (VNC Auth) — DES challenge/response using the stored password.
+
+    Returns True when the server grants access, False on any failure.
+    The caller must close the WebSocket and writer on False.
+    """
+    # --- Version negotiation ---
+    server_ver = await reader.read(12)
+    if len(server_ver) < 12:
+        return False
+    # Always speak RFB 3.8 — broadly compatible and required for type negotiation
+    writer.write(b"RFB 003.008\n")
+    await writer.drain()
+
+    # --- Security type list ---
+    header = await reader.read(1)
+    if not header:
+        return False
+    n_types = header[0]
+    if n_types == 0:
+        # Server sent an error (RFB 3.8 error path)
+        return False
+    sec_types_bytes = await reader.read(n_types)
+    if len(sec_types_bytes) < n_types:
+        return False
+    sec_types = list(sec_types_bytes)
+
+    # Prefer type 1 (None auth) — no password needed
+    if 1 in sec_types:
+        writer.write(b"\x01")
+        await writer.drain()
+        # RFB 3.8 sends a 4-byte SecurityResult even for type 1
+        result_bytes = await reader.read(4)
+        if len(result_bytes) < 4:
+            return True  # older servers skip SecurityResult for type 1
+        status = struct.unpack(">I", result_bytes)[0]
+        return status == 0
+
+    # Type 2 (VNC Auth) — require a password
+    if 2 in sec_types:
+        if not password:
+            # Server requires auth but we have no password stored — fail cleanly
+            writer.write(b"\x02")
+            await writer.drain()
+            return False
+
+        writer.write(b"\x02")
+        await writer.drain()
+
+        challenge = await reader.read(16)
+        if len(challenge) < 16:
+            return False
+
+        key = _vnc_des_key(password)
+        # DES/ECB — encrypt two 8-byte blocks independently.
+        # Use TripleDES(key * 3) which degenerates to plain DES when all three
+        # sub-keys are identical — standard VNC RFB behaviour.
+        cipher = Cipher(_TripleDES(key * 3), modes.ECB())
+        encryptor = cipher.encryptor()
+        response = encryptor.update(challenge[:8]) + encryptor.update(challenge[8:]) + encryptor.finalize()
+
+        writer.write(response)
+        await writer.drain()
+
+        result_bytes = await reader.read(4)
+        if len(result_bytes) < 4:
+            return False
+        status = struct.unpack(">I", result_bytes)[0]
+        return status == 0
+
+    # No supported security type
+    return False
 
 
 @router.websocket("/session/{node_id}")
@@ -62,6 +159,14 @@ async def vnc_session(
         await websocket.close(code=4000, reason="Node has no known IP — bootstrap first")
         return
 
+    # Retrieve stored VNC password (if any)
+    vnc_password: str | None = None
+    if node.vnc_password_enc:
+        try:
+            vnc_password = decrypt_secret(node.vnc_password_enc)
+        except Exception:
+            pass  # proceed — server may not require auth
+
     # Log session
     async with AsyncSessionLocal() as sdb:
         session_rec = SSHSession(
@@ -88,6 +193,24 @@ async def vnc_session(
     except (asyncio.TimeoutError, ConnectionRefusedError, OSError) as e:
         err_msg = f"Cannot connect to VNC on {node.bootstrap_ip}:{VNC_PORT} — ensure Screen Sharing is enabled: {e}"
         await websocket.close(code=4000, reason=err_msg[:120])
+        await _close_session(session_id, "failed")
+        return
+
+    # Perform RFB server-side handshake before bridging the WebSocket
+    try:
+        auth_ok = await asyncio.wait_for(
+            _rfb_auth(reader, writer, vnc_password),
+            timeout=15,
+        )
+    except asyncio.TimeoutError:
+        auth_ok = False
+
+    if not auth_ok:
+        try:
+            writer.close()
+        except Exception:
+            pass
+        await websocket.close(code=4006, reason="VNC authentication failed")
         await _close_session(session_id, "failed")
         return
 

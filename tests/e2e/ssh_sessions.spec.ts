@@ -67,4 +67,128 @@ test.describe('SSH Sessions', () => {
     const sshBtn = page.locator('button:has-text("SSH")').first()
     await expect(sshBtn).toBeVisible({ timeout: 5000 })
   })
+
+  test('SSH-06 SSH button is visible on node detail page for any node', async ({ page, request }) => {
+    test.setTimeout(90000)
+    await loginViaApi(page)
+    const token = await getToken(request)
+
+    // Get any node via API
+    const nodesRes = await request.get(`${API}/api/v1/nodes?per_page=1`, {
+      headers: { Authorization: `Bearer ${token}` },
+    })
+    const { items } = await nodesRes.json()
+    if (!items?.length) {
+      test.skip()
+      return
+    }
+
+    const nodeId = items[0].id
+    await page.goto(`/nodes/${nodeId}`)
+    await page.waitForSelector('h1', { timeout: 8000 })
+
+    // SSH button should be visible (may be disabled if node offline)
+    const sshBtn = page.locator('button:has-text("SSH")').first()
+    await expect(sshBtn).toBeVisible({ timeout: 5000 })
+  })
+
+  test('SSH-07 SSH button is disabled when node is offline', async ({ page, request }) => {
+    test.setTimeout(90000)
+    await loginViaApi(page)
+    const token = await getToken(request)
+
+    // Find an offline node, or skip
+    const nodesRes = await request.get(`${API}/api/v1/nodes?per_page=10`, {
+      headers: { Authorization: `Bearer ${token}` },
+    })
+    const { items } = await nodesRes.json()
+    const offlineNode = items?.find((n: any) => n.status !== 'online')
+
+    if (!offlineNode) {
+      test.skip()
+      return
+    }
+
+    await page.goto(`/nodes/${offlineNode.id}`)
+    await page.waitForSelector('h1', { timeout: 8000 })
+
+    const sshBtn = page.locator('button:has-text("SSH")').first()
+    // Button should be disabled or have disabled attribute
+    const isDisabled = await sshBtn.isDisabled()
+    const hasDisabledClass = await sshBtn.evaluate((el) =>
+      el.getAttribute('disabled') !== null ||
+      el.className.includes('disabled') ||
+      el.className.includes('opacity-50')
+    )
+    expect(isDisabled || hasDisabledClass).toBeTruthy()
+  })
+
+  test('SSH-08 clicking SSH on a node opens terminal panel', async ({ page, request }) => {
+    test.setTimeout(90000)
+    await loginViaApi(page)
+    const token = await getToken(request)
+
+    // Find an online node, or skip
+    const nodesRes = await request.get(`${API}/api/v1/nodes?per_page=10`, {
+      headers: { Authorization: `Bearer ${token}` },
+    })
+    const { items } = await nodesRes.json()
+    const onlineNode = items?.find((n: any) => n.status === 'online')
+
+    if (!onlineNode) {
+      test.skip()
+      return
+    }
+
+    await page.goto(`/nodes/${onlineNode.id}`)
+    await page.waitForSelector('h1', { timeout: 8000 })
+
+    // Click SSH button
+    const sshBtn = page.locator('button:has-text("SSH")').first()
+    await sshBtn.click()
+
+    // Verify terminal panel appears (dark background with "SSH →" text)
+    const terminalPanel = page.locator('text=SSH →').first()
+    await expect(terminalPanel).toBeVisible({ timeout: 8000 })
+
+    // Verify close button exists (X in top right)
+    const closeBtn = page.locator('button').filter({ hasText: '×' }).first()
+    await expect(closeBtn).toBeVisible({ timeout: 5000 })
+  })
+
+  test('SSH-09 terminal panel can be closed', async ({ page, request }) => {
+    test.setTimeout(90000)
+    await loginViaApi(page)
+    const token = await getToken(request)
+
+    // Find an online node, or skip
+    const nodesRes = await request.get(`${API}/api/v1/nodes?per_page=10`, {
+      headers: { Authorization: `Bearer ${token}` },
+    })
+    const { items } = await nodesRes.json()
+    const onlineNode = items?.find((n: any) => n.status === 'online')
+
+    if (!onlineNode) {
+      test.skip()
+      return
+    }
+
+    await page.goto(`/nodes/${onlineNode.id}`)
+    await page.waitForSelector('h1', { timeout: 8000 })
+
+    // Open SSH terminal
+    const sshBtn = page.locator('button:has-text("SSH")').first()
+    await sshBtn.click()
+
+    // Verify it opened
+    const terminalPanel = page.locator('text=SSH →').first()
+    await expect(terminalPanel).toBeVisible({ timeout: 8000 })
+
+    // Close the panel
+    const closeBtn = page.locator('button').filter({ hasText: '×' }).first()
+    await closeBtn.click()
+
+    // Verify it closed (terminal panel should not be visible anymore)
+    await expect(terminalPanel).not.toBeVisible({ timeout: 5000 })
+  })
 })

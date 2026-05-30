@@ -260,11 +260,18 @@ async def webssh_session(
     # Guard: if credentials could not be decrypted the password will be empty string.
     # Surface this clearly in the terminal rather than letting SSH auth silently fail.
     if creds["auth_mode"] == "password" and not creds.get("ssh_password"):
+        import json
+        error_event = json.dumps({
+            "type": "credential_error",
+            "code": "credential_decryption_failed",
+            "node_id": str(node_id),
+        })
         await proxy.send_to_browser(
             b"\r\n\x1b[31m[SSH Error] Credentials could not be decrypted.\x1b[0m\r\n"
             b"\x1b[33mThe SSH password stored for this node was encrypted with a different\r\n"
             b"JWT_SECRET than the one currently in .env.docker.\r\n"
             b"\r\nFix: go to Node \xe2\x86\x92 Secrets tab and re-enter the SSH password.\x1b[0m\r\n"
+            b'\x1b]kri_event:' + error_event.encode() + b'\x07\r\n'
         )
         await proxy._flush_recording()
         await proxy.close(status="failed")

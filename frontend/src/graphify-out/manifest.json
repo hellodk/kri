@@ -1,0 +1,377 @@
+{
+  "/home/dk/Documents/git/kri/frontend/src/main.tsx": {
+    "mtime": 1778843787.2209918,
+    "ast_hash": "e7a95cfbb8e27179f1c8998ec7823a77",
+    "semantic_hash": "e7a95cfbb8e27179f1c8998ec7823a77"
+  },
+  "/home/dk/Documents/git/kri/frontend/src/App.tsx": {
+    "mtime": 1779906587.233656,
+    "ast_hash": "28b3e3cdbccefbd39568346229fc5f82",
+    "semantic_hash": "28b3e3cdbccefbd39568346229fc5f82"
+  },
+  "/home/dk/Documents/git/kri/frontend/src/vite-env.d.ts": {
+    "mtime": 1779419270.8632114,
+    "ast_hash": "baed90355525121b50b64e9e44d58b28",
+    "semantic_hash": "baed90355525121b50b64e9e44d58b28"
+  },
+  "/home/dk/Documents/git/kri/frontend/src/api/playbookSources.ts": {
+    "mtime": 1779417133.259596,
+    "ast_hash": "bbca874962baf1923ec7f0ca532d7d21",
+    "semantic_hash": "bbca874962baf1923ec7f0ca532d7d21"
+  },
+  "/home/dk/Documents/git/kri/frontend/src/api/iosTracking.ts": {
+    "mtime": 1779455686.5782943,
+    "ast_hash": "fd399a8182e3c7046f42ed558eec6bae",
+    "semantic_hash": "fd399a8182e3c7046f42ed558eec6bae"
+  },
+  "/home/dk/Documents/git/kri/frontend/src/api/auth.ts": {
+    "mtime": 1779874191.1369839,
+    "ast_hash": "b02989b9d28835c6597b75ed1579f5f0",
+    "semantic_hash": "b02989b9d28835c6597b75ed1579f5f0"
+  },
+  "/home/dk/Documents/git/kri/frontend/src/api/nodeSecrets.ts": {
+    "mtime": 1779448239.7604678,
+    "ast_hash": "8d90d22c90a7355446b4fd295140e358",
+    "semantic_hash": "8d90d22c90a7355446b4fd295140e358"
+  },
+  "/home/dk/Documents/git/kri/frontend/src/api/audit.ts": {
+    "mtime": 1779879344.99864,
+    "ast_hash": "389acbd075eefd3729711041d3539f76",
+    "semantic_hash": "389acbd075eefd3729711041d3539f76"
+  },
+  "/home/dk/Documents/git/kri/frontend/src/api/sbom.ts": {
+    "mtime": 1779444185.1741278,
+    "ast_hash": "5885080a297992a5d980a6ff3b88039c",
+    "semantic_hash": "5885080a297992a5d980a6ff3b88039c"
+  },
+  "/home/dk/Documents/git/kri/frontend/src/api/fleet.ts": {
+    "mtime": 1779455544.1735954,
+    "ast_hash": "01350781f858858f5df0c37a98f2be6f",
+    "semantic_hash": "01350781f858858f5df0c37a98f2be6f"
+  },
+  "/home/dk/Documents/git/kri/frontend/src/api/executions.ts": {
+    "mtime": 1779043311.8929899,
+    "ast_hash": "98cca306ed25243db2d679558c31712d",
+    "semantic_hash": "98cca306ed25243db2d679558c31712d"
+  },
+  "/home/dk/Documents/git/kri/frontend/src/api/groups.ts": {
+    "mtime": 1779465564.0630546,
+    "ast_hash": "a395ea8c698a1a26793e534f67a9861e",
+    "semantic_hash": "a395ea8c698a1a26793e534f67a9861e"
+  },
+  "/home/dk/Documents/git/kri/frontend/src/api/fleetHealth.ts": {
+    "mtime": 1779822419.4327707,
+    "ast_hash": "6f13b08d6414049ecebec3f2f8963d5f",
+    "semantic_hash": "6f13b08d6414049ecebec3f2f8963d5f"
+  },
+  "/home/dk/Documents/git/kri/frontend/src/api/drift.ts": {
+    "mtime": 1779446984.7189746,
+    "ast_hash": "afe899f36babb177a16ec0aa28214a4e",
+    "semantic_hash": "afe899f36babb177a16ec0aa28214a4e"
+  },
+  "/home/dk/Documents/git/kri/frontend/src/api/alerts.ts": {
+    "mtime": 1779455507.1654136,
+    "ast_hash": "576d20315e08b3c797e00af375ec2bff",
+    "semantic_hash": "576d20315e08b3c797e00af375ec2bff"
+  },
+  "/home/dk/Documents/git/kri/frontend/src/api/saltOps.ts": {
+    "mtime": 1779448249.514535,
+    "ast_hash": "4ff8e65df1690065355732fe79d55a2c",
+    "semantic_hash": "4ff8e65df1690065355732fe79d55a2c"
+  },
+  "/home/dk/Documents/git/kri/frontend/src/api/builds.ts": {
+    "mtime": 1779874191.137984,
+    "ast_hash": "e5e2543a9d5ae989ff2977a7e84c45dd",
+    "semantic_hash": "e5e2543a9d5ae989ff2977a7e84c45dd"
+  },
+  "/home/dk/Documents/git/kri/frontend/src/api/playbooks.ts": {
+    "mtime": 1779388710.5922809,
+    "ast_hash": "41ceee0d23a14013e35fdf436eb72cfd",
+    "semantic_hash": "41ceee0d23a14013e35fdf436eb72cfd"
+  },
+  "/home/dk/Documents/git/kri/frontend/src/api/client.ts": {
+    "mtime": 1779874191.1629844,
+    "ast_hash": "ee9664173ae6bdbfad380943774e3a0b",
+    "semantic_hash": "ee9664173ae6bdbfad380943774e3a0b"
+  },
+  "/home/dk/Documents/git/kri/frontend/src/api/baselines.ts": {
+    "mtime": 1779438738.761517,
+    "ast_hash": "836bd45bffab98d7cbb894e2e4e0d353",
+    "semantic_hash": "836bd45bffab98d7cbb894e2e4e0d353"
+  },
+  "/home/dk/Documents/git/kri/frontend/src/api/saltKeys.ts": {
+    "mtime": 1779445606.9140491,
+    "ast_hash": "2b8300d52ca9b1ac46aec7a81b6e7bf0",
+    "semantic_hash": "2b8300d52ca9b1ac46aec7a81b6e7bf0"
+  },
+  "/home/dk/Documents/git/kri/frontend/src/api/llm.ts": {
+    "mtime": 1779883066.5303948,
+    "ast_hash": "97d2d85f3cf6fd8dc3a780e0802cb277",
+    "semantic_hash": "97d2d85f3cf6fd8dc3a780e0802cb277"
+  },
+  "/home/dk/Documents/git/kri/frontend/src/api/ansible.ts": {
+    "mtime": 1779874191.1369839,
+    "ast_hash": "524509db3596708a618ad1a4d569d655",
+    "semantic_hash": "524509db3596708a618ad1a4d569d655"
+  },
+  "/home/dk/Documents/git/kri/frontend/src/api/groupSecrets.ts": {
+    "mtime": 1779448243.6274946,
+    "ast_hash": "8f6acad05cffc918b4da5a986377307c",
+    "semantic_hash": "8f6acad05cffc918b4da5a986377307c"
+  },
+  "/home/dk/Documents/git/kri/frontend/src/api/provisioning.ts": {
+    "mtime": 1779903871.919501,
+    "ast_hash": "a934d661c9241f9f38896c39f26b49ea",
+    "semantic_hash": "a934d661c9241f9f38896c39f26b49ea"
+  },
+  "/home/dk/Documents/git/kri/frontend/src/api/search.ts": {
+    "mtime": 1778843787.218853,
+    "ast_hash": "51748e7c0d46f1c1f2b488db6a4b944b",
+    "semantic_hash": "51748e7c0d46f1c1f2b488db6a4b944b"
+  },
+  "/home/dk/Documents/git/kri/frontend/src/components/StatusBadge.tsx": {
+    "mtime": 1779120514.530624,
+    "ast_hash": "3754bad9f24ef8783a9594f466415468",
+    "semantic_hash": "3754bad9f24ef8783a9594f466415468"
+  },
+  "/home/dk/Documents/git/kri/frontend/src/components/LLMAssistant.tsx": {
+    "mtime": 1779906838.4440954,
+    "ast_hash": "127918822950b0311a5fae93b415e786",
+    "semantic_hash": "127918822950b0311a5fae93b415e786"
+  },
+  "/home/dk/Documents/git/kri/frontend/src/components/PlaybookDrawer.tsx": {
+    "mtime": 1779438966.7651904,
+    "ast_hash": "dc41bd89ca1b04436e6884109ce70632",
+    "semantic_hash": "dc41bd89ca1b04436e6884109ce70632"
+  },
+  "/home/dk/Documents/git/kri/frontend/src/components/ErrorState.tsx": {
+    "mtime": 1778843787.2204795,
+    "ast_hash": "0d3596962c6e8c36605d61aa5efdb6a5",
+    "semantic_hash": "0d3596962c6e8c36605d61aa5efdb6a5"
+  },
+  "/home/dk/Documents/git/kri/frontend/src/components/ToastContainer.tsx": {
+    "mtime": 1779120147.8167994,
+    "ast_hash": "2249fd8ebbcb5ebdfb369145b1a29aac",
+    "semantic_hash": "2249fd8ebbcb5ebdfb369145b1a29aac"
+  },
+  "/home/dk/Documents/git/kri/frontend/src/components/VNCViewer.tsx": {
+    "mtime": 1779428135.037628,
+    "ast_hash": "1c2bc71a90700369311f087a68902a50",
+    "semantic_hash": "1c2bc71a90700369311f087a68902a50"
+  },
+  "/home/dk/Documents/git/kri/frontend/src/components/AuthGuard.tsx": {
+    "mtime": 1779794025.2185183,
+    "ast_hash": "eeb60cdbccfaa423e980e329b9d312a4",
+    "semantic_hash": "eeb60cdbccfaa423e980e329b9d312a4"
+  },
+  "/home/dk/Documents/git/kri/frontend/src/components/LLMEndpointForm.tsx": {
+    "mtime": 1779822419.433558,
+    "ast_hash": "3565f4742bc10fce8ba241a41bfe4028",
+    "semantic_hash": "3565f4742bc10fce8ba241a41bfe4028"
+  },
+  "/home/dk/Documents/git/kri/frontend/src/components/WebSSHTerminal.tsx": {
+    "mtime": 1779822419.433558,
+    "ast_hash": "078ceef02e5558a5cc63d7ccb62fae3f",
+    "semantic_hash": "078ceef02e5558a5cc63d7ccb62fae3f"
+  },
+  "/home/dk/Documents/git/kri/frontend/src/components/Skeleton.tsx": {
+    "mtime": 1778843787.2208862,
+    "ast_hash": "63c11df4bc3bee734be21e6b4bc09fa7",
+    "semantic_hash": "63c11df4bc3bee734be21e6b4bc09fa7"
+  },
+  "/home/dk/Documents/git/kri/frontend/src/components/PlaybookFileBrowser.tsx": {
+    "mtime": 1779415607.1131825,
+    "ast_hash": "d53cc1e8c7ba347a37f0e51cf0d25342",
+    "semantic_hash": "d53cc1e8c7ba347a37f0e51cf0d25342"
+  },
+  "/home/dk/Documents/git/kri/frontend/src/components/DriftBadge.tsx": {
+    "mtime": 1779120503.124572,
+    "ast_hash": "32fa4d7dc623302014338fad579a3ad7",
+    "semantic_hash": "32fa4d7dc623302014338fad579a3ad7"
+  },
+  "/home/dk/Documents/git/kri/frontend/src/components/Pagination.tsx": {
+    "mtime": 1779276343.4985704,
+    "ast_hash": "0895846c6cae539603ae457bc86c7da6",
+    "semantic_hash": "0895846c6cae539603ae457bc86c7da6"
+  },
+  "/home/dk/Documents/git/kri/frontend/src/components/ssh/MultiSessionTerminal.tsx": {
+    "mtime": 1779822419.433558,
+    "ast_hash": "04e8494fc20273a6c52bc5c9f771b845",
+    "semantic_hash": "04e8494fc20273a6c52bc5c9f771b845"
+  },
+  "/home/dk/Documents/git/kri/frontend/src/components/ssh/SshTabBar.tsx": {
+    "mtime": 1779822419.4340765,
+    "ast_hash": "0364a8917546e10bbea85eb5c1e4dbb2",
+    "semantic_hash": "0364a8917546e10bbea85eb5c1e4dbb2"
+  },
+  "/home/dk/Documents/git/kri/frontend/src/components/Layout/Sidebar.tsx": {
+    "mtime": 1779905441.8000703,
+    "ast_hash": "90718533536626cba3faf08fd8bd8a09",
+    "semantic_hash": "90718533536626cba3faf08fd8bd8a09"
+  },
+  "/home/dk/Documents/git/kri/frontend/src/components/Layout/TopBar.tsx": {
+    "mtime": 1779275983.7069693,
+    "ast_hash": "26dedf3ce63a56379f8f334af25c8fff",
+    "semantic_hash": "26dedf3ce63a56379f8f334af25c8fff"
+  },
+  "/home/dk/Documents/git/kri/frontend/src/components/Layout/Layout.tsx": {
+    "mtime": 1779120440.0272806,
+    "ast_hash": "65b67c68e0be7e6abd00f1b0aa6f84f1",
+    "semantic_hash": "65b67c68e0be7e6abd00f1b0aa6f84f1"
+  },
+  "/home/dk/Documents/git/kri/frontend/src/utils/dateFormat.ts": {
+    "mtime": 1779455559.2616694,
+    "ast_hash": "cd657fbdc9e2f02e23cc89203d165144",
+    "semantic_hash": "cd657fbdc9e2f02e23cc89203d165144"
+  },
+  "/home/dk/Documents/git/kri/frontend/src/types/index.ts": {
+    "mtime": 1779464736.708672,
+    "ast_hash": "51470cb13f97ee7422784afcbf9baf45",
+    "semantic_hash": "51470cb13f97ee7422784afcbf9baf45"
+  },
+  "/home/dk/Documents/git/kri/frontend/src/stores/toastStore.ts": {
+    "mtime": 1779904705.71324,
+    "ast_hash": "b0b5071b9e61312f34eeff55ca27dedd",
+    "semantic_hash": "b0b5071b9e61312f34eeff55ca27dedd"
+  },
+  "/home/dk/Documents/git/kri/frontend/src/stores/filterStore.ts": {
+    "mtime": 1778843787.2253196,
+    "ast_hash": "c2ff1750e9b35b8996ac11c0a8a650ce",
+    "semantic_hash": "c2ff1750e9b35b8996ac11c0a8a650ce"
+  },
+  "/home/dk/Documents/git/kri/frontend/src/stores/llmStore.ts": {
+    "mtime": 1779906838.4450953,
+    "ast_hash": "53e594af94d4e328eaaffcebae429e80",
+    "semantic_hash": "53e594af94d4e328eaaffcebae429e80"
+  },
+  "/home/dk/Documents/git/kri/frontend/src/stores/saltKeysStore.ts": {
+    "mtime": 1779445503.8227444,
+    "ast_hash": "94d937b215250d5b80ab3850db92244d",
+    "semantic_hash": "94d937b215250d5b80ab3850db92244d"
+  },
+  "/home/dk/Documents/git/kri/frontend/src/stores/authStore.ts": {
+    "mtime": 1779886060.676954,
+    "ast_hash": "a2cec8aab7125f880626f80fbb8bc422",
+    "semantic_hash": "a2cec8aab7125f880626f80fbb8bc422"
+  },
+  "/home/dk/Documents/git/kri/frontend/src/pages/GroupDetail.tsx": {
+    "mtime": 1779903871.920501,
+    "ast_hash": "ee690a69019b58445be58ace1f7e3a6e",
+    "semantic_hash": "ee690a69019b58445be58ace1f7e3a6e"
+  },
+  "/home/dk/Documents/git/kri/frontend/src/pages/SaltOpsPage.tsx": {
+    "mtime": 1779906463.3234944,
+    "ast_hash": "c914e392c2685cb8bc8e3157edf18031",
+    "semantic_hash": "c914e392c2685cb8bc8e3157edf18031"
+  },
+  "/home/dk/Documents/git/kri/frontend/src/pages/JobDetail.tsx": {
+    "mtime": 1778843787.2221897,
+    "ast_hash": "7cab913988ea9adb3c21b2e1583db069",
+    "semantic_hash": "7cab913988ea9adb3c21b2e1583db069"
+  },
+  "/home/dk/Documents/git/kri/frontend/src/pages/ProvisioningPage.tsx": {
+    "mtime": 1779354166.43404,
+    "ast_hash": "58035ee16ab2bbe76b663fa0cc0005cb",
+    "semantic_hash": "58035ee16ab2bbe76b663fa0cc0005cb"
+  },
+  "/home/dk/Documents/git/kri/frontend/src/pages/BootstrapModal.tsx": {
+    "mtime": 1779388690.730196,
+    "ast_hash": "1f7d5a95542965076d39f4846c595d7f",
+    "semantic_hash": "1f7d5a95542965076d39f4846c595d7f"
+  },
+  "/home/dk/Documents/git/kri/frontend/src/pages/LoginPage.tsx": {
+    "mtime": 1779906451.103481,
+    "ast_hash": "24d30ff5c17670027bf993fe5ed0dc83",
+    "semantic_hash": "24d30ff5c17670027bf993fe5ed0dc83"
+  },
+  "/home/dk/Documents/git/kri/frontend/src/pages/SaltKeysPage.tsx": {
+    "mtime": 1779906587.234656,
+    "ast_hash": "deb80c0d4b3f5c22664183d602ad8e87",
+    "semantic_hash": "deb80c0d4b3f5c22664183d602ad8e87"
+  },
+  "/home/dk/Documents/git/kri/frontend/src/pages/ExecutionHistory.tsx": {
+    "mtime": 1779906587.233656,
+    "ast_hash": "3a3477a07b74cf1c3672a9a40db3f8a1",
+    "semantic_hash": "3a3477a07b74cf1c3672a9a40db3f8a1"
+  },
+  "/home/dk/Documents/git/kri/frontend/src/pages/OidcCallbackPage.tsx": {
+    "mtime": 1779886060.676954,
+    "ast_hash": "bf5561aabbba227c67d367ecbe0c4d1d",
+    "semantic_hash": "bf5561aabbba227c67d367ecbe0c4d1d"
+  },
+  "/home/dk/Documents/git/kri/frontend/src/pages/PlaybookRunModal.tsx": {
+    "mtime": 1779364545.6293705,
+    "ast_hash": "87f2cb29a00145c29310f6a88f12740f",
+    "semantic_hash": "87f2cb29a00145c29310f6a88f12740f"
+  },
+  "/home/dk/Documents/git/kri/frontend/src/pages/PlaybooksPage.tsx": {
+    "mtime": 1779424750.3172905,
+    "ast_hash": "7796bfeb655a06003f31df8b4df993d1",
+    "semantic_hash": "7796bfeb655a06003f31df8b4df993d1"
+  },
+  "/home/dk/Documents/git/kri/frontend/src/pages/NodeDetail.tsx": {
+    "mtime": 1779906872.9401646,
+    "ast_hash": "123272183f9c4e954a6f62c4f258ca18",
+    "semantic_hash": "123272183f9c4e954a6f62c4f258ca18"
+  },
+  "/home/dk/Documents/git/kri/frontend/src/pages/FleetDashboard.tsx": {
+    "mtime": 1779906872.9391644,
+    "ast_hash": "9705760230ea1359ff2f0bd661402146",
+    "semantic_hash": "9705760230ea1359ff2f0bd661402146"
+  },
+  "/home/dk/Documents/git/kri/frontend/src/pages/AuditPage.tsx": {
+    "mtime": 1779879344.99964,
+    "ast_hash": "c62fe90cb592b8ad6f0d568fdec0735f",
+    "semantic_hash": "c62fe90cb592b8ad6f0d568fdec0735f"
+  },
+  "/home/dk/Documents/git/kri/frontend/src/pages/SecurityPage.tsx": {
+    "mtime": 1779906878.2861755,
+    "ast_hash": "6741aa08e0f034a2db4b4052eaf10466",
+    "semantic_hash": "6741aa08e0f034a2db4b4052eaf10466"
+  },
+  "/home/dk/Documents/git/kri/frontend/src/pages/SBOMExplorer.tsx": {
+    "mtime": 1779438949.9911916,
+    "ast_hash": "4dc1171a053e2412e064a61675dad026",
+    "semantic_hash": "4dc1171a053e2412e064a61675dad026"
+  },
+  "/home/dk/Documents/git/kri/frontend/src/pages/DashboardPage.tsx": {
+    "mtime": 1779464101.6134965,
+    "ast_hash": "4a66849743715d649c02a9fda12799f1",
+    "semantic_hash": "4a66849743715d649c02a9fda12799f1"
+  },
+  "/home/dk/Documents/git/kri/frontend/src/pages/BaselinesPage.tsx": {
+    "mtime": 1779438825.2023087,
+    "ast_hash": "7bd378b803759ed57c263aca7c5d4693",
+    "semantic_hash": "7bd378b803759ed57c263aca7c5d4693"
+  },
+  "/home/dk/Documents/git/kri/frontend/src/pages/SettingsPage.tsx": {
+    "mtime": 1779906587.235656,
+    "ast_hash": "0119e3082e17199462b4044f82f3a4e9",
+    "semantic_hash": "0119e3082e17199462b4044f82f3a4e9"
+  },
+  "/home/dk/Documents/git/kri/frontend/src/pages/AlertsPage.tsx": {
+    "mtime": 1779906872.9391644,
+    "ast_hash": "4fbaf6131355d075fe039d7c57dd25f9",
+    "semantic_hash": "4fbaf6131355d075fe039d7c57dd25f9"
+  },
+  "/home/dk/Documents/git/kri/frontend/src/pages/GroupExplorer.tsx": {
+    "mtime": 1779906872.9401646,
+    "ast_hash": "62bc1d6a9ae59cc7a9521c4422ebb89e",
+    "semantic_hash": "62bc1d6a9ae59cc7a9521c4422ebb89e"
+  },
+  "/home/dk/Documents/git/kri/frontend/src/pages/FleetHealthPage.tsx": {
+    "mtime": 1779822419.4340765,
+    "ast_hash": "7048b182b5cc53315b938b6fbfa66131",
+    "semantic_hash": "7048b182b5cc53315b938b6fbfa66131"
+  },
+  "/home/dk/Documents/git/kri/frontend/src/pages/DriftExplorer.tsx": {
+    "mtime": 1779906838.4450953,
+    "ast_hash": "c5a748385e859fcf2241573a6dcd0601",
+    "semantic_hash": "c5a748385e859fcf2241573a6dcd0601"
+  },
+  "/home/dk/Documents/git/kri/frontend/src/pages/DriftComparePage.tsx": {
+    "mtime": 1779447023.651144,
+    "ast_hash": "e46b534edf0e83d1188f80c05b41aec9",
+    "semantic_hash": "e46b534edf0e83d1188f80c05b41aec9"
+  }
+}

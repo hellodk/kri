@@ -1,6 +1,8 @@
 # fleet_platform/services/platform_settings_svc.py
 import base64
 import hashlib
+import json
+import time
 from pathlib import Path
 
 from cryptography.fernet import Fernet
@@ -51,6 +53,86 @@ NODE_STALE_THRESHOLD_MINUTES = "node_stale_threshold_minutes"
 NODE_OFFLINE_THRESHOLD_HOURS = "node_offline_threshold_hours"
 
 LLM_INCLUDE_NODE_IPS = "llm_include_node_ips"  # "true" | "false", default "true"
+
+SALT_ALLOWED_FUNCTIONS = "salt_allowed_functions"  # JSON array of allowed function names
+
+# Default set of Salt functions that may be executed via the ad-hoc command API.
+# Mirrors the original hardcoded frozenset in salt_tasks.py.
+_DEFAULT_SALT_FUNCTIONS: frozenset[str] = frozenset(
+    {
+        "state.apply",
+        "state.highstate",
+        "state.show_sls",
+        "pkg.install",
+        "pkg.remove",
+        "pkg.list_pkgs",
+        "pkg.upgrade",
+        "pip.install",
+        "pip.installed",
+        "pip.list",
+        "service.start",
+        "service.stop",
+        "service.restart",
+        "service.status",
+        "disk.usage",
+        "disk.inodeusage",
+        "status.loadavg",
+        "status.meminfo",
+        "grains.items",
+        "grains.get",
+        "test.ping",
+        "test.version",
+        "saltutil.sync_all",
+        "saltutil.refresh_grains",
+        "saltutil.refresh_pillar",
+        "system.reboot",
+        "cmd.run",
+    }
+)
+
+# Minimum safe functions that are always present regardless of DB configuration.
+_SALT_MINIMUM_FUNCTIONS: frozenset[str] = frozenset(
+    {
+        "test.ping",
+        "grains.items",
+        "grains.get",
+    }
+)
+
+# (timestamp, frozenset) in-process cache — avoids a DB hit on every task invocation
+_allowed_cache: tuple[float, frozenset[str]] | None = None
+
+
+def get_allowed_salt_functions_sync(db: Session) -> frozenset[str]:
+    """Return the current allowed Salt functions, reading from DB with 60-second cache.
+
+    Falls back to ``_DEFAULT_SALT_FUNCTIONS`` when no DB row exists.
+    Always ensures ``_SALT_MINIMUM_FUNCTIONS`` are present even if an admin
+    accidentally removed them via the UI.
+    """
+    global _allowed_cache
+    now = time.monotonic()
+    if _allowed_cache is not None and now - _allowed_cache[0] < 60:
+        return _allowed_cache[1]
+
+    row = get_setting_sync(db, SALT_ALLOWED_FUNCTIONS)
+    if row:
+        try:
+            parsed = json.loads(row)
+            funcs = frozenset(str(f) for f in parsed) | _SALT_MINIMUM_FUNCTIONS
+        except (json.JSONDecodeError, TypeError):
+            funcs = _DEFAULT_SALT_FUNCTIONS | _SALT_MINIMUM_FUNCTIONS
+    else:
+        funcs = _DEFAULT_SALT_FUNCTIONS | _SALT_MINIMUM_FUNCTIONS
+
+    _allowed_cache = (now, funcs)
+    return funcs
+
+
+def invalidate_salt_allowlist_cache() -> None:
+    """Force the next call to ``get_allowed_salt_functions_sync`` to re-read the DB."""
+    global _allowed_cache
+    _allowed_cache = None
 
 
 def _fernet_key() -> bytes:

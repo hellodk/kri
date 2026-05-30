@@ -19,6 +19,7 @@ from typing import Any
 
 import requests
 
+from fleet_platform.services.platform_settings_svc import get_allowed_salt_functions_sync
 from fleet_platform.workers.celery_app import celery_app
 
 logger = logging.getLogger(__name__)
@@ -27,41 +28,6 @@ _SALT_API_URL = os.environ.get("SALT_API_URL", "").rstrip("/")
 _SALT_API_USER = os.environ.get("SALT_API_USER", "")
 _SALT_API_PASSWORD = os.environ.get("SALT_API_PASSWORD", "")
 _SALT_API_EAUTH = os.environ.get("SALT_API_EAUTH", "pam")
-
-# Allowlist of Salt functions that can be executed via the ad-hoc command API.
-# This prevents operators from running arbitrary shell commands via cmd.run
-# or other dangerous Salt modules.
-_ALLOWED_SALT_FUNCTIONS: frozenset[str] = frozenset(
-    {
-        "state.apply",
-        "state.highstate",
-        "state.show_sls",
-        "pkg.install",
-        "pkg.remove",
-        "pkg.list_pkgs",
-        "pkg.upgrade",
-        "pip.install",
-        "pip.installed",
-        "pip.list",
-        "service.start",
-        "service.stop",
-        "service.restart",
-        "service.status",
-        "disk.usage",
-        "disk.inodeusage",
-        "status.loadavg",
-        "status.meminfo",
-        "grains.items",
-        "grains.get",
-        "test.ping",
-        "test.version",
-        "saltutil.sync_all",
-        "saltutil.refresh_grains",
-        "saltutil.refresh_pillar",
-        "system.reboot",
-        "cmd.run",
-    }
-)
 
 
 def _salt_api_not_configured_error() -> dict:
@@ -190,12 +156,16 @@ def run_salt_cmd(
     args: list[str] | None = None,
 ) -> dict:
     """Run: salt -L '{minion1,minion2}' {function} [args...]"""
-    if function not in _ALLOWED_SALT_FUNCTIONS:
+    from fleet_platform.db.session import get_sync_db
+
+    with get_sync_db() as db:
+        allowed = get_allowed_salt_functions_sync(db)
+    if function not in allowed:
         logger.error("run_salt_cmd: rejected disallowed function %r", function)
         return {
             "status": "error",
             "reason": f"Function '{function}' is not in the allowlist. "
-            f"Allowed functions: {sorted(_ALLOWED_SALT_FUNCTIONS)}",
+            f"Allowed functions: {sorted(allowed)}",
         }
 
     if not _SALT_API_URL:

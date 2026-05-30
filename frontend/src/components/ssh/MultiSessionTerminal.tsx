@@ -14,6 +14,8 @@ interface MultiSessionTerminalProps {
   activeTabId: string
   /** Called when a tab's WebSocket closes / errors so the parent can update UI */
   onTabStatusChange?: (tabId: string, status: 'connected' | 'closed' | 'error') => void
+  /** Called when a credential decryption error is detected in the terminal output */
+  onCredentialError?: (nodeId: string) => void
 }
 
 /**
@@ -24,10 +26,12 @@ function SingleTerminalPanel({
   tab,
   isActive,
   onStatusChange,
+  onCredentialError,
 }: {
   tab: SshTab
   isActive: boolean
   onStatusChange?: (status: 'connected' | 'closed' | 'error') => void
+  onCredentialError?: (nodeId: string) => void
 }) {
   const termRef = useRef<HTMLDivElement>(null)
   const wsRef = useRef<WebSocket | null>(null)
@@ -82,7 +86,26 @@ function SingleTerminalPanel({
         onStatusChange?.('error')
         terminal.write('\r\n\x1b[31m[Connection failed]\x1b[0m\r\n')
       }
-      ws.onmessage = (e) => terminal.write(e.data)
+      ws.onmessage = (e) => {
+        const data = e.data
+        terminal.write(data)
+
+        // Detect kri_event OSC sequence for credential errors
+        // Format: \x1b]kri_event:{"type":"credential_error","code":"...","node_id":"..."}\x07
+        if (typeof data === 'string' && data.includes('kri_event:')) {
+          const oscMatch = data.match(/kri_event:({[^}]+})\x07/)
+          if (oscMatch) {
+            try {
+              const event = JSON.parse(oscMatch[1])
+              if (event.type === 'credential_error' && event.node_id) {
+                onCredentialError?.(event.node_id)
+              }
+            } catch {
+              // Ignore JSON parse errors
+            }
+          }
+        }
+      }
 
       terminal.onData((data: string) => {
         if (ws.readyState === WebSocket.OPEN) ws.send(data)
@@ -144,6 +167,7 @@ export function MultiSessionTerminal({
   tabs,
   activeTabId,
   onTabStatusChange,
+  onCredentialError,
 }: MultiSessionTerminalProps) {
   return (
     <div className="relative flex-1 overflow-hidden bg-gray-950">
@@ -153,6 +177,7 @@ export function MultiSessionTerminal({
           tab={tab}
           isActive={tab.id === activeTabId}
           onStatusChange={(status) => onTabStatusChange?.(tab.id, status)}
+          onCredentialError={onCredentialError}
         />
       ))}
     </div>

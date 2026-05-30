@@ -25,6 +25,7 @@ export const fleetApi = {
   updateNode: (id: string, data: {
     hostname?: string; ip_address?: string; hardware_model?: string; os_version?: string;
     ssh_username?: string; ssh_password?: string; ssh_auth_mode?: string; ssh_key?: string;
+    vnc_password?: string;
   }) =>
     api.patch<NodeDetail>(`/api/v1/nodes/${id}`, data),
   deleteNode: (id: string) =>

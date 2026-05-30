@@ -21,6 +21,7 @@ from fleet_platform.services.platform_settings_svc import (
     OIDC_ROLE_PREFIX,
     PILLAR_DIR,
     PLAYBOOKS_DIR,
+    SALT_ALLOWED_FUNCTIONS,
     SALT_MASTER,
     SMTP_FROM,
     SMTP_HOST,
@@ -32,12 +33,28 @@ from fleet_platform.services.platform_settings_svc import (
     SSH_PASSWORD,
     SSH_USERNAME,
     VNC_ENABLED,
+    _DEFAULT_SALT_FUNCTIONS,
+    _SALT_MINIMUM_FUNCTIONS,
     get_setting,
+    invalidate_salt_allowlist_cache,
     set_setting,
 )
 from fleet_platform.services.ssh_keypair import ensure_controller_keypair, get_controller_pubkey
 
 router = APIRouter(prefix="/api/v1/settings")
+
+
+def _parse_salt_allowlist(raw: str | None) -> list[str]:
+    """Parse the JSON salt allowlist from DB, merging minimum functions."""
+    import json as _json
+
+    if raw:
+        try:
+            parsed = _json.loads(raw)
+            return sorted(set(str(f) for f in parsed) | _SALT_MINIMUM_FUNCTIONS)
+        except (ValueError, TypeError):
+            pass
+    return sorted(_DEFAULT_SALT_FUNCTIONS | _SALT_MINIMUM_FUNCTIONS)
 
 
 @router.get("", response_model=PlatformSettingsResponse)
@@ -50,6 +67,7 @@ async def get_settings(
     vnc_enabled = vnc_enabled_raw == "true"
     oidc_enabled_raw = await get_setting(db, OIDC_ENABLED)
     oidc_enabled = oidc_enabled_raw == "true"
+    salt_allowlist_raw = await get_setting(db, SALT_ALLOWED_FUNCTIONS)
     return PlatformSettingsResponse(
         salt_master_address=await get_setting(db, SALT_MASTER),
         kri_api_url=await get_setting(db, KRI_API_URL),
@@ -71,6 +89,7 @@ async def get_settings(
         smtp_username=await get_setting(db, SMTP_USERNAME),
         smtp_from=await get_setting(db, SMTP_FROM),
         digest_recipients=await get_setting(db, DIGEST_RECIPIENTS),
+        salt_allowed_functions=_parse_salt_allowlist(salt_allowlist_raw),
     )
 
 
@@ -133,6 +152,13 @@ async def update_settings(
         await set_setting(db, DIGEST_RECIPIENTS, payload.digest_recipients)
     if payload.jenkins_ingest_secret:
         await set_setting(db, JENKINS_INGEST_SECRET, payload.jenkins_ingest_secret, encrypt=True)
+    if payload.salt_allowed_functions is not None:
+        import json as _json
+
+        # Always keep minimum functions — merge before persisting
+        merged = sorted(set(payload.salt_allowed_functions) | _SALT_MINIMUM_FUNCTIONS)
+        await set_setting(db, SALT_ALLOWED_FUNCTIONS, _json.dumps(merged))
+        invalidate_salt_allowlist_cache()
     vnc_enabled_raw = await get_setting(db, VNC_ENABLED)
     vnc_enabled = vnc_enabled_raw == "true"
     oidc_enabled_raw = await get_setting(db, OIDC_ENABLED)
@@ -158,4 +184,5 @@ async def update_settings(
         smtp_username=await get_setting(db, SMTP_USERNAME),
         smtp_from=await get_setting(db, SMTP_FROM),
         digest_recipients=await get_setting(db, DIGEST_RECIPIENTS),
+        salt_allowed_functions=_parse_salt_allowlist(await get_setting(db, SALT_ALLOWED_FUNCTIONS)),
     )

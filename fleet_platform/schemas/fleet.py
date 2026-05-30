@@ -52,11 +52,13 @@ class NodeDetailResponse(NodeListItem):
     ssh_auth_mode: str = "password"
     has_ssh_password: bool = False
     has_ssh_key: bool = False
+    # VNC credential metadata (never expose raw secrets)
+    has_vnc_password: bool = False
 
     @model_validator(mode="wrap")
     @classmethod
     def compute_ssh_flags(cls, data: Any, handler: Any) -> "NodeDetailResponse":
-        """Set has_ssh_password/has_ssh_key from ORM encrypted columns without exposing secrets."""
+        """Set has_ssh_password/has_ssh_key/has_vnc_password from ORM encrypted columns without exposing secrets."""
         # FastAPI re-validates the return value through the response_model. When
         # data is already a NodeDetailResponse (from our endpoint return), the flags
         # are already correct — return it as-is to avoid re-computing from missing fields.
@@ -65,12 +67,14 @@ class NodeDetailResponse(NodeListItem):
         if isinstance(data, dict):
             data.setdefault("has_ssh_password", bool(data.get("ssh_password_enc")))
             data.setdefault("has_ssh_key", bool(data.get("ssh_key_enc")))
+            data.setdefault("has_vnc_password", bool(data.get("vnc_password_enc")))
             return handler(data)
         # ORM object: compute flags from the encrypted column presence.
         result = handler(data)
         return result.model_copy(update={
             "has_ssh_password": bool(getattr(data, "ssh_password_enc", None)),
             "has_ssh_key": bool(getattr(data, "ssh_key_enc", None)),
+            "has_vnc_password": bool(getattr(data, "vnc_password_enc", None)),
         })
 
 
@@ -92,6 +96,8 @@ class NodeUpdateRequest(BaseModel):
     ssh_password: str | None = None   # plaintext, will be encrypted on save
     ssh_auth_mode: str | None = None  # "password" | "key"
     ssh_key: str | None = None        # plaintext key content, will be encrypted
+    # VNC credential update (plaintext in, encrypted on save)
+    vnc_password: str | None = None   # plaintext, will be encrypted on save
 
 
 class FleetOverviewResponse(BaseModel):

@@ -29,7 +29,8 @@ def test_per_minion_result_table():
 
 
 def test_pip_install_in_allowlist():
-    src = Path("fleet_platform/workers/salt_tasks.py").read_text()
+    # The allowlist default is now defined in platform_settings_svc.py (issue #255)
+    src = Path("fleet_platform/services/platform_settings_svc.py").read_text()
     assert "pip.install" in src
 
 

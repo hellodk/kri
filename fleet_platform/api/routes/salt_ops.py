@@ -5,7 +5,9 @@ from pathlib import Path
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel
+from sqlalchemy.ext.asyncio import AsyncSession
 
+from fleet_platform.api.deps import get_db
 from fleet_platform.core.auth import get_current_user, require_role
 
 router = APIRouter(prefix="/api/v1/salt")
@@ -74,9 +76,39 @@ async def apply_state(
     return {"task_id": task.id}
 
 
+@router.get("/allowlist")
+async def get_salt_allowlist(
+    db: AsyncSession = Depends(get_db),
+    _: dict = Depends(require_role("operator", "admin")),
+):
+    """Return the current Salt function allowlist from platform settings."""
+    from fleet_platform.services.platform_settings_svc import (
+        SALT_ALLOWED_FUNCTIONS,
+        _DEFAULT_SALT_FUNCTIONS,
+        _SALT_MINIMUM_FUNCTIONS,
+        get_setting,
+    )
+
+    raw = await get_setting(db, SALT_ALLOWED_FUNCTIONS)
+    import json as _json
+
+    if raw:
+        try:
+            funcs = sorted(set(_json.loads(raw)) | _SALT_MINIMUM_FUNCTIONS)
+        except (ValueError, TypeError):
+            funcs = sorted(_DEFAULT_SALT_FUNCTIONS)
+    else:
+        funcs = sorted(_DEFAULT_SALT_FUNCTIONS)
+    return {
+        "functions": funcs,
+        "locked": sorted(_SALT_MINIMUM_FUNCTIONS),
+    }
+
+
 @router.post("/cmd", status_code=202)
 async def run_cmd(
     payload: CmdRequest,
+    db: AsyncSession = Depends(get_db),
     _: dict = Depends(require_role("operator", "admin")),
 ):
     """Queue an ad-hoc Salt command. Returns the Celery task_id."""
@@ -85,13 +117,30 @@ async def run_cmd(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             detail="minion_ids must not be empty",
         )
-    from fleet_platform.workers.salt_tasks import _ALLOWED_SALT_FUNCTIONS, run_salt_cmd
-    if payload.function not in _ALLOWED_SALT_FUNCTIONS:
+    from fleet_platform.services.platform_settings_svc import (
+        SALT_ALLOWED_FUNCTIONS,
+        _DEFAULT_SALT_FUNCTIONS,
+        _SALT_MINIMUM_FUNCTIONS,
+        get_setting,
+    )
+    from fleet_platform.workers.salt_tasks import run_salt_cmd
+    import json as _json
+
+    raw = await get_setting(db, SALT_ALLOWED_FUNCTIONS)
+    if raw:
+        try:
+            allowed: frozenset[str] = frozenset(_json.loads(raw)) | _SALT_MINIMUM_FUNCTIONS
+        except (ValueError, TypeError):
+            allowed = _DEFAULT_SALT_FUNCTIONS | _SALT_MINIMUM_FUNCTIONS
+    else:
+        allowed = _DEFAULT_SALT_FUNCTIONS | _SALT_MINIMUM_FUNCTIONS
+
+    if payload.function not in allowed:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             detail=(
                 f"Function '{payload.function}' is not in the allowlist. "
-                f"Allowed functions: {sorted(_ALLOWED_SALT_FUNCTIONS)}"
+                f"Allowed functions: {sorted(allowed)}"
             ),
         )
     task = run_salt_cmd.delay(

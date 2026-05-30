@@ -51,6 +51,9 @@ class Node(Base, TimestampMixin):
     ssh_auth_mode: Mapped[str] = mapped_column(String(10), default="password")  # "password" | "key"
     ssh_key_enc: Mapped[str | None] = mapped_column(Text, nullable=True)
 
+    # Per-node VNC password (encrypted at rest)
+    vnc_password_enc: Mapped[str | None] = mapped_column(Text, nullable=True)
+
     maintenance_mode: Mapped[bool] = mapped_column(default=False, nullable=False)
 
     # SSH host key (TOFU — Trust-On-First-Use, stored on first connection)

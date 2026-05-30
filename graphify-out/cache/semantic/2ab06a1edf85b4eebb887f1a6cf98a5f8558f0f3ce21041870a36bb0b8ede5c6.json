@@ -1,0 +1,1 @@
+{"nodes": [{"id": "routes_nodes_register_node", "label": "register_node endpoint", "file_type": "code", "source_file": "fleet_platform/api/routes/nodes.py", "source_location": null, "source_url": null, "captured_at": null, "author": null, "contributor": null}], "edges": [], "hyperedges": []}

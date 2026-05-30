@@ -53,6 +53,7 @@ export interface NodeDetail extends Node {
   ssh_auth_mode: 'password' | 'key'
   has_ssh_password: boolean
   has_ssh_key: boolean
+  has_vnc_password: boolean
   maintenance_mode: boolean
 }
 

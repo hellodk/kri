@@ -6,39 +6,81 @@ HTTP API (salt-api). These tests verify the allowlist enforcement, API URL
 not-configured error path, and the HTTP dispatch logic.
 """
 
+import json
 from unittest.mock import MagicMock, patch
 
-# ── Allowlist enforcement (unchanged from prior implementation) ───────────────
+
+def _fake_db_ctx():
+    """Return a context manager that yields a MagicMock db session."""
+    from contextlib import contextmanager
+
+    @contextmanager
+    def _ctx():
+        yield MagicMock()
+
+    return _ctx()
+
+
+def _default_allowed() -> frozenset[str]:
+    from fleet_platform.services.platform_settings_svc import (
+        _DEFAULT_SALT_FUNCTIONS,
+        _SALT_MINIMUM_FUNCTIONS,
+    )
+
+    return _DEFAULT_SALT_FUNCTIONS | _SALT_MINIMUM_FUNCTIONS
+
+
+# ── Allowlist enforcement ─────────────────────────────────────────────────────
+
 
 def test_run_salt_cmd_rejects_disallowed_function():
     """run_salt_cmd returns error dict for functions not in the allowlist."""
     from fleet_platform.workers.salt_tasks import run_salt_cmd
 
-    result = run_salt_cmd.run(function="cmd.exec", target_minions=["minion1"])
+    # Patch the DB session import *inside* the function and the svc helper
+    with (
+        patch("fleet_platform.db.session.get_sync_db", return_value=_fake_db_ctx()),
+        patch(
+            "fleet_platform.services.platform_settings_svc.get_allowed_salt_functions_sync",
+            return_value=_default_allowed(),
+        ),
+        patch(
+            "fleet_platform.workers.salt_tasks.get_allowed_salt_functions_sync",
+            return_value=_default_allowed(),
+        ),
+    ):
+        result = run_salt_cmd.run(function="cmd.exec", target_minions=["minion1"])
+
     assert result["status"] == "error"
     assert "allowlist" in result["reason"].lower()
 
 
-def test_run_salt_cmd_rejects_cmd_run():
-    """cmd.run must be rejected — it allows arbitrary shell execution on fleet nodes."""
-    from fleet_platform.workers.salt_tasks import _ALLOWED_SALT_FUNCTIONS, run_salt_cmd
+def test_run_salt_cmd_rejects_unlisted_function():
+    """A function not present in the stored allowlist is rejected."""
+    from fleet_platform.workers.salt_tasks import run_salt_cmd
 
-    assert (
-        "cmd.run" not in _ALLOWED_SALT_FUNCTIONS
-    ), "cmd.run must never be in _ALLOWED_SALT_FUNCTIONS (arbitrary shell exec risk)"
+    # Limited allowlist — pkg.install is not in it
+    limited = frozenset(["state.apply", "test.ping", "grains.items", "grains.get"])
+    with (
+        patch("fleet_platform.db.session.get_sync_db", return_value=_fake_db_ctx()),
+        patch(
+            "fleet_platform.workers.salt_tasks.get_allowed_salt_functions_sync",
+            return_value=limited,
+        ),
+    ):
+        result = run_salt_cmd.run(function="pkg.install", target_minions=["minion1"])
 
-    result = run_salt_cmd.run(function="cmd.run", target_minions=["minion1"], args=["id"])
     assert result["status"] == "error"
     assert "allowlist" in result["reason"].lower()
 
 
-def test_allowlist_contains_expected_safe_functions():
-    """The allowlist must contain the expected safe Salt functions."""
-    from fleet_platform.workers.salt_tasks import _ALLOWED_SALT_FUNCTIONS
+def test_default_allowlist_contains_expected_safe_functions():
+    """The default Salt allowlist constant contains the expected safe functions."""
+    from fleet_platform.services.platform_settings_svc import _DEFAULT_SALT_FUNCTIONS
 
     required = {"test.ping", "state.apply", "grains.items", "pkg.list_pkgs"}
-    assert required.issubset(_ALLOWED_SALT_FUNCTIONS), (
-        f"Missing expected safe functions: {required - _ALLOWED_SALT_FUNCTIONS}"
+    assert required.issubset(_DEFAULT_SALT_FUNCTIONS), (
+        f"Missing expected safe functions: {required - _DEFAULT_SALT_FUNCTIONS}"
     )
 
 
@@ -49,7 +91,14 @@ def test_run_salt_cmd_returns_error_when_api_not_configured():
     from fleet_platform.workers import salt_tasks
     from fleet_platform.workers.salt_tasks import run_salt_cmd
 
-    with patch.object(salt_tasks, "_SALT_API_URL", ""):
+    with (
+        patch("fleet_platform.db.session.get_sync_db", return_value=_fake_db_ctx()),
+        patch(
+            "fleet_platform.workers.salt_tasks.get_allowed_salt_functions_sync",
+            return_value=_default_allowed(),
+        ),
+        patch.object(salt_tasks, "_SALT_API_URL", ""),
+    ):
         result = run_salt_cmd.run(function="test.ping", target_minions=["minion1"])
 
     assert result["status"] == "error"
@@ -75,7 +124,6 @@ def test_apply_salt_state_returns_error_when_api_not_configured():
 
 def test_run_salt_cmd_dispatches_via_http_api():
     """An allowlisted function triggers a POST to the salt-api /run endpoint."""
-
     from fleet_platform.workers import salt_tasks
     from fleet_platform.workers.salt_tasks import run_salt_cmd
 
@@ -84,6 +132,11 @@ def test_run_salt_cmd_dispatches_via_http_api():
     fake_response.json.return_value = {"return": [{"minion1": True}]}
 
     with (
+        patch("fleet_platform.db.session.get_sync_db", return_value=_fake_db_ctx()),
+        patch(
+            "fleet_platform.workers.salt_tasks.get_allowed_salt_functions_sync",
+            return_value=_default_allowed(),
+        ),
         patch.object(salt_tasks, "_SALT_API_URL", "http://salt-master:8080"),
         patch.object(salt_tasks, "_SALT_API_USER", "saltuser"),
         patch.object(salt_tasks, "_SALT_API_PASSWORD", "secret"),
@@ -140,6 +193,11 @@ def test_run_salt_api_handles_connection_error():
     from fleet_platform.workers.salt_tasks import run_salt_cmd
 
     with (
+        patch("fleet_platform.db.session.get_sync_db", return_value=_fake_db_ctx()),
+        patch(
+            "fleet_platform.workers.salt_tasks.get_allowed_salt_functions_sync",
+            return_value=_default_allowed(),
+        ),
         patch.object(salt_tasks, "_SALT_API_URL", "http://salt-master:8080"),
         patch.object(salt_tasks, "_SALT_API_USER", "u"),
         patch.object(salt_tasks, "_SALT_API_PASSWORD", "p"),

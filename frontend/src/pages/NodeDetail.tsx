@@ -387,6 +387,9 @@ export function NodeDetail() {
   const [secretDesc, setSecretDesc] = useState('')
   const [secretShowValue, setSecretShowValue] = useState(false)
   const [deletingSecretKey, setDeletingSecretKey] = useState<string | null>(null)
+  // VNC password state (within Secrets tab)
+  const [vncPasswordInput, setVncPasswordInput] = useState('')
+  const [showVncPassword, setShowVncPassword] = useState(false)
   // iOS tab state
   const [showAddCert, setShowAddCert] = useState(false)
   const [showJenkinsConfigure, setShowJenkinsConfigure] = useState(false)
@@ -548,6 +551,16 @@ export function NodeDetail() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['node-secrets', nodeId] })
       toast('Secret deleted')
+    },
+    onError: (e: Error) => toast(e.message, 'error'),
+  })
+
+  const saveVncPasswordMutation = useMutation({
+    mutationFn: () => fleetApi.updateNode(nodeId!, { vnc_password: vncPasswordInput }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['node', nodeId] })
+      setVncPasswordInput('')
+      toast('VNC password saved')
     },
     onError: (e: Error) => toast(e.message, 'error'),
   })
@@ -1700,6 +1713,10 @@ export function NodeDetail() {
           <MultiSessionTerminal
             tabs={sshTabs}
             activeTabId={activeSshTabId}
+            onCredentialError={() => {
+              setShowSSH(false)
+              setTab('secrets')
+            }}
           />
         </div>
       )}
@@ -1823,6 +1840,53 @@ export function NodeDetail() {
                   {addSecretMutation.isPending ? 'Saving…' : 'Save Secret'}
                 </button>
               </div>
+            </form>
+          </div>
+
+          {/* VNC Password card */}
+          <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-4 space-y-3">
+            <div className="flex items-center gap-2">
+              <p className="text-sm font-semibold text-gray-700">VNC Password</p>
+              {node.has_vnc_password && (
+                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-emerald-100 text-emerald-700 border border-emerald-200">
+                  Stored
+                </span>
+              )}
+            </div>
+            <p className="text-xs text-gray-500">
+              Used by the kri VNC proxy to authenticate server-side against macOS Screen Sharing (port 5900).
+              The password is encrypted at rest and never transmitted to the browser.
+            </p>
+            <form
+              onSubmit={(e) => { e.preventDefault(); saveVncPasswordMutation.mutate() }}
+              className="flex gap-3 flex-wrap items-end"
+            >
+              <div className="flex-1 min-w-48">
+                <label className="block text-xs text-gray-500 mb-1">New VNC Password</label>
+                <div className="relative">
+                  <input
+                    type={showVncPassword ? 'text' : 'password'}
+                    value={vncPasswordInput}
+                    onChange={(e) => setVncPasswordInput(e.target.value)}
+                    placeholder={node.has_vnc_password ? 'Leave blank to keep existing' : 'Enter VNC password'}
+                    className="w-full text-sm border border-gray-300 rounded px-2 py-1.5 pr-16 focus:outline-none focus:ring-2 focus:ring-brand-400"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowVncPassword((v) => !v)}
+                    className="absolute right-2 top-1/2 -translate-y-1/2 text-xs text-gray-400 hover:text-gray-600"
+                  >
+                    {showVncPassword ? 'Hide' : 'Show'}
+                  </button>
+                </div>
+              </div>
+              <button
+                type="submit"
+                disabled={saveVncPasswordMutation.isPending || !vncPasswordInput}
+                className="px-4 py-1.5 bg-brand-600 text-white text-sm rounded-lg hover:bg-brand-700 disabled:opacity-50 font-medium"
+              >
+                {saveVncPasswordMutation.isPending ? 'Saving…' : 'Save VNC Password'}
+              </button>
             </form>
           </div>
         </div>

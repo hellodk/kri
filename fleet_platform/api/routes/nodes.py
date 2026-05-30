@@ -175,6 +175,9 @@ async def update_node(
         node.ssh_auth_mode = payload.ssh_auth_mode
     if payload.ssh_key is not None:
         node.ssh_key_enc = encrypt_secret(payload.ssh_key) if payload.ssh_key else None
+    # VNC credential update
+    if payload.vnc_password is not None:
+        node.vnc_password_enc = encrypt_secret(payload.vnc_password) if payload.vnc_password else None
 
     await audit(
         db,
@@ -194,6 +197,7 @@ async def update_node(
     return NodeDetailResponse.model_validate(node).model_copy(update={
         "has_ssh_password": bool(node.ssh_password_enc),
         "has_ssh_key": bool(node.ssh_key_enc),
+        "has_vnc_password": bool(node.vnc_password_enc),
     })
 
 

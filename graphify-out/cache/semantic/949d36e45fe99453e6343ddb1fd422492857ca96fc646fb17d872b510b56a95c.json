@@ -1,0 +1,1 @@
+{"nodes": [{"id": "integration_test_provisioning_api_profiles_route", "label": "/api/v1/provisioning upload/download/delete", "file_type": "code", "source_file": "tests/integration/test_provisioning_api.py", "source_location": null, "source_url": null, "captured_at": null, "author": null, "contributor": null}], "edges": [], "hyperedges": []}

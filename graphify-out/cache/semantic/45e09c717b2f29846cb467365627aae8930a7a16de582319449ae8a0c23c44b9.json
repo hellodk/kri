@@ -1,0 +1,1 @@
+{"nodes": [{"id": "unit_test_salt_zmq_bind_ip_b27", "label": "test_salt_zmq_bind_ip_b27", "file_type": "code", "source_file": "tests/unit/test_salt_zmq_bind_ip_b27.py", "source_location": null, "source_url": null, "captured_at": null, "author": null, "contributor": null}], "edges": [], "hyperedges": []}

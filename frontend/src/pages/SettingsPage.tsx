@@ -538,6 +538,7 @@ export function SettingsPage() {
       {/* Advanced tab */}
       {activeTab === 'Advanced' && (
         <div className="space-y-6">
+          <SaltAllowlistSection />
           <PlaybookSourcesSection />
         </div>
       )}
@@ -755,6 +756,154 @@ export function SettingsPage() {
           </button>
         </div>
       )}
+    </div>
+  )
+}
+
+// ---------------------------------------------------------------------------
+// Salt Allowlist sub-section (self-contained, reads/saves via main settings API)
+// ---------------------------------------------------------------------------
+
+const LOCKED_SALT_FUNCTIONS = new Set(['test.ping', 'grains.items', 'grains.get'])
+
+function SaltAllowlistSection() {
+  const qc = useQueryClient()
+  const toast = useToastStore((s) => s.add)
+  const [functions, setFunctions] = useState<string[]>([])
+  const [newFn, setNewFn] = useState('')
+  const [dirty, setDirty] = useState(false)
+
+  const { data, isLoading } = useQuery({
+    queryKey: ['settings'],
+    queryFn: ansibleApi.getSettings,
+  })
+
+  useEffect(() => {
+    if (data?.salt_allowed_functions) {
+      setFunctions(data.salt_allowed_functions)
+      setDirty(false)
+    }
+  }, [data])
+
+  const saveMutation = useMutation({
+    mutationFn: () => ansibleApi.updateSettings({ salt_allowed_functions: functions }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['settings'] })
+      toast('Salt allowlist saved')
+      setDirty(false)
+    },
+    onError: (e: Error) => toast(e.message, 'error'),
+  })
+
+  function addFunction() {
+    const trimmed = newFn.trim()
+    if (!trimmed) return
+    if (functions.includes(trimmed)) {
+      toast(`'${trimmed}' is already in the allowlist`, 'error')
+      return
+    }
+    const updated = [...functions, trimmed].sort()
+    setFunctions(updated)
+    setNewFn('')
+    setDirty(true)
+  }
+
+  function removeFunction(fn: string) {
+    if (LOCKED_SALT_FUNCTIONS.has(fn)) return
+    setFunctions(functions.filter(f => f !== fn))
+    setDirty(true)
+  }
+
+  if (isLoading) {
+    return (
+      <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-6">
+        <div className="h-4 bg-gray-100 rounded animate-pulse w-48 mb-4" />
+        <div className="h-3 bg-gray-100 rounded animate-pulse w-64" />
+      </div>
+    )
+  }
+
+  return (
+    <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-6 space-y-4">
+      <div>
+        <h2 className="text-base font-semibold text-gray-900">Salt Function Allowlist</h2>
+        <p className="text-sm text-gray-500 mt-1">
+          Only functions listed here can be dispatched via the ad-hoc Salt command API.
+          Locked functions (shown with a lock badge) are always enforced and cannot be removed.
+        </p>
+      </div>
+
+      {/* Chip list */}
+      <div className="flex flex-wrap gap-2">
+        {functions.map(fn => {
+          const locked = LOCKED_SALT_FUNCTIONS.has(fn)
+          return (
+            <span
+              key={fn}
+              className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-mono font-medium border ${
+                locked
+                  ? 'bg-blue-50 border-blue-200 text-blue-800'
+                  : 'bg-gray-50 border-gray-200 text-gray-700'
+              }`}
+            >
+              {locked && (
+                <svg width="10" height="10" viewBox="0 0 12 12" fill="none" className="flex-shrink-0">
+                  <rect x="2" y="5" width="8" height="6" rx="1" fill="currentColor" opacity="0.6"/>
+                  <path d="M4 5V3.5a2 2 0 0 1 4 0V5" stroke="currentColor" strokeWidth="1.2" fill="none"/>
+                </svg>
+              )}
+              {fn}
+              {!locked && (
+                <button
+                  onClick={() => removeFunction(fn)}
+                  aria-label={`Remove ${fn}`}
+                  className="ml-0.5 text-gray-400 hover:text-red-600 transition-colors leading-none"
+                >
+                  <svg width="10" height="10" viewBox="0 0 10 10" fill="none" className="flex-shrink-0">
+                    <path d="M2 2l6 6M8 2L2 8" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
+                  </svg>
+                </button>
+              )}
+            </span>
+          )
+        })}
+        {functions.length === 0 && (
+          <p className="text-sm text-gray-400 italic">No functions configured — locked defaults will still apply.</p>
+        )}
+      </div>
+
+      {/* Add new function input */}
+      <div className="flex gap-2">
+        <input
+          type="text"
+          value={newFn}
+          onChange={(e) => setNewFn(e.target.value)}
+          onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addFunction() } }}
+          placeholder="e.g. file.managed"
+          className="flex-1 px-3 py-2 border border-gray-300 rounded-lg text-sm font-mono text-gray-900 focus:outline-none focus:border-brand-600"
+        />
+        <button
+          onClick={addFunction}
+          disabled={!newFn.trim()}
+          className="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg text-sm font-medium hover:bg-gray-200 disabled:opacity-40 border border-gray-200"
+        >
+          Add
+        </button>
+      </div>
+
+      {/* Save button */}
+      <div className="flex items-center gap-3 pt-1">
+        <button
+          onClick={() => saveMutation.mutate()}
+          disabled={saveMutation.isPending || !dirty}
+          className="px-4 py-2 bg-brand-600 text-white rounded-lg text-sm font-medium hover:bg-brand-700 disabled:opacity-50"
+        >
+          {saveMutation.isPending ? 'Saving…' : 'Save Allowlist'}
+        </button>
+        {dirty && (
+          <span className="text-xs text-amber-600 font-medium">Unsaved changes</span>
+        )}
+      </div>
     </div>
   )
 }
