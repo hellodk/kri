@@ -308,22 +308,45 @@ cmd_infra() {
 
 cmd_infra_status() {
     header "Infrastructure status"
-    info "Containers:"
+
+    info "Containers (Docker):"
     docker ps --format "  {{.Names}}  {{.Status}}  {{.Ports}}" | grep -E "deploy-|kri" 2>/dev/null || echo "  (none running)"
+    # Warn about orphan salt-master container (removed from compose but may still run)
+    if docker ps --format "{{.Names}}" | grep -q "salt-master"; then
+        warn "  deploy-salt-master-1 is running as an orphan (removed from compose)"
+        warn "  Run 'kri infra destroy' to remove it, or: docker rm -f deploy-salt-master-1"
+    fi
     echo ""
+
+    info "External services (not managed by Docker):"
+    echo -e "  ${CYAN}salt-master${NC}  mm1 (100.102.68.75) — native launchd service"
+    local sm_status
+    sm_status=$(ssh -o ConnectTimeout=3 -o StrictHostKeyChecking=no 100.102.68.75 \
+        "sudo launchctl list com.saltstack.salt.master 2>/dev/null | grep PID | awk '{print \$3}'" 2>/dev/null || echo "")
+    if [[ -n "$sm_status" && "$sm_status" != "-" ]]; then
+        echo -e "    ${GREEN}[ok]${NC}    running (PID $sm_status)"
+    else
+        echo -e "    ${YELLOW}[warn]${NC}  not running or unreachable"
+    fi
+    echo ""
+
     info "Volumes:"
     docker volume ls --format "  {{.Name}}" | grep -E "deploy_|kri" 2>/dev/null || echo "  (none)"
     echo ""
+
     info "Images:"
-    docker images --format "  {{.Repository}}:{{.Tag}}  {{.Size}}" | grep -E "deploy-|hellodk/|kri" 2>/dev/null || echo "  (none)"
+    docker images --format "  {{.Repository}}:{{.Tag}}  {{.Size}}" \
+        | grep -E "deploy-|hellodk/kri|deploy-api|deploy-worker|deploy-frontend|deploy-beat" \
+        2>/dev/null || echo "  (none)"
 }
 
 cmd_infra_destroy() {
     require_env
     header "Destroying containers"
-    warn "This stops and removes all kri containers. Volumes (data) are preserved."
+    warn "This stops and removes all kri Docker containers. Volumes (data) are preserved."
+    warn "Salt-master on mm1 is NOT affected."
     prompt_confirm "Proceed?" || { info "Cancelled."; return; }
-    compose down --remove-orphans
+    compose down --remove-orphans   # --remove-orphans cleans up old salt-master container too
     success "All containers removed. Volumes preserved."
     info "Run 'kri up' to restart."
 }
@@ -331,10 +354,11 @@ cmd_infra_destroy() {
 cmd_infra_recreate() {
     require_env
     header "Recreating infrastructure"
-    warn "This destroys all containers and rebuilds them from scratch."
+    warn "This destroys all Docker containers and rebuilds them from scratch."
     warn "Volumes (database, redis data) are preserved."
+    warn "Salt-master on mm1 is NOT touched."
     prompt_confirm "Proceed?" || { info "Cancelled."; return; }
-    info "Stopping and removing containers…"
+    info "Stopping and removing containers (including orphans)…"
     compose down --remove-orphans
     info "Rebuilding all images…"
     export APP_VERSION
@@ -343,7 +367,7 @@ cmd_infra_recreate() {
     info "Starting services…"
     compose up -d
     success "Infrastructure recreated → v${APP_VERSION} → http://localhost"
-    _pki_push_after_salt_restart true
+    info "Salt-master on mm1 continues running — no pki push needed."
 }
 
 cmd_infra_reset() {
@@ -352,27 +376,30 @@ cmd_infra_reset() {
     echo -e "${RED}${BOLD}  ⚠  WARNING: This WIPES ALL DATA${NC}"
     echo -e "${RED}     • PostgreSQL database (all fleet data)${NC}"
     echo -e "${RED}     • Redis (all queues, sessions)${NC}"
-    echo -e "${RED}     • Salt pillar data${NC}"
+    echo -e "${RED}     • All Docker volumes${NC}"
+    echo -e "${RED}     Salt-master on mm1 is NOT wiped (pillar data preserved there).${NC}"
     echo -e "${RED}     This cannot be undone.${NC}\n"
-    prompt_confirm "Type 'yes' to confirm — are you absolutely sure?" || { info "Cancelled."; return; }
+    prompt_confirm "Are you absolutely sure?" || { info "Cancelled."; return; }
 
-    # Double-confirm for reset
     local confirm
-    echo -en "${RED}${BOLD}  Type 'wipe' to confirm data deletion:${NC} "
+    echo -en "${RED}${BOLD}  Type 'wipe' to confirm:${NC} "
     read -r confirm </dev/tty || true
     if [[ "$confirm" != "wipe" ]]; then
         info "Cancelled — 'wipe' not entered."
         return
     fi
 
-    info "Stopping all containers…"
+    info "Stopping all containers (including orphans)…"
     compose down --remove-orphans
 
     info "Removing volumes…"
     local project_name
     project_name=$(basename "$(dirname "$COMPOSE_FILE")")
+    # Remove current volumes
     docker volume rm "${project_name}_pgdata" "${project_name}_redisdata" \
-        "${project_name}_salt-pillar" "${project_name}_pgbackups" 2>/dev/null || true
+        "${project_name}_pgbackups" 2>/dev/null || true
+    # Remove legacy salt volumes (may exist from pre-mm1 setup)
+    docker volume rm "${project_name}_salt-pillar" "${project_name}_salt-master-pki" 2>/dev/null || true
 
     warn "All data wiped."
     info "Rebuilding from scratch…"
