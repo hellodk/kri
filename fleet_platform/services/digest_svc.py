@@ -197,3 +197,67 @@ def send_digest(db: Session) -> dict:
         server.sendmail(from_addr, recipients, msg.as_string())
 
     return {"status": "sent", "recipients": len(recipients), **stats}
+
+
+def send_alert_email(rule: object, alert_event: object) -> None:
+    """Send a real-time alert email for a fired AlertEvent.
+    
+    Called from alert_svc._maybe_send_alert_email when SMTP is configured.
+    Reads SMTP config from platform_settings synchronously.
+    """
+    from fleet_platform.db.session import get_sync_db  # noqa: PLC0415
+
+    with get_sync_db() as db:
+        smtp_host = get_setting_sync(db, SMTP_HOST)
+        if not smtp_host:
+            return  # SMTP not configured — skip silently
+
+        smtp_port = int(get_setting_sync(db, SMTP_PORT) or "587")
+        smtp_user = get_setting_sync(db, SMTP_USERNAME)
+        smtp_password_raw = get_setting_sync(db, SMTP_PASSWORD)
+        smtp_password = decrypt_secret(smtp_password_raw) if smtp_password_raw else ""
+        from_addr = get_setting_sync(db, SMTP_FROM) or smtp_user or ""
+        recipients_raw = get_setting_sync(db, DIGEST_RECIPIENTS) or ""
+        recipients = [r.strip() for r in recipients_raw.split(",") if r.strip()]
+
+    if not recipients:
+        return
+
+    event_type = getattr(rule, "event_type", "alert")
+    message = getattr(alert_event, "message", "")
+    fired_at = getattr(alert_event, "fired_at", None)
+    time_str = fired_at.strftime("%Y-%m-%d %H:%M UTC") if fired_at else "now"
+
+    subject = f"[kri alert] {event_type}: {message[:80]}"
+    body_html = f"""
+<html><body style="font-family:sans-serif;color:#111827">
+  <h2 style="color:#DC2626">⚠ kri Alert</h2>
+  <table style="border-collapse:collapse;width:100%;max-width:600px">
+    <tr><td style="padding:8px;font-weight:600;color:#4B5563;width:120px">Type</td>
+        <td style="padding:8px">{event_type}</td></tr>
+    <tr style="background:#F9FAFB"><td style="padding:8px;font-weight:600;color:#4B5563">Message</td>
+        <td style="padding:8px">{message}</td></tr>
+    <tr><td style="padding:8px;font-weight:600;color:#4B5563">Fired at</td>
+        <td style="padding:8px">{time_str}</td></tr>
+  </table>
+  <p style="margin-top:16px;font-size:12px;color:#9CA3AF">
+    Sent by kri fleet management platform.
+    Configure alerts in Settings → Alerts.
+  </p>
+</body></html>"""
+
+    msg = MIMEMultipart("alternative")
+    msg["Subject"] = subject
+    msg["From"] = from_addr
+    msg["To"] = ", ".join(recipients)
+    msg.attach(MIMEText(body_html, "html"))
+
+    try:
+        with smtplib.SMTP(smtp_host, smtp_port) as server:
+            server.ehlo()
+            server.starttls()
+            if smtp_user and smtp_password:
+                server.login(smtp_user, smtp_password)
+            server.sendmail(from_addr, recipients, msg.as_string())
+    except Exception:
+        pass  # non-fatal — alert was already stored in DB

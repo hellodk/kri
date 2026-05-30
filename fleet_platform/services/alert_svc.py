@@ -1,3 +1,4 @@
+import asyncio
 """Alert evaluation and delivery service."""
 
 from __future__ import annotations
@@ -282,3 +283,19 @@ async def _deliver_alert(rule: AlertRule, alert_event: AlertEvent, db: AsyncSess
 
     if delivered_any:
         alert_event.delivered = True
+
+    # Also send email if SMTP is configured
+    await _maybe_send_alert_email(rule, alert_event, db)
+
+
+async def _maybe_send_alert_email(
+    rule: "AlertRule", alert_event: "AlertEvent", db: AsyncSession
+) -> None:
+    """Send a real-time alert email if SMTP is configured (non-blocking)."""
+    try:
+        from fleet_platform.services.digest_svc import send_alert_email  # noqa: PLC0415
+        await asyncio.get_event_loop().run_in_executor(
+            None, lambda: send_alert_email(rule, alert_event)
+        )
+    except Exception:
+        pass  # email failure must never block alert processing

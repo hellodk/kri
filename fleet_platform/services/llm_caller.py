@@ -27,9 +27,17 @@ async def call_openai_compat(
     if api_key:
         headers["Authorization"] = f"Bearer {api_key}"
 
+    # Truncate system prompt for small local models (< 8k context)
+    MAX_SYSTEM_CHARS = 2000
+    if len(system_prompt) > MAX_SYSTEM_CHARS:
+        system_prompt = system_prompt[:MAX_SYSTEM_CHARS] + "\n[context truncated for model capacity]"
+
     payload = {
         "model": model,
         "max_tokens": max_tokens,
+        "temperature": 0.3,       # reduce echo/repetition vs pure greedy decoding
+        "top_p": 0.9,
+        "stop": ["</s>", "<|im_end|>", "<|endoftext|>", "Human:", "User:"],
         "messages": [
             {"role": "system", "content": system_prompt},
             {"role": "user", "content": user_prompt},
@@ -58,7 +66,30 @@ async def call_openai_compat(
         raise LLMCallError(f"Unexpected response shape from {base_url}: {exc}") from exc
 
     usage = data.get("usage", {})
+    # Detect garbled output — small local models sometimes echo the system prompt
+    content = _validate_response(content, system_prompt)
     return content, usage.get("prompt_tokens", 0), usage.get("completion_tokens", 0)
+
+
+def _validate_response(content: str, system_prompt: str) -> str:
+    """Detect common small-model failure modes and return a clean error message."""
+    stripped = content.strip()
+    # Too short to be useful
+    if len(stripped) < 5:
+        return "[Model returned an empty response. Try a larger model or simplify your question.]"
+    # Echoing the system prompt (first 40 chars match)
+    if len(stripped) > 20 and system_prompt[:40].lower().replace("\n", " ") in stripped[:200].lower():
+        return "[Model echoed its system prompt — it may be too small for this task. Try a 7B+ model.]"
+    # Contains common chat-template artifacts
+    artifacts = ["<|im_start|>", "<|im_end|>", "<|system|>", "<|user|>", "<|assistant|>"]
+    if any(a in content for a in artifacts):
+        # Strip them and return if something useful remains
+        for a in artifacts:
+            content = content.replace(a, "")
+        content = content.strip()
+        if len(content) < 5:
+            return "[Model response contained only template tokens. Configure chat_template in llama.cpp.]"
+    return content
 
 
 async def call_anthropic(
