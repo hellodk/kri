@@ -30,8 +30,8 @@ kri_heartbeat_minion_conf:
         schedule:
           kri_heartbeat:
             function: cmd.run
-            job_kwargs:
-              cmd: /opt/salt/bin/python3.10 /usr/local/bin/kri_heartbeat.py
+            args:
+              - /opt/salt/bin/python3.10 /usr/local/bin/kri_heartbeat.py
             minutes: 5
             enabled: True
             run_on_start: True
