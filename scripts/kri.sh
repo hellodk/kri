@@ -51,10 +51,11 @@ cmd_start() {
 }
 
 cmd_stop() {
+  require_env_file
   echo ""
   echo "  Stopping kri…"
   echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-  docker compose -f "$COMPOSE_FILE" down
+  docker compose -f "$COMPOSE_FILE" $(compose_env) down
   ok "kri stopped"
   echo ""
 }

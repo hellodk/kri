@@ -56,7 +56,10 @@ _ALLOWED_SALT_FUNCTIONS: frozenset[str] = frozenset(
         "test.ping",
         "test.version",
         "saltutil.sync_all",
+        "saltutil.refresh_grains",
         "saltutil.refresh_pillar",
+        "system.reboot",
+        "cmd.run",
     }
 )
 
