@@ -94,6 +94,58 @@ def _get_node_credentials(node) -> tuple[str, str, str]:
     return user, password, auth_mode
 
 
+def _get_group_credentials(node, db) -> tuple[str, str, str, str]:
+    """Return (ssh_user, ssh_password, ssh_key, auth_mode) from node's primary group.
+
+    Primary group = alphabetically-first group the node belongs to that has credentials.
+    Returns empty strings for all fields if no group credentials exist.
+    """
+    from fleet_platform.models.group import Group, GroupMember
+    from fleet_platform.services.platform_settings_svc import decrypt_secret
+
+    result = db.execute(
+        select(Group)
+        .join(GroupMember, GroupMember.group_id == Group.id)
+        .where(GroupMember.node_id == node.id)
+        .where(Group.ssh_username.isnot(None))
+        .order_by(Group.name.asc())
+        .limit(1)
+    )
+    group = result.scalar_one_or_none()
+    if not group:
+        return "", "", "", ""
+
+    password = ""
+    if group.ssh_password_enc:
+        try:
+            password = decrypt_secret(group.ssh_password_enc)
+        except Exception:
+            logger.warning(
+                "_get_group_credentials: cannot decrypt ssh_password for group %s node %s",
+                group.name,
+                node.id,
+            )
+
+    ssh_key = ""
+    if group.ssh_key_enc:
+        try:
+            ssh_key = decrypt_secret(group.ssh_key_enc)
+        except Exception:
+            logger.warning(
+                "_get_group_credentials: cannot decrypt ssh_key for group %s node %s",
+                group.name,
+                node.id,
+            )
+
+    logger.info(
+        "bootstrap_node: using group '%s' credentials for node %s (auth_mode=%s)",
+        group.name,
+        node.id,
+        group.ssh_auth_mode,
+    )
+    return group.ssh_username or "", password, ssh_key, group.ssh_auth_mode or "password"
+
+
 def _get_pillar_dir(db) -> Path:
     """Return the configured pillar directory, falling back to /srv/salt/pillar."""
     from sqlalchemy import select as _select
@@ -178,18 +230,24 @@ def bootstrap_node(
         # Per-node stored credentials
         node_user, node_password, node_auth_mode = _get_node_credentials(node)
 
-        # Priority: per-run args > node-stored > global settings
-        ssh_user = ssh_username or node_user or _settings_ssh_user or "admin"
-        ssh_password = ssh_password or node_password or _settings_ssh_password
+        # Group credentials: if no node-level creds, check primary group
+        group_user, group_password, group_key, group_auth_mode = _get_group_credentials(node, db)
 
-        # Resolve auth mode: per-run password/key arg takes priority, then node-stored mode
+        # Priority: per-run args > node-stored > group-stored > global settings
+        ssh_user = ssh_username or node_user or group_user or _settings_ssh_user or "admin"
+        ssh_password = ssh_password or node_password or group_password or _settings_ssh_password
+
+        # Resolve auth mode: per-run password/key arg takes priority,
+        # then node-stored mode, then group mode
         if ssh_password:
             resolved_auth_mode = "password"
-        else:
+        elif node_user:
             resolved_auth_mode = node_auth_mode
+        else:
+            resolved_auth_mode = group_auth_mode or node_auth_mode
 
         # Load node's SSH key if key-auth mode is active and no per-run password provided
-        node_ssh_key: str | None = None
+        node_ssh_key: str | None = group_key or None
         if resolved_auth_mode == "key" and node.ssh_key_enc:
             from fleet_platform.services.platform_settings_svc import decrypt_secret
 
