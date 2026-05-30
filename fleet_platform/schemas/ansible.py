@@ -49,8 +49,9 @@ class PlatformSettingsUpdate(BaseModel):
     digest_recipients: str | None = None
     # Jenkins
     jenkins_ingest_secret: str | None = None
-    # Salt allowlist
+    # Salt allowlist / denylist
     salt_allowed_functions: list[str] | None = None
+    salt_denied_functions: list[str] | None = None
 
 
 class PlatformSettingsResponse(BaseModel):
@@ -81,5 +82,6 @@ class PlatformSettingsResponse(BaseModel):
     digest_recipients: str | None = None
     # Jenkins (never return secret)
     jenkins_ingest_secret: None = None
-    # Salt allowlist
+    # Salt allowlist / denylist
     salt_allowed_functions: list[str] | None = None
+    salt_denied_functions: list[str] | None = None

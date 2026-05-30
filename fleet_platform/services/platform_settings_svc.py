@@ -55,6 +55,7 @@ NODE_OFFLINE_THRESHOLD_HOURS = "node_offline_threshold_hours"
 LLM_INCLUDE_NODE_IPS = "llm_include_node_ips"  # "true" | "false", default "true"
 
 SALT_ALLOWED_FUNCTIONS = "salt_allowed_functions"  # JSON array of allowed function names
+SALT_DENIED_FUNCTIONS = "salt_denied_functions"  # JSON array of denied function names
 
 # Default set of Salt functions that may be executed via the ad-hoc command API.
 # Mirrors the original hardcoded frozenset in salt_tasks.py.
@@ -102,6 +103,39 @@ _SALT_MINIMUM_FUNCTIONS: frozenset[str] = frozenset(
 # (timestamp, frozenset) in-process cache — avoids a DB hit on every task invocation
 _allowed_cache: tuple[float, frozenset[str]] | None = None
 
+# Separate cache for the deny list
+_deny_cache: tuple[float, frozenset[str]] | None = None
+
+
+def get_denied_salt_functions_sync(db: Session) -> frozenset[str]:
+    """Return the current denied Salt functions, reading from DB with 60-second cache.
+
+    Denied functions are blocked even if they appear on the allow list.
+    Returns an empty frozenset when no deny list is configured.
+    """
+    global _deny_cache
+    now = time.monotonic()
+    if _deny_cache is not None and now - _deny_cache[0] < 60:
+        return _deny_cache[1]
+
+    row = get_setting_sync(db, SALT_DENIED_FUNCTIONS)
+    if row:
+        try:
+            funcs = frozenset(str(f) for f in json.loads(row) if isinstance(f, str))
+        except (json.JSONDecodeError, TypeError):
+            funcs = frozenset()
+    else:
+        funcs = frozenset()
+
+    _deny_cache = (now, funcs)
+    return funcs
+
+
+def invalidate_salt_deny_cache() -> None:
+    """Force the next call to ``get_denied_salt_functions_sync`` to re-read the DB."""
+    global _deny_cache
+    _deny_cache = None
+
 
 def get_allowed_salt_functions_sync(db: Session) -> frozenset[str]:
     """Return the current allowed Salt functions, reading from DB with 60-second cache.
@@ -109,6 +143,9 @@ def get_allowed_salt_functions_sync(db: Session) -> frozenset[str]:
     Falls back to ``_DEFAULT_SALT_FUNCTIONS`` when no DB row exists.
     Always ensures ``_SALT_MINIMUM_FUNCTIONS`` are present even if an admin
     accidentally removed them via the UI.
+
+    Priority: deny > allow > default.  ``_SALT_MINIMUM_FUNCTIONS`` (test.ping,
+    grains.items, grains.get) are never blocked by the deny list.
     """
     global _allowed_cache
     now = time.monotonic()
@@ -124,6 +161,11 @@ def get_allowed_salt_functions_sync(db: Session) -> frozenset[str]:
             funcs = _DEFAULT_SALT_FUNCTIONS | _SALT_MINIMUM_FUNCTIONS
     else:
         funcs = _DEFAULT_SALT_FUNCTIONS | _SALT_MINIMUM_FUNCTIONS
+
+    # Subtract denied functions (deny list takes priority over allow list).
+    # Minimum functions can NEVER be blocked by the deny list.
+    denied = get_denied_salt_functions_sync(db)
+    funcs = (funcs - denied) | _SALT_MINIMUM_FUNCTIONS
 
     _allowed_cache = (now, funcs)
     return funcs

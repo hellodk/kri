@@ -26,8 +26,9 @@ export interface PlatformSettings {
   digest_recipients: string | null
   // Jenkins
   jenkins_ingest_secret: null
-  // Salt allowlist
+  // Salt allowlist / denylist
   salt_allowed_functions: string[] | null
+  salt_denied_functions: string[] | null
 }
 
 export interface BootstrapResponse {
@@ -128,8 +129,9 @@ export const ansibleApi = {
     digest_recipients?: string
     // Jenkins
     jenkins_ingest_secret?: string
-    // Salt allowlist
+    // Salt allowlist / denylist
     salt_allowed_functions?: string[]
+    salt_denied_functions?: string[]
   }) => api.put<PlatformSettings>('/api/v1/settings', payload),
   bootstrap: (minion_id: string, target_ip: string, sshUsername?: string, sshPassword?: string) =>
     api.post<BootstrapResponse>('/api/v1/ansible/bootstrap', {

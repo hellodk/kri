@@ -22,6 +22,7 @@ from fleet_platform.services.platform_settings_svc import (
     PILLAR_DIR,
     PLAYBOOKS_DIR,
     SALT_ALLOWED_FUNCTIONS,
+    SALT_DENIED_FUNCTIONS,
     SALT_MASTER,
     SMTP_FROM,
     SMTP_HOST,
@@ -37,6 +38,7 @@ from fleet_platform.services.platform_settings_svc import (
     _SALT_MINIMUM_FUNCTIONS,
     get_setting,
     invalidate_salt_allowlist_cache,
+    invalidate_salt_deny_cache,
     set_setting,
 )
 from fleet_platform.services.ssh_keypair import ensure_controller_keypair, get_controller_pubkey
@@ -57,6 +59,19 @@ def _parse_salt_allowlist(raw: str | None) -> list[str]:
     return sorted(_DEFAULT_SALT_FUNCTIONS | _SALT_MINIMUM_FUNCTIONS)
 
 
+def _parse_salt_denylist(raw: str | None) -> list[str]:
+    """Parse the JSON salt denylist from DB."""
+    import json as _json
+
+    if raw:
+        try:
+            parsed = _json.loads(raw)
+            return sorted(str(f) for f in parsed if isinstance(f, str))
+        except (ValueError, TypeError):
+            pass
+    return []
+
+
 @router.get("", response_model=PlatformSettingsResponse)
 async def get_settings(
     db: AsyncSession = Depends(get_db),
@@ -68,6 +83,7 @@ async def get_settings(
     oidc_enabled_raw = await get_setting(db, OIDC_ENABLED)
     oidc_enabled = oidc_enabled_raw == "true"
     salt_allowlist_raw = await get_setting(db, SALT_ALLOWED_FUNCTIONS)
+    salt_denylist_raw = await get_setting(db, SALT_DENIED_FUNCTIONS)
     return PlatformSettingsResponse(
         salt_master_address=await get_setting(db, SALT_MASTER),
         kri_api_url=await get_setting(db, KRI_API_URL),
@@ -90,6 +106,7 @@ async def get_settings(
         smtp_from=await get_setting(db, SMTP_FROM),
         digest_recipients=await get_setting(db, DIGEST_RECIPIENTS),
         salt_allowed_functions=_parse_salt_allowlist(salt_allowlist_raw),
+        salt_denied_functions=_parse_salt_denylist(salt_denylist_raw),
     )
 
 
@@ -159,6 +176,14 @@ async def update_settings(
         merged = sorted(set(payload.salt_allowed_functions) | _SALT_MINIMUM_FUNCTIONS)
         await set_setting(db, SALT_ALLOWED_FUNCTIONS, _json.dumps(merged))
         invalidate_salt_allowlist_cache()
+    if payload.salt_denied_functions is not None:
+        import json as _json
+
+        denied = sorted(str(f) for f in payload.salt_denied_functions)
+        await set_setting(db, SALT_DENIED_FUNCTIONS, _json.dumps(denied))
+        invalidate_salt_deny_cache()
+        # Invalidate allowlist cache too — deny list affects effective allowlist
+        invalidate_salt_allowlist_cache()
     vnc_enabled_raw = await get_setting(db, VNC_ENABLED)
     vnc_enabled = vnc_enabled_raw == "true"
     oidc_enabled_raw = await get_setting(db, OIDC_ENABLED)
@@ -185,4 +210,5 @@ async def update_settings(
         smtp_from=await get_setting(db, SMTP_FROM),
         digest_recipients=await get_setting(db, DIGEST_RECIPIENTS),
         salt_allowed_functions=_parse_salt_allowlist(await get_setting(db, SALT_ALLOWED_FUNCTIONS)),
+        salt_denied_functions=_parse_salt_denylist(await get_setting(db, SALT_DENIED_FUNCTIONS)),
     )

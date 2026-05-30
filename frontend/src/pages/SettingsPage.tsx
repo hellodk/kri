@@ -539,6 +539,7 @@ export function SettingsPage() {
       {activeTab === 'Advanced' && (
         <div className="space-y-6">
           <SaltAllowlistSection />
+          <SaltDenylistSection />
           <PlaybookSourcesSection />
         </div>
       )}
@@ -899,6 +900,137 @@ function SaltAllowlistSection() {
           className="px-4 py-2 bg-brand-600 text-white rounded-lg text-sm font-medium hover:bg-brand-700 disabled:opacity-50"
         >
           {saveMutation.isPending ? 'Saving…' : 'Save Allowlist'}
+        </button>
+        {dirty && (
+          <span className="text-xs text-amber-600 font-medium">Unsaved changes</span>
+        )}
+      </div>
+    </div>
+  )
+}
+
+// ---------------------------------------------------------------------------
+// Salt Denylist sub-section (self-contained, reads/saves via main settings API)
+// ---------------------------------------------------------------------------
+
+function SaltDenylistSection() {
+  const qc = useQueryClient()
+  const toast = useToastStore((s) => s.add)
+  const [functions, setFunctions] = useState<string[]>([])
+  const [newFn, setNewFn] = useState('')
+  const [dirty, setDirty] = useState(false)
+
+  const { data, isLoading } = useQuery({
+    queryKey: ['settings'],
+    queryFn: ansibleApi.getSettings,
+  })
+
+  useEffect(() => {
+    if (data) {
+      setFunctions(data.salt_denied_functions ?? [])
+      setDirty(false)
+    }
+  }, [data])
+
+  const saveMutation = useMutation({
+    mutationFn: () => ansibleApi.updateSettings({ salt_denied_functions: functions }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['settings'] })
+      toast('Salt denylist saved')
+      setDirty(false)
+    },
+    onError: (e: Error) => toast(e.message, 'error'),
+  })
+
+  function addFunction() {
+    const trimmed = newFn.trim()
+    if (!trimmed) return
+    if (functions.includes(trimmed)) {
+      toast(`'${trimmed}' is already in the denylist`, 'error')
+      return
+    }
+    const updated = [...functions, trimmed].sort()
+    setFunctions(updated)
+    setNewFn('')
+    setDirty(true)
+  }
+
+  function removeFunction(fn: string) {
+    setFunctions(functions.filter(f => f !== fn))
+    setDirty(true)
+  }
+
+  if (isLoading) {
+    return (
+      <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-6">
+        <div className="h-4 bg-gray-100 rounded animate-pulse w-48 mb-4" />
+        <div className="h-3 bg-gray-100 rounded animate-pulse w-64" />
+      </div>
+    )
+  }
+
+  return (
+    <div className="bg-white rounded-xl border border-red-100 shadow-sm p-6 space-y-4">
+      <div>
+        <h2 className="text-base font-semibold text-gray-900">Salt Function Deny List</h2>
+        <p className="text-sm text-gray-500 mt-1">
+          Functions listed here are <span className="font-semibold text-red-700">always blocked</span>,
+          even if they appear on the allow list. Use this to prevent specific functions from ever being
+          called regardless of the allowlist configuration.
+        </p>
+      </div>
+
+      {/* Chip list */}
+      <div className="flex flex-wrap gap-2">
+        {functions.map(fn => (
+          <span
+            key={fn}
+            className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-mono font-medium border bg-red-50 text-red-700 border-red-200"
+          >
+            {fn}
+            <button
+              onClick={() => removeFunction(fn)}
+              aria-label={`Remove ${fn} from denylist`}
+              className="ml-0.5 text-red-400 hover:text-red-700 transition-colors leading-none"
+            >
+              <svg width="10" height="10" viewBox="0 0 10 10" fill="none" className="flex-shrink-0">
+                <path d="M2 2l6 6M8 2L2 8" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
+              </svg>
+            </button>
+          </span>
+        ))}
+        {functions.length === 0 && (
+          <p className="text-sm text-gray-400 italic">No functions denied — all allowlisted functions can be called.</p>
+        )}
+      </div>
+
+      {/* Add new function input */}
+      <div className="flex gap-2">
+        <input
+          type="text"
+          value={newFn}
+          onChange={(e) => setNewFn(e.target.value)}
+          onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addFunction() } }}
+          placeholder="e.g. system.reboot"
+          className="flex-1 px-3 py-2 border border-gray-300 rounded-lg text-sm font-mono text-gray-900 focus:outline-none focus:border-red-400"
+        />
+        <button
+          onClick={addFunction}
+          disabled={!newFn.trim()}
+          className="px-4 py-2 bg-red-50 text-red-700 rounded-lg text-sm font-medium hover:bg-red-100 disabled:opacity-40 border border-red-200"
+        >
+          Add
+        </button>
+      </div>
+
+      {/* Save button */}
+      <div className="flex items-center gap-3 pt-1">
+        <button
+          onClick={() => saveMutation.mutate()}
+          disabled={saveMutation.isPending || !dirty}
+          className="px-4 py-2 bg-red-600 text-white rounded-lg text-sm font-medium hover:bg-red-700 disabled:opacity-50"
+        >
+          {saveMutation.isPending ? 'Saving…' : 'Save Deny List'}
         </button>
         {dirty && (
           <span className="text-xs text-amber-600 font-medium">Unsaved changes</span>
