@@ -783,18 +783,18 @@ export function NodeDetail() {
               setActiveSshTabId(firstTab.id)
               setShowSSH(true)
             }}
-            disabled={node.status !== 'online'}
+            disabled={!node.bootstrap_ip}
             className="px-4 py-2 bg-emerald-600 text-white text-sm font-medium rounded-lg hover:bg-emerald-700 disabled:opacity-40 shadow-sm font-mono"
-            title={node.status !== 'online' ? 'Node must be online' : 'Open SSH terminal'}
+            title={!node.bootstrap_ip ? 'Bootstrap node first to get its IP' : `SSH into ${node.hostname} (${node.status})`}
           >
             SSH
           </button>
           {vncEnabled && (
             <button
               onClick={() => setShowVNC(true)}
-              disabled={node.status !== 'online'}
+              disabled={!node.bootstrap_ip}
               className="px-4 py-2 bg-purple-600 text-white text-sm font-medium rounded-lg hover:bg-purple-700 disabled:opacity-40 shadow-sm font-mono"
-              title={node.status !== 'online' ? 'Node must be online' : 'Open VNC screen share'}
+              title={!node.bootstrap_ip ? 'Bootstrap node first to get its IP' : `VNC into ${node.hostname} (${node.status})`}
             >
               VNC
             </button>
