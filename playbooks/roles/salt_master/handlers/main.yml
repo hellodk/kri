@@ -1,0 +1,28 @@
+---
+- name: Restart salt-master
+  shell: |
+    launchctl stop com.saltstack.salt.master 2>/dev/null || true
+    sleep 2
+    launchctl start com.saltstack.salt.master
+  become: true
+
+- name: Reload and start salt-master
+  shell: |
+    launchctl unload /Library/LaunchDaemons/com.saltstack.salt.master.plist 2>/dev/null || true
+    launchctl load -w /Library/LaunchDaemons/com.saltstack.salt.master.plist
+    launchctl start com.saltstack.salt.master 2>/dev/null || true
+  become: true
+
+- name: Restart salt-api
+  shell: |
+    launchctl stop com.saltstack.salt.api 2>/dev/null || true
+    sleep 2
+    launchctl start com.saltstack.salt.api
+  become: true
+
+- name: Reload and start salt-api
+  shell: |
+    launchctl unload /Library/LaunchDaemons/com.saltstack.salt.api.plist 2>/dev/null || true
+    launchctl load -w /Library/LaunchDaemons/com.saltstack.salt.api.plist
+    launchctl start com.saltstack.salt.api 2>/dev/null || true
+  become: true

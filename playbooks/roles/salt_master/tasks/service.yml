@@ -1,0 +1,71 @@
+---
+# tasks/service.yml — launchd plists for salt-master and salt-api
+
+- name: Write salt-master launchd plist
+  template:
+    src: salt-master.plist.j2
+    dest: /Library/LaunchDaemons/com.saltstack.salt.master.plist
+    owner: root
+    group: wheel
+    mode: "0644"
+  become: true
+  notify: Reload and start salt-master
+
+- name: Write salt-api launchd plist
+  template:
+    src: salt-api.plist.j2
+    dest: /Library/LaunchDaemons/com.saltstack.salt.api.plist
+    owner: root
+    group: wheel
+    mode: "0644"
+  become: true
+  notify: Reload and start salt-api
+
+- name: Load salt-master launchd service
+  shell: |
+    launchctl unload /Library/LaunchDaemons/com.saltstack.salt.master.plist 2>/dev/null || true
+    launchctl load -w /Library/LaunchDaemons/com.saltstack.salt.master.plist
+  become: true
+  changed_when: false
+
+- name: Start salt-master
+  shell: launchctl start com.saltstack.salt.master 2>/dev/null || true
+  become: true
+  changed_when: false
+
+- name: Wait for salt-master to be ready
+  wait_for:
+    port: 4505
+    host: 127.0.0.1
+    timeout: 30
+  become: false
+
+- name: Load salt-api launchd service
+  shell: |
+    launchctl unload /Library/LaunchDaemons/com.saltstack.salt.api.plist 2>/dev/null || true
+    launchctl load -w /Library/LaunchDaemons/com.saltstack.salt.api.plist
+  become: true
+  changed_when: false
+
+- name: Start salt-api
+  shell: launchctl start com.saltstack.salt.api 2>/dev/null || true
+  become: true
+  changed_when: false
+
+- name: Wait for salt-api to be ready
+  wait_for:
+    port: "{{ salt_api_port }}"
+    host: 127.0.0.1
+    timeout: 30
+  become: false
+
+- name: Verify salt-master is running
+  shell: /opt/salt/salt-key -L 2>/dev/null
+  register: salt_key_list
+  changed_when: false
+  become: true
+  failed_when: false
+
+- name: Show accepted minion keys
+  debug:
+    msg: "{{ salt_key_list.stdout_lines }}"

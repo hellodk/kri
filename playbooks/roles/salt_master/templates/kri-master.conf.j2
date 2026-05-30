@@ -1,0 +1,40 @@
+# kri Salt Master configuration — managed by Ansible role salt_master
+# Installed to /etc/salt/master.d/kri.conf on {{ inventory_hostname }}
+
+# Keys must be manually accepted via kri UI (Settings → Minion Keys)
+auto_accept: False
+
+# Pillar data per minion (ingest_url + node_token written by kri worker)
+pillar_roots:
+  base:
+    - {{ salt_pillar_dir }}
+
+# kri Salt states (grain_report, heartbeat, sbom_scan, etc.)
+file_roots:
+  base:
+    - {{ salt_states_dir }}
+
+# Listen on all interfaces so Tailscale-connected minions can reach this host
+interface: {{ salt_master_interface }}
+
+# Log to file (not stdout — native service, not Docker container)
+log_file: {{ salt_log_dir }}/master
+log_level: info
+
+# Presence detection — marks minions as connected/disconnected
+presence_events: {{ salt_presence_events | lower }}
+loop_interval: {{ salt_loop_interval }}
+
+# Reactor: fire grain_report immediately when any minion starts/reconnects.
+# This ensures kri marks nodes online within seconds of reconnect.
+reactor:
+  - 'salt/minion/*/start':
+    - salt://reactor/grain_report_on_start.sls
+
+# External auth for salt-api (kri workers authenticate as {{ salt_api_user }})
+external_auth:
+  pam:
+    {{ salt_api_user }}:
+      - '.*'
+      - '@runner'
+      - '@wheel'

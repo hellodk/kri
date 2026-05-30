@@ -1,0 +1,82 @@
+---
+# playbooks/setup_salt_master.yml
+# Install salt-master + salt-api on mm1 (Apple Silicon Mac Mini).
+# Run from the Linux host that runs kri (Docker host).
+#
+# Usage:
+#   ansible-playbook playbooks/setup_salt_master.yml \
+#     -i playbooks/inventory/inventory.ini \
+#     -e "ansible_host=100.102.68.75" \
+#     -e "kri_salt_api_password=<secure-password>"
+#
+# After running:
+#   1. Update .env.docker with SALT_API_URL, SALT_API_USER, SALT_API_PASSWORD
+#   2. Run: docker compose up -d (docker-compose no longer has salt-master)
+#   3. Update minion configs to point to mm1: salt_master_address: 100.102.68.75
+#   4. Minions reconnect automatically (PKI was transferred)
+
+- name: Export pillar data from Docker salt-master volume
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  tasks:
+    - name: Create local pillar export directory
+      file:
+        path: /tmp/kri-pillar-export
+        state: directory
+        mode: "0750"
+
+    - name: Export pillar files from Docker volume
+      shell: |
+        docker exec deploy-salt-master-1 sh -c \
+          "tar -cf - /srv/salt/pillar/*.sls 2>/dev/null" \
+          | tar -xf - -C /tmp/kri-pillar-export --strip-components=3 2>/dev/null || true
+      failed_when: false
+
+    - name: List exported pillar files
+      find:
+        paths: /tmp/kri-pillar-export
+        patterns: "*.sls"
+      register: pillar_files
+
+    - name: Show pillar files to be transferred
+      debug:
+        msg: "Transferring {{ pillar_files.files | length }} pillar files to mm1"
+
+- name: Install and configure salt-master on mm1
+  hosts: salt_master
+  gather_facts: false
+  vars:
+    # MM1 Tailscale IP — salt-master binds here so all fleet nodes can reach it
+    ansible_host: "{{ salt_master_ip | default('100.102.68.75') }}"
+    ansible_user: "{{ ansible_ssh_user | default('dk') }}"
+    ansible_become_method: sudo
+
+    # Override defaults here or pass via -e on the command line
+    kri_ingest_base_url: "http://100.89.50.27/api/v1/ingest"
+
+  roles:
+    - salt_master
+
+  post_tasks:
+    - name: Print connection details for .env.docker
+      debug:
+        msg: |
+          ============================================================
+          Salt-master installed on mm1. Update .env.docker:
+
+          SALT_API_URL=http://100.102.68.75:{{ salt_api_port }}
+          SALT_API_USER={{ salt_api_user }}
+          SALT_API_PASSWORD=<the password you set in kri_salt_api_password>
+
+          Then restart kri:
+            docker compose up -d
+          ============================================================
+
+    - name: Remind to update minion master addresses
+      debug:
+        msg: |
+          Minion configs (bootstrap_mac_mini.yml) already set salt_master_address.
+          Update playbooks/group_vars/all.yml:
+            salt_master_address: "100.102.68.75"
+          Then re-run bootstrap or update /etc/salt/minion on each node.

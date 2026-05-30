@@ -1,0 +1,56 @@
+---
+# tasks/pillar.yml — set up salt pillar directory on mm1
+# The pillar contains per-node ingest URLs and tokens written by kri workers.
+
+- name: Create pillar directory
+  file:
+    path: "{{ salt_pillar_dir }}"
+    state: directory
+    owner: root
+    group: wheel
+    mode: "0750"
+  become: true
+
+- name: Write pillar top.sls
+  copy:
+    content: |
+      # Salt pillar top file — managed by kri
+      # Per-minion pillar files are written by the kri worker when nodes are bootstrapped.
+      base:
+        '*':
+          - 'match_id'
+    dest: "{{ salt_pillar_dir }}/top.sls"
+    owner: root
+    group: wheel
+    mode: "0644"
+  become: true
+
+- name: Write pillar match_id.sls (include per-minion file by ID)
+  copy:
+    content: |
+      # Dynamically include the per-minion pillar file by minion ID.
+      # Written by kri workers when a node is bootstrapped.
+      {% raw %}
+      {% if grains['id'] is defined %}
+      {% include grains['id'] + '.sls' ignore missing %}
+      {% endif %}
+      {% endraw %}
+    dest: "{{ salt_pillar_dir }}/match_id.sls"
+    owner: root
+    group: wheel
+    mode: "0644"
+  become: true
+
+- name: Sync existing per-node pillar files from controller
+  # Export pillar files from the Docker salt-pillar volume on the controller
+  # and copy them to mm1. The controller's /tmp/kri-pillar-export/ is populated
+  # by the setup_salt_master.yml playbook before this role runs.
+  copy:
+    src: /tmp/kri-pillar-export/
+    dest: "{{ salt_pillar_dir }}/"
+    owner: root
+    group: wheel
+    mode: "0640"
+  become: true
+  when: lookup('fileglob', '/tmp/kri-pillar-export/*.sls') | length > 0
+  failed_when: false

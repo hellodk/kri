@@ -91,19 +91,13 @@ compose() {
 # ══════════════════════════════════════════════════════════════════════════════
 
 _pki_push_after_salt_restart() {
-    # RCA: salt 3008 rotates its RSA keypair on every container restart.
-    # Any command that restarts salt-master MUST push the new key to minions
-    # or they will stay disconnected indefinitely. This runs automatically.
+    # No-op: salt-master now runs natively on mm1 (not in Docker).
+    # Keys are stable — no rotation on deploy. pki push only needed after
+    # mm1 reboot or explicit salt-master restart on mm1.
+    # Kept for backward compat if someone runs kri against a Docker salt-master.
     local salt_restarted="${1:-false}"
     [[ "$salt_restarted" != "true" ]] && return
-    warn "Salt-master was restarted — pushing new master.pub to minions…"
-    info "  (Salt 3008 rotates keys on every restart — this is mandatory)"
-    # Give salt-master 8 seconds to write its new key
-    local waited=0
-    until docker exec deploy-salt-master-1 test -L /etc/salt/pki/master/master.pub 2>/dev/null; do
-        sleep 1; waited=$((waited+1)); [[ $waited -gt 15 ]] && break
-    done
-    cmd_pki_push
+    info "Salt-master runs on mm1 — no pki push needed on Docker deploy"
 }
 
 cmd_up() {

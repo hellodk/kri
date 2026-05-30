@@ -1,0 +1,65 @@
+---
+# tasks/pki.yml — transfer PKI keys from Ansible controller to mm1
+# The controller (Linux host running the playbook) has deploy/salt-pki/
+# which contains the current salt-master keys and accepted minion keys.
+
+- name: Create PKI directories
+  file:
+    path: "{{ item }}"
+    state: directory
+    owner: root
+    group: wheel
+    mode: "0700"
+  loop:
+    - "{{ salt_pki_dir }}"
+    - "{{ salt_pki_dir }}/minions"
+    - "{{ salt_pki_dir }}/minions_pre"
+    - "{{ salt_pki_dir }}/minions_denied"
+    - "{{ salt_pki_dir }}/minions_autosign"
+    - "{{ salt_pki_dir }}/minions_rejected"
+  become: true
+
+- name: Copy master private key
+  copy:
+    src: "{{ playbook_dir }}/../deploy/salt-pki/master.pem"
+    dest: "{{ salt_pki_dir }}/master.pem"
+    owner: root
+    group: wheel
+    mode: "0400"
+  become: true
+  # master.pem may be a symlink on the controller — resolve it
+  # The controller's salt-pki/master.pem symlinks to the versioned file;
+  # copy the actual content, not the symlink.
+  vars:
+    ansible_local_follow_symlinks: true
+
+- name: Copy master public key
+  copy:
+    src: "{{ playbook_dir }}/../deploy/salt-pki/master.pub"
+    dest: "{{ salt_pki_dir }}/master.pub"
+    owner: root
+    group: wheel
+    mode: "0444"
+  become: true
+
+- name: Copy accepted minion keys
+  copy:
+    src: "{{ playbook_dir }}/../deploy/salt-pki/minions/"
+    dest: "{{ salt_pki_dir }}/minions/"
+    owner: root
+    group: wheel
+    mode: "0644"
+  become: true
+  when: lookup('fileglob', playbook_dir + '/../deploy/salt-pki/minions/*') | length > 0
+
+- name: Fix PKI directory permissions (755 so API can read key lists)
+  file:
+    path: "{{ item }}"
+    mode: "0755"
+  loop:
+    - "{{ salt_pki_dir }}"
+    - "{{ salt_pki_dir }}/minions"
+    - "{{ salt_pki_dir }}/minions_pre"
+    - "{{ salt_pki_dir }}/minions_rejected"
+    - "{{ salt_pki_dir }}/minions_denied"
+  become: true

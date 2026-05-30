@@ -1,0 +1,24 @@
+---
+# tasks/states.yml — sync salt states from kri repo to mm1
+
+- name: Create states directory
+  file:
+    path: "{{ salt_states_dir }}"
+    state: directory
+    owner: root
+    group: wheel
+    mode: "0755"
+  become: true
+
+- name: Sync salt states from kri repo
+  # Copies salt/states/ from the Ansible controller (Linux host with kri git repo)
+  # to mm1's /srv/salt/states/. Subsequent state updates are handled by
+  # re-running the playbook or a cron-based sync.
+  synchronize:
+    src: "{{ playbook_dir }}/../salt/states/"
+    dest: "{{ salt_states_dir }}/"
+    delete: true
+    rsync_opts:
+      - "--exclude=*.pyc"
+      - "--exclude=__pycache__"
+  become: true

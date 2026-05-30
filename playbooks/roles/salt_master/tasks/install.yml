@@ -1,0 +1,73 @@
+---
+# tasks/install.yml — install salt via official .pkg (same approach as bootstrap_mac_mini.yml)
+
+- name: Set pkg filename for architecture
+  set_fact:
+    salt_pkg_filename: "salt-{{ salt_version }}-py3-{{ cpu_arch }}.pkg"
+    salt_checksum_filename: "salt-{{ salt_version }}-py3-{{ cpu_arch }}.pkg.sha512"
+
+- name: Set download URL (Artifactory if configured, else official)
+  set_fact:
+    salt_pkg_url: >-
+      {%- if artifactory_binary_url -%}
+        {{ artifactory_binary_url.rstrip('/') }}/salt/{{ salt_version }}/{{ salt_pkg_filename }}
+      {%- else -%}
+        {{ salt_pkg_official_base }}/{{ salt_pkg_filename }}
+      {%- endif -%}
+    salt_checksum_url: >-
+      {%- if artifactory_binary_url -%}
+        {{ artifactory_binary_url.rstrip('/') }}/salt/{{ salt_version }}/{{ salt_checksum_filename }}
+      {%- else -%}
+        {{ salt_pkg_official_base }}/{{ salt_checksum_filename }}
+      {%- endif -%}
+
+- name: Check if correct salt version is already installed
+  shell: /opt/salt/salt-master --version 2>/dev/null | awk '{print $2}'
+  register: installed_salt_version
+  changed_when: false
+  failed_when: false
+  become: false
+
+- name: Download salt pkg checksum
+  get_url:
+    url: "{{ salt_checksum_url }}"
+    dest: "/tmp/{{ salt_checksum_filename }}"
+    mode: "0644"
+    force: true
+  when: installed_salt_version.stdout.strip() != salt_version
+  become: false
+
+- name: Download salt pkg
+  get_url:
+    url: "{{ salt_pkg_url }}"
+    dest: "/tmp/{{ salt_pkg_filename }}"
+    mode: "0644"
+  when: installed_salt_version.stdout.strip() != salt_version
+  become: false
+
+- name: Verify salt pkg checksum
+  shell: |
+    EXPECTED=$(awk '{print $1}' /tmp/{{ salt_checksum_filename }})
+    ACTUAL=$(shasum -a 512 /tmp/{{ salt_pkg_filename }} | awk '{print $1}')
+    [ "$EXPECTED" = "$ACTUAL" ] || (echo "CHECKSUM MISMATCH" >&2; exit 1)
+  when: installed_salt_version.stdout.strip() != salt_version
+  become: false
+
+- name: Stop salt-master service before upgrade
+  shell: launchctl stop com.saltstack.salt.master 2>/dev/null || true
+  become: true
+  changed_when: false
+  when: installed_salt_version.stdout.strip() != salt_version
+
+- name: Install salt pkg (installs salt-master, salt-minion, salt-api)
+  shell: installer -pkg /tmp/{{ salt_pkg_filename }} -target /
+  become: true
+  when: installed_salt_version.stdout.strip() != salt_version
+
+- name: Confirm installed salt version
+  shell: /opt/salt/salt-master --version 2>/dev/null | awk '{print $2}'
+  register: verified_salt_version
+  changed_when: false
+  failed_when: verified_salt_version.stdout.strip() != salt_version
+  become: false
+  when: installed_salt_version.stdout.strip() != salt_version

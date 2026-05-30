@@ -1,0 +1,49 @@
+---
+# tasks/configure.yml — write salt-master configuration files
+
+- name: Create /etc/salt directory
+  file:
+    path: /etc/salt
+    state: directory
+    owner: root
+    group: wheel
+    mode: "0755"
+  become: true
+
+- name: Create /etc/salt/master.d directory
+  file:
+    path: /etc/salt/master.d
+    state: directory
+    owner: root
+    group: wheel
+    mode: "0755"
+  become: true
+
+- name: Write kri salt-master configuration
+  template:
+    src: kri-master.conf.j2
+    dest: /etc/salt/master.d/kri.conf
+    owner: root
+    group: wheel
+    mode: "0644"
+  become: true
+  notify: Restart salt-master
+
+- name: Write salt-api configuration
+  template:
+    src: salt-api.conf.j2
+    dest: /etc/salt/master.d/salt-api.conf
+    owner: root
+    group: wheel
+    mode: "0644"
+  become: true
+  notify: Restart salt-api
+
+- name: Create log directory
+  file:
+    path: "{{ salt_log_dir }}"
+    state: directory
+    owner: root
+    group: wheel
+    mode: "0755"
+  become: true

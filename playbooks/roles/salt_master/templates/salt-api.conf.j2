@@ -1,0 +1,8 @@
+# salt-api configuration — managed by Ansible role salt_master
+# Provides the HTTP API used by kri API/worker containers to run salt commands.
+# Installed to /etc/salt/master.d/salt-api.conf on {{ inventory_hostname }}
+
+rest_cherrypy:
+  port: {{ salt_api_port }}
+  disable_ssl: true   # TLS terminated at Tailscale (WireGuard); safe on overlay network
+  webhook_disable_auth: false

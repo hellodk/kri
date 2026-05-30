@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN"
+  "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.saltstack.salt.master</string>
+
+    <key>ProgramArguments</key>
+    <array>
+        <string>/opt/salt/salt-master</string>
+        <string>--log-level=info</string>
+    </array>
+
+    <!-- Run as root — salt-master needs to manage PKI and pillar -->
+    <key>UserName</key>
+    <string>root</string>
+
+    <key>RunAtLoad</key>
+    <true/>
+
+    <key>KeepAlive</key>
+    <true/>
+
+    <key>ThrottleInterval</key>
+    <integer>5</integer>
+
+    <key>StandardOutPath</key>
+    <string>{{ salt_log_dir }}/master</string>
+
+    <key>StandardErrorPath</key>
+    <string>{{ salt_log_dir }}/master-error</string>
+</dict>
+</plist>

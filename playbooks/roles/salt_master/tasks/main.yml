@@ -1,0 +1,20 @@
+---
+# playbooks/roles/salt_master/tasks/main.yml
+
+- name: Detect CPU architecture
+  raw: uname -m
+  register: uname_result
+  changed_when: false
+
+- name: Set arch facts
+  set_fact:
+    cpu_arch: "{{ 'arm64' if 'arm64' in uname_result.stdout else 'x86_64' }}"
+    brew_prefix: "{{ '/opt/homebrew' if 'arm64' in uname_result.stdout else '/usr/local' }}"
+
+- import_tasks: install.yml
+- import_tasks: configure.yml
+- import_tasks: pki.yml
+- import_tasks: pillar.yml
+- import_tasks: states.yml
+- import_tasks: api_user.yml
+- import_tasks: service.yml

@@ -28,10 +28,11 @@ artifactory_binary_url: ""   # e.g. https://artifactory.company.local/binary-rep
 salt_pkg_official_base: "https://packages.broadcom.com/artifactory/saltproject-generic/onedir/{{ salt_version }}"
 
 # ── Salt master ───────────────────────────────────────────────────────────────
-# salt_master_address and salt_master_pub_key must be set per environment.
-# Define them in host_vars/<minion_id>.yml or pass via -e at runtime.
-# salt_master_address: "100.89.50.27"         # Tailscale IP or hostname
-# salt_master_pub_key: |                       # contents of deploy/salt-pki/master.pub
+# salt-master runs natively on mm1 (100.102.68.75) — NOT in Docker.
+# This eliminates PKI key rotation on every kri deploy.
+salt_master_address: "100.102.68.75"   # mm1 Tailscale IP
+# salt_master_pub_key: set in host_vars/ or passed via -e at runtime
+# contents of /etc/salt/pki/master/master.pub on mm1 after role apply
 #   -----BEGIN PUBLIC KEY-----
 #   ...
 #   -----END PUBLIC KEY-----

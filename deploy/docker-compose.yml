@@ -95,8 +95,9 @@ services:
       redis:
         condition: service_healthy
     volumes:
-      - salt-pillar:/srv/salt/pillar
-      - ./salt-pki:/etc/salt/pki/master:ro   # read master pub for minion key acceptance
+      # salt-master now runs natively on mm1 — no local PKI or pillar mounts needed.
+      # Salt API URL is configured via SALT_API_URL in .env.docker.
+      # Salt key listing reads from mm1 via SALT_PKI_SSH (set SALT_MASTER_SSH_HOST).
       - /home/dk/Documents/git/pulse:/mnt/pulse:ro   # host playbook repos
       - ../salt/states:/srv/salt/states:ro
     healthcheck:
@@ -131,7 +132,6 @@ services:
       redis:
         condition: service_healthy
     volumes:
-      - salt-pillar:/srv/salt/pillar
       # SSH keys for Ansible playbook execution.
       # MUST be a dedicated service-account keypair — NOT your personal ~/.ssh.
       # Create: ssh-keygen -t ed25519 -f deploy/ssh/id_ed25519 -N ""
@@ -156,31 +156,10 @@ services:
           memory: 2G
     logging: *default-logging
 
-  salt-master:
-    image: hellodk/salt-master:3008.0
-    restart: unless-stopped
-    ports:
-      - "${SALT_BIND_IP:-0.0.0.0}:4505:4505"   # ZeroMQ publisher  — minions subscribe for events
-      - "${SALT_BIND_IP:-0.0.0.0}:4506:4506"   # ZeroMQ request/reply — minions send results here
-    volumes:
-      - salt-pillar:/srv/salt/pillar
-      - ./salt-pki:/etc/salt/pki/master       # bind mount — keys persist across rebuilds
-      - ./salt-master.conf:/etc/salt/master.d/kri.conf:ro
-      - ../salt/states:/srv/salt/states:ro
-      # Reactor SLS lives under salt/states/reactor/ — already served by file_roots above.
-      # No separate mount needed (audit C1 fix).
-    healthcheck:
-      test: ["CMD-SHELL", "grep -r 'salt-master' /proc/*/cmdline 2>/dev/null | grep -q master || exit 1"]
-      interval: 30s
-      timeout: 5s
-      retries: 3
-      start_period: 30s
-    deploy:
-      resources:
-        limits:
-          cpus: '1.0'
-          memory: 1G
-    logging: *default-logging
+  # salt-master removed from Docker — runs natively on mm1 (100.102.68.75).
+  # See playbooks/roles/salt_master and playbooks/setup_salt_master.yml.
+  # This eliminates the PKI key rotation issue caused by container restarts.
+  # Configure SALT_API_URL=http://100.102.68.75:8080 in .env.docker.
 
   beat:
     build:
@@ -194,8 +173,7 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
-    volumes:
-      - salt-pillar:/srv/salt/pillar
+    volumes: []
     healthcheck:
       test: ["CMD-SHELL", "grep -r 'celery' /proc/*/cmdline 2>/dev/null | grep -q beat || exit 1"]
       interval: 60s
@@ -238,5 +216,6 @@ services:
 volumes:
   pgdata:
   redisdata:
-  salt-pillar:
+  # salt-pillar volume removed — pillar now lives on mm1 at /srv/salt/pillar/
+  # managed by kri worker via SSH/salt-api
   pgbackups:
