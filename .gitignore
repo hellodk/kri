@@ -82,3 +82,7 @@ deploy/certs/
 # Salt-master PKI — private key is NEVER committed
 # master.pem is stored in ansible vault, backed up via `kri pki-backup`
 deploy/salt-pki/master.pem
+
+# Bundled installer packages (too large for git — store on kri server)
+playbooks/files/*.pkg
+playbooks/files/*.pkg.sha512

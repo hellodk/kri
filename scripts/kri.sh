@@ -598,6 +598,164 @@ cmd_pki_push() {
 }
 
 # ══════════════════════════════════════════════════════════════════════════════
+# SALT-MASTER
+# ══════════════════════════════════════════════════════════════════════════════
+
+cmd_saltmaster() {
+    local sub="${1:-}"
+    shift 2>/dev/null || true
+
+    if [[ -z "$sub" ]]; then
+        _prompt_select "Salt-master action?" \
+            "install (put salt-master on a node)" \
+            "status  (check where salt-master is running)" \
+            "keys    (show minion key status on master)"
+        sub="$PROMPT_RESULT"
+    fi
+
+    case "$sub" in
+        install|"install (put salt-master on a node)")
+            cmd_saltmaster_install "$@" ;;
+        status|"status  (check where salt-master is running)")
+            cmd_saltmaster_status ;;
+        keys|"keys    (show minion key status on master)")
+            cmd_saltmaster_keys ;;
+        *)
+            error "Unknown saltmaster subcommand: $sub  (install|status|keys)" ;;
+    esac
+}
+
+cmd_saltmaster_install() {
+    local target_ip="${1:-}"
+
+    # Interactive target selection if not provided
+    if [[ -z "$target_ip" ]]; then
+        header "Salt-master installation"
+        info "Salt-master handles minion authentication, state distribution, and key management."
+        info "Runs natively on a Mac Mini (launchd) — never in Docker."
+        echo ""
+
+        # Discover known nodes from DB if possible
+        local known_nodes=""
+        if docker exec deploy-db-1 psql -U fleet fleet_demo \
+              -t -c "SELECT bootstrap_ip || '  (' || hostname || ')' FROM nodes WHERE bootstrap_ip IS NOT NULL ORDER BY hostname" \
+              2>/dev/null | grep -q '\.' ; then
+            known_nodes=$(docker exec deploy-db-1 psql -U fleet fleet_demo \
+              -t -c "SELECT bootstrap_ip || '  (' || hostname || ')' FROM nodes WHERE bootstrap_ip IS NOT NULL ORDER BY hostname" \
+              2>/dev/null | grep '\.' | sed 's/^ */  /' )
+            info "Known fleet nodes:"
+            echo "$known_nodes"
+            echo ""
+        fi
+
+        _prompt_input "Target node IP (e.g. 100.102.68.75 for mm1)" ""
+        target_ip="${PROMPT_RESULT//[[:space:]]/}"
+        [[ -z "$target_ip" ]] && error "Target IP is required"
+    fi
+
+    local api_password="${2:-}"
+    if [[ -z "$api_password" ]]; then
+        echo -en "${CYAN}[kri]${NC} salt-api password for krisalt user: "
+        read -rs api_password </dev/tty; echo
+        [[ -z "$api_password" ]] && error "salt-api password is required"
+    fi
+
+    # Verify the bundled .pkg exists before doing anything
+    local pkg="$REPO_DIR/playbooks/files/salt-3007.14-py3-arm64.pkg"
+    if [[ ! -f "$pkg" ]]; then
+        error "Bundled installer missing: $pkg
+Download it (on a connected machine) and copy it to playbooks/files/:
+  curl -LO https://packages.broadcom.com/artifactory/saltproject-generic/onedir/3007.14/salt-3007.14-py3-arm64.pkg"
+    fi
+
+    header "Installing salt-master → $target_ip"
+    info "Package: $(basename "$pkg") ($(du -sh "$pkg" | cut -f1), air-gapped)"
+    info "This installs salt-master, configures launchd, and starts the service."
+    echo ""
+
+    local ansible_cmd="ansible-playbook $REPO_DIR/playbooks/install_salt_master.yml \
+        -i $target_ip, \
+        -e target_host=$target_ip \
+        -e kri_salt_api_password=$api_password \
+        -e ansible_user=dk"
+
+    # Stream Ansible output
+    if source "$VENV" 2>/dev/null; then
+        eval "$ansible_cmd"
+        local rc=$?
+    else
+        error "Python venv not found at $VENV — run from kri repo root"
+    fi
+
+    if [[ $rc -eq 0 ]]; then
+        success "Salt-master installed on $target_ip"
+        echo ""
+        info "Next steps:"
+        info "  1. Add to .env.docker:  SALT_API_URL=http://${target_ip}:8080"
+        info "                          SALT_API_USER=krisalt"
+        info "                          SALT_API_PASSWORD=<the password you set>"
+        info "  2. Update minion configs: master: ${target_ip}"
+        info "  3. kri deploy api worker"
+    else
+        error "Ansible playbook failed (rc=$rc) — check output above"
+    fi
+}
+
+cmd_saltmaster_status() {
+    header "Salt-master status"
+
+    # Check the configured SALT_API_URL
+    local salt_url=""
+    if [[ -f "$REPO_DIR/.env.docker" ]]; then
+        salt_url=$(grep "^SALT_API_URL=" "$REPO_DIR/.env.docker" 2>/dev/null | cut -d= -f2-)
+    fi
+
+    if [[ -z "$salt_url" ]]; then
+        warn "SALT_API_URL not set in .env.docker — salt-master location unknown"
+    else
+        info "Configured SALT_API_URL: $salt_url"
+        local salt_host
+        salt_host=$(echo "$salt_url" | sed 's|http://||;s|:.*||')
+
+        info "Checking $salt_host for salt-master process…"
+        if ssh -o StrictHostKeyChecking=no -o ConnectTimeout=5 dk@"$salt_host" \
+              "ps aux | grep '/opt/salt/salt-master\|/usr/local/bin/salt-master' | grep -v grep" \
+              2>/dev/null | grep -q salt-master; then
+            success "salt-master is RUNNING on $salt_host"
+        else
+            warn "salt-master process NOT found on $salt_host"
+        fi
+
+        info "Checking ports 4505/4506 on $salt_host…"
+        timeout 3 bash -c "</dev/tcp/$salt_host/4505" 2>/dev/null \
+            && success "Port 4505 (pub/sub) OPEN" || warn "Port 4505 CLOSED"
+        timeout 3 bash -c "</dev/tcp/$salt_host/4506" 2>/dev/null \
+            && success "Port 4506 (return) OPEN" || warn "Port 4506 CLOSED"
+    fi
+}
+
+cmd_saltmaster_keys() {
+    header "Minion key status"
+
+    local salt_url=""
+    if [[ -f "$REPO_DIR/.env.docker" ]]; then
+        salt_url=$(grep "^SALT_API_URL=" "$REPO_DIR/.env.docker" 2>/dev/null | cut -d= -f2-)
+    fi
+
+    if [[ -z "$salt_url" ]]; then
+        warn "SALT_API_URL not configured — cannot query salt-master"
+        return
+    fi
+
+    local salt_host
+    salt_host=$(echo "$salt_url" | sed 's|http://||;s|:.*||')
+    info "Querying salt-key on $salt_host…"
+    ssh -o StrictHostKeyChecking=no -o ConnectTimeout=5 dk@"$salt_host" \
+        "sudo /opt/salt/salt-key -L 2>/dev/null" 2>/dev/null \
+        || warn "Cannot reach $salt_host — is salt-master running?"
+}
+
+# ══════════════════════════════════════════════════════════════════════════════
 # DIAGNOSE / SEED / DEV
 # ══════════════════════════════════════════════════════════════════════════════
 
@@ -745,6 +903,11 @@ ${BOLD}PKI:${NC}
   ${CYAN}pki backup${NC}       Print vault commands to back up master.pem
   ${CYAN}pki push [ip...]${NC} Push master.pub to minions after restart
 
+${BOLD}Salt-master:${NC}
+  ${CYAN}saltmaster install [ip]${NC}  Install salt-master on a node (air-gapped, bundled pkg)
+  ${CYAN}saltmaster status${NC}        Check where salt-master is running
+  ${CYAN}saltmaster keys${NC}          Show accepted/pending minion keys
+
 ${BOLD}Tools:${NC}
   ${CYAN}diagnose [ip]${NC}    Investigate an offline node
   ${CYAN}seed${NC}             Create default users
@@ -767,7 +930,7 @@ main() {
             "deploy" "rolling-deploy" "rollback" \
             "infra" \
             "test" "diagnose" "seed" "dev" \
-            "pki" "version"
+            "pki" "saltmaster" "version"
         cmd="$PROMPT_RESULT"
     fi
 
@@ -786,6 +949,7 @@ main() {
         pki-init)       cmd_pki_init ;;        # backwards compat
         pki-backup)     cmd_pki_backup ;;      # backwards compat
         pki-push)       cmd_pki_push "$@" ;;   # backwards compat
+        saltmaster)     cmd_saltmaster "$@" ;;
         diagnose)       cmd_diagnose "$@" ;;
         seed)           cmd_seed ;;
         dev)            cmd_dev "$@" ;;

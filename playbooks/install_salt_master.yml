@@ -1,0 +1,152 @@
+---
+# playbooks/install_salt_master.yml
+#
+# Install salt-master natively on any Mac Mini in the fleet.
+# Air-gapped: bundles salt-3007.14-py3-arm64.pkg — no internet on the target.
+#
+# ─── Usage ───────────────────────────────────────────────────────────────────
+#
+#   # Interactive (kri will prompt for target):
+#   kri saltmaster install
+#
+#   # Direct:
+#   ansible-playbook playbooks/install_salt_master.yml \
+#     -i playbooks/inventory/inventory.ini \
+#     -e "target_host=100.102.68.75" \
+#     -e "ansible_user=dk" \
+#     -e "kri_salt_api_password=<secure-password>"
+#
+# ─── Variables ───────────────────────────────────────────────────────────────
+#
+#   target_host           (required) IP or hostname of the target Mac Mini
+#   ansible_user          SSH username on the target (default: dk)
+#   kri_salt_api_password Password for the krisalt PAM user (default: changeme)
+#   kri_ingest_base_url   kri API base URL for minion heartbeats
+#
+# ─── After running ───────────────────────────────────────────────────────────
+#
+#   1. Add to .env.docker:
+#        SALT_API_URL=http://<target_host>:8080
+#        SALT_API_USER=krisalt
+#        SALT_API_PASSWORD=<kri_salt_api_password>
+#
+#   2. Update minion configs on all fleet nodes (or re-run bootstrap):
+#        /etc/salt/minion → master: <target_host>
+#
+#   3. Restart kri worker + api:
+#        kri deploy api worker
+#
+# ─────────────────────────────────────────────────────────────────────────────
+
+- name: Pre-flight — validate target host is defined
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  tasks:
+    - name: Fail if target_host not provided
+      fail:
+        msg: |
+          target_host is required.
+          Run:  ansible-playbook playbooks/install_salt_master.yml -e target_host=<IP>
+          Or:   kri saltmaster install
+      when: target_host is not defined or target_host == ''
+
+    - name: Verify bundled salt .pkg is present
+      stat:
+        path: "{{ playbook_dir }}/files/salt-{{ salt_version }}-py3-arm64.pkg"
+      register: pkg_check
+      vars:
+        salt_version: "3007.14"
+
+    - name: Abort if .pkg is missing
+      fail:
+        msg: |
+          Bundled installer not found:
+            {{ playbook_dir }}/files/salt-3007.14-py3-arm64.pkg
+
+          This is an air-gapped install — the .pkg must be present on the
+          kri server before running the playbook.
+
+          To obtain it on a connected machine:
+            curl -LO https://packages.broadcom.com/artifactory/saltproject-generic/onedir/3007.14/salt-3007.14-py3-arm64.pkg
+          Then copy it to:
+            playbooks/files/salt-3007.14-py3-arm64.pkg
+      when: not pkg_check.stat.exists
+
+
+- name: Export existing pillar data (if Docker salt-master was previously running)
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  tasks:
+    - name: Check if legacy Docker salt-master container exists
+      shell: docker ps -a --format '{%raw%}{{.Names}}{%endraw%}' 2>/dev/null | grep -q deploy-salt-master
+      register: docker_salt_check
+      failed_when: false
+      changed_when: false
+
+    - name: Export pillar from Docker container (if it exists)
+      shell: |
+        mkdir -p /tmp/kri-pillar-export
+        docker exec deploy-salt-master-1 sh -c \
+          "tar -cf - /srv/salt/pillar/ 2>/dev/null" \
+          | tar -xf - -C /tmp/kri-pillar-export --strip-components=3 2>/dev/null || true
+        echo "Exported $(ls /tmp/kri-pillar-export/*.sls 2>/dev/null | wc -l | tr -d ' ') pillar files"
+      when: docker_salt_check.rc == 0
+      register: pillar_export
+
+    - name: Show pillar export result
+      debug:
+        msg: "{{ pillar_export.stdout | default('No Docker salt-master found — starting fresh') }}"
+
+
+- name: Install and configure salt-master
+  hosts: "{{ target_host }}"
+  gather_facts: false
+
+  vars:
+    ansible_user: "{{ ansible_ssh_user | default('dk') }}"
+    ansible_become_method: sudo
+    ansible_ssh_common_args: "-o StrictHostKeyChecking=no -o ConnectTimeout=10"
+
+    # Salt-master listens on all interfaces — Tailscale overlay provides the security layer
+    salt_master_interface: "0.0.0.0"
+
+    # kri ingest URL: the kri API container's Tailscale IP
+    # Override with -e kri_ingest_base_url=http://<kri-server>/api/v1/ingest
+    kri_ingest_base_url: "http://100.89.50.27/api/v1/ingest"
+
+  roles:
+    - salt_master
+
+  post_tasks:
+    - name: Verify salt-master is responding
+      raw: /opt/salt/salt-key -L 2>/dev/null
+      register: salt_key_output
+      changed_when: false
+      failed_when: false
+      become: true
+
+    - name: Print next steps
+      debug:
+        msg: |
+          ╔══════════════════════════════════════════════════════════════╗
+          ║  salt-master installed on {{ target_host }}
+          ╠══════════════════════════════════════════════════════════════╣
+          ║
+          ║  1. Add to .env.docker:
+          ║       SALT_API_URL=http://{{ target_host }}:{{ salt_api_port }}
+          ║       SALT_API_USER={{ salt_api_user }}
+          ║       SALT_API_PASSWORD=<kri_salt_api_password>
+          ║
+          ║  2. Update minion configs on ALL fleet nodes to point here:
+          ║       /etc/salt/minion → master: {{ target_host }}
+          ║     OR re-bootstrap each node (will pick up SALT_MASTER_ADDRESS).
+          ║
+          ║  3. Accept minion keys after they reconnect:
+          ║       kri saltmaster keys     (accept via kri UI)
+          ║
+          ║  4. Restart kri services:
+          ║       kri deploy api worker
+          ║
+          ╚══════════════════════════════════════════════════════════════╝

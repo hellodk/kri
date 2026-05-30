@@ -1,73 +1,101 @@
 ---
-# tasks/install.yml — install salt via official .pkg (same approach as bootstrap_mac_mini.yml)
+# tasks/install.yml — install salt from a LOCAL .pkg bundled with kri repo
+#
+# Air-gapped installation: no internet access required on the target.
+# The .pkg file is stored at playbooks/files/salt-{{ salt_version }}-py3-arm64.pkg
+# and is copied from the Ansible controller (kri server) to the target via SSH.
+#
+# To update the bundled package:
+#   1. Download: salt-<VERSION>-py3-arm64.pkg from packages.broadcom.com (on a connected machine)
+#   2. Replace: playbooks/files/salt-<VERSION>-py3-arm64.pkg
+#   3. Update salt_version in playbooks/roles/salt_master/defaults/main.yml
 
-- name: Set pkg filename for architecture
+- name: Set pkg filename
   set_fact:
-    salt_pkg_filename: "salt-{{ salt_version }}-py3-{{ cpu_arch }}.pkg"
-    salt_checksum_filename: "salt-{{ salt_version }}-py3-{{ cpu_arch }}.pkg.sha512"
+    salt_pkg_filename: "salt-{{ salt_version }}-py3-arm64.pkg"
+    salt_pkg_local_path: "{{ playbook_dir }}/files/salt-{{ salt_version }}-py3-arm64.pkg"
 
-- name: Set download URL (Artifactory if configured, else official)
-  set_fact:
-    salt_pkg_url: >-
-      {%- if artifactory_binary_url -%}
-        {{ artifactory_binary_url.rstrip('/') }}/salt/{{ salt_version }}/{{ salt_pkg_filename }}
-      {%- else -%}
-        {{ salt_pkg_official_base }}/{{ salt_pkg_filename }}
-      {%- endif -%}
-    salt_checksum_url: >-
-      {%- if artifactory_binary_url -%}
-        {{ artifactory_binary_url.rstrip('/') }}/salt/{{ salt_version }}/{{ salt_checksum_filename }}
-      {%- else -%}
-        {{ salt_pkg_official_base }}/{{ salt_checksum_filename }}
-      {%- endif -%}
+- name: Verify bundled .pkg exists on controller
+  local_action:
+    module: stat
+    path: "{{ salt_pkg_local_path }}"
+  register: pkg_stat
+  failed_when: not pkg_stat.stat.exists
+  run_once: true
+  become: false
 
-- name: Check if correct salt version is already installed
-  shell: /opt/salt/salt-master --version 2>/dev/null | awk '{print $2}'
+- name: Check if correct salt-master version is already installed
+  raw: /opt/salt/salt-master --version 2>/dev/null | awk '{print $2}'
   register: installed_salt_version
   changed_when: false
   failed_when: false
-  become: false
 
-- name: Download salt pkg checksum
-  get_url:
-    url: "{{ salt_checksum_url }}"
-    dest: "/tmp/{{ salt_checksum_filename }}"
-    mode: "0644"
-    force: true
-  when: installed_salt_version.stdout.strip() != salt_version
-  become: false
+- name: Show installed version
+  debug:
+    msg: >-
+      salt-master {{ installed_salt_version.stdout | trim or 'not installed' }}
+      — target version: {{ salt_version }}
+      — will install: {{ installed_salt_version.stdout | trim != salt_version }}
 
-- name: Download salt pkg
-  get_url:
-    url: "{{ salt_pkg_url }}"
+- name: Copy salt .pkg to target (air-gapped — no internet on target needed)
+  copy:
+    src: "{{ salt_pkg_local_path }}"
     dest: "/tmp/{{ salt_pkg_filename }}"
     mode: "0644"
-  when: installed_salt_version.stdout.strip() != salt_version
   become: false
+  when: installed_salt_version.stdout | trim != salt_version
 
-- name: Verify salt pkg checksum
-  shell: |
-    EXPECTED=$(awk '{print $1}' /tmp/{{ salt_checksum_filename }})
+- name: Copy sha512 checksum file to target
+  copy:
+    src: "{{ salt_pkg_local_path }}.sha512"
+    dest: "/tmp/{{ salt_pkg_filename }}.sha512"
+    mode: "0644"
+  become: false
+  when:
+    - installed_salt_version.stdout | trim != salt_version
+    - lookup('first_found', {'files': [salt_pkg_local_path + '.sha512'], 'skip': true})
+
+- name: Stop existing salt-master (if running) before install
+  raw: launchctl stop com.saltstack.salt.master 2>/dev/null; true
+  become: true
+  changed_when: false
+  when: installed_salt_version.stdout | trim != salt_version
+
+- name: Install salt .pkg
+  raw: installer -pkg /tmp/{{ salt_pkg_filename }} -target /
+  become: true
+  when: installed_salt_version.stdout | trim != salt_version
+  register: pkg_install
+
+- name: Verify pkg sha512 before install
+  raw: |
+    EXPECTED=$(awk '{print $1}' /tmp/{{ salt_pkg_filename }}.sha512 2>/dev/null)
     ACTUAL=$(shasum -a 512 /tmp/{{ salt_pkg_filename }} | awk '{print $1}')
-    [ "$EXPECTED" = "$ACTUAL" ] || (echo "CHECKSUM MISMATCH" >&2; exit 1)
-  when: installed_salt_version.stdout.strip() != salt_version
-  become: false
-
-- name: Stop salt-master service before upgrade
-  shell: launchctl stop com.saltstack.salt.master 2>/dev/null || true
-  become: true
+    if [ -n "$EXPECTED" ] && [ "$EXPECTED" != "$ACTUAL" ]; then
+      echo "CHECKSUM MISMATCH" >&2; exit 1
+    fi
+    echo "checksum ok"
+  register: checksum_result
+  failed_when: "'CHECKSUM MISMATCH' in checksum_result.stdout"
   changed_when: false
-  when: installed_salt_version.stdout.strip() != salt_version
+  when: installed_salt_version.stdout | trim != salt_version
 
-- name: Install salt pkg (installs salt-master, salt-minion, salt-api)
-  shell: installer -pkg /tmp/{{ salt_pkg_filename }} -target /
-  become: true
-  when: installed_salt_version.stdout.strip() != salt_version
-
-- name: Confirm installed salt version
-  shell: /opt/salt/salt-master --version 2>/dev/null | awk '{print $2}'
-  register: verified_salt_version
-  changed_when: false
-  failed_when: verified_salt_version.stdout.strip() != salt_version
+- name: Remove .pkg from /tmp
+  raw: rm -f /tmp/{{ salt_pkg_filename }} /tmp/{{ salt_pkg_filename }}.sha512
   become: false
-  when: installed_salt_version.stdout.strip() != salt_version
+  changed_when: false
+  when: installed_salt_version.stdout | trim != salt_version
+
+- name: Confirm salt-master binary exists after install
+  raw: /opt/salt/salt-master --version 2>/dev/null
+  register: post_install_version
+  changed_when: false
+  failed_when: salt_version not in post_install_version.stdout
+  when: installed_salt_version.stdout | trim != salt_version
+
+- name: Confirm installed version
+  debug:
+    msg: "salt-master {{ post_install_version.stdout | trim }} installed successfully"
+  when:
+    - installed_salt_version.stdout | trim != salt_version
+    - post_install_version is defined
