@@ -394,14 +394,14 @@ export function SecurityPage() {
       {/* Summary cards */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         {[
-          { label: 'Critical & High', value: (d?.vulnerabilities?.critical ?? 0) + (d?.vulnerabilities?.high ?? 0), color: 'text-red-600', bg: 'bg-red-50 border-red-200' },
-          { label: 'Medium & Low', value: (d?.vulnerabilities?.medium ?? 0) + (d?.vulnerabilities?.low ?? 0), color: 'text-amber-600', bg: 'bg-amber-50 border-amber-200' },
-          { label: 'License Risks', value: (d?.license_risks?.high ?? 0) + (d?.license_risks?.medium ?? 0), color: 'text-purple-700', bg: 'bg-purple-50 border-purple-200' },
-          { label: 'Nodes at Risk', value: d?.nodes_with_critical_or_high ?? 0, color: 'text-orange-700', bg: 'bg-orange-50 border-orange-200' },
+          { label: 'Critical & High', value: (d?.vulnerabilities?.critical ?? 0) + (d?.vulnerabilities?.high ?? 0), numColor: 'text-red-700', accent: 'border-l-red-500' },
+          { label: 'Medium & Low', value: (d?.vulnerabilities?.medium ?? 0) + (d?.vulnerabilities?.low ?? 0), numColor: 'text-amber-700', accent: 'border-l-amber-500' },
+          { label: 'License Risks', value: (d?.license_risks?.high ?? 0) + (d?.license_risks?.medium ?? 0), numColor: 'text-purple-700', accent: 'border-l-purple-500' },
+          { label: 'Nodes at Risk', value: d?.nodes_with_critical_or_high ?? 0, numColor: 'text-orange-700', accent: 'border-l-orange-500' },
         ].map(card => (
-          <div key={card.label} className={`rounded-xl border p-5 ${card.bg}`}>
-            <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">{card.label}</p>
-            <p className={`text-3xl font-bold mt-1 ${card.color}`}>{card.value}</p>
+          <div key={card.label} className={`bg-white rounded-xl border border-gray-200 border-l-4 ${card.accent} p-5 shadow-sm`}>
+            <p className="text-xs font-semibold uppercase tracking-wide text-gray-500 mb-2">{card.label}</p>
+            <p className={`text-4xl font-black tabular-nums ${card.numColor}`}>{card.value}</p>
           </div>
         ))}
       </div>

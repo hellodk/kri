@@ -21,7 +21,7 @@ from fleet_platform.api.routes.vnc import _rfb_auth, _vnc_des_key
 
 
 def test_vnc_des_key_produces_eight_bytes():
-    key = _vnc_des_key("password")
+    key = _vnc_des_key("pwd")
     assert len(key) == 8
 
 
@@ -153,10 +153,10 @@ async def test_rfb_auth_succeeds_with_correct_password():
     reader = _MockReader(data)
     writer = _MockWriter()
 
-    ok = await _rfb_auth(reader, writer, password="secret")
+    ok = await _rfb_auth(reader, writer, password="abcd")
 
     assert ok is True
-    expected = _compute_expected_response("secret", challenge)
+    expected = _compute_expected_response("abcd", challenge)
     # The 16-byte DES response must appear in writer output
     assert expected in bytes(writer.written)
 
@@ -168,7 +168,7 @@ async def test_rfb_auth_fails_when_server_returns_status_1():
     reader = _MockReader(data)
     writer = _MockWriter()
 
-    ok = await _rfb_auth(reader, writer, password="wrongpassword")
+    ok = await _rfb_auth(reader, writer, password="wrong")
 
     assert ok is False
 
