@@ -625,26 +625,39 @@ cmd_diagnose() {
         warn "Port 22 unreachable — ensure Remote Login is enabled"
     fi
 
-    info "[3/4] Salt minion key status…"
+    info "[3/4] Salt minion key status (via mm1 salt-api)…"
+    local salt_api_url="${SALT_API_URL:-http://100.102.68.75:8080}"
     local salt_keys
-    salt_keys=$(docker exec deploy-salt-master-1 salt-key -L 2>/dev/null || echo "unavailable")
-    if [[ "$salt_keys" == "unavailable" ]]; then
-        warn "Cannot reach salt-master"
-    else
-        local accepted
-        accepted=$(echo "$salt_keys" | grep -A999 "Accepted Keys:" | grep -c "$target" 2>/dev/null || echo 0)
-        if [[ "$accepted" -gt 0 ]]; then
-            success "Minion key for $target is ACCEPTED"
+    # Query mm1 salt-api for accepted keys
+    if curl -sf --max-time 5 "$salt_api_url/health" >/dev/null 2>&1; then
+        salt_keys=$(curl -sf --max-time 10 \
+            -H "X-Auth-Token: $(curl -sf -d username="${SALT_API_USER:-krisalt}" \
+                -d password="${SALT_API_PASSWORD:-}" \
+                -d eauth=pam "$salt_api_url/login" 2>/dev/null | python3 -c "import sys,json;d=json.load(sys.stdin);print(d.get('return',[{}])[0].get('token',''))" 2>/dev/null)" \
+            "$salt_api_url/keys" 2>/dev/null \
+            | python3 -c "import sys,json;d=json.load(sys.stdin);print('\n'.join(d.get('return',{}).get('minions',[])))" 2>/dev/null || echo "")
+        if echo "$salt_keys" | grep -q "$target"; then
+            success "Minion key for $target is ACCEPTED on mm1"
         else
-            warn "No accepted salt key for $target"
+            warn "No accepted salt key for $target on mm1 (check: ssh mm1 sudo salt-key -L)"
         fi
+    else
+        warn "Cannot reach mm1 salt-api at $salt_api_url — check mm1 salt-master service"
     fi
 
-    info "[4/4] kri node record…"
-    docker exec deploy-db-1 psql -U fleet -d fleet_demo -t -c \
+    info "[4/4] kri API — node record…"
+    local api_url="http://localhost:8000/health/ready"
+    if curl -sf --max-time 5 "$api_url" >/dev/null 2>&1; then
+        success "kri API is responding"
+    else
+        warn "kri API not responding at localhost:8000 — run: kri status"
+    fi
+
+    info "[5/5] kri node record in DB…"
+    docker exec deploy-db-1 psql -U fleet -d fleet_platform -t -c \
         "SELECT hostname, minion_id, status, last_seen_at FROM nodes \
          WHERE bootstrap_ip='$target' OR minion_id='$target' OR hostname LIKE '%$target%';" \
-        2>/dev/null | grep -v '^$' || warn "Node not found in DB"
+        2>/dev/null | grep -v '^$' || warn "Node not found in DB (or DB container not running)"
 }
 
 cmd_seed() {

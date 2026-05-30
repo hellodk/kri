@@ -42,6 +42,9 @@ def test_monitoring_page_uses_usequery():
     assert "useQuery" in src
 
 
-def test_monitoring_sidebar_entry():
+def test_monitoring_reachable_from_sidebar():
+    # Monitoring is a tab inside the Overview hub page — the sidebar links to /overview
     src = Path("frontend/src/components/Layout/Sidebar.tsx").read_text()
-    assert "monitoring" in src.lower()
+    assert "/overview" in src.lower() or "overview" in src.lower(), (
+        "Sidebar must include /overview which hosts the Monitoring tab"
+    )

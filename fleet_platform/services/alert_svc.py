@@ -1,7 +1,7 @@
-import asyncio
 """Alert evaluation and delivery service."""
 
 from __future__ import annotations
+import asyncio
 
 import ipaddress
 import json

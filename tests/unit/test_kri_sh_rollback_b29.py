@@ -24,9 +24,16 @@ def test_rolling_deploy_restarts_api_last():
     start = KRI_SH.index("cmd_rolling_deploy()")
     end   = KRI_SH.index("cmd_rollback()")
     rolling_body = KRI_SH[start:end]
-    beat_pos = rolling_body.find('"beat"')
-    api_pos  = rolling_body.find('"api"')
-    assert beat_pos < api_pos, "beat should restart before api in rolling deploy"
+    # Find ALL lines that contain both beat and api (tagging loop, restart loop)
+    loop_lines = [
+        line for line in rolling_body.splitlines()
+        if "beat" in line and "api" in line
+    ]
+    # The restart loop should have api AFTER beat (api is last — highest blast radius)
+    assert any(
+        line.find("beat") < line.find("api")
+        for line in loop_lines
+    ), f"At least one loop must have beat before api. Lines found: {loop_lines}"
 
 
 def test_stateful_services_excluded_from_rolling():

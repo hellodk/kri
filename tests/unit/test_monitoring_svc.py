@@ -112,7 +112,9 @@ async def test_get_monitoring_summary_structure():
     node_result.all.return_value = [("online", 3)]
     alert_result = MagicMock()
     alert_result.all.return_value = []
-    mock_db.execute = AsyncMock(side_effect=[node_result, alert_result])
+    health_result = MagicMock()
+    health_result.all.return_value = []
+    mock_db.execute = AsyncMock(side_effect=[node_result, alert_result, health_result])
 
     with patch("fleet_platform.services.monitoring_svc.get_redis", side_effect=Exception("no redis")):
         summary = await get_monitoring_summary(mock_db, "")

@@ -33,9 +33,12 @@ def test_license_page_in_frontend():
     assert "copyleft" in page.lower() or "LicensePage" in page
 
 
-def test_license_in_sidebar():
+def test_license_reachable_from_sidebar():
+    # License compliance is under the /compliance hub page (not a direct sidebar link)
     sidebar = (Path(__file__).parent.parent.parent / "frontend/src/components/Layout/Sidebar.tsx").read_text()
-    assert "license" in sidebar.lower() or "License" in sidebar
+    assert "/compliance" in sidebar.lower() or "compliance" in sidebar.lower(), (
+        "Sidebar must include /compliance which hosts the License compliance tab"
+    )
 
 
 def test_license_route_in_app():

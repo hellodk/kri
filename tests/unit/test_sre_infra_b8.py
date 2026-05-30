@@ -50,7 +50,8 @@ def test_docker_compose_resource_limits():
     """All 8 services must have deploy.resources.limits.memory set."""
     compose = _load_compose()
     services = compose.get("services", {})
-    expected = ("db", "pg_backup", "redis", "api", "worker", "salt-master", "beat", "frontend")
+    # salt-master was removed from Docker and now runs natively on mm1 (issue #110)
+    expected = ("db", "pg_backup", "redis", "api", "worker", "beat", "frontend")
     for svc_name in expected:
         svc = services[svc_name]
         memory = (
