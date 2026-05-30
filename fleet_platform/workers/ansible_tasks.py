@@ -55,7 +55,15 @@ def _get_bootstrap_settings(db) -> tuple[str, str, str, str]:
         if row is None:
             return ""
         if row.is_encrypted and row.value:
-            return _fernet().decrypt(row.value.encode()).decode()
+            try:
+                return _fernet().decrypt(row.value.encode()).decode()
+            except Exception:
+                logger.warning(
+                    "_get_bootstrap_settings: cannot decrypt setting '%s' — "
+                    "JWT_SECRET may have changed. Re-enter credentials in Settings → Bootstrap.",
+                    key,
+                )
+                return ""
         return row.value or ""
 
     salt_master = _get(SALT_MASTER) or "localhost"
@@ -191,7 +199,16 @@ def bootstrap_node(
                 logger.warning("bootstrap_node: failed to decrypt ssh_key_enc for node_id=%s", node_id)
 
         if not ssh_password and not node_ssh_key:
-            logger.warning("bootstrap_node: SSH credentials missing from settings for node_id=%s", node_id)
+            msg = (
+                "SSH credentials are missing or could not be decrypted — "
+                "the encryption key may have changed. "
+                "Re-enter SSH credentials in Node → Secrets or Settings → Bootstrap, then retry."
+            )
+            logger.warning("bootstrap_node: %s node_id=%s", msg, node_id)
+            node.bootstrap_status = "failed"
+            node.bootstrap_error = msg
+            db.commit()
+            return {"status": "error", "reason": msg}
 
     # 2. Generate fresh node token and write pillar BEFORE Ansible runs
     raw_token = secrets.token_urlsafe(32)
