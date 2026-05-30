@@ -90,21 +90,41 @@ compose() {
 # UP / DOWN / RESTART / STATUS / LOGS
 # ══════════════════════════════════════════════════════════════════════════════
 
+_pki_push_after_salt_restart() {
+    # RCA: salt 3008 rotates its RSA keypair on every container restart.
+    # Any command that restarts salt-master MUST push the new key to minions
+    # or they will stay disconnected indefinitely. This runs automatically.
+    local salt_restarted="${1:-false}"
+    [[ "$salt_restarted" != "true" ]] && return
+    warn "Salt-master was restarted — pushing new master.pub to minions…"
+    info "  (Salt 3008 rotates keys on every restart — this is mandatory)"
+    # Give salt-master 8 seconds to write its new key
+    local waited=0
+    until docker exec deploy-salt-master-1 test -L /etc/salt/pki/master/master.pub 2>/dev/null; do
+        sleep 1; waited=$((waited+1)); [[ $waited -gt 15 ]] && break
+    done
+    cmd_pki_push
+}
+
 cmd_up() {
     require_env
     header "Starting kri v$(version)"
     local svc="${1:-}"
+    local salt_restarted=false
     export APP_VERSION
     APP_VERSION=$(version)
     if [[ -n "$svc" ]]; then
         info "Building and starting: $svc"
+        [[ "$svc" == "salt-master" ]] && salt_restarted=true
         compose up -d --build "$svc"
     else
         info "Building and starting all services…"
         compose up -d --build
+        salt_restarted=true  # full up always restarts salt-master
     fi
     success "kri is up → http://localhost"
     info "API docs → http://localhost/api/docs"
+    _pki_push_after_salt_restart "$salt_restarted"
 }
 
 cmd_down() {
@@ -183,8 +203,17 @@ cmd_deploy() {
             compose build
             compose up -d
             success "Full deploy complete → v${APP_VERSION}"
+            _pki_push_after_salt_restart true
             ;;
-        api|worker|frontend|salt-master|beat)
+        salt-master)
+            info "Building salt-master…"
+            compose build salt-master
+            compose up -d salt-master
+            _wait_healthy salt-master
+            success "Deployed salt-master → v${APP_VERSION}"
+            _pki_push_after_salt_restart true
+            ;;
+        api|worker|frontend|beat)
             info "Building $sub…"
             compose build "$sub"
             compose up -d "$sub"
@@ -225,6 +254,7 @@ cmd_rolling_deploy() {
         _wait_healthy "$svc" 60
     done
     success "Rolling deploy complete → v${APP_VERSION} → http://localhost"
+    # Rolling deploy does NOT restart salt-master — skip pki push
 }
 
 cmd_rollback() {
@@ -319,6 +349,7 @@ cmd_infra_recreate() {
     info "Starting services…"
     compose up -d
     success "Infrastructure recreated → v${APP_VERSION} → http://localhost"
+    _pki_push_after_salt_restart true
 }
 
 cmd_infra_reset() {
@@ -358,7 +389,7 @@ cmd_infra_reset() {
     echo ""
     success "Fresh infrastructure started → v${APP_VERSION}"
     info "Run 'kri seed' to create default users."
-    info "Run 'kri pki push' to reconnect salt minions."
+    _pki_push_after_salt_restart true
 }
 
 cmd_infra_prune() {
