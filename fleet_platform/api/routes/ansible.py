@@ -142,7 +142,7 @@ async def bootstrap_status(
     # Auto-heal: if node is stuck in 'bootstrapping' but all bootstrap runs
     # for it have terminal status, reset to 'failed' so the UI doesn't hang.
     if node.bootstrap_status == "bootstrapping":
-        stale_cutoff = datetime.now(UTC) - timedelta(minutes=30)
+        stale_cutoff = datetime.now(UTC) - timedelta(minutes=15)
         runs = await db.execute(
             select(BootstrapRun)
             .where(BootstrapRun.node_id == node_id)

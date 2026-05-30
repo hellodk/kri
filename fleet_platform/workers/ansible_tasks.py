@@ -28,7 +28,7 @@ logger = logging.getLogger(__name__)
 _PLAYBOOKS_DIR = Path(__file__).parent.parent.parent / "playbooks"
 _DEFAULT_PILLAR_DIR = Path("/srv/salt/pillar")
 _DEFAULT_KRI_DIR = Path.home() / ".kri"
-
+_BOOTSTRAP_TIMEOUT_SECONDS = 600  # 10 minutes
 
 _MINION_ID_RE = re.compile(r"^[a-zA-Z0-9._-]{1,128}$")
 
@@ -314,7 +314,7 @@ def bootstrap_node(
             },
             quiet=False,
             rotate_artifacts=1,
-            timeout=1200,  # 20-minute hard timeout
+            timeout=_BOOTSTRAP_TIMEOUT_SECONDS,
         )
         if known_hosts_file:
             try:
@@ -363,7 +363,7 @@ def bootstrap_node(
 
     if result.status == "timeout":
         bootstrap_error = (
-            f"Timed out after 20 minutes. Last task: {last_task}" if last_task else "Timed out after 20 minutes."
+            f"Timed out after 10 minutes. Last task: {last_task}" if last_task else "Timed out after 10 minutes."
         )
     elif result.status != "successful" or result.rc != 0:
         if "UNREACHABLE" in full_stdout:
