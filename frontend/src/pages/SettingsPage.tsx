@@ -125,7 +125,7 @@ export function SettingsPage() {
   const monoInputClass = inputClass + ' font-mono'
 
   return (
-    <div className="space-y-6 max-w-2xl">
+    <div className="space-y-6">
       <div>
         <h1 className="text-2xl font-bold text-gray-900">Settings</h1>
         <p className="text-gray-500 mt-1">Configure the kri fleet platform.</p>
@@ -1077,6 +1077,7 @@ function PlaybookSourcesSection() {
 
   const [showCsv, setShowCsv] = useState(false)
   const [csvText, setCsvText] = useState('')
+  const [lastAddType, setLastAddType] = useState<'local' | 'git'>('local')
 
   type ValidateState = { status: 'idle' } | { status: 'validating' } | { status: 'valid'; result: PlaybookSourceValidateResponse } | { status: 'invalid'; error: string; logs?: string[] }
   const [localValidation, setLocalValidation] = useState<ValidateState>({ status: 'idle' })
@@ -1092,7 +1093,9 @@ function PlaybookSourcesSection() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['playbook-sources'] })
       qc.invalidateQueries({ queryKey: ['playbooks'] })
-      toast('Source added — playbooks refreshed')
+      toast(lastAddType === 'git'
+        ? 'Git source added — click Sync to clone the repository and load playbooks'
+        : 'Source added — playbooks refreshed')
       setLocalPath(''); setLocalLabel(''); setShowAddLocal(false); setLocalValidation({ status: 'idle' })
       setGitUrl(''); setGitBranch('main'); setGitLabel(''); setShowAddGit(false); setGitValidation({ status: 'idle' })
     },
@@ -1104,7 +1107,7 @@ function PlaybookSourcesSection() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['playbook-sources'] })
       qc.invalidateQueries({ queryKey: ['playbooks'] })
-      toast('Source removed')
+      toast('Source removed — playbooks hidden from list (files not deleted from disk)')
     },
     onError: (e: Error) => toast(e.message, 'error'),
   })
@@ -1304,7 +1307,7 @@ function PlaybookSourcesSection() {
             <div className="flex gap-2 justify-end">
               <button onClick={() => { setShowAddLocal(false); setLocalPath(''); setLocalLabel(''); setLocalValidation({ status: 'idle' }) }} className={btnSecondary}>Cancel</button>
               <button
-                onClick={() => addMutation.mutate({ type: 'local', path: localPath.trim(), label: localLabel.trim() || undefined })}
+                onClick={() => { setLastAddType('local'); addMutation.mutate({ type: 'local', path: localPath.trim(), label: localLabel.trim() || undefined }) }}
                 disabled={localValidation.status !== 'valid' || addMutation.isPending}
                 className={btnPrimary}
               >
@@ -1387,14 +1390,14 @@ function PlaybookSourcesSection() {
             <div className="flex gap-2 justify-end">
               <button onClick={() => { setShowAddGit(false); setGitUrl(''); setGitBranch('main'); setGitLabel(''); setGitValidation({ status: 'idle' }); setShowCreds(false); setGitToken(''); setGitSshKey('') }} className={btnSecondary}>Cancel</button>
               <button
-                onClick={() => addMutation.mutate({
+                onClick={() => { setLastAddType('git'); addMutation.mutate({
                   type: 'git',
                   url: gitUrl.trim(),
                   branch: gitBranch || 'main',
                   label: gitLabel.trim() || undefined,
                   token: gitToken.trim() || undefined,
                   ssh_key: gitSshKey.trim() || undefined,
-                })}
+                }) }}
                 disabled={gitValidation.status !== 'valid' || addMutation.isPending}
                 className={btnPrimary}
               >
