@@ -4,7 +4,6 @@ import { playbooksApi } from '../api/playbooks'
 import type { PlaybookEntry } from '../api/playbooks'
 import { fleetApi } from '../api/fleet'
 import { groupsApi } from '../api/groups'
-import { ansibleApi } from '../api/ansible'
 import { useToastStore } from '../stores/toastStore'
 
 const SYSTEM_VARS = new Set([
@@ -34,9 +33,6 @@ export function PlaybookRunModal({ playbook, onClose }: Props) {
   const [targetType, setTargetType] = useState<'node' | 'group'>('node')
   const [targetId, setTargetId] = useState('')
   const [jobId, setJobId] = useState<string | null>(null)
-  const [sshUsername, setSshUsername] = useState('')
-  const [sshPassword, setSshPassword] = useState('')
-  const [showSshPassword, setShowSshPassword] = useState(false)
   const [vars, setVars] = useState<Record<string, string>>(
     Object.fromEntries(
       Object.entries(playbook.default_vars).map(([k, v]) => [k, String(v ?? '')])
@@ -44,20 +40,6 @@ export function PlaybookRunModal({ playbook, onClose }: Props) {
   )
   const toast = useToastStore((s) => s.add)
   const qc = useQueryClient()
-
-  // Load SSH credential defaults from platform settings
-  const { data: settingsData } = useQuery({
-    queryKey: ['platform-settings'],
-    queryFn: () => ansibleApi.getSettings(),
-    staleTime: 60_000,
-  })
-
-  useEffect(() => {
-    if (settingsData) {
-      if (!sshUsername) setSshUsername(settingsData.ssh_bootstrap_username || '')
-    }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [settingsData])
 
   const { data: nodes } = useQuery({
     queryKey: ['nodes-for-playbook'],
@@ -88,7 +70,7 @@ export function PlaybookRunModal({ playbook, onClose }: Props) {
         else if (v !== '' && !isNaN(Number(v))) extravars[k] = Number(v)
         else extravars[k] = v
       }
-      return playbooksApi.run(playbook.filename, targetType, targetId, extravars, sshUsername || undefined, sshPassword || undefined)
+      return playbooksApi.run(playbook.filename, targetType, targetId, extravars)
     },
     onSuccess: (data) => { setJobId(data.job_id); toast('Playbook queued') },
     onError: (e: Error) => toast(e.message, 'error'),
@@ -205,37 +187,16 @@ export function PlaybookRunModal({ playbook, onClose }: Props) {
                 </div>
               </div>
             )}
-            {/* SSH Credentials */}
-            <div className="border-t border-gray-100 pt-4 space-y-3">
-              <p className="text-xs font-medium text-gray-500 uppercase tracking-wide">SSH Credentials</p>
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Username</label>
-                  <input
-                    value={sshUsername}
-                    onChange={(e) => setSshUsername(e.target.value)}
-                    placeholder="admin"
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm text-gray-900 focus:outline-none focus:border-brand-600"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Password</label>
-                  <div className="relative">
-                    <input
-                      type={showSshPassword ? 'text' : 'password'}
-                      value={sshPassword}
-                      onChange={(e) => setSshPassword(e.target.value)}
-                      placeholder="••••••••"
-                      className="w-full px-3 py-2 pr-9 border border-gray-300 rounded-lg text-sm text-gray-900 focus:outline-none focus:border-brand-600"
-                    />
-                    <button type="button" onClick={() => setShowSshPassword(!showSshPassword)}
-                      className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">
-                      {showSshPassword ? '🙈' : '👁'}
-                    </button>
-                  </div>
-                </div>
+            {/* SSH Credentials — resolved automatically, no prompt */}
+            <div className="border-t border-gray-100 pt-4">
+              <div className="flex items-start gap-2 rounded-lg border border-gray-200 bg-gray-50 px-3 py-2.5">
+                <span className="text-base leading-none mt-0.5" aria-hidden>🔑</span>
+                <p className="text-sm text-gray-600">
+                  SSH credentials are resolved automatically for each host
+                  <span className="text-gray-500"> (node&nbsp;→&nbsp;group&nbsp;→&nbsp;global settings)</span>.
+                  The run output shows which source was used per host.
+                </p>
               </div>
-              <p className="text-xs text-gray-400">Overrides global Settings credentials for this run only.</p>
             </div>
           </div>
         ) : (

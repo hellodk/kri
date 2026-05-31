@@ -115,6 +115,77 @@ async def resolve_node_credentials(node: Node, db: AsyncSession) -> dict:
     }
 
 
+def _decrypt_or_blank(label: str, ident, field: str, ciphertext: str | None) -> str:
+    if not ciphertext:
+        return ""
+    try:
+        return decrypt_secret(ciphertext)
+    except Exception as exc:
+        logger.warning("Fernet decryption failed for %s %s field %s: %s", label, ident, field, exc)
+        return ""
+
+
+def resolve_node_credentials_sync(node: Node, db) -> dict:
+    """Synchronous twin of :func:`resolve_node_credentials` for the Celery worker.
+
+    The playbook worker runs on a sync SQLAlchemy ``Session`` (``get_sync_db``),
+    so it cannot await the async resolver. This mirrors the same
+    node → primary-group → global priority chain and returns the identical
+    dict shape, including ``credential_source`` (#279).
+    """
+    # 1. Node-level override
+    if node.ssh_username:
+        return {
+            "ssh_user": node.ssh_username,
+            "ssh_password": _decrypt_or_blank("node", node.id, "ssh_password", node.ssh_password_enc),
+            "ssh_key": _decrypt_or_blank("node", node.id, "ssh_key", node.ssh_key_enc),
+            "auth_mode": node.ssh_auth_mode or "password",
+            "credential_source": "node",
+        }
+
+    # 2. Primary group (alphabetically-first group that has credentials)
+    group = db.execute(
+        select(Group)
+        .join(GroupMember, GroupMember.group_id == Group.id)
+        .where(GroupMember.node_id == node.id)
+        .where(Group.ssh_username.isnot(None))
+        .order_by(Group.name.asc())
+        .limit(1)
+    ).scalar_one_or_none()
+    if group and group.ssh_username:
+        return {
+            "ssh_user": group.ssh_username,
+            "ssh_password": _decrypt_or_blank("group", group.name, "ssh_password", group.ssh_password_enc),
+            "ssh_key": _decrypt_or_blank("group", group.name, "ssh_key", group.ssh_key_enc),
+            "auth_mode": group.ssh_auth_mode or "password",
+            "credential_source": f"group:{group.name}",
+        }
+
+    # 3. Global fallback from platform settings
+    return {
+        "ssh_user": _get_global_setting_sync(db, SSH_USERNAME) or "admin",
+        "ssh_password": _get_global_setting_sync(db, SSH_PASSWORD, encrypted=True),
+        "ssh_key": "",
+        "auth_mode": "password",
+        "credential_source": "global",
+    }
+
+
+def _get_global_setting_sync(db, key: str, encrypted: bool = False) -> str:
+    row = db.execute(
+        select(PlatformSetting).where(PlatformSetting.key == key)
+    ).scalar_one_or_none()
+    if not row or not row.value:
+        return ""
+    if encrypted and row.is_encrypted:
+        try:
+            return _fernet().decrypt(row.value.encode()).decode()
+        except Exception as exc:
+            logger.warning("Fernet decryption failed for global platform setting %s: %s", key, exc)
+            return ""
+    return row.value or ""
+
+
 async def _get_global_setting(db: AsyncSession, key: str, encrypted: bool = False) -> str:
     result = await db.execute(
         select(PlatformSetting).where(PlatformSetting.key == key)

@@ -21,6 +21,7 @@ class LLMEndpointCreate(BaseModel):
 
 class LLMEndpointUpdate(BaseModel):
     name: str | None = Field(default=None, min_length=1, max_length=255)
+    provider: VALID_PROVIDERS | None = None
     base_url: str | None = Field(default=None, min_length=1, max_length=500)
     api_key: str | None = None
     model: str | None = Field(default=None, min_length=1, max_length=255)
