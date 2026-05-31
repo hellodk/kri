@@ -62,9 +62,10 @@ def _is_playbook(path: Path) -> tuple[bool, str, dict]:
         data = yaml.safe_load(raw)
         if not isinstance(data, list) or not data or not isinstance(data[0], dict):
             return False, "", {}
-        # A playbook starts with a play dict that has 'hosts' or 'import_playbook'
+        # A playbook play dict has at least one of these keys; vars/handler files do not.
         first = data[0]
-        if not ("hosts" in first or "import_playbook" in first or "name" in first):
+        _PLAY_KEYS = {"hosts", "import_playbook", "name", "roles", "tasks"}
+        if not (_PLAY_KEYS & first.keys()):
             return False, "", {}
         play_name = first.get("name", path.stem)
         default_vars = first.get("vars", {}) or {}

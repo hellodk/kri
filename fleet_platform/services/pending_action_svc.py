@@ -62,6 +62,9 @@ async def approve(db: AsyncSession, action: PendingAction) -> PendingAction:
 
 
 async def reject(db: AsyncSession, action: PendingAction) -> PendingAction:
+    if action.status != "pending":
+        # Already approved/rejected/expired — do not overwrite (audit integrity)
+        return action
     action.status = "rejected"
     await db.commit()
     await db.refresh(action)
@@ -163,4 +166,4 @@ async def _send_approval_email(action: PendingAction, node, requested_by: str) -
         except Exception:
             pass
 
-    await asyncio.get_event_loop().run_in_executor(None, _send)
+    await asyncio.to_thread(_send)  # get_event_loop() deprecated in 3.10+; to_thread is safe

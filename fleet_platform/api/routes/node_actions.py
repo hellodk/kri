@@ -252,7 +252,9 @@ async def get_node_metrics(
     if not node:
         raise HTTPException(status_code=404, detail="Node not found")
 
-    node_ip = node.bootstrap_ip or node.ip_address
+    # ip_address is the current live address (from grains); bootstrap_ip is the provisioning address.
+    # node_exporter binds to ip_address so use it first — bootstrap_ip is only a fallback.
+    node_ip = node.ip_address or node.bootstrap_ip
     if not node_ip:
         return {"available": False, "reason": "Node has no IP address — bootstrap first"}
 
@@ -315,7 +317,13 @@ async def get_node_metrics(
 
 @actions_router.get("/{token}/approve")
 async def approve_action(token: str, db: AsyncSession = Depends(get_db)):
-    """Approve a pending destructive action via the emailed approval link."""
+    """Approve a pending destructive action via the emailed approval link.
+
+    Security: no session auth required — the token (secrets.token_urlsafe(32),
+    ~192 bits entropy, one-time use, 15-minute TTL) IS the credential, matching
+    the password-reset link pattern. The token is delivered only to configured
+    SMTP recipients and is never reusable after approval/rejection/expiry.
+    """
     action = await pending_action_svc.get_by_token(db, token)
     if not action:
         raise HTTPException(status_code=404, detail="Action not found")
