@@ -208,6 +208,25 @@ def decrypt_secret(ciphertext: str) -> str:
     return _fernet().decrypt(ciphertext.encode()).decode()
 
 
+async def get_settings_bulk(db: AsyncSession, keys: list[str]) -> dict[str, str | None]:
+    """Fetch multiple settings in a single DB round-trip (#284).
+
+    Returns a dict keyed by setting name; missing keys map to None.
+    Encrypted values are decrypted transparently.
+    """
+    if not keys:
+        return {}
+    result = await db.execute(select(PlatformSetting).where(PlatformSetting.key.in_(keys)))
+    rows = result.scalars().all()
+    out: dict[str, str | None] = {k: None for k in keys}
+    for row in rows:
+        if row.is_encrypted and row.value:
+            out[row.key] = _fernet().decrypt(row.value.encode()).decode()
+        else:
+            out[row.key] = row.value
+    return out
+
+
 async def get_setting(db: AsyncSession, key: str) -> str | None:
     result = await db.execute(select(PlatformSetting).where(PlatformSetting.key == key))
     row = result.scalar_one_or_none()

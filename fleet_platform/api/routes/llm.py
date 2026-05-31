@@ -66,6 +66,11 @@ def _to_response(endpoint) -> LLMEndpointResponse:
         enabled=endpoint.enabled,
         created_at=endpoint.created_at,
         updated_at=endpoint.updated_at,
+        model_context_length=endpoint.model_context_length,
+        model_capabilities=(
+            [c.strip() for c in endpoint.model_capabilities.split(",") if c.strip()]
+            if endpoint.model_capabilities else []
+        ),
     )
 
 
@@ -192,6 +197,11 @@ async def submit_query(
         raise HTTPException(status_code=422, detail="Selected LLM endpoint is disabled")
 
     api_key = llm_svc.get_decrypted_api_key(endpoint)
+    model_ctx = endpoint.model_context_length
+    model_caps = (
+        [c.strip() for c in endpoint.model_capabilities.split(",") if c.strip()]
+        if endpoint.model_capabilities else []
+    )
     system_prompt = await build_fleet_context(db, payload.intent)
 
     history_dicts: list[dict] = [
@@ -232,6 +242,8 @@ async def submit_query(
                 system_prompt=system_prompt,
                 user_prompt=payload.prompt,
                 history=history_dicts,
+                model_context_length=model_ctx,
+                model_capabilities=model_caps,
             )
     except (LLMCallError, Exception) as exc:
         error = str(exc)

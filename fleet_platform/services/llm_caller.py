@@ -33,35 +33,54 @@ async def call_openai_compat(
     system_prompt: str,
     user_prompt: str,
     history: list[dict] | None = None,
+    model_context_length: int | None = None,
+    model_capabilities: list[str] | None = None,
 ) -> tuple[str, int, int]:
     """
     Call an OpenAI-compatible /chat/completions endpoint.
     Returns (content, input_tokens, output_tokens).
-    Compatible with: OpenAI, Ollama, LM Studio, vLLM, Groq, Mistral, Together.
-    Raises: LLMCallError on HTTP errors, timeouts, or unexpected response shape.
+    Compatible with: OpenAI, Ollama, LM Studio, vLLM, Groq, Mistral, Together, exo.
+
+    model_context_length: if known, used to size the system-prompt budget and
+        clamp max_tokens; falls back to an 8k conservative default.
+    model_capabilities: list of strings from /v1/models (e.g. ["text","thinking"]).
+        Thinking models skip echo-detection, strip <think> blocks, and omit
+        small-model stop tokens (#273).
     """
+    import re as _re
+
     headers: dict[str, str] = {"Content-Type": "application/json"}
     if api_key:
         headers["Authorization"] = f"Bearer {api_key}"
 
-    # Truncate system prompt for small local models (< 8k context)
-    MAX_SYSTEM_CHARS = 2000
-    if len(system_prompt) > MAX_SYSTEM_CHARS:
-        system_prompt = system_prompt[:MAX_SYSTEM_CHARS] + "\n[context truncated for model capacity]"
+    is_thinking = bool(model_capabilities and "thinking" in model_capabilities)
+
+    # Clamp max_tokens to the model's context window when known
+    ctx = model_context_length or 8192
+    if max_tokens > ctx:
+        max_tokens = ctx
+
+    # Budget the system prompt so it fits in the context window.
+    # Reserve max_tokens chars for output; allow the rest (≈ 4 chars/token).
+    max_system_chars = max(1000, (ctx - max_tokens) * 4 - 200)
+    if len(system_prompt) > max_system_chars:
+        system_prompt = system_prompt[:max_system_chars] + "\n[context truncated for model capacity]"
 
     messages: list[dict] = [{"role": "system", "content": system_prompt}]
     if history:
         messages.extend(history[-10:])
     messages.append({"role": "user", "content": user_prompt})
 
-    payload = {
+    payload: dict = {
         "model": model,
         "max_tokens": max_tokens,
-        "temperature": 0.3,       # reduce echo/repetition vs pure greedy decoding
+        "temperature": 0.3,
         "top_p": 0.9,
-        "stop": ["</s>", "<|im_end|>", "<|endoftext|>", "Human:", "User:"],
         "messages": messages,
     }
+    # Small-model stop tokens are counter-productive on thinking/frontier models
+    if not is_thinking:
+        payload["stop"] = ["</s>", "<|im_end|>", "<|endoftext|>", "Human:", "User:"]
 
     try:
         async with httpx.AsyncClient(timeout=OPENAI_COMPAT_TIMEOUT) as client:
@@ -85,8 +104,16 @@ async def call_openai_compat(
         raise LLMCallError(f"Unexpected response shape from {base_url}: {exc}") from exc
 
     usage = data.get("usage", {})
-    # Detect garbled output — small local models sometimes echo the system prompt
-    content = _validate_response(content, system_prompt)
+
+    # Strip <think>...</think> reasoning blocks from thinking models
+    if is_thinking:
+        content = _re.sub(r"<think>.*?</think>", "", content, flags=_re.DOTALL).strip()
+        if not content:
+            content = "[Model returned only a thinking block with no final answer.]"
+    else:
+        # Echo-detection only makes sense for small non-thinking models
+        content = _validate_response(content, system_prompt)
+
     return content, usage.get("prompt_tokens", 0), usage.get("completion_tokens", 0)
 
 

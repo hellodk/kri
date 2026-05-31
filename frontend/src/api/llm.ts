@@ -15,6 +15,8 @@ export interface LLMEndpoint {
   has_api_key: boolean
   created_at: string
   updated_at: string
+  model_context_length: number | null
+  model_capabilities: string[]
 }
 
 export interface LLMEndpointCreate {
