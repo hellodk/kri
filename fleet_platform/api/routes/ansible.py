@@ -316,7 +316,7 @@ async def list_playbooks(
     sources_json = setting.value if setting else None
 
     all_dirs = get_all_playbook_dirs(sources_json, _PLAYBOOKS_DIR)
-    all_entries = []
+    all_entries: list[PlaybookEntryResponse] = []
     for d in all_dirs:
         all_entries.extend(
             PlaybookEntryResponse(
@@ -644,7 +644,8 @@ async def add_source(
     # in the Playbooks tab without requiring a manual Sync click.
     if payload.type == "git":
         from fleet_platform.services.playbook_sources import _clone_git_source, _default_clone_path
-        local_path = payload.local_path or _default_clone_path(payload.url)
+        assert payload.url is not None, "git source requires a URL"  # noqa: S101
+        local_path: str = payload.local_path or _default_clone_path(payload.url)
         asyncio.create_task(
             asyncio.to_thread(
                 _clone_git_source,

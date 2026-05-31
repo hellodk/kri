@@ -103,7 +103,7 @@ async def _rfb_auth(
             # DES/ECB — encrypt two 8-byte blocks independently.
             # Use TripleDES(key * 3) which degenerates to plain DES when all three
             # sub-keys are identical — standard VNC RFB behaviour.
-            cipher = Cipher(_TripleDES(key * 3), modes.ECB())
+            cipher = Cipher(_TripleDES(key * 3), modes.ECB())  # nosec B305 — VNC RFB protocol requires DES/ECB
             encryptor = cipher.encryptor()
             response = encryptor.update(challenge[:8]) + encryptor.update(challenge[8:]) + encryptor.finalize()
 
