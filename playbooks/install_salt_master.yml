@@ -107,7 +107,17 @@
   vars:
     ansible_user: "{{ ansible_ssh_user | default('dk') }}"
     ansible_become_method: sudo
-    ansible_ssh_common_args: "-o StrictHostKeyChecking=no -o ConnectTimeout=10"
+    # macOS-specific SSH settings:
+    # - ControlMaster=no: prevents connection multiplexing issues on macOS zsh targets
+    # - ServerAliveInterval: keeps the long pkg copy (32MB) alive
+    ansible_ssh_common_args: >-
+      -o StrictHostKeyChecking=no
+      -o ConnectTimeout=15
+      -o ControlMaster=no
+      -o ServerAliveInterval=30
+      -o ServerAliveCountMax=6
+    # Use bash explicitly — macOS default zsh startup scripts can close the connection
+    ansible_shell_executable: /bin/bash
 
     # Salt-master listens on all interfaces — Tailscale overlay provides the security layer
     salt_master_interface: "0.0.0.0"

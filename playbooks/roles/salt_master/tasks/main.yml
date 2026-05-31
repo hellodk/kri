@@ -2,7 +2,9 @@
 # playbooks/roles/salt_master/tasks/main.yml
 
 - name: Detect CPU architecture
-  raw: uname -m
+  shell: uname -m
+  args:
+    executable: /bin/bash
   register: uname_result
   changed_when: false
 
