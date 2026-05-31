@@ -359,7 +359,7 @@ const BOOTSTRAP_STATUS_STYLE: Record<string, { label: string; colour: string; bg
   failed:       { label: 'Failed',           colour: 'text-red-700', bg: 'bg-red-50 border-red-200' },
 }
 
-type Tab = 'overview' | 'drift' | 'sbom' | 'executions' | 'bootstrap-history' | 'secrets' | 'ios'
+type Tab = 'overview' | 'drift' | 'sbom' | 'executions' | 'bootstrap-history' | 'secrets' | 'ios' | 'services'
 
 export function NodeDetail() {
   const { nodeId } = useParams<{ nodeId: string }>()
@@ -396,9 +396,17 @@ export function NodeDetail() {
   const [showJenkinsConfigure, setShowJenkinsConfigure] = useState(false)
   const [jenkinsForm, setJenkinsForm] = useState({ jenkins_url: '', agent_name: '' })
   const [checkingJenkins, setCheckingJenkins] = useState(false)
+  // Service Manager state
+  const [servicesLoading, setServicesLoading] = useState(false)
+  const [servicesTaskId, setServicesTaskId] = useState<string | null>(null)
+  // AI Recommendations state
+  const [aiLoading, setAiLoading] = useState(false)
+  const [aiRecommendation, setAiRecommendation] = useState<string | null>(null)
+  const [aiError, setAiError] = useState<string | null>(null)
   // Quick Actions state
   const [actionResult, setActionResult] = useState<string | null>(null)
   const [runningAction, setRunningAction] = useState(false)
+  const [deployingMonitoring, setDeployingMonitoring] = useState(false)
   const [rebootConfirm, setRebootConfirm] = useState(false)
   const [quickActionTaskId, setQuickActionTaskId] = useState<string | null>(null)
   const [quickActionPolling, setQuickActionPolling] = useState(false)
@@ -673,6 +681,64 @@ export function NodeDetail() {
     }
   }
 
+  async function askAI() {
+    if (!nodeId) return
+    setAiLoading(true)
+    setAiRecommendation(null)
+    setAiError(null)
+    try {
+      const resp = await api.post<{ recommendation: string; model_used: string }>(
+        `/api/v1/nodes/${nodeId}/ask-ai`,
+        {}
+      )
+      setAiRecommendation(resp.recommendation)
+    } catch (e: unknown) {
+      setAiError(e instanceof Error ? e.message : 'AI unavailable')
+    } finally {
+      setAiLoading(false)
+    }
+  }
+
+  async function fetchServices() {
+    if (!nodeId) return
+    setServicesLoading(true)
+    try {
+      const resp = await api.get<{task_id: string}>(`/api/v1/nodes/${nodeId}/services`)
+      setServicesTaskId(resp.task_id)
+      toast('Service list queued')
+    } catch (e: unknown) {
+      toast(e instanceof Error ? e.message : 'Failed to fetch services', 'error')
+    } finally {
+      setServicesLoading(false)
+    }
+  }
+
+  async function requestServiceAction(svcName: string, actionType: 'service_start' | 'service_stop' | 'service_restart' | 'service_disable') {
+    if (!nodeId) return
+    try {
+      const resp = await api.post<{status: string; message: string}>(`/api/v1/nodes/${nodeId}/actions`, {
+        action_type: actionType,
+        params: { service: svcName, minion_id: node?.minion_id },
+      })
+      toast(resp.message || `${actionType} requested`)
+    } catch (e: unknown) {
+      toast(e instanceof Error ? e.message : 'Action failed', 'error')
+    }
+  }
+
+  async function deployNodeExporter() {
+    if (!node || !nodeId) return
+    setDeployingMonitoring(true)
+    try {
+      await playbooksApi.run('deploy_node_exporter.yml', 'node', nodeId, {})
+      toast('node_exporter deployment queued')
+    } catch (e: unknown) {
+      toast(e instanceof Error ? e.message : 'Deploy failed', 'error')
+    } finally {
+      setDeployingMonitoring(false)
+    }
+  }
+
   async function collectGrains() {
     if (!nodeId) return
     setCollectingGrains(true)
@@ -719,6 +785,7 @@ export function NodeDetail() {
     { id: 'executions', label: 'Executions' },
     { id: 'bootstrap-history', label: 'Bootstrap History' },
     { id: 'secrets', label: 'Secrets' },
+    { id: 'services' as Tab, label: 'Services' },
     ...(isMacOSNode(node) ? [{ id: 'ios' as Tab, label: 'iOS' }] : []),
   ]
 
@@ -1127,6 +1194,14 @@ export function NodeDetail() {
               >
                 Reboot
               </button>
+              <button
+                onClick={deployNodeExporter}
+                disabled={deployingMonitoring}
+                className="px-3 py-1.5 text-xs font-medium bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg disabled:opacity-50 transition-colors"
+                title="Install and start Prometheus node_exporter on this node"
+              >
+                {deployingMonitoring ? 'Deploying…' : 'Deploy Monitoring'}
+              </button>
             </div>
             {rebootConfirm && (
               <div role="alertdialog" aria-label="Confirm reboot" className="mt-3 flex items-center gap-2 p-2 bg-red-50 border border-red-200 rounded text-xs text-red-700">
@@ -1166,6 +1241,40 @@ export function NodeDetail() {
                   <p className="text-gray-600 dark:text-gray-400 mt-1">{quickTaskOutput.reason}</p>
                 )}
               </div>
+            )}
+          </div>
+
+          {/* AI Recommendations */}
+          <div className="bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200 rounded-xl p-5 md:col-span-2">
+            <div className="flex items-center justify-between mb-3">
+              <div className="flex items-center gap-2">
+                <span className="text-base">🤖</span>
+                <h3 className="text-sm font-semibold text-gray-900">AI Recommendations</h3>
+              </div>
+              <button
+                onClick={askAI}
+                disabled={aiLoading}
+                className="px-3 py-1.5 text-xs font-medium bg-blue-600 hover:bg-blue-700 text-white rounded-lg disabled:opacity-50 transition-colors flex items-center gap-1.5"
+              >
+                {aiLoading ? (
+                  <><span className="w-3 h-3 border border-white/40 border-t-white rounded-full animate-spin inline-block" />Analyzing…</>
+                ) : (
+                  'Ask AI'
+                )}
+              </button>
+            </div>
+
+            {aiRecommendation ? (
+              <div className="bg-white rounded-lg border border-blue-100 p-4">
+                <pre className="text-sm text-gray-800 whitespace-pre-wrap font-sans leading-relaxed">{aiRecommendation}</pre>
+                <p className="text-xs text-gray-400 mt-3">AI-generated — verify before acting. Actions require approval.</p>
+              </div>
+            ) : aiError ? (
+              <p className="text-sm text-red-600">⚠ {aiError}</p>
+            ) : (
+              <p className="text-sm text-gray-500">
+                Get AI-powered analysis of this node's health, resource usage, and drift — with actionable recommendations.
+              </p>
             )}
           </div>
 
@@ -2039,6 +2148,69 @@ export function NodeDetail() {
               onPage={setHistoryPage}
             />
           )}
+        </div>
+      )}
+      {tab === 'services' && (
+        <div className="bg-white border border-gray-200 rounded-xl p-5">
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="text-sm font-semibold text-gray-900">Services</h3>
+            <button
+              onClick={fetchServices}
+              disabled={servicesLoading}
+              className="px-3 py-1.5 text-xs font-medium bg-white border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 disabled:opacity-50"
+            >
+              {servicesLoading ? 'Loading…' : '↺ Refresh'}
+            </button>
+          </div>
+
+          {servicesTaskId && (
+            <p className="text-xs text-brand-600 mb-3">Salt task queued: {servicesTaskId}. Results appear after task completes.</p>
+          )}
+
+          <div className="rounded-lg border border-gray-200 overflow-hidden">
+            <table className="w-full text-xs">
+              <thead>
+                <tr className="bg-gray-50 border-b border-gray-200">
+                  <th className="text-left py-2.5 px-3 text-gray-500 font-medium">Service</th>
+                  <th className="text-center py-2.5 px-3 text-gray-500 font-medium">Status</th>
+                  <th className="text-center py-2.5 px-3 text-gray-500 font-medium">Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {/* Service rows will be rendered here once Salt task result polling is wired up.
+                    Each row will include action buttons calling requestServiceAction(svcName, actionType). */}
+                {([] as {name: string; status: string}[]).map((svc) => (
+                  <tr key={svc.name} className="border-b border-gray-100 last:border-0 hover:bg-gray-50">
+                    <td className="py-2 px-3 text-gray-700 font-mono">{svc.name}</td>
+                    <td className="py-2 px-3 text-center">
+                      <span className={`px-1.5 py-0.5 rounded text-xs font-medium ${svc.status === 'running' ? 'bg-emerald-50 text-emerald-700' : 'bg-gray-100 text-gray-500'}`}>
+                        {svc.status}
+                      </span>
+                    </td>
+                    <td className="py-2 px-3 text-center">
+                      <div className="flex items-center justify-center gap-1">
+                        <button onClick={() => requestServiceAction(svc.name, 'service_start')} className="px-2 py-0.5 text-xs bg-white border border-gray-300 rounded hover:bg-gray-50">Start</button>
+                        <button onClick={() => requestServiceAction(svc.name, 'service_restart')} className="px-2 py-0.5 text-xs bg-white border border-gray-300 rounded hover:bg-gray-50">Restart</button>
+                        <button onClick={() => requestServiceAction(svc.name, 'service_stop')} className="px-2 py-0.5 text-xs bg-white border border-red-200 text-red-600 rounded hover:bg-red-50">Stop</button>
+                        <button onClick={() => requestServiceAction(svc.name, 'service_disable')} className="px-2 py-0.5 text-xs bg-white border border-red-200 text-red-600 rounded hover:bg-red-50">Disable</button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+                <tr>
+                  <td colSpan={3} className="py-8 text-center text-gray-400 text-sm">
+                    Click Refresh to load services via Salt.
+                    <br/>
+                    <span className="text-xs">Start/Restart execute immediately. Stop/Disable require email approval.</span>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          <div className="mt-3 text-xs text-gray-400">
+            Supports macOS (launchd) and Linux (systemd) nodes via Salt service module.
+          </div>
         </div>
       )}
       {deletingSecretKey && (

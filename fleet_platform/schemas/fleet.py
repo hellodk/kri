@@ -27,6 +27,8 @@ class NodeListItem(BaseModel):
     hardware_model: str | None = None
     status: str
     drift_score: int
+    cpu_usage_pct: float | None = None
+    mem_usage_pct: float | None = None
     last_seen_at: datetime | None = None
     tags: list[TagResponse]
     maintenance_mode: bool = False

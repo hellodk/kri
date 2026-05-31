@@ -1,0 +1,6 @@
+---
+- name: Deploy Prometheus node_exporter to fleet nodes
+  hosts: targets
+  gather_facts: true
+  roles:
+    - node_exporter

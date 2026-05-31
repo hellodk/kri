@@ -4,6 +4,7 @@ from decimal import Decimal
 
 from sqlalchemy import (
     DateTime,
+    Float,
     ForeignKey,
     Index,
     Numeric,
@@ -35,6 +36,11 @@ class Node(Base, TimestampMixin):
     storage_gb: Mapped[Decimal | None] = mapped_column(Numeric(10, 2), nullable=True)
     status: Mapped[str] = mapped_column(String(20), nullable=False, default="unknown")
     drift_score: Mapped[int] = mapped_column(SmallInteger, nullable=False, default=0)
+    cpu_usage_pct: Mapped[float | None] = mapped_column(Float, nullable=True)
+    mem_usage_pct: Mapped[float | None] = mapped_column(Float, nullable=True)
+    disk_io_read_kbs: Mapped[float | None] = mapped_column(Float, nullable=True)
+    disk_io_write_kbs: Mapped[float | None] = mapped_column(Float, nullable=True)
+    gpu_usage_pct: Mapped[float | None] = mapped_column(Float, nullable=True)
     node_token_hash: Mapped[str] = mapped_column(String(72), nullable=False)
     first_seen_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     last_seen_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)

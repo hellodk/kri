@@ -86,7 +86,7 @@ services:
       dockerfile: deploy/Dockerfile.api
     # migrate.sh acquires a PostgreSQL advisory lock before running alembic upgrade
     # head, preventing concurrent migration races when multiple API replicas start.
-    command: ["sh", "-c", "bash /app/deploy/migrate.sh && uv run uvicorn fleet_platform.api.main:app --host 0.0.0.0 --port 8000 --log-level info"]
+    command: ["sh", "-c", "chown -R $(id -u):$(id -g) /home/appuser/.kri/git-repos 2>/dev/null || true && bash /app/deploy/migrate.sh && uv run uvicorn fleet_platform.api.main:app --host 0.0.0.0 --port 8000 --log-level info"]
     restart: unless-stopped
     env_file: ../.env.docker
     depends_on:
@@ -140,7 +140,7 @@ services:
       # Set WORKER_SSH_DIR in .env.docker to override (default: ./ssh).
       # Issue #91: operator personal ~/.ssh removed.
       - ${WORKER_SSH_DIR:-./ssh}:/home/appuser/.ssh:ro
-      - ~/.kri:/home/appuser/.kri:ro
+      - ~/.kri:/home/appuser/.kri  # rw: worker needs to write id_rsa keypair (not :ro)
       - git-repos-cache:/home/appuser/.kri/git-repos  # persist cloned git sources across redeploys
       - /home/dk/Documents/git/pulse:/mnt/pulse:ro   # host playbook repos
       # Docker socket intentionally NOT mounted — container escape risk. Issue #82.

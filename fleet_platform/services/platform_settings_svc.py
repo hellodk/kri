@@ -75,6 +75,9 @@ _DEFAULT_SALT_FUNCTIONS: frozenset[str] = frozenset(
         "service.stop",
         "service.restart",
         "service.status",
+        "service.get_all",
+        "service.available",
+        "service.enabled",
         "disk.usage",
         "disk.inodeusage",
         "status.loadavg",
@@ -88,6 +91,8 @@ _DEFAULT_SALT_FUNCTIONS: frozenset[str] = frozenset(
         "saltutil.refresh_pillar",
         "system.reboot",
         "cmd.run",
+        "ps.list_processes",
+        "ps.kill_pid",
     }
 )
 

@@ -37,3 +37,38 @@ async def test_update_endpoint_leaves_provider_when_omitted():
     await llm_svc.update_endpoint(_fake_db(), endpoint, payload)
     assert endpoint.provider == "openai_compat"
     assert endpoint.name == "renamed"
+
+
+@pytest.mark.asyncio
+async def test_list_endpoints_calls_db():
+    from unittest.mock import MagicMock
+    db = AsyncMock()
+    mock_result = MagicMock()
+    mock_result.scalars.return_value.all.return_value = []
+    db.execute = AsyncMock(return_value=mock_result)
+    result = await llm_svc.list_endpoints(db)
+    assert result == []
+    db.execute.assert_called_once()
+
+
+@pytest.mark.asyncio
+async def test_get_default_endpoint_returns_none_when_missing():
+    from unittest.mock import MagicMock
+    db = AsyncMock()
+    mock_result = MagicMock()
+    mock_result.scalar_one_or_none.return_value = None
+    db.execute = AsyncMock(return_value=mock_result)
+    result = await llm_svc.get_default_endpoint(db)
+    assert result is None
+
+
+@pytest.mark.asyncio
+async def test_delete_endpoint_commits():
+    from unittest.mock import MagicMock
+    endpoint = MagicMock()
+    db = AsyncMock()
+    db.delete = AsyncMock()
+    db.commit = AsyncMock()
+    await llm_svc.delete_endpoint(db, endpoint)
+    db.delete.assert_called_once_with(endpoint)
+    db.commit.assert_called_once()

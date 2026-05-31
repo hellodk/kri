@@ -1,0 +1,8 @@
+---
+- name: Include macOS tasks
+  import_tasks: macos.yml
+  when: ansible_system == "Darwin"
+
+- name: Include Linux tasks
+  import_tasks: linux.yml
+  when: ansible_system == "Linux"

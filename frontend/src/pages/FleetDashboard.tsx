@@ -570,6 +570,8 @@ export function FleetDashboard() {
   const [tagFilter, setTagFilter] = useState('')
   const [driftMin, setDriftMin] = useState('')
   const [driftMax, setDriftMax] = useState('')
+  const [cpuMin, setCpuMin] = useState('')
+  const [memMin, setMemMin] = useState('')
   const [sort, setSort] = useState('drift_score:desc')
   const [showBootstrap, setShowBootstrap] = useState(false)
   const [showAddNode, setShowAddNode] = useState(false)
@@ -588,16 +590,16 @@ export function FleetDashboard() {
   const user = useAuthStore((s) => s.user)
   const canManage = user?.role === 'admin' || user?.role === 'operator'
 
-  const filters = { search, statusFilter, osFilter, tagFilter, driftMin, driftMax, sort }
+  const filters = { search, statusFilter, osFilter, tagFilter, driftMin, driftMax, cpuMin, memMin, sort }
 
   function resetFilters() {
     setSearch(''); setStatusFilter(''); setOsFilter('')
-    setTagFilter(''); setDriftMin(''); setDriftMax(''); setSort('drift_score:desc')
+    setTagFilter(''); setDriftMin(''); setDriftMax(''); setCpuMin(''); setMemMin(''); setSort('drift_score:desc')
     setMacosOnly(false)
     setPage(1)
   }
 
-  const hasActiveFilters = search || statusFilter || osFilter || tagFilter || driftMin || driftMax || macosOnly
+  const hasActiveFilters = search || statusFilter || osFilter || tagFilter || driftMin || driftMax || cpuMin || memMin || macosOnly
 
   const qc = useQueryClient()
   const toast = useToastStore((s) => s.add)
@@ -624,6 +626,8 @@ export function FleetDashboard() {
       tag: tagFilter || undefined,
       drift_min: driftMin ? parseInt(driftMin) : undefined,
       drift_max: driftMax ? parseInt(driftMax) : undefined,
+      cpu_min: cpuMin ? parseFloat(cpuMin) : undefined,
+      mem_min: memMin ? parseFloat(memMin) : undefined,
       sort,
     }),
     staleTime: 30_000,
@@ -843,6 +847,20 @@ export function FleetDashboard() {
           <input value={driftMax} onChange={(e) => { setDriftMax(e.target.value); setPage(1) }}
             placeholder="Max" type="number" min="0"
             className="w-20 px-3 py-1.5 border border-gray-300 text-sm text-gray-900 rounded-lg focus:outline-none focus:border-brand-600" />
+
+          <span className="text-sm text-gray-500 font-medium">CPU%:</span>
+          <input
+            type="number" min="0" max="100" placeholder="≥"
+            value={cpuMin} onChange={e => { setCpuMin(e.target.value); setPage(1) }}
+            className="w-20 px-3 py-1.5 border border-gray-300 text-sm text-gray-900 rounded-lg focus:outline-none focus:border-brand-600"
+          />
+
+          <span className="text-sm text-gray-500 font-medium">Mem%:</span>
+          <input
+            type="number" min="0" max="100" placeholder="≥"
+            value={memMin} onChange={e => { setMemMin(e.target.value); setPage(1) }}
+            className="w-20 px-3 py-1.5 border border-gray-300 text-sm text-gray-900 rounded-lg focus:outline-none focus:border-brand-600"
+          />
 
           <div className="flex-1" />
 

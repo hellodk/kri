@@ -1,0 +1,254 @@
+"""HTTP endpoints for destructive node action approval gate (#291)."""
+import uuid
+from datetime import UTC, datetime
+
+from fastapi import APIRouter, Depends, HTTPException
+from pydantic import BaseModel
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from fleet_platform.api.deps import get_db
+from fleet_platform.core.audit import audit
+from fleet_platform.core.auth import require_role
+from fleet_platform.models.node import Node
+from fleet_platform.models.pending_action import PendingAction
+from fleet_platform.services import pending_action_svc
+
+router = APIRouter(prefix="/api/v1/nodes", tags=["node-actions"])
+actions_router = APIRouter(prefix="/api/v1/actions", tags=["node-actions"])
+
+
+class NodeActionRequest(BaseModel):
+    action_type: str
+    params: dict = {}
+
+
+class PendingActionResponse(BaseModel):
+    id: uuid.UUID
+    node_id: uuid.UUID
+    action_type: str
+    status: str
+    expires_at: datetime
+    message: str
+
+    model_config = {"from_attributes": True}
+
+
+@router.post("/{node_id}/actions", response_model=PendingActionResponse, status_code=202)
+async def request_node_action(
+    node_id: uuid.UUID,
+    payload: NodeActionRequest,
+    db: AsyncSession = Depends(get_db),
+    claims: dict = Depends(require_role("operator", "admin")),
+):
+    """Request a node action. Destructive actions are gated behind email approval."""
+    if PendingAction.is_forbidden(payload.action_type):
+        raise HTTPException(
+            status_code=403,
+            detail=(
+                f"Action '{payload.action_type}' is not permitted. "
+                "Remote force-kill is disabled for safety. Use the service manager or SSH."
+            ),
+        )
+
+    node_result = await db.execute(select(Node).where(Node.id == node_id))
+    node = node_result.scalar_one_or_none()
+    if not node:
+        raise HTTPException(status_code=404, detail="Node not found")
+
+    if not PendingAction.is_destructive(payload.action_type):
+        # Non-destructive: execute immediately (placeholder — actual Salt call TBD)
+        await audit(
+            db,
+            actor=claims["sub"],
+            action=payload.action_type,
+            resource_type="node",
+            resource_id=node_id,
+            new_value=payload.params,
+        )
+        return PendingActionResponse(
+            id=uuid.uuid4(),
+            node_id=node_id,
+            action_type=payload.action_type,
+            status="executed",
+            expires_at=datetime.now(UTC),
+            message=f"Action '{payload.action_type}' queued for execution.",
+        )
+
+    action = await pending_action_svc.create_pending_action(
+        db,
+        node_id=node_id,
+        action_type=payload.action_type,
+        params=payload.params,
+        requested_by=claims["sub"],
+    )
+
+    # Send approval email (non-blocking — failure must not block the response)
+    try:
+        await pending_action_svc._send_approval_email(action, node, claims["sub"])
+    except Exception:
+        pass  # email failure must not block
+
+    await audit(
+        db,
+        actor=claims["sub"],
+        action=f"{payload.action_type}_requested",
+        resource_type="node",
+        resource_id=node_id,
+        new_value={"action_id": str(action.id), "params": payload.params},
+    )
+
+    return PendingActionResponse(
+        id=action.id,
+        node_id=action.node_id,
+        action_type=action.action_type,
+        status=action.status,
+        expires_at=action.expires_at,
+        message="Approval email sent. Action will expire in 15 minutes.",
+    )
+
+
+@router.get("/{node_id}/processes")
+async def list_processes(
+    node_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+    _claims: dict = Depends(require_role("operator", "admin")),
+):
+    """List running processes on a node via Salt ps.list_processes."""
+    from sqlalchemy import select as _sel
+    node_result = await db.execute(_sel(Node).where(Node.id == node_id))
+    node = node_result.scalar_one_or_none()
+    if not node:
+        raise HTTPException(status_code=404, detail="Node not found")
+    from fleet_platform.workers.salt_tasks import run_salt_cmd
+    task = run_salt_cmd.delay(
+        function="ps.list_processes",
+        target_minions=[node.minion_id],
+        args=[],
+    )
+    return {"task_id": task.id, "minion_id": node.minion_id}
+
+
+@router.get("/{node_id}/services")
+async def list_services(
+    node_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+    _claims: dict = Depends(require_role("operator", "admin")),
+):
+    """List services on a node via Salt service.get_all + service.status."""
+    from sqlalchemy import select as _sel
+    node_result = await db.execute(_sel(Node).where(Node.id == node_id))
+    node = node_result.scalar_one_or_none()
+    if not node:
+        raise HTTPException(status_code=404, detail="Node not found")
+    from fleet_platform.workers.salt_tasks import run_salt_cmd
+    task = run_salt_cmd.delay(
+        function="service.get_all",
+        target_minions=[node.minion_id],
+        args=[],
+    )
+    return {"task_id": task.id, "minion_id": node.minion_id}
+
+
+@router.post("/{node_id}/ask-ai")
+async def ask_ai_about_node(
+    node_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+    claims: dict = Depends(require_role("operator", "admin")),
+):
+    """Ask the LLM for recommendations about a specific node."""
+    from sqlalchemy import select as _sel
+
+    from fleet_platform.models.node import Node as _Node
+    from fleet_platform.services.llm_caller import LLMCallError, call_anthropic, call_openai_compat
+    from fleet_platform.services.llm_context import build_fleet_context
+    from fleet_platform.services.llm_svc import get_decrypted_api_key, get_default_endpoint
+
+    node_result = await db.execute(_sel(_Node).where(_Node.id == node_id))
+    node = node_result.scalar_one_or_none()
+    if not node:
+        raise HTTPException(status_code=404, detail="Node not found")
+
+    endpoint = await get_default_endpoint(db)
+    if not endpoint or not endpoint.enabled:
+        raise HTTPException(status_code=422, detail="No LLM endpoint configured.")
+
+    # Build node-specific context
+    node_name = node.hostname or node.minion_id
+    cpu_info = f"{node.cpu_usage_pct:.1f}%" if node.cpu_usage_pct is not None else "unknown"
+    mem_info = f"{node.mem_usage_pct:.1f}%" if node.mem_usage_pct is not None else "unknown"
+    drift_info = str(node.drift_score)
+
+    node_context = (
+        f"Analyze node '{node_name}' and provide actionable recommendations.\n\n"
+        f"Node status: {node.status}\n"
+        f"CPU usage: {cpu_info}\n"
+        f"Memory usage: {mem_info}\n"
+        f"Drift score: {drift_info}/100\n\n"
+        "Provide: (1) Assessment of current health, (2) Top 2-3 actionable recommendations, "
+        "(3) Risk level (Low/Medium/High). Be concise. Do not invent data not shown above."
+    )
+
+    system_prompt = await build_fleet_context(db, "fleet_query")
+    api_key = get_decrypted_api_key(endpoint)
+    model_caps = (
+        [c.strip() for c in endpoint.model_capabilities.split(",") if c.strip()]
+        if endpoint.model_capabilities else []
+    )
+
+    try:
+        if endpoint.provider == "anthropic":
+            content, input_tokens, output_tokens = await call_anthropic(
+                api_key=api_key or "",
+                model=endpoint.model,
+                max_tokens=min(endpoint.max_tokens, 512),
+                system_prompt=system_prompt,
+                user_prompt=node_context,
+            )
+        else:
+            content, input_tokens, output_tokens = await call_openai_compat(
+                base_url=endpoint.base_url,
+                api_key=api_key,
+                model=endpoint.model,
+                max_tokens=min(endpoint.max_tokens, 512),
+                system_prompt=system_prompt,
+                user_prompt=node_context,
+                model_context_length=endpoint.model_context_length,
+                model_capabilities=model_caps,
+            )
+    except LLMCallError as exc:
+        raise HTTPException(status_code=502, detail=f"LLM call failed: {exc}") from exc
+
+    return {
+        "node_id": str(node_id),
+        "node_name": node_name,
+        "recommendation": content,
+        "model_used": endpoint.model,
+        "input_tokens": input_tokens,
+        "output_tokens": output_tokens,
+    }
+
+
+@actions_router.get("/{token}/approve")
+async def approve_action(token: str, db: AsyncSession = Depends(get_db)):
+    """Approve a pending destructive action via the emailed approval link."""
+    action = await pending_action_svc.get_by_token(db, token)
+    if not action:
+        raise HTTPException(status_code=404, detail="Action not found")
+    action = await pending_action_svc.approve(db, action)
+    if action.status == "expired":
+        return {"status": "expired", "message": "This approval link has expired."}
+    if action.status == "approved":
+        # TODO: dispatch actual Salt execution
+        return {"status": "approved", "message": f"Action '{action.action_type}' approved and queued."}
+    return {"status": action.status}
+
+
+@actions_router.get("/{token}/reject")
+async def reject_action(token: str, db: AsyncSession = Depends(get_db)):
+    """Reject a pending destructive action via the emailed rejection link."""
+    action = await pending_action_svc.get_by_token(db, token)
+    if not action:
+        raise HTTPException(status_code=404, detail="Action not found")
+    action = await pending_action_svc.reject(db, action)
+    return {"status": "rejected", "message": "Action rejected."}

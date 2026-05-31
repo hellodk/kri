@@ -79,5 +79,9 @@ celery_app.conf.update(
             "task": "fleet_platform.workers.digest_tasks.weekly_digest",
             "schedule": crontab(hour=8, minute=0, day_of_week=1),  # Monday 08:00 UTC
         },
+        "reap-orphaned-jobs": {
+            "task": "fleet_platform.workers.maintenance.reap_orphaned_jobs",
+            "schedule": 900,  # every 15 minutes — clears jobs orphaned by worker restarts
+        },
     },
 )

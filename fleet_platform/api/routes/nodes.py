@@ -225,7 +225,7 @@ async def delete_node(
     await db.commit()
 
 
-_SORT_FIELDS = {"drift_score", "hostname", "status", "last_seen_at", "created_at"}
+_SORT_FIELDS = {"drift_score", "hostname", "status", "last_seen_at", "created_at", "cpu_usage_pct", "mem_usage_pct"}
 
 
 @router.get("", response_model=PaginatedResponse[NodeListItem])
@@ -237,6 +237,8 @@ async def list_nodes(
     os_version: str | None = None,
     drift_min: int | None = Query(default=None, ge=0),
     drift_max: int | None = Query(default=None, ge=0),
+    cpu_min: float | None = Query(default=None),
+    mem_min: float | None = Query(default=None),
     sort: str = "drift_score:desc",
     page: int = Query(default=1, ge=1),
     per_page: int = Query(default=25, ge=1, le=200),
@@ -263,6 +265,12 @@ async def list_nodes(
 
     if drift_max is not None:
         query = query.where(Node.drift_score <= drift_max)
+
+    if cpu_min is not None:
+        query = query.where(Node.cpu_usage_pct >= cpu_min)
+
+    if mem_min is not None:
+        query = query.where(Node.mem_usage_pct >= mem_min)
 
     if tag:
         key, _sep1, value = tag.partition(":")
