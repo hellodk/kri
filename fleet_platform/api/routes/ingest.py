@@ -72,6 +72,24 @@ def _is_valid_ip(addr: str) -> bool:
         return False
 
 
+def _safe_float(grains: dict, *keys: str) -> float | None:
+    """Try each key path in order; return float or None."""
+    for key in keys:
+        parts = key.split(".")
+        val: object = grains
+        for p in parts:
+            if not isinstance(val, dict):
+                val = None
+                break
+            val = val.get(p)
+        if val is not None:
+            try:
+                return float(val)  # type: ignore[arg-type]
+            except (TypeError, ValueError):
+                pass
+    return None
+
+
 def _extract_storage_gb(grains: dict) -> float | None:
     for key in ("disk_total", "disks_total_size"):
         val = grains.get(key)
@@ -141,6 +159,11 @@ def _extract_node_updates(grains: dict) -> dict:
         "ram_gb": grains.get("mem_total", 0) / 1024 if grains.get("mem_total") else None,
         "storage_gb": _extract_storage_gb(grains),
         "status": "online",
+        "cpu_usage_pct": _safe_float(grains, "cpu_percent", "ps.cpu_percent"),
+        "mem_usage_pct": _safe_float(grains, "mem_percent", "virtual_memory.percent"),
+        "disk_io_read_kbs": _safe_float(grains, "disk_io_counters.read_kbs", "disk_read_kbs"),
+        "disk_io_write_kbs": _safe_float(grains, "disk_io_counters.write_kbs", "disk_write_kbs"),
+        "gpu_usage_pct": _safe_float(grains, "gpu_percent", "gpu_usage"),
     }
 
 

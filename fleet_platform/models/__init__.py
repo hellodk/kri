@@ -12,6 +12,7 @@ from fleet_platform.models.llm_query_log import LLMQueryLog
 from fleet_platform.models.node import Node, Tag
 from fleet_platform.models.node_health_snapshot import NodeHealthSnapshot
 from fleet_platform.models.node_secret import NodeSecret
+from fleet_platform.models.pending_action import PendingAction
 from fleet_platform.models.platform_setting import PlatformSetting
 from fleet_platform.models.sbom import SBOMComponent, SBOMScan
 from fleet_platform.models.user import User
@@ -34,4 +35,5 @@ __all__ = [
     "LLMQueryLog",
     "NodeHealthSnapshot",
     "JenkinsBuildEvent",
+    "PendingAction",
 ]

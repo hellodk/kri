@@ -6,6 +6,7 @@ export const fleetApi = {
   nodes: (params: {
     page?: number; per_page?: number; status?: string; sort?: string;
     search?: string; os_version?: string; drift_min?: number; drift_max?: number; tag?: string;
+    cpu_min?: number; mem_min?: number;
   }) => {
     const q = new URLSearchParams()
     if (params.page)       q.set('page',       String(params.page))
@@ -17,6 +18,8 @@ export const fleetApi = {
     if (params.tag)        q.set('tag',        params.tag)
     if (params.drift_min != null) q.set('drift_min', String(params.drift_min))
     if (params.drift_max != null) q.set('drift_max', String(params.drift_max))
+    if (params.cpu_min != null) q.set('cpu_min', String(params.cpu_min))
+    if (params.mem_min != null) q.set('mem_min', String(params.mem_min))
     return api.get<Paginated<Node>>(`/api/v1/nodes?${q}`)
   },
   node: (id: string) => api.get<NodeDetail>(`/api/v1/nodes/${id}`),

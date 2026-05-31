@@ -33,6 +33,8 @@ from fleet_platform.api.routes.group_secrets import router as group_secrets_rout
 from fleet_platform.api.routes.ios_tracking import router as ios_tracking_router
 from fleet_platform.api.routes.llm import router as llm_router
 from fleet_platform.api.routes.monitoring import router as monitoring_router
+from fleet_platform.api.routes.node_actions import actions_router
+from fleet_platform.api.routes.node_actions import router as node_actions_router
 from fleet_platform.api.routes.node_secrets import router as node_secrets_router
 from fleet_platform.api.routes.oidc import router as oidc_router
 from fleet_platform.api.routes.provisioning import router as provisioning_router
@@ -139,6 +141,8 @@ def create_app() -> FastAPI:
     app.include_router(oidc_router, tags=["oidc"])
     app.include_router(builds_router, tags=["builds"])
     app.include_router(monitoring_router, tags=["monitoring"])
+    app.include_router(node_actions_router)
+    app.include_router(actions_router)
 
     @app.get("/metrics", include_in_schema=False)
     async def metrics_endpoint():

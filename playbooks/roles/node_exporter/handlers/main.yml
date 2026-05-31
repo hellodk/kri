@@ -1,0 +1,5 @@
+---
+- name: restart node_exporter macos
+  command: launchctl kickstart -k system/io.prometheus.node_exporter
+  become: true
+  when: ansible_system == "Darwin"

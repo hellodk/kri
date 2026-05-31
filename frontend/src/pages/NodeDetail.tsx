@@ -399,6 +399,7 @@ export function NodeDetail() {
   // Quick Actions state
   const [actionResult, setActionResult] = useState<string | null>(null)
   const [runningAction, setRunningAction] = useState(false)
+  const [deployingMonitoring, setDeployingMonitoring] = useState(false)
   const [rebootConfirm, setRebootConfirm] = useState(false)
   const [quickActionTaskId, setQuickActionTaskId] = useState<string | null>(null)
   const [quickActionPolling, setQuickActionPolling] = useState(false)
@@ -670,6 +671,19 @@ export function NodeDetail() {
       toast(msg, 'error')
     } finally {
       setRunningAction(false)
+    }
+  }
+
+  async function deployNodeExporter() {
+    if (!node || !nodeId) return
+    setDeployingMonitoring(true)
+    try {
+      await playbooksApi.run('deploy_node_exporter.yml', 'node', nodeId, {})
+      toast('node_exporter deployment queued')
+    } catch (e: unknown) {
+      toast(e instanceof Error ? e.message : 'Deploy failed', 'error')
+    } finally {
+      setDeployingMonitoring(false)
     }
   }
 
@@ -1126,6 +1140,14 @@ export function NodeDetail() {
                 className="px-3 py-1.5 text-xs font-medium bg-red-100 text-red-700 rounded-md hover:bg-red-200 disabled:opacity-50 transition-colors"
               >
                 Reboot
+              </button>
+              <button
+                onClick={deployNodeExporter}
+                disabled={deployingMonitoring}
+                className="px-3 py-1.5 text-xs font-medium bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg disabled:opacity-50 transition-colors"
+                title="Install and start Prometheus node_exporter on this node"
+              >
+                {deployingMonitoring ? 'Deploying…' : 'Deploy Monitoring'}
               </button>
             </div>
             {rebootConfirm && (
