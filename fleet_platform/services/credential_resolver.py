@@ -33,7 +33,7 @@ async def resolve_node_credentials(node: Node, db: AsyncSession) -> dict:
     """
     # 1. Node-level override
     if node.ssh_username:
-        password = ""
+        password = ""  # nosec B105 — default before decryption attempt, not a hardcoded credential
         if node.ssh_password_enc:
             try:
                 password = decrypt_secret(node.ssh_password_enc)
@@ -72,7 +72,7 @@ async def resolve_node_credentials(node: Node, db: AsyncSession) -> dict:
     )
     group = result.scalar_one_or_none()
     if group and group.ssh_username:
-        password = ""
+        password = ""  # nosec B105 — default before decryption attempt, not a hardcoded credential
         if group.ssh_password_enc:
             try:
                 password = decrypt_secret(group.ssh_password_enc)

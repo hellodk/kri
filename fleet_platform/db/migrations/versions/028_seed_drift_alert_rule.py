@@ -3,8 +3,8 @@
 Any node exceeding drift score 50 will fire an alert (and email if SMTP configured).
 Threshold matches _DEFAULT_OFFLINE_HOURS spirit: 50 = "High" severity in drift engine.
 """
-from alembic import op
 import sqlalchemy as sa
+from alembic import op
 
 revision = '028'
 down_revision = '027'

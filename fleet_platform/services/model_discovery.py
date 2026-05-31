@@ -1,6 +1,8 @@
 """Discover available models from a live LLM provider endpoint."""
 from __future__ import annotations
+
 import logging
+
 import httpx
 
 from fleet_platform.services.llm_caller import normalize_openai_base_url

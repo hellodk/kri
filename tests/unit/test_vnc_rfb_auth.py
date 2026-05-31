@@ -7,13 +7,11 @@ Tests cover:
   - _rfb_auth: returns False when server reports authentication failure
   - _rfb_auth: returns False when no password is stored but server requires type-2
 """
-import asyncio
 import struct
 
 import pytest
 
 from fleet_platform.api.routes.vnc import _rfb_auth, _vnc_des_key
-
 
 # ---------------------------------------------------------------------------
 # _vnc_des_key tests

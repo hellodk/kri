@@ -83,9 +83,9 @@ async def get_salt_allowlist(
 ):
     """Return the current Salt function allowlist from platform settings."""
     from fleet_platform.services.platform_settings_svc import (
-        SALT_ALLOWED_FUNCTIONS,
         _DEFAULT_SALT_FUNCTIONS,
         _SALT_MINIMUM_FUNCTIONS,
+        SALT_ALLOWED_FUNCTIONS,
         get_setting,
     )
 
@@ -117,14 +117,15 @@ async def run_cmd(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             detail="minion_ids must not be empty",
         )
+    import json as _json
+
     from fleet_platform.services.platform_settings_svc import (
-        SALT_ALLOWED_FUNCTIONS,
         _DEFAULT_SALT_FUNCTIONS,
         _SALT_MINIMUM_FUNCTIONS,
+        SALT_ALLOWED_FUNCTIONS,
         get_setting,
     )
     from fleet_platform.workers.salt_tasks import run_salt_cmd
-    import json as _json
 
     raw = await get_setting(db, SALT_ALLOWED_FUNCTIONS)
     if raw:

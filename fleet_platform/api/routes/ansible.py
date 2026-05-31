@@ -134,6 +134,7 @@ async def bootstrap_status(
     _: dict = Depends(require_role("operator", "admin")),
 ):
     from datetime import UTC, datetime, timedelta  # noqa: PLC0415
+
     from fleet_platform.models.bootstrap_run import BootstrapRun  # noqa: PLC0415
     result = await db.execute(select(Node).where(Node.id == node_id))
     node = result.scalar_one_or_none()
@@ -361,7 +362,6 @@ async def validate_source(
     _: dict = Depends(require_role("operator", "admin")),
 ):
     """Validate a playbook source without saving it. Returns scan results."""
-    import asyncio
     import os
     import tempfile
 
@@ -576,7 +576,6 @@ async def add_source(
     _: dict = Depends(require_role("operator", "admin")),
 ):
     """Add a new playbook source (local directory or git repository)."""
-    import asyncio
     import json as _json
     import os
 

@@ -1,6 +1,8 @@
 """Unit tests for model_discovery service (Closes #245)."""
-import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
+
+import pytest
+
 from fleet_platform.services.model_discovery import discover_models
 
 

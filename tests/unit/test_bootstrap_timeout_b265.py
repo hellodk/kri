@@ -1,5 +1,4 @@
 """Tests for #265: bootstrap timeout reduced to 10 minutes."""
-import ast
 from pathlib import Path
 
 
