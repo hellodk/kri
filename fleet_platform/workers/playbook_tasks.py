@@ -16,7 +16,7 @@ from sqlalchemy import select
 from fleet_platform.db.session import get_sync_db
 from fleet_platform.models.ansible_job import AnsibleJob
 from fleet_platform.models.node import Node
-from fleet_platform.workers.ansible_tasks import _get_bootstrap_settings
+from fleet_platform.services.credential_resolver import resolve_node_credentials_sync
 from fleet_platform.workers.celery_app import celery_app
 
 _DEFAULT_PLAYBOOKS_DIR = Path(__file__).parent.parent.parent / "playbooks"
@@ -73,14 +73,44 @@ def _resolve_playbook_path(playbook_filename: str, db) -> tuple[Path, Path]:
     return _DEFAULT_PLAYBOOKS_DIR / playbook_filename, _DEFAULT_PLAYBOOKS_DIR
 
 
-def _write_static_inventory(tmpdir: str, hosts: list[tuple[str, str, str]]) -> str:
+_SOURCE_LABELS = {"node": "node override", "global": "global default", "manual": "manual override"}
+
+
+def _source_label(source: str) -> str:
+    # group sources keep their "group:<name>" form; others get a friendly label
+    return _SOURCE_LABELS.get(source, source)
+
+
+def _write_static_inventory(tmpdir: str, hosts: list[dict]) -> str:
+    """Write a per-host inventory with each host's resolved SSH credentials.
+
+    Credentials differ per host (node override vs group vs global), so they go
+    inline per host rather than via a single global env var. Private keys are
+    written to 0600 files in *tmpdir* and referenced, never inlined (#279).
+    """
     lines = ["[targets]"]
-    for hostname, ip, user in hosts:
-        lines.append(f"{hostname} ansible_host={ip} ansible_user={user}")
+    for h in hosts:
+        parts = [h["hostname"], f"ansible_host={h['ip']}", f"ansible_user={h['ssh_user']}"]
+        if h.get("auth_mode") == "key" and h.get("ssh_key"):
+            key_path = Path(tmpdir) / f"{_safe_label(h['hostname'])}.key"
+            key_path.write_text(h["ssh_key"] if h["ssh_key"].endswith("\n") else h["ssh_key"] + "\n")
+            key_path.chmod(0o600)
+            parts.append(f"ansible_ssh_private_key_file={key_path}")
+        elif h.get("ssh_password"):
+            parts.append(f"ansible_ssh_pass={h['ssh_password']}")
+        lines.append(" ".join(parts))
     inv_path = Path(tmpdir) / "inventory.ini"
     inv_path.write_text("\n".join(lines))
-    inv_path.chmod(0o600)  # not world-readable — contains IP addresses
+    inv_path.chmod(0o600)  # holds SSH passwords + IPs — never world/group readable
     return str(inv_path)
+
+
+def _credential_source_banner(hosts: list[dict]) -> str:
+    """Human-readable summary of where each host's credentials came from (#279)."""
+    lines = ["Credentials resolved automatically (node → group → global):"]
+    for h in hosts:
+        lines.append(f"  {h['hostname']} ({h['ip']}) ← {_source_label(h['credential_source'])}")
+    return "\n".join(lines)
 
 
 def _write_var_file(path: Path, vars_dict: dict) -> None:
@@ -88,14 +118,37 @@ def _write_var_file(path: Path, vars_dict: dict) -> None:
     path.write_text(_yaml.dump(vars_dict, default_flow_style=False, allow_unicode=True))
 
 
-def _resolve_hosts(db, job: AnsibleJob, ssh_user: str) -> list[tuple[str, str, str]] | None:
+def _host_entry(node: Node, db, override: dict | None) -> dict:
+    """Build a host inventory entry, resolving credentials per node (#279).
+
+    *override* (an explicit ssh_user/ssh_password supplied via the API) wins
+    over the resolver and is reported as source ``manual``.
+    """
+    if override and override.get("ssh_user"):
+        creds = {
+            "ssh_user": override["ssh_user"],
+            "ssh_password": override.get("ssh_password") or "",
+            "ssh_key": "",
+            "auth_mode": "password",
+            "credential_source": "manual",
+        }
+    else:
+        creds = resolve_node_credentials_sync(node, db)
+    return {
+        "hostname": node.hostname or node.minion_id,
+        "ip": node.ip_address,
+        **creds,
+    }
+
+
+def _resolve_hosts(db, job: AnsibleJob, override: dict | None = None) -> list[dict] | None:
     if job.target_type == "node":
         node = db.execute(
             select(Node).where(Node.id == _uuid.UUID(job.target_id))
         ).scalar_one_or_none()
         if not node or not node.ip_address:
             return None
-        return [(node.hostname or node.minion_id, node.ip_address, ssh_user)]
+        return [_host_entry(node, db, override)]
 
     if job.target_type == "group":
         from fleet_platform.models.group import GroupMember
@@ -108,7 +161,7 @@ def _resolve_hosts(db, job: AnsibleJob, ssh_user: str) -> list[tuple[str, str, s
         nodes = db.execute(
             select(Node).where(Node.id.in_(node_ids), Node.ip_address.isnot(None))
         ).scalars().all()
-        return [(n.hostname or n.minion_id, n.ip_address, ssh_user) for n in nodes]
+        return [_host_entry(n, db, override) for n in nodes]
 
     return None
 
@@ -148,16 +201,16 @@ def run_playbook(self, job_id: str, ssh_username: str | None = None, ssh_passwor
             job.status = "running"
             job.started_at = datetime.now(UTC)
             db.commit()
-            _, _settings_ssh_user, _settings_ssh_password, _ = _get_bootstrap_settings(db)
-            ssh_user = ssh_username or _settings_ssh_user
-            ssh_password = _settings_ssh_password if ssh_password is None else ssh_password
+            # Explicit per-call override (optional, e.g. via API). When absent,
+            # credentials are auto-resolved per host (node → group → global).
+            override = {"ssh_user": ssh_username, "ssh_password": ssh_password} if ssh_username else None
 
             # Resolve playbook path across all configured sources (not just builtin)
             playbook_path, playbooks_dir = _resolve_playbook_path(job.playbook, db)
 
         with get_sync_db() as db:
             job = db.execute(select(AnsibleJob).where(AnsibleJob.id == job_uuid)).scalar_one()
-            hosts = _resolve_hosts(db, job, ssh_user)
+            hosts = _resolve_hosts(db, job, override)
 
         if not hosts:
             with get_sync_db() as db:
@@ -168,11 +221,20 @@ def run_playbook(self, job_id: str, ssh_username: str | None = None, ssh_passwor
                 db.commit()
             return {"status": "error", "reason": "no_hosts"}
 
+        # Tell the operator which credential source each host used (#279)
+        banner = _credential_source_banner(hosts)
+        stdout_lines.append(banner)
+        stdout_lines.append("")
+        with get_sync_db() as db:
+            job = db.execute(select(AnsibleJob).where(AnsibleJob.id == job_uuid)).scalar_one()
+            job.stdout = "\n".join(stdout_lines)
+            db.commit()
+
         with get_sync_db() as db:
             job = db.execute(select(AnsibleJob).where(AnsibleJob.id == job_uuid)).scalar_one()
             if job.extravars:
                 if job.target_type == "node" and hosts:
-                    hostname = _safe_label(hosts[0][0])
+                    hostname = _safe_label(hosts[0]["hostname"])
                     vf = playbooks_dir / "host_vars" / f"{hostname}.yml"
                     _write_var_file(vf, job.extravars)
                 elif job.target_type == "group":
@@ -191,8 +253,8 @@ def run_playbook(self, job_id: str, ssh_username: str | None = None, ssh_passwor
                 inventory=inv_path,
                 extravars=job.extravars or {},
                 envvars={
-                    "ANSIBLE_USER": ssh_user,
-                    "ANSIBLE_PASSWORD": ssh_password,
+                    # SSH credentials are set per host in the inventory (#279),
+                    # resolved node → group → global — not via a single global env.
                     "ANSIBLE_COLLECTIONS_PATH": str(playbooks_dir / "collections" / "installed"),
                     # Reduce SSH timeout so stalled tasks surface faster
                     "ANSIBLE_TIMEOUT": "30",

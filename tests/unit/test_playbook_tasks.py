@@ -4,9 +4,14 @@ from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 
+def _host(hostname, ip, user, password="", source="node"):
+    return {"hostname": hostname, "ip": ip, "ssh_user": user, "ssh_password": password,
+            "ssh_key": "", "auth_mode": "password", "credential_source": source}
+
+
 def test_write_static_inventory_single_host(tmp_path):
     from fleet_platform.workers.playbook_tasks import _write_static_inventory
-    inv_path = _write_static_inventory(str(tmp_path), [("mac-01", "10.0.1.11", "admin")])
+    inv_path = _write_static_inventory(str(tmp_path), [_host("mac-01", "10.0.1.11", "admin")])
     content = Path(inv_path).read_text()
     assert "[targets]" in content
     assert "mac-01 ansible_host=10.0.1.11 ansible_user=admin" in content
@@ -14,7 +19,7 @@ def test_write_static_inventory_single_host(tmp_path):
 
 def test_write_static_inventory_multiple_hosts(tmp_path):
     from fleet_platform.workers.playbook_tasks import _write_static_inventory
-    hosts = [("mac-01", "10.0.1.11", "admin"), ("mac-02", "10.0.1.12", "admin")]
+    hosts = [_host("mac-01", "10.0.1.11", "admin"), _host("mac-02", "10.0.1.12", "admin")]
     inv_path = _write_static_inventory(str(tmp_path), hosts)
     content = Path(inv_path).read_text()
     assert "mac-01 ansible_host=10.0.1.11" in content
