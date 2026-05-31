@@ -1,4 +1,5 @@
 import { useParams, Link } from 'react-router-dom'
+import { useEffect, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { playbooksApi, type AnsibleJob } from '../api/playbooks'
 import { formatDistanceToNow, formatDuration, intervalToDuration } from 'date-fns'
@@ -49,6 +50,23 @@ export function PlaybookJobDetail() {
 
   const isLive = job.status === 'running' || job.status === 'pending'
 
+  const [elapsed, setElapsed] = useState(0)
+
+  useEffect(() => {
+    if (!isLive || !job?.started_at) { setElapsed(0); return }
+    const base = new Date(job.started_at).getTime()
+    const tick = () => setElapsed(Math.floor((Date.now() - base) / 1000))
+    tick()
+    const id = setInterval(tick, 1000)
+    return () => clearInterval(id)
+  }, [isLive, job?.started_at])
+
+  function fmtElapsed(s: number): string {
+    const m = Math.floor(s / 60)
+    const sec = s % 60
+    return m > 0 ? `${m}m ${sec}s elapsed` : `${sec}s elapsed`
+  }
+
   return (
     <div className="space-y-6 max-w-5xl">
       <div className="flex items-center gap-3">
@@ -65,7 +83,12 @@ export function PlaybookJobDetail() {
               <h1 className="text-lg font-bold text-gray-900 font-mono">{job.playbook}</h1>
               {statusBadge(job.status)}
               {isLive && (
-                <span className="text-xs text-blue-600 font-medium animate-pulse">● live</span>
+                <div className="flex items-center gap-2">
+                  <span className="text-xs text-blue-600 font-medium animate-pulse">● live</span>
+                  {elapsed > 0 && (
+                    <span className="text-xs text-gray-400 font-mono">{fmtElapsed(elapsed)}</span>
+                  )}
+                </div>
               )}
             </div>
             <p className="text-sm text-gray-500">
@@ -102,7 +125,15 @@ export function PlaybookJobDetail() {
       {/* Logs */}
       <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
         <div className="flex items-center justify-between px-4 py-2.5 border-b border-gray-100 bg-gray-50">
-          <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Output</p>
+          <div>
+            <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Output</p>
+            {job?.stdout && (() => {
+              const m = job.stdout.match(/\[running: ([^\]]+)\]\s*$/)
+              return m ? (
+                <p className="text-xs text-amber-600 mt-0.5 font-mono">▶ {m[1]}</p>
+              ) : null
+            })()}
+          </div>
           {isLive && (
             <span className="text-xs text-blue-500">Polling every 3s…</span>
           )}

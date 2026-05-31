@@ -1,13 +1,35 @@
 # fleet_platform/services/playbook_discovery.py
+"""Discover Ansible playbooks and roles from a directory tree.
+
+Scans:
+  - <root>/*.yml               — top-level playbooks
+  - <root>/<subdir>/*.yml      — one level of subdirectories (e.g. playbooks/, deploy/)
+  - <root>/roles/<name>/       — top-level roles
+  - <root>/playbooks/roles/<name>/  — roles inside a playbooks/ subdir
+
+Skips 'roles' subdirectories when scanning for playbooks (handled separately).
+Skips files that are not valid Ansible play lists (e.g. vars files, handlers).
+"""
+from __future__ import annotations
+
+import logging
 from dataclasses import dataclass, field
 from pathlib import Path
 
 import yaml
 
+_log = logging.getLogger(__name__)
+
+# Subdirectory names to skip when scanning for playbooks
+_SKIP_SUBDIRS = frozenset({
+    "roles", "tasks", "handlers", "vars", "defaults", "meta",
+    "templates", "files", "group_vars", "host_vars", ".git",
+})
+
 
 @dataclass
 class PlaybookEntry:
-    filename: str        # "deploy_config.yml" or "roles/salt_minion"
+    filename: str        # "deploy_config.yml", "playbooks/deploy.yml", "roles/salt_minion"
     name: str            # human-readable name
     description: str | None
     entry_type: str      # "playbook" | "role"
@@ -19,7 +41,6 @@ def _lint_yaml(path: Path) -> list[str]:
     """Return list of error strings, empty if valid."""
     try:
         with open(path) as f:
-            # consume all documents in multi-doc YAML files
             list(yaml.safe_load_all(f))
         return []
     except yaml.YAMLError as e:
@@ -34,23 +55,41 @@ def _parse_description(text: str) -> str | None:
     return None
 
 
-def _discover_playbooks(playbooks_dir: Path) -> list[PlaybookEntry]:
+def _is_playbook(path: Path) -> tuple[bool, str, dict]:
+    """Return (is_playbook, name, default_vars) for a YAML file."""
+    try:
+        raw = path.read_text()
+        data = yaml.safe_load(raw)
+        if not isinstance(data, list) or not data or not isinstance(data[0], dict):
+            return False, "", {}
+        # A playbook starts with a play dict that has 'hosts' or 'import_playbook'
+        first = data[0]
+        if not ("hosts" in first or "import_playbook" in first or "name" in first):
+            return False, "", {}
+        play_name = first.get("name", path.stem)
+        default_vars = first.get("vars", {}) or {}
+        return True, play_name, default_vars if isinstance(default_vars, dict) else {}
+    except Exception:
+        return False, "", {}
+
+
+def _discover_playbooks_in_dir(scan_dir: Path, prefix: str = "") -> list[PlaybookEntry]:
+    """Discover playbooks in a single directory (non-recursive)."""
     results = []
-    for path in sorted(playbooks_dir.glob("*.yml")):
+    for path in sorted(scan_dir.glob("*.yml")):
         lint_errors = _lint_yaml(path)
+        ok, play_name, default_vars = _is_playbook(path)
+        if not ok:
+            continue
+        filename = f"{prefix}{path.name}" if prefix else path.name
         try:
             raw = path.read_text()
-            data = yaml.safe_load(raw)
-            if not isinstance(data, list) or not data:
-                continue
-            play_name = data[0].get("name", path.stem)
-            default_vars = data[0].get("vars", {}) or {}
             results.append(PlaybookEntry(
-                filename=path.name,
+                filename=filename,
                 name=play_name,
                 description=_parse_description(raw),
                 entry_type="playbook",
-                default_vars=default_vars if isinstance(default_vars, dict) else {},
+                default_vars=default_vars,
                 lint_errors=lint_errors,
             ))
         except Exception:
@@ -58,8 +97,8 @@ def _discover_playbooks(playbooks_dir: Path) -> list[PlaybookEntry]:
     return results
 
 
-def _discover_roles(playbooks_dir: Path) -> list[PlaybookEntry]:
-    roles_dir = playbooks_dir / "roles"
+def _discover_roles_in_dir(roles_dir: Path, prefix: str = "roles/") -> list[PlaybookEntry]:
+    """Discover roles in a roles/ directory."""
     if not roles_dir.is_dir():
         return []
     results = []
@@ -81,7 +120,7 @@ def _discover_roles(playbooks_dir: Path) -> list[PlaybookEntry]:
             except Exception:
                 pass
         results.append(PlaybookEntry(
-            filename=f"roles/{role_path.name}",
+            filename=f"{prefix}{role_path.name}",
             name=role_path.name.replace("_", " ").title(),
             description=description,
             entry_type="role",
@@ -92,4 +131,40 @@ def _discover_roles(playbooks_dir: Path) -> list[PlaybookEntry]:
 
 
 def discover_all(playbooks_dir: Path) -> list[PlaybookEntry]:
-    return _discover_playbooks(playbooks_dir) + _discover_roles(playbooks_dir)
+    """Discover all playbooks and roles under *playbooks_dir*.
+
+    Scans root-level *.yml, one level of subdirectories (skipping role-reserved
+    names), root-level roles/, and playbooks/roles/ for external repos that
+    use the standard Ansible collection layout.
+    """
+    entries: list[PlaybookEntry] = []
+
+    if not playbooks_dir.is_dir():
+        return entries
+
+    # 1. Root-level playbooks
+    entries.extend(_discover_playbooks_in_dir(playbooks_dir))
+
+    # 2. One-level subdirectory scan (e.g. playbooks/, deploy/, provision/)
+    for subdir in sorted(playbooks_dir.iterdir()):
+        if not subdir.is_dir():
+            continue
+        if subdir.name in _SKIP_SUBDIRS:
+            continue
+        # Use subdir name as prefix so filename stays runnable
+        entries.extend(_discover_playbooks_in_dir(subdir, prefix=f"{subdir.name}/"))
+        # Also look for roles inside this subdir (e.g. playbooks/roles/)
+        entries.extend(_discover_roles_in_dir(subdir / "roles", prefix=f"{subdir.name}/roles/"))
+
+    # 3. Root-level roles/
+    entries.extend(_discover_roles_in_dir(playbooks_dir / "roles"))
+
+    # Deduplicate by filename (subdirectory scan may overlap with root scan in edge cases)
+    seen: set[str] = set()
+    deduped: list[PlaybookEntry] = []
+    for e in entries:
+        if e.filename not in seen:
+            seen.add(e.filename)
+            deduped.append(e)
+
+    return deduped

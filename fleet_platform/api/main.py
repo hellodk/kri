@@ -68,6 +68,13 @@ async def lifespan(app: FastAPI):
     # do not re-push grains automatically; this queues a one-shot refresh).
     from fleet_platform.workers.ansible_tasks import refresh_all_node_grains
     refresh_all_node_grains.delay()
+    # Ensure controller SSH keypair exists once at startup — not on every request.
+    # Running here avoids blocking the settings GET endpoint with RSA keygen.
+    from fleet_platform.services.ssh_keypair import ensure_controller_keypair
+    try:
+        ensure_controller_keypair()
+    except PermissionError as exc:
+        _log.warning("Could not create controller keypair at startup: %s", exc)
     yield
     await close_redis()
 

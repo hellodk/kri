@@ -23,7 +23,7 @@ _DEFAULT_PLAYBOOKS_DIR = Path(__file__).parent.parent.parent / "playbooks"
 
 _log = logging.getLogger(__name__)
 _SAFE_PATH_RE = re.compile(r'^[a-zA-Z0-9._\-]{1,128}$')
-_LOG_BATCH_INTERVAL = 30  # seconds between intermediate stdout DB flushes
+_LOG_BATCH_INTERVAL = 5  # seconds between intermediate stdout DB flushes
 
 
 def _safe_label(label: str) -> str:

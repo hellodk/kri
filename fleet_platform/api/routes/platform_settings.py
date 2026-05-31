@@ -42,7 +42,7 @@ from fleet_platform.services.platform_settings_svc import (
     invalidate_salt_deny_cache,
     set_setting,
 )
-from fleet_platform.services.ssh_keypair import ensure_controller_keypair, get_controller_pubkey
+from fleet_platform.services.ssh_keypair import get_controller_pubkey
 
 router = APIRouter(prefix="/api/v1/settings")
 
@@ -78,7 +78,6 @@ async def get_settings(
     db: AsyncSession = Depends(get_db),
     _: dict = Depends(require_role("admin")),
 ):
-    ensure_controller_keypair()
     # Single bulk SELECT replaces 21 sequential queries (#284)
     s = await get_settings_bulk(
         db,
@@ -138,7 +137,6 @@ async def update_settings(
     db: AsyncSession = Depends(get_db),
     _: dict = Depends(require_role("admin")),
 ):
-    ensure_controller_keypair()
     if payload.salt_master_address is not None:
         await set_setting(db, SALT_MASTER, payload.salt_master_address)
     if payload.kri_api_url is not None:
