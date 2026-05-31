@@ -1,6 +1,6 @@
 """Unit tests for ssh_keypair — controller keypair management (closes #309)."""
+
 import pytest
-from pathlib import Path
 
 
 def test_ensure_creates_keypair_when_missing(tmp_path):

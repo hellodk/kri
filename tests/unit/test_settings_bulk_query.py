@@ -79,7 +79,6 @@ async def test_bulk_empty_keys_returns_empty_dict():
 @pytest.mark.asyncio
 async def test_bulk_corrupt_ciphertext_returns_none_for_bad_key_only(caplog):
     """A corrupt ciphertext for one key must not prevent other keys from returning (#308)."""
-    import logging
     from fleet_platform.services.platform_settings_svc import _fernet
 
     plaintext = "good-secret"

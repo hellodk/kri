@@ -84,11 +84,10 @@ async def test_build_fleet_context_assembles_prompt():
         node_count_result, online_count_result, groups_result, nodes_result, membership_result,
     ])
 
-    async def fake_get_settings_bulk(db, keys):
-        mapping = {"salt_master_address": "salt.local", "playbooks_dir": "/srv/plays", "llm_include_node_ips": "true"}
-        return {k: mapping.get(k) for k in keys}
+    async def fake_get_setting(db, key):
+        return {"salt_master_address": "salt.local", "ansible_endpoint_url": "/srv/plays"}.get(key)
 
-    with patch.object(svc_mod, "get_settings_bulk", side_effect=fake_get_settings_bulk):
+    with patch.object(svc_mod, "get_setting", side_effect=fake_get_setting):
         ctx = await build_fleet_context(mock_db, "salt_state")
 
     assert "7" in ctx
@@ -111,8 +110,8 @@ async def test_build_fleet_context_appends_intent_addendum():
 
     import fleet_platform.services.platform_settings_svc as svc_mod
 
-    async def fake_get_settings_bulk(db, keys):
-        return {k: None for k in keys}
+    async def fake_get_setting(db, key):
+        return None
 
     nodes_result2 = MagicMock()
     nodes_result2.all.return_value = []
@@ -120,7 +119,7 @@ async def test_build_fleet_context_appends_intent_addendum():
     membership_result2 = MagicMock()
     membership_result2.all.return_value = []
 
-    with patch.object(svc_mod, "get_settings_bulk", side_effect=fake_get_settings_bulk):
+    with patch.object(svc_mod, "get_setting", side_effect=fake_get_setting):
         mock_db.execute = AsyncMock(side_effect=[
             count_result, count_result, groups_result, nodes_result2, membership_result2,
         ])
