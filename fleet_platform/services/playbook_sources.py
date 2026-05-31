@@ -52,17 +52,10 @@ def _default_clone_path(url: str) -> str:
     return str(_GIT_CACHE_DIR / repo_name)
 
 
-def _sync_git_source(url: str, branch: str, local_path: str) -> Path:
-    """Clone or pull a git repo. Returns the local path."""
+def _clone_git_source(url: str, branch: str, local_path: str) -> Path:
+    """Clone a git repo for the first time. Does NOT pull — use _pull_git_source for updates."""
     p = Path(local_path)
-    if p.exists():
-        subprocess.run(
-            ["git", "-C", str(p), "pull", "--ff-only"],
-            check=False,
-            capture_output=True,
-            timeout=30,
-        )
-    else:
+    if not p.exists():
         p.parent.mkdir(parents=True, exist_ok=True)
         subprocess.run(
             ["git", "clone", "--depth=1", "--branch", branch, url, str(p)],
@@ -73,8 +66,31 @@ def _sync_git_source(url: str, branch: str, local_path: str) -> Path:
     return p
 
 
+def _pull_git_source(local_path: str) -> None:
+    """Pull latest changes into an already-cloned repo."""
+    subprocess.run(
+        ["git", "-C", local_path, "pull", "--ff-only"],
+        check=False,
+        capture_output=True,
+        timeout=30,
+    )
+
+
+def _sync_git_source(url: str, branch: str, local_path: str) -> Path:
+    """Clone if needed, then pull. Used only by explicit sync operations."""
+    p = _clone_git_source(url, branch, local_path)
+    _pull_git_source(local_path)
+    return p
+
+
 def get_all_playbook_dirs(settings_value: str | None, builtin_dir: Path) -> list[Path]:
-    """Return all directories to scan for playbooks, starting with builtin."""
+    """Return all directories to scan for playbooks, starting with builtin.
+
+    For git sources: uses the already-cloned local cache directory WITHOUT
+    pulling. Git pulls only happen via sync_all_git_sources (explicit sync button
+    or after adding a new source). This keeps list_playbooks at ~0ms instead of
+    blocking for 1-2s per git source on every page load.
+    """
     dirs = [builtin_dir]
     if not settings_value:
         return dirs
@@ -91,7 +107,6 @@ def get_all_playbook_dirs(settings_value: str | None, builtin_dir: Path) -> list
             if p.is_dir():
                 dirs.append(p)
             else:
-                # Log both the original and translated paths to ease debugging
                 if raw != translated:
                     logger.warning(
                         "playbook source path does not exist: %s (translated from host path: %s)",
@@ -100,15 +115,25 @@ def get_all_playbook_dirs(settings_value: str | None, builtin_dir: Path) -> list
                 else:
                     logger.warning("playbook source path does not exist: %s", p)
         elif src_type == "git":
-            try:
-                p = _sync_git_source(
-                    url=src["url"],
-                    branch=src.get("branch", "main"),
-                    local_path=src.get("local_path") or _default_clone_path(src["url"]),
-                )
+            local_path = src.get("local_path") or _default_clone_path(src["url"])
+            p = Path(local_path)
+            if p.is_dir():
+                # Already cloned — use the cached clone as-is (no pull)
                 dirs.append(p)
-            except Exception as e:
-                logger.error("failed to sync git source %s: %s", src.get("url"), e)
+            else:
+                # First time: clone synchronously (only happens once per repo)
+                try:
+                    p = _clone_git_source(
+                        url=src["url"],
+                        branch=src.get("branch", "main"),
+                        local_path=local_path,
+                    )
+                    dirs.append(p)
+                except Exception as e:
+                    logger.error(
+                        "failed to clone git source %s: %s — run Sync to retry",
+                        src.get("url"), e,
+                    )
     return dirs
 
 

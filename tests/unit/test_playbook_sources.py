@@ -79,10 +79,13 @@ def test_sync_git_source_clones_if_not_exists(tmp_path):
             branch="main",
             local_path=str(clone_target),
         )
-    mock_run.assert_called_once()
-    args = mock_run.call_args[0][0]
-    assert args[0] == "git"
-    assert "clone" in args
+    # _sync_git_source calls both clone AND pull (used for explicit sync operations)
+    assert mock_run.call_count == 2
+    clone_call_args = mock_run.call_args_list[0][0][0]
+    assert clone_call_args[0] == "git"
+    assert "clone" in clone_call_args
+    pull_call_args = mock_run.call_args_list[1][0][0]
+    assert "pull" in pull_call_args
     assert result == clone_target
 
 
@@ -121,19 +124,24 @@ def test_get_all_playbook_dirs_local_nonexistent(tmp_path):
 
 
 def test_get_all_playbook_dirs_git_source(tmp_path):
+    """get_all_playbook_dirs uses the existing clone cache — no git pull on list."""
     builtin = tmp_path / "builtin"
     builtin.mkdir()
-    synced = tmp_path / "synced-repo"
+    # Simulate an already-cloned repo in the cache dir
+    cached_repo = tmp_path / "cached-repo"
+    cached_repo.mkdir()
     settings = json.dumps([
-        {"type": "git", "url": "https://github.com/org/repo.git", "branch": "main"}
+        {"type": "git", "url": "https://github.com/org/repo.git", "branch": "main",
+         "local_path": str(cached_repo)}
     ])
+    # _sync_git_source must NOT be called — get_all_playbook_dirs should use cache as-is
     with patch(
         "fleet_platform.services.playbook_sources._sync_git_source",
-        return_value=synced,
-    ):
+    ) as mock_sync:
         result = get_all_playbook_dirs(settings, builtin)
+    mock_sync.assert_not_called()  # no git pull on every list request
     assert builtin in result
-    assert synced in result
+    assert cached_repo in result
 
 
 def test_get_all_playbook_dirs_git_error_skipped(tmp_path):
