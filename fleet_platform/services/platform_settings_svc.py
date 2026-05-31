@@ -226,7 +226,14 @@ async def get_settings_bulk(db: AsyncSession, keys: list[str]) -> dict[str, str 
     out: dict[str, str | None] = {k: None for k in keys}
     for row in rows:
         if row.is_encrypted and row.value:
-            out[row.key] = _fernet().decrypt(row.value.encode()).decode()
+            try:
+                out[row.key] = _fernet().decrypt(row.value.encode()).decode()
+            except Exception:
+                out[row.key] = None
+                import logging as _logging
+                _logging.getLogger(__name__).warning(
+                    "get_settings_bulk: failed to decrypt key %r — returning None", row.key
+                )
         else:
             out[row.key] = row.value
     return out

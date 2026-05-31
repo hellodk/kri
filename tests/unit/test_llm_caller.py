@@ -377,3 +377,162 @@ async def test_stream_empty_response_returns_error_message():
         )
 
     assert content.startswith("[") and "empty" in content.lower()
+
+
+# ─── streaming edge cases (#309) ──────────────────────────────────────────────
+
+@pytest.mark.asyncio
+async def test_stream_skips_malformed_json_midstream_and_continues():
+    """A bad JSON chunk must be silently skipped; aggregation continues."""
+    from unittest.mock import AsyncMock, MagicMock, patch
+
+    from fleet_platform.services.llm_caller import call_openai_compat
+
+    async def _lines_with_bad_chunk():
+        yield f'data: {json.dumps({"choices": [{"delta": {"content": "Hello"}}]})}'
+        yield "data: {this is not valid json!!!"
+        yield f'data: {json.dumps({"choices": [{"delta": {"content": " world"}}]})}'
+        yield "data: [DONE]"
+
+    mock_response = MagicMock()
+    mock_response.raise_for_status = MagicMock()
+    mock_response.aiter_lines = _lines_with_bad_chunk
+
+    mock_client = MagicMock()
+    mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+    mock_client.__aexit__ = AsyncMock(return_value=None)
+    mock_stream_ctx = MagicMock()
+    mock_stream_ctx.__aenter__ = AsyncMock(return_value=mock_response)
+    mock_stream_ctx.__aexit__ = AsyncMock(return_value=None)
+    mock_client.stream = MagicMock(return_value=mock_stream_ctx)
+
+    with patch("fleet_platform.services.llm_caller.httpx.AsyncClient", return_value=mock_client):
+        content, _inp, _out = await call_openai_compat(
+            base_url="http://x", api_key=None, model="m",
+            max_tokens=128, system_prompt="sys", user_prompt="hi",
+        )
+
+    assert content == "Hello world"
+
+
+@pytest.mark.asyncio
+async def test_stream_parses_usage_tokens_from_final_chunk():
+    """Token counts must be extracted from the usage chunk, not left at 0."""
+    from unittest.mock import AsyncMock, MagicMock, patch
+
+    from fleet_platform.services.llm_caller import call_openai_compat
+
+    mock_response = MagicMock()
+    mock_response.raise_for_status = MagicMock()
+    mock_response.aiter_lines = lambda: _sse_lines(
+        "The answer is 42",
+        usage={"prompt_tokens": 123, "completion_tokens": 45},
+    )
+
+    mock_client = MagicMock()
+    mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+    mock_client.__aexit__ = AsyncMock(return_value=None)
+    mock_stream_ctx = MagicMock()
+    mock_stream_ctx.__aenter__ = AsyncMock(return_value=mock_response)
+    mock_stream_ctx.__aexit__ = AsyncMock(return_value=None)
+    mock_client.stream = MagicMock(return_value=mock_stream_ctx)
+
+    with patch("fleet_platform.services.llm_caller.httpx.AsyncClient", return_value=mock_client):
+        content, inp, out = await call_openai_compat(
+            base_url="http://x", api_key=None, model="m",
+            max_tokens=128, system_prompt="sys", user_prompt="hi",
+        )
+
+    assert inp == 123
+    assert out == 45
+    assert "42" in content
+
+
+@pytest.mark.asyncio
+async def test_stream_usage_missing_defaults_to_zero():
+    """If provider sends no usage chunk, tokens must be (content, 0, 0)."""
+    from unittest.mock import AsyncMock, MagicMock, patch
+
+    from fleet_platform.services.llm_caller import call_openai_compat
+
+    mock_response = MagicMock()
+    mock_response.raise_for_status = MagicMock()
+    mock_response.aiter_lines = lambda: _sse_lines("some content")  # no usage kwarg
+
+    mock_client = MagicMock()
+    mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+    mock_client.__aexit__ = AsyncMock(return_value=None)
+    mock_stream_ctx = MagicMock()
+    mock_stream_ctx.__aenter__ = AsyncMock(return_value=mock_response)
+    mock_stream_ctx.__aexit__ = AsyncMock(return_value=None)
+    mock_client.stream = MagicMock(return_value=mock_stream_ctx)
+
+    with patch("fleet_platform.services.llm_caller.httpx.AsyncClient", return_value=mock_client):
+        _content, inp, out = await call_openai_compat(
+            base_url="http://x", api_key=None, model="m",
+            max_tokens=128, system_prompt="sys", user_prompt="hi",
+        )
+
+    assert inp == 0
+    assert out == 0
+
+
+@pytest.mark.asyncio
+async def test_thinking_model_strips_think_blocks():
+    """Thinking models: <think>...</think> blocks must be stripped from output."""
+    from unittest.mock import AsyncMock, MagicMock, patch
+
+    from fleet_platform.services.llm_caller import call_openai_compat
+
+    mock_response = MagicMock()
+    mock_response.raise_for_status = MagicMock()
+    mock_response.aiter_lines = lambda: _sse_lines("<think>reasoning here</think>Final answer")
+
+    mock_client = MagicMock()
+    mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+    mock_client.__aexit__ = AsyncMock(return_value=None)
+    mock_stream_ctx = MagicMock()
+    mock_stream_ctx.__aenter__ = AsyncMock(return_value=mock_response)
+    mock_stream_ctx.__aexit__ = AsyncMock(return_value=None)
+    mock_client.stream = MagicMock(return_value=mock_stream_ctx)
+
+    with patch("fleet_platform.services.llm_caller.httpx.AsyncClient", return_value=mock_client):
+        content, _inp, _out = await call_openai_compat(
+            base_url="http://x", api_key=None, model="m",
+            max_tokens=128, system_prompt="sys", user_prompt="hi",
+            model_capabilities=["thinking"],
+        )
+
+    assert content == "Final answer"
+    assert "<think>" not in content
+
+
+@pytest.mark.asyncio
+async def test_max_tokens_clamped_to_model_context_length():
+    """max_tokens must be clamped to model_context_length when it would exceed it."""
+    from unittest.mock import AsyncMock, MagicMock, patch
+
+    from fleet_platform.services.llm_caller import call_openai_compat
+
+    mock_response = MagicMock()
+    mock_response.raise_for_status = MagicMock()
+    mock_response.aiter_lines = lambda: _sse_lines("ok")
+
+    mock_client = MagicMock()
+    mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+    mock_client.__aexit__ = AsyncMock(return_value=None)
+    mock_stream_ctx = MagicMock()
+    mock_stream_ctx.__aenter__ = AsyncMock(return_value=mock_response)
+    mock_stream_ctx.__aexit__ = AsyncMock(return_value=None)
+    mock_client.stream = MagicMock(return_value=mock_stream_ctx)
+
+    with patch("fleet_platform.services.llm_caller.httpx.AsyncClient", return_value=mock_client):
+        await call_openai_compat(
+            base_url="http://x", api_key=None, model="m",
+            max_tokens=99999, system_prompt="sys", user_prompt="hi",
+            model_context_length=4096,
+        )
+
+    _method, url, kwargs = mock_client.stream.call_args[0][0], mock_client.stream.call_args[0][1], mock_client.stream.call_args[1]
+    sent_payload = kwargs["json"]
+    assert sent_payload["max_tokens"] <= 4096
