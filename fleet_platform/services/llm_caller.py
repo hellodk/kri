@@ -32,6 +32,7 @@ async def call_openai_compat(
     max_tokens: int,
     system_prompt: str,
     user_prompt: str,
+    history: list[dict] | None = None,
 ) -> tuple[str, int, int]:
     """
     Call an OpenAI-compatible /chat/completions endpoint.
@@ -48,16 +49,18 @@ async def call_openai_compat(
     if len(system_prompt) > MAX_SYSTEM_CHARS:
         system_prompt = system_prompt[:MAX_SYSTEM_CHARS] + "\n[context truncated for model capacity]"
 
+    messages: list[dict] = [{"role": "system", "content": system_prompt}]
+    if history:
+        messages.extend(history[-10:])
+    messages.append({"role": "user", "content": user_prompt})
+
     payload = {
         "model": model,
         "max_tokens": max_tokens,
         "temperature": 0.3,       # reduce echo/repetition vs pure greedy decoding
         "top_p": 0.9,
         "stop": ["</s>", "<|im_end|>", "<|endoftext|>", "Human:", "User:"],
-        "messages": [
-            {"role": "system", "content": system_prompt},
-            {"role": "user", "content": user_prompt},
-        ],
+        "messages": messages,
     }
 
     try:
@@ -115,6 +118,7 @@ async def call_anthropic(
     max_tokens: int,
     system_prompt: str,
     user_prompt: str,
+    history: list[dict] | None = None,
 ) -> tuple[str, int, int]:
     """
     Call Anthropic Claude via the native anthropic SDK.
@@ -123,11 +127,15 @@ async def call_anthropic(
     import anthropic
 
     client = anthropic.AsyncAnthropic(api_key=api_key)
+    messages: list[dict] = []
+    if history:
+        messages.extend(history[-10:])
+    messages.append({"role": "user", "content": user_prompt})
     message = await client.messages.create(
         model=model,
         max_tokens=max_tokens,
         system=system_prompt,
-        messages=[{"role": "user", "content": user_prompt}],
+        messages=messages,  # type: ignore[arg-type]  # dict is runtime-compatible with MessageParam
     )
     block = message.content[0]
     content: str = block.text if hasattr(block, "text") else ""

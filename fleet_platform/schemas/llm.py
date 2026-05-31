@@ -5,7 +5,7 @@ from typing import Literal
 from pydantic import BaseModel, Field
 
 VALID_PROVIDERS = Literal["openai_compat", "anthropic", "ollama", "vllm", "llamacpp"]
-VALID_INTENTS = Literal["salt_state", "ansible_playbook", "fleet_command", "explain"]
+VALID_INTENTS = Literal["salt_state", "ansible_playbook", "fleet_command", "explain", "fleet_query"]
 
 
 class LLMEndpointCreate(BaseModel):
@@ -14,7 +14,7 @@ class LLMEndpointCreate(BaseModel):
     base_url: str = Field(..., min_length=1, max_length=500)
     api_key: str | None = None
     model: str = Field(..., min_length=1, max_length=255)
-    max_tokens: int = Field(default=4096, ge=256, le=128000)
+    max_tokens: int = Field(default=4096, ge=256, le=200000)
     is_default: bool = False
     enabled: bool = True
 
@@ -25,7 +25,7 @@ class LLMEndpointUpdate(BaseModel):
     base_url: str | None = Field(default=None, min_length=1, max_length=500)
     api_key: str | None = None
     model: str | None = Field(default=None, min_length=1, max_length=255)
-    max_tokens: int | None = Field(default=None, ge=256, le=128000)
+    max_tokens: int | None = Field(default=None, ge=256, le=200000)
     is_default: bool | None = None
     enabled: bool | None = None
 
@@ -52,10 +52,16 @@ class LLMEndpointTestResponse(BaseModel):
     error: str | None = None
 
 
+class ChatHistoryMessage(BaseModel):
+    role: Literal["user", "assistant"]
+    content: str = Field(..., max_length=4000)
+
+
 class LLMQueryRequest(BaseModel):
     prompt: str = Field(..., min_length=1, max_length=8000)
     intent: VALID_INTENTS
     endpoint_id: uuid.UUID | None = None
+    history: list[ChatHistoryMessage] = Field(default_factory=list)
 
 
 class LLMQueryResponse(BaseModel):

@@ -83,7 +83,7 @@ class TestWebSSHLogger:
         proxy._flush_recording = AsyncMock()
 
         with caplog.at_level(logging.DEBUG, logger="fleet_platform.api.routes.webssh"):
-            asyncio.get_event_loop().run_until_complete(
+            asyncio.run(
                 proxy.send_to_browser(b"hello")
             )
 

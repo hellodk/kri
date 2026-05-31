@@ -69,7 +69,7 @@ def test_evict_node_removes_matching():
     ssh_connection_cache._cache[("target", 22, "user")] = ssh_connection_cache._CachedConn(conn=conn1)
     ssh_connection_cache._cache[("other", 22, "user")] = ssh_connection_cache._CachedConn(conn=conn2)
 
-    count = asyncio.get_event_loop().run_until_complete(ssh_connection_cache.evict_node("target"))
+    count = asyncio.run(ssh_connection_cache.evict_node("target"))
     assert count == 1
     assert ("target", 22, "user") not in ssh_connection_cache._cache
     assert ("other", 22, "user") in ssh_connection_cache._cache
@@ -86,7 +86,7 @@ def test_get_connection_creates_and_caches():
             conn = await ssh_connection_cache.get_connection("h", 22, "u", {"host": "h"})
         return conn
 
-    result = asyncio.get_event_loop().run_until_complete(run())
+    result = asyncio.run(run())
     assert result is fake_conn
     assert ("h", 22, "u") in ssh_connection_cache._cache
     ssh_connection_cache._cache.clear()
@@ -102,7 +102,7 @@ def test_get_connection_reuses_cached():
         with patch("asyncssh.connect", new=AsyncMock(side_effect=AssertionError("should not call connect"))):
             return await ssh_connection_cache.get_connection("h", 22, "u", {})
 
-    result = asyncio.get_event_loop().run_until_complete(run())
+    result = asyncio.run(run())
     assert result is fake_conn
     assert ssh_connection_cache._cache[("h", 22, "u")].use_count == 1
     ssh_connection_cache._cache.clear()
@@ -119,7 +119,7 @@ def test_get_connection_evicts_dead_before_reuse():
         with patch("asyncssh.connect", new=AsyncMock(return_value=new_conn)):
             return await ssh_connection_cache.get_connection("h", 22, "u", {"host": "h"})
 
-    result = asyncio.get_event_loop().run_until_complete(run())
+    result = asyncio.run(run())
     assert result is new_conn
     ssh_connection_cache._cache.clear()
 

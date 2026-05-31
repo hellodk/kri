@@ -142,7 +142,7 @@ def test_llm_query_request_valid_intents():
     from pydantic import ValidationError
 
     from fleet_platform.schemas.llm import LLMQueryRequest
-    for intent in ("salt_state", "ansible_playbook", "fleet_command", "explain"):
+    for intent in ("salt_state", "ansible_playbook", "fleet_command", "explain", "fleet_query"):
         req = LLMQueryRequest(prompt="do something", intent=intent)
         assert req.intent == intent
     with pytest.raises(ValidationError):
@@ -224,3 +224,19 @@ def test_llm_endpoint_response_model_validate_without_api_key():
     )
     response = LLMEndpointResponse.model_validate(endpoint)
     assert response.has_api_key is False
+
+
+def test_max_tokens_schema_cap():
+    """Schema and frontend agree on max_tokens ceiling (#275)."""
+    import pytest
+    from pydantic import ValidationError
+
+    from fleet_platform.schemas.llm import LLMEndpointCreate
+
+    # At the cap — valid
+    ep = LLMEndpointCreate(name="x", provider="openai_compat", base_url="http://x", model="m", max_tokens=200000)
+    assert ep.max_tokens == 200000
+
+    # Over the cap — invalid
+    with pytest.raises(ValidationError):
+        LLMEndpointCreate(name="x", provider="openai_compat", base_url="http://x", model="m", max_tokens=200001)

@@ -1,7 +1,7 @@
 import { api } from './client'
 
 export type LLMProvider = 'openai_compat' | 'anthropic' | 'ollama' | 'vllm' | 'llamacpp'
-export type LLMIntent = 'salt_state' | 'ansible_playbook' | 'fleet_command' | 'explain'
+export type LLMIntent = 'salt_state' | 'ansible_playbook' | 'fleet_command' | 'explain' | 'fleet_query'
 
 export interface LLMEndpoint {
   id: string
@@ -36,10 +36,16 @@ export interface LLMEndpointTestResult {
   error: string | null
 }
 
+export interface ChatHistoryMessage {
+  role: 'user' | 'assistant'
+  content: string
+}
+
 export interface LLMQueryRequest {
   prompt: string
   intent: LLMIntent
   endpoint_id?: string | null
+  history?: ChatHistoryMessage[]
 }
 
 export interface LLMQueryResponse {
