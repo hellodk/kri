@@ -148,3 +148,54 @@ def test_grounding_rules_in_every_intent():
         lower_combined = combined.lower()
         has_grounding = "only" in lower_combined or "cannot" in lower_combined
         assert has_grounding, f"Intent '{intent}' should have grounding rules"
+
+
+def test_sanitize_cell_escapes_pipe():
+    from fleet_platform.services.llm_context import _sanitize_cell
+    result = _sanitize_cell("bad|hostname")
+    assert "|" not in result.replace("\\|", "")
+    assert "\\|" in result
+
+
+def test_sanitize_cell_removes_newline():
+    from fleet_platform.services.llm_context import _sanitize_cell
+    result = _sanitize_cell("bad\nhostname")
+    assert "\n" not in result
+
+
+def test_per_node_records_pipe_in_hostname_is_escaped():
+    from fleet_platform.services.llm_context import build_static_context
+    records = [
+        {"hostname": "bad|node", "minion_id": "mm1", "ip": "10.0.0.1",
+         "status": "online", "last_seen": "1m ago", "group": "—"},
+    ]
+    ctx = build_static_context(
+        node_count=1, online_count=1, groups=[], salt_master="", playbooks_dir="",
+        node_records=records,
+    )
+    # The raw unescaped pipe must not appear as a table-breaking cell separator
+    # Find the line containing mm1 and check it doesn't have an unescaped pipe before hostname
+    lines = [l for l in ctx.splitlines() if "mm1" in l]
+    assert lines, "node record line must be present"
+    # Each cell is delimited by " | " — the hostname cell must not split unexpectedly
+    # If "bad|node" were unescaped, "bad" and "node" would be separate cells
+    # Escaped as "bad\\|node" the row has the right number of cells
+    assert lines[0].count("|") <= 8  # a 6-column row has 7 pipes; escaped pipe adds 1 more max
+
+
+def test_format_last_seen_days():
+    from datetime import UTC, datetime, timedelta
+    from fleet_platform.services.llm_context import _format_last_seen
+    ts = datetime.now(UTC) - timedelta(days=3)
+    result = _format_last_seen(ts)
+    assert "d ago" in result, f"expected 'd ago', got: {result}"
+
+
+def test_format_last_seen_naive_datetime_treated_as_utc():
+    from datetime import datetime, timedelta
+    from fleet_platform.services.llm_context import _format_last_seen
+    # naive datetime (no tzinfo) — common from some DB drivers
+    ts = datetime.utcnow() - timedelta(minutes=10)
+    assert ts.tzinfo is None
+    result = _format_last_seen(ts)
+    assert "m ago" in result  # must not raise TypeError

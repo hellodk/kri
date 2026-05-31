@@ -42,6 +42,11 @@ _GROUNDING_RULES = (
 )
 
 
+def _sanitize_cell(value: str) -> str:
+    """Escape pipe and newline characters that would break the LLM Markdown context table."""
+    return value.replace("|", "\\|").replace("\n", " ").replace("\r", "")
+
+
 def _format_last_seen(last_seen_at) -> str:
     if last_seen_at is None:
         return "never"
@@ -87,8 +92,9 @@ def build_static_context(
             ip = n.get("ip") or "—"
             group = n.get("group") or "—"
             parts.append(
-                f"| {n['hostname']} | {n['minion_id']} | {ip} | {n['status']} "
-                f"| {n['last_seen']} | {group} |\n"
+                f"| {_sanitize_cell(n['hostname'])} | {_sanitize_cell(n['minion_id'])} "
+                f"| {_sanitize_cell(ip)} | {_sanitize_cell(n['status'])} "
+                f"| {n['last_seen']} | {_sanitize_cell(group)} |\n"
             )
 
     parts.append(
@@ -109,13 +115,9 @@ async def build_fleet_context(db: AsyncSession, intent: str) -> str:
     from fleet_platform.services.llm_svc import _redact_sensitive_data
     from fleet_platform.services.platform_settings_svc import (
         LLM_INCLUDE_NODE_IPS,
-        get_setting,
-    )
-    from fleet_platform.services.platform_settings_svc import (
         PLAYBOOKS_DIR as PLAYBOOKS_DIR_KEY,
-    )
-    from fleet_platform.services.platform_settings_svc import (
         SALT_MASTER as SALT_MASTER_KEY,
+        get_settings_bulk,
     )
 
     node_count_result = await db.execute(select(func.count()).select_from(Node))
@@ -129,6 +131,7 @@ async def build_fleet_context(db: AsyncSession, intent: str) -> str:
 
     nodes_result = await db.execute(
         select(
+            Node.id,
             Node.hostname,
             Node.minion_id,
             Node.ip_address,
@@ -144,11 +147,10 @@ async def build_fleet_context(db: AsyncSession, intent: str) -> str:
     )
     node_group_map: dict = {str(row.node_id): row.name for row in membership_result.all()}
 
-    salt_master = await get_setting(db, SALT_MASTER_KEY) or ""
-    playbooks_dir = await get_setting(db, PLAYBOOKS_DIR_KEY) or ""
-
-    include_ips_setting = await get_setting(db, LLM_INCLUDE_NODE_IPS)
-    include_ips = (include_ips_setting or "true").lower() != "false"
+    ctx_settings = await get_settings_bulk(db, [SALT_MASTER_KEY, PLAYBOOKS_DIR_KEY, LLM_INCLUDE_NODE_IPS])
+    salt_master = ctx_settings[SALT_MASTER_KEY] or ""
+    playbooks_dir = ctx_settings[PLAYBOOKS_DIR_KEY] or ""
+    include_ips = (ctx_settings[LLM_INCLUDE_NODE_IPS] or "true").lower() != "false"
 
     node_records = []
     for row in node_rows:
@@ -158,7 +160,7 @@ async def build_fleet_context(db: AsyncSession, intent: str) -> str:
             "ip": row.ip_address if include_ips else "[redacted]",
             "status": row.status or "unknown",
             "last_seen": _format_last_seen(row.last_seen_at),
-            "group": node_group_map.get(str(row.minion_id), "—"),
+            "group": node_group_map.get(str(row.id), "—"),
         })
 
     base = build_static_context(
