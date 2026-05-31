@@ -108,6 +108,127 @@ async def request_node_action(
     )
 
 
+@router.get("/{node_id}/processes")
+async def list_processes(
+    node_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+    _claims: dict = Depends(require_role("operator", "admin")),
+):
+    """List running processes on a node via Salt ps.list_processes."""
+    from sqlalchemy import select as _sel
+    node_result = await db.execute(_sel(Node).where(Node.id == node_id))
+    node = node_result.scalar_one_or_none()
+    if not node:
+        raise HTTPException(status_code=404, detail="Node not found")
+    from fleet_platform.workers.salt_tasks import run_salt_cmd
+    task = run_salt_cmd.delay(
+        function="ps.list_processes",
+        target_minions=[node.minion_id],
+        args=[],
+    )
+    return {"task_id": task.id, "minion_id": node.minion_id}
+
+
+@router.get("/{node_id}/services")
+async def list_services(
+    node_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+    _claims: dict = Depends(require_role("operator", "admin")),
+):
+    """List services on a node via Salt service.get_all + service.status."""
+    from sqlalchemy import select as _sel
+    node_result = await db.execute(_sel(Node).where(Node.id == node_id))
+    node = node_result.scalar_one_or_none()
+    if not node:
+        raise HTTPException(status_code=404, detail="Node not found")
+    from fleet_platform.workers.salt_tasks import run_salt_cmd
+    task = run_salt_cmd.delay(
+        function="service.get_all",
+        target_minions=[node.minion_id],
+        args=[],
+    )
+    return {"task_id": task.id, "minion_id": node.minion_id}
+
+
+@router.post("/{node_id}/ask-ai")
+async def ask_ai_about_node(
+    node_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+    claims: dict = Depends(require_role("operator", "admin")),
+):
+    """Ask the LLM for recommendations about a specific node."""
+    from sqlalchemy import select as _sel
+
+    from fleet_platform.models.node import Node as _Node
+    from fleet_platform.services.llm_caller import LLMCallError, call_anthropic, call_openai_compat
+    from fleet_platform.services.llm_context import build_fleet_context
+    from fleet_platform.services.llm_svc import get_decrypted_api_key, get_default_endpoint
+
+    node_result = await db.execute(_sel(_Node).where(_Node.id == node_id))
+    node = node_result.scalar_one_or_none()
+    if not node:
+        raise HTTPException(status_code=404, detail="Node not found")
+
+    endpoint = await get_default_endpoint(db)
+    if not endpoint or not endpoint.enabled:
+        raise HTTPException(status_code=422, detail="No LLM endpoint configured.")
+
+    # Build node-specific context
+    node_name = node.hostname or node.minion_id
+    cpu_info = f"{node.cpu_usage_pct:.1f}%" if node.cpu_usage_pct is not None else "unknown"
+    mem_info = f"{node.mem_usage_pct:.1f}%" if node.mem_usage_pct is not None else "unknown"
+    drift_info = str(node.drift_score)
+
+    node_context = (
+        f"Analyze node '{node_name}' and provide actionable recommendations.\n\n"
+        f"Node status: {node.status}\n"
+        f"CPU usage: {cpu_info}\n"
+        f"Memory usage: {mem_info}\n"
+        f"Drift score: {drift_info}/100\n\n"
+        "Provide: (1) Assessment of current health, (2) Top 2-3 actionable recommendations, "
+        "(3) Risk level (Low/Medium/High). Be concise. Do not invent data not shown above."
+    )
+
+    system_prompt = await build_fleet_context(db, "fleet_query")
+    api_key = get_decrypted_api_key(endpoint)
+    model_caps = (
+        [c.strip() for c in endpoint.model_capabilities.split(",") if c.strip()]
+        if endpoint.model_capabilities else []
+    )
+
+    try:
+        if endpoint.provider == "anthropic":
+            content, input_tokens, output_tokens = await call_anthropic(
+                api_key=api_key or "",
+                model=endpoint.model,
+                max_tokens=min(endpoint.max_tokens, 512),
+                system_prompt=system_prompt,
+                user_prompt=node_context,
+            )
+        else:
+            content, input_tokens, output_tokens = await call_openai_compat(
+                base_url=endpoint.base_url,
+                api_key=api_key,
+                model=endpoint.model,
+                max_tokens=min(endpoint.max_tokens, 512),
+                system_prompt=system_prompt,
+                user_prompt=node_context,
+                model_context_length=endpoint.model_context_length,
+                model_capabilities=model_caps,
+            )
+    except LLMCallError as exc:
+        raise HTTPException(status_code=502, detail=f"LLM call failed: {exc}") from exc
+
+    return {
+        "node_id": str(node_id),
+        "node_name": node_name,
+        "recommendation": content,
+        "model_used": endpoint.model,
+        "input_tokens": input_tokens,
+        "output_tokens": output_tokens,
+    }
+
+
 @actions_router.get("/{token}/approve")
 async def approve_action(token: str, db: AsyncSession = Depends(get_db)):
     """Approve a pending destructive action via the emailed approval link."""
