@@ -1,6 +1,6 @@
-import redis as sync_redis
 from datetime import UTC, datetime, timedelta
 
+import redis as sync_redis
 from sqlalchemy import select, update
 
 from fleet_platform.core.config import settings

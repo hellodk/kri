@@ -6,7 +6,6 @@ HTTP API (salt-api). These tests verify the allowlist enforcement, API URL
 not-configured error path, and the HTTP dispatch logic.
 """
 
-import json
 from unittest.mock import MagicMock, patch
 
 

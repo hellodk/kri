@@ -111,6 +111,7 @@ def test_playbook_task_uses_run_async():
     playbook finishes (potentially 20+ minutes with no feedback).
     """
     import inspect
+
     from fleet_platform.workers import playbook_tasks
     source = inspect.getsource(playbook_tasks)
     assert "run_async" in source, (
@@ -122,6 +123,7 @@ def test_playbook_task_uses_run_async():
 def test_playbook_task_flushes_logs_periodically():
     """run_playbook must write partial stdout to DB at intervals, not only at end."""
     import inspect
+
     from fleet_platform.workers import playbook_tasks
     source = inspect.getsource(playbook_tasks)
     assert "_LOG_BATCH_INTERVAL" in source, (
@@ -135,6 +137,7 @@ def test_playbook_task_flushes_logs_periodically():
 def test_playbook_task_handles_soft_time_limit():
     """run_playbook must catch SoftTimeLimitExceeded and write terminal status to DB."""
     import inspect
+
     from fleet_platform.workers import playbook_tasks
     source = inspect.getsource(playbook_tasks)
     assert "SoftTimeLimitExceeded" in source, (

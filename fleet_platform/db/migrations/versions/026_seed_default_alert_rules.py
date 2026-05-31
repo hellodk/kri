@@ -6,8 +6,8 @@ no default rule exists so most fleets never receive offline alerts.
 This migration inserts the default node_offline rule if it is not already present,
 making monitoring work out-of-the-box without manual UI configuration.
 """
-from alembic import op
 import sqlalchemy as sa
+from alembic import op
 
 revision = '026'
 down_revision = '025'

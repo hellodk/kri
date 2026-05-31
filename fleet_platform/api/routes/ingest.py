@@ -216,7 +216,7 @@ async def ingest_grains(
         )
     now = datetime.now(UTC)
 
-    clean_grains = _strip_nulls(payload.grains)
+    clean_grains: dict = _strip_nulls(payload.grains)  # type: ignore[assignment]
 
     updates = _extract_node_updates(clean_grains)
     updates["last_seen_at"] = now

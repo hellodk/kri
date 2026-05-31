@@ -48,7 +48,7 @@ def _get_playbooks_dir(db) -> Path:
     return _DEFAULT_PLAYBOOKS_DIR
 
 
-def _resolve_playbook_path(playbook_filename: str, db) -> Path:
+def _resolve_playbook_path(playbook_filename: str, db) -> tuple[Path, Path]:
     """Find which configured source directory contains this playbook file.
 
     Searches the builtin dir first, then all external sources in order.
@@ -139,7 +139,6 @@ def _flush_stdout(job_uuid: _uuid.UUID, lines: list[str], last_task: str | None)
 def run_playbook(self, job_id: str, ssh_username: str | None = None, ssh_password: str | None = None) -> dict:
     job_uuid = _uuid.UUID(job_id)
     stdout_lines: list[str] = []
-    result = None
 
     try:
         with get_sync_db() as db:
@@ -234,7 +233,6 @@ def run_playbook(self, job_id: str, ssh_username: str | None = None, ssh_passwor
                 if msg:
                     stdout_lines.append(msg)
 
-            result = runner.config.artifact_dir
             final_status = runner.status
             final_rc = runner.rc
 

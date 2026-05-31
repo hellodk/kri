@@ -8,6 +8,22 @@ class LLMCallError(Exception):
     """Raised when an LLM provider call fails — wraps transport and parse errors."""
 
 
+def normalize_openai_base_url(base_url: str) -> str:
+    """Return *base_url* with any trailing ``/v1`` and trailing slashes removed.
+
+    OpenAI-compatible endpoints are conventionally written either with the
+    ``/v1`` suffix (OpenAI, Groq) or without it (some local servers). Callers
+    append the version segment themselves (``/v1/chat/completions``,
+    ``/v1/models``), so stripping a trailing ``/v1`` here makes both forms
+    resolve identically and avoids a doubled ``/v1/v1`` path (#272). Provider
+    path prefixes such as Groq's ``/openai`` are preserved.
+    """
+    cleaned = base_url.strip().rstrip("/")
+    if cleaned.endswith("/v1"):
+        cleaned = cleaned[: -len("/v1")]
+    return cleaned.rstrip("/")
+
+
 async def call_openai_compat(
     *,
     base_url: str,
@@ -47,7 +63,7 @@ async def call_openai_compat(
     try:
         async with httpx.AsyncClient(timeout=OPENAI_COMPAT_TIMEOUT) as client:
             response = await client.post(
-                f"{base_url.rstrip('/')}/chat/completions",
+                f"{normalize_openai_base_url(base_url)}/v1/chat/completions",
                 headers=headers,
                 json=payload,
             )

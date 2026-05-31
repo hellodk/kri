@@ -134,6 +134,7 @@ async def bootstrap_status(
     _: dict = Depends(require_role("operator", "admin")),
 ):
     from datetime import UTC, datetime, timedelta  # noqa: PLC0415
+
     from fleet_platform.models.bootstrap_run import BootstrapRun  # noqa: PLC0415
     result = await db.execute(select(Node).where(Node.id == node_id))
     node = result.scalar_one_or_none()
@@ -315,7 +316,7 @@ async def list_playbooks(
     sources_json = setting.value if setting else None
 
     all_dirs = get_all_playbook_dirs(sources_json, _PLAYBOOKS_DIR)
-    all_entries = []
+    all_entries: list[PlaybookEntryResponse] = []
     for d in all_dirs:
         all_entries.extend(
             PlaybookEntryResponse(
@@ -361,7 +362,6 @@ async def validate_source(
     _: dict = Depends(require_role("operator", "admin")),
 ):
     """Validate a playbook source without saving it. Returns scan results."""
-    import asyncio
     import os
     import tempfile
 
@@ -576,7 +576,6 @@ async def add_source(
     _: dict = Depends(require_role("operator", "admin")),
 ):
     """Add a new playbook source (local directory or git repository)."""
-    import asyncio
     import json as _json
     import os
 
@@ -645,7 +644,8 @@ async def add_source(
     # in the Playbooks tab without requiring a manual Sync click.
     if payload.type == "git":
         from fleet_platform.services.playbook_sources import _clone_git_source, _default_clone_path
-        local_path = payload.local_path or _default_clone_path(payload.url)
+        assert payload.url is not None, "git source requires a URL"  # noqa: S101
+        local_path: str = payload.local_path or _default_clone_path(payload.url)
         asyncio.create_task(
             asyncio.to_thread(
                 _clone_git_source,

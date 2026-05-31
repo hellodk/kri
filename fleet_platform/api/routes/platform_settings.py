@@ -6,6 +6,8 @@ from fleet_platform.api.deps import get_db
 from fleet_platform.core.auth import require_role
 from fleet_platform.schemas.ansible import PlatformSettingsResponse, PlatformSettingsUpdate
 from fleet_platform.services.platform_settings_svc import (
+    _DEFAULT_SALT_FUNCTIONS,
+    _SALT_MINIMUM_FUNCTIONS,
     ANSIBLE_API_TOKEN,
     ANSIBLE_ENDPOINT_URL,
     CXONE_API_TOKEN,
@@ -34,8 +36,6 @@ from fleet_platform.services.platform_settings_svc import (
     SSH_PASSWORD,
     SSH_USERNAME,
     VNC_ENABLED,
-    _DEFAULT_SALT_FUNCTIONS,
-    _SALT_MINIMUM_FUNCTIONS,
     get_setting,
     invalidate_salt_allowlist_cache,
     invalidate_salt_deny_cache,

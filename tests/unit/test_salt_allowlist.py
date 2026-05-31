@@ -2,9 +2,7 @@
 """Unit tests for the dynamic Salt function allowlist (issue #255)."""
 
 import json
-import time
-from unittest.mock import MagicMock, patch
-
+from unittest.mock import MagicMock
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -117,7 +115,6 @@ def test_get_allowed_falls_back_on_invalid_json():
 def test_cache_returns_cached_value_within_60s():
     """A second call within 60 s must return the same frozenset without hitting DB."""
     _reset_cache()
-    import fleet_platform.services.platform_settings_svc as svc
     from fleet_platform.services.platform_settings_svc import get_allowed_salt_functions_sync
 
     stored = json.dumps(["state.apply", "test.ping"])
@@ -254,6 +251,7 @@ def test_denied_functions_are_blocked():
     _reset_cache()
     _reset_deny_cache()
     import json
+
     from fleet_platform.services.platform_settings_svc import get_allowed_salt_functions_sync
 
     allowlist = json.dumps(["state.apply", "cmd.run", "disk.usage", "test.ping"])
@@ -272,6 +270,7 @@ def test_minimum_functions_cannot_be_denied():
     _reset_cache()
     _reset_deny_cache()
     import json
+
     from fleet_platform.services.platform_settings_svc import (
         _SALT_MINIMUM_FUNCTIONS,
         get_allowed_salt_functions_sync,
@@ -294,6 +293,7 @@ def test_deny_cache_hit_within_60s():
     """A second call to get_denied_salt_functions_sync within 60s must use the cache."""
     _reset_deny_cache()
     import json
+
     from fleet_platform.services.platform_settings_svc import get_denied_salt_functions_sync
 
     denylist = json.dumps(["cmd.run", "system.reboot"])
@@ -312,6 +312,7 @@ def test_deny_cache_expires_after_60s():
     """After 60 seconds the deny cache must expire and the DB must be re-queried."""
     _reset_deny_cache()
     import json
+
     import fleet_platform.services.platform_settings_svc as svc
     from fleet_platform.services.platform_settings_svc import get_denied_salt_functions_sync
 
@@ -331,6 +332,7 @@ def test_deny_cache_expires_after_60s():
 def test_invalidate_salt_deny_cache_clears_cache():
     """invalidate_salt_deny_cache() must set _deny_cache to None."""
     import json
+
     import fleet_platform.services.platform_settings_svc as svc
     from fleet_platform.services.platform_settings_svc import (
         get_denied_salt_functions_sync,
@@ -351,6 +353,7 @@ def test_empty_denylist_allows_all_allowlisted_functions():
     _reset_cache()
     _reset_deny_cache()
     import json
+
     from fleet_platform.services.platform_settings_svc import get_allowed_salt_functions_sync
 
     allowlist = json.dumps(["state.apply", "cmd.run", "disk.usage"])

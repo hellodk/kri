@@ -1,7 +1,11 @@
 """Discover available models from a live LLM provider endpoint."""
 from __future__ import annotations
+
 import logging
+
 import httpx
+
+from fleet_platform.services.llm_caller import normalize_openai_base_url
 
 _log = logging.getLogger(__name__)
 _TIMEOUT = 8.0
@@ -9,7 +13,9 @@ _TIMEOUT = 8.0
 
 async def discover_models(url: str, provider: str) -> list[dict[str, str]]:
     """Query provider's model-list API. Returns [] on any error (never raises)."""
-    base = url.rstrip("/")
+    # Normalize so a base_url written with or without a trailing /v1 resolves
+    # to the same endpoint the chat caller uses — no doubled /v1/v1 (#272).
+    base = normalize_openai_base_url(url)
     try:
         async with httpx.AsyncClient(timeout=_TIMEOUT) as client:
             if provider == "ollama":
