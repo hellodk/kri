@@ -17,6 +17,8 @@ class LLMEndpointCreate(BaseModel):
     max_tokens: int = Field(default=4096, ge=256, le=200000)
     is_default: bool = False
     enabled: bool = True
+    model_context_length: int | None = None
+    model_capabilities: list[str] | None = None
 
 
 class LLMEndpointUpdate(BaseModel):
@@ -28,6 +30,8 @@ class LLMEndpointUpdate(BaseModel):
     max_tokens: int | None = Field(default=None, ge=256, le=200000)
     is_default: bool | None = None
     enabled: bool | None = None
+    model_context_length: int | None = None
+    model_capabilities: list[str] | None = None
 
 
 class LLMEndpointResponse(BaseModel):
@@ -42,6 +46,8 @@ class LLMEndpointResponse(BaseModel):
     enabled: bool
     created_at: datetime
     updated_at: datetime
+    model_context_length: int | None = None
+    model_capabilities: list[str] | None = None
 
     model_config = {"from_attributes": True}
 

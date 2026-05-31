@@ -58,6 +58,11 @@ async def create_endpoint(db: AsyncSession, payload: LLMEndpointCreate) -> LLMEn
         max_tokens=payload.max_tokens,
         is_default=payload.is_default,
         enabled=payload.enabled,
+        model_context_length=payload.model_context_length,
+        model_capabilities=(
+            ",".join(payload.model_capabilities)
+            if payload.model_capabilities else None
+        ),
     )
     db.add(endpoint)
     await db.commit()
@@ -86,6 +91,10 @@ async def update_endpoint(
         if payload.is_default:
             await db.execute(update(LLMEndpoint).values(is_default=False))
         endpoint.is_default = payload.is_default
+    if payload.model_context_length is not None:
+        endpoint.model_context_length = payload.model_context_length
+    if payload.model_capabilities is not None:
+        endpoint.model_capabilities = ",".join(payload.model_capabilities)
     await db.commit()
     await db.refresh(endpoint)
     return endpoint

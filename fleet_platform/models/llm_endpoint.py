@@ -30,6 +30,9 @@ class LLMEndpoint(Base):
     max_tokens: Mapped[int] = mapped_column(Integer, nullable=False, default=4096)
     is_default: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    # Populated when a model is selected from the discovery dropdown (#273)
+    model_context_length: Mapped[int | None] = mapped_column(Integer, nullable=True, default=None)
+    model_capabilities: Mapped[str | None] = mapped_column(Text, nullable=True, default=None)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now()
     )
