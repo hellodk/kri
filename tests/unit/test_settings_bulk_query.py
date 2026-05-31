@@ -74,3 +74,38 @@ async def test_bulk_empty_keys_returns_empty_dict():
     out = await get_settings_bulk(db, [])
     assert out == {}
     db.execute.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_bulk_corrupt_ciphertext_returns_none_for_bad_key_only(caplog):
+    """A corrupt ciphertext for one key must not prevent other keys from returning (#308)."""
+    from fleet_platform.services.platform_settings_svc import _fernet
+
+    plaintext = "good-secret"
+    good_encrypted = _fernet().encrypt(plaintext.encode()).decode()
+
+    good_row = MagicMock()
+    good_row.key = "ssh_password"
+    good_row.value = good_encrypted
+    good_row.is_encrypted = True
+
+    bad_row = MagicMock()
+    bad_row.key = "ansible_api_token"
+    bad_row.value = "not-valid-fernet-ciphertext"
+    bad_row.is_encrypted = True
+
+    db = AsyncMock()
+    result_mock = MagicMock()
+    result_mock.scalars.return_value.all.return_value = [good_row, bad_row]
+    db.execute = AsyncMock(return_value=result_mock)
+
+    import logging as _logging
+    with caplog.at_level(_logging.WARNING):
+        out = await get_settings_bulk(db, ["ssh_password", "ansible_api_token"])
+
+    # Good key decrypts successfully
+    assert out["ssh_password"] == plaintext
+    # Corrupt key returns None instead of raising
+    assert out["ansible_api_token"] is None
+    # A warning is logged for the bad key
+    assert any("ansible_api_token" in record.message for record in caplog.records)

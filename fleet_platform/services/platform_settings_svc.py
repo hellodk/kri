@@ -57,6 +57,8 @@ LLM_INCLUDE_NODE_IPS = "llm_include_node_ips"  # "true" | "false", default "true
 SALT_ALLOWED_FUNCTIONS = "salt_allowed_functions"  # JSON array of allowed function names
 SALT_DENIED_FUNCTIONS = "salt_denied_functions"  # JSON array of denied function names
 
+PROMETHEUS_URL = "prometheus_url"
+
 # Default set of Salt functions that may be executed via the ad-hoc command API.
 # Mirrors the original hardcoded frozenset in salt_tasks.py.
 _DEFAULT_SALT_FUNCTIONS: frozenset[str] = frozenset(
@@ -226,7 +228,14 @@ async def get_settings_bulk(db: AsyncSession, keys: list[str]) -> dict[str, str 
     out: dict[str, str | None] = {k: None for k in keys}
     for row in rows:
         if row.is_encrypted and row.value:
-            out[row.key] = _fernet().decrypt(row.value.encode()).decode()
+            try:
+                out[row.key] = _fernet().decrypt(row.value.encode()).decode()
+            except Exception:
+                out[row.key] = None
+                import logging as _logging
+                _logging.getLogger(__name__).warning(
+                    "get_settings_bulk: failed to decrypt key %r — returning None", row.key
+                )
         else:
             out[row.key] = row.value
     return out
