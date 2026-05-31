@@ -243,6 +243,7 @@ def run_playbook(self, job_id: str, ssh_username: str | None = None, ssh_passwor
 
         last_task: str | None = None
         last_db_write: float = time.time()
+        job_start_time: float = time.time()
 
         with tempfile.TemporaryDirectory(prefix="kri-playbook-") as tmpdir:
             inv_path = _write_static_inventory(tmpdir, hosts)
@@ -310,7 +311,8 @@ def run_playbook(self, job_id: str, ssh_username: str | None = None, ssh_passwor
 
     except SoftTimeLimitExceeded:
         _log.warning("playbook_tasks: job %s hit soft time limit", job_uuid)
-        _flush_stdout(job_uuid, stdout_lines, f"TIMED OUT after {_LOG_BATCH_INTERVAL}s idle")
+        elapsed = int(time.time() - job_start_time)
+        _flush_stdout(job_uuid, stdout_lines, f"TIMED OUT after {elapsed}s elapsed")
         with get_sync_db() as db:
             job = db.execute(select(AnsibleJob).where(AnsibleJob.id == job_uuid)).scalar_one_or_none()
             if job and job.status == "running":

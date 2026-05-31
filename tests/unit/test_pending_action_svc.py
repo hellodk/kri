@@ -145,3 +145,27 @@ async def test_expire_old_returns_count():
     count = await expire_old(db)
     assert count == 3
     db.commit.assert_called_once()
+
+
+@pytest.mark.asyncio
+async def test_reject_noop_when_already_approved():
+    """reject() must not overwrite an already-approved action (audit integrity)."""
+    from fleet_platform.services.pending_action_svc import reject
+    db = AsyncMock()
+    action = MagicMock()
+    action.status = "approved"
+    result = await reject(db, action)
+    assert result.status == "approved"
+    db.commit.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_reject_noop_when_already_rejected():
+    """Idempotent: rejecting an already-rejected action is a no-op."""
+    from fleet_platform.services.pending_action_svc import reject
+    db = AsyncMock()
+    action = MagicMock()
+    action.status = "rejected"
+    result = await reject(db, action)
+    assert result.status == "rejected"
+    db.commit.assert_not_called()

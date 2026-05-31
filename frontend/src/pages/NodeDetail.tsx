@@ -543,7 +543,10 @@ export function NodeDetail() {
     try {
       const ret = (processTaskResult.result as any)?.return?.[0]
       if (!ret) return
-      const minionData = Object.values(ret)[0] as Record<string, any>
+      // Prefer the known minion_id key; fall back to first value for resilience
+      const minionData = (node?.minion_id && ret[node.minion_id])
+        ? ret[node.minion_id] as Record<string, any>
+        : Object.values(ret)[0] as Record<string, any>
       if (!minionData) return
       const list = Object.entries(minionData).map(([pid, p]: [string, any]) => ({
         pid,
@@ -575,7 +578,10 @@ export function NodeDetail() {
     try {
       const ret = (serviceTaskResult.result as any)?.return?.[0]
       if (!ret) return
-      const minionData = Object.values(ret)[0]
+      // Prefer the known minion_id key; fall back to first value for resilience
+      const minionData = (node?.minion_id && ret[node.minion_id])
+        ? ret[node.minion_id]
+        : Object.values(ret)[0]
       if (Array.isArray(minionData)) {
         setServiceList((minionData as string[]).sort().map(name => ({ name, running: true })))
       }

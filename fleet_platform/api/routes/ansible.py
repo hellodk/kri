@@ -1044,12 +1044,16 @@ async def list_ansible_jobs(
         q = q.where(AnsibleJob.status == status)
     if node_id:
         # Include both direct-node jobs AND group jobs for groups this node belongs to
+        try:
+            node_uuid = uuid.UUID(node_id)
+        except ValueError:
+            raise HTTPException(status_code=422, detail="node_id must be a valid UUID")
         from sqlalchemy import or_
 
         from fleet_platform.models.group import GroupMember
         group_ids_result = await db.execute(
             select(GroupMember.group_id).where(
-                GroupMember.node_id == uuid.UUID(node_id)
+                GroupMember.node_id == node_uuid
             )
         )
         group_ids = [str(gid) for gid in group_ids_result.scalars().all()]
