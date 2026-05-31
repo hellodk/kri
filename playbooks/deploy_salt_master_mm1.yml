@@ -1,0 +1,49 @@
+---
+# playbooks/deploy_salt_master_mm1.yml
+# Install salt-master + salt-api on mm1 (native, no Docker dependency).
+#
+# Usage:
+#   ansible-playbook playbooks/deploy_salt_master_mm1.yml \
+#     -i playbooks/inventory/hosts.ini \
+#     -e "kri_salt_api_password=<secure-password>"
+#
+# After running:
+#   1. Update .env.docker: SALT_API_URL=http://100.102.68.75:8080
+#   2. Restart kri: docker compose -f deploy/docker-compose.yml up -d
+#   3. Minion configs already set salt_master_address=100.102.68.75
+
+- name: Deploy salt-master natively on mm1
+  hosts: salt_master
+  gather_facts: false
+  vars:
+    # Override on CLI: -e kri_salt_api_password=<password>
+    kri_salt_api_password: "changeme-set-via-e-flag"
+    kri_ingest_base_url: "http://100.89.50.27/api/v1/ingest"
+
+  pre_tasks:
+    - name: Confirm target host
+      debug:
+        msg: "Deploying salt-master to {{ inventory_hostname }} ({{ ansible_host }})"
+
+  roles:
+    - salt_master
+
+  post_tasks:
+    - name: Print post-install instructions
+      debug:
+        msg: |
+          ============================================================
+          Salt-master installed on mm1 ({{ ansible_host }}).
+
+          Update deploy/.env.docker:
+            SALT_API_URL=http://{{ ansible_host }}:{{ salt_api_port }}
+            SALT_API_USER={{ salt_api_user }}
+            SALT_API_PASSWORD={{ kri_salt_api_password }}
+
+          Then restart kri workers:
+            cd deploy && docker compose -f docker-compose.yml up -d api worker beat
+
+          Minion salt_master_address is already set to 100.102.68.75 via
+          playbooks/group_vars/all.yml. Re-run bootstrap_mac_mini.yml on
+          any node that hasn't connected yet.
+          ============================================================

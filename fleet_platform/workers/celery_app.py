@@ -15,6 +15,7 @@ celery_app = Celery(
         "fleet_platform.workers.playbook_tasks",
         "fleet_platform.workers.security_tasks",
         "fleet_platform.workers.salt_tasks",
+        "fleet_platform.workers.salt_presence_tasks",
         "fleet_platform.workers.alert_tasks",
         "fleet_platform.workers.ios_tasks",
         "fleet_platform.workers.health_tasks",
@@ -45,6 +46,10 @@ celery_app.conf.update(
         "mark-stale-nodes": {
             "task": "fleet_platform.workers.maintenance.mark_stale_nodes",
             "schedule": 300,
+        },
+        "sync-minion-presence": {
+            "task": "fleet_platform.workers.salt_presence_tasks.sync_minion_presence",
+            "schedule": 90,  # every 90s — nodes appear online within 90s of minion connect
         },
         "archive-old-sbom-scans": {
             "task": "fleet_platform.workers.sbom_tasks.cleanup_old_sbom_scans",
