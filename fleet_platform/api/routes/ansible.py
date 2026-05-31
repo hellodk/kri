@@ -1012,6 +1012,40 @@ async def collect_grains(
     return {"task_id": task.id, "node_id": str(node_id), "status": "queued"}
 
 
+@router.get("/jobs", response_model=list[AnsibleJobResponse])
+async def list_ansible_jobs(
+    status: str | None = Query(None, description="Filter by status: pending|running|completed|failed"),
+    page: int = Query(1, ge=1),
+    per_page: int = Query(25, ge=1, le=100),
+    db: AsyncSession = Depends(get_db),
+    _: dict = Depends(require_role("viewer", "operator", "admin")),
+):
+    """List all ansible playbook jobs, newest first."""
+    q = select(AnsibleJob).order_by(AnsibleJob.created_at.desc())
+    if status:
+        q = q.where(AnsibleJob.status == status)
+    q = q.offset((page - 1) * per_page).limit(per_page)
+    result = await db.execute(q)
+    jobs = result.scalars().all()
+    return [
+        AnsibleJobResponse(
+            id=j.id,
+            playbook=j.playbook,
+            target_type=j.target_type,
+            target_label=j.target_label,
+            extravars=j.extravars,
+            status=j.status,
+            triggered_by=j.triggered_by,
+            started_at=j.started_at,
+            completed_at=j.completed_at,
+            stdout=j.stdout,
+            rc=j.rc,
+            created_at=j.created_at,
+        )
+        for j in jobs
+    ]
+
+
 @router.get("/jobs/{job_id}", response_model=AnsibleJobResponse)
 async def get_ansible_job(
     job_id: uuid.UUID,

@@ -3,12 +3,14 @@
 import logging
 import re
 import tempfile
+import time
 import uuid as _uuid
 from datetime import UTC, datetime
 from pathlib import Path
 
 import ansible_runner
 import yaml as _yaml
+from celery.exceptions import SoftTimeLimitExceeded
 from sqlalchemy import select
 
 from fleet_platform.db.session import get_sync_db
@@ -21,12 +23,12 @@ _DEFAULT_PLAYBOOKS_DIR = Path(__file__).parent.parent.parent / "playbooks"
 
 _log = logging.getLogger(__name__)
 _SAFE_PATH_RE = re.compile(r'^[a-zA-Z0-9._\-]{1,128}$')
+_LOG_BATCH_INTERVAL = 30  # seconds between intermediate stdout DB flushes
 
 
 def _safe_label(label: str) -> str:
     """Sanitise a label used in file paths — prevents path traversal."""
     cleaned = re.sub(r'[^a-zA-Z0-9._\-]', '_', label)
-    # Collapse any sequence of two or more dots to a single dot
     cleaned = re.sub(r'\.{2,}', '.', cleaned)
     cleaned = cleaned.strip('.')
     if not cleaned:
@@ -46,6 +48,31 @@ def _get_playbooks_dir(db) -> Path:
     return _DEFAULT_PLAYBOOKS_DIR
 
 
+def _resolve_playbook_path(playbook_filename: str, db) -> Path:
+    """Find which configured source directory contains this playbook file.
+
+    Searches the builtin dir first, then all external sources in order.
+    Returns the absolute path to the playbook file and the source directory.
+    """
+    from fleet_platform.models.platform_setting import PlatformSetting
+    from fleet_platform.services.playbook_sources import get_all_playbook_dirs
+
+    row = db.execute(
+        select(PlatformSetting).where(PlatformSetting.key == "playbook_sources")
+    ).scalar_one_or_none()
+    sources_json = row.value if row else None
+
+    all_dirs = get_all_playbook_dirs(sources_json, _DEFAULT_PLAYBOOKS_DIR)
+
+    for d in all_dirs:
+        candidate = d / playbook_filename
+        if candidate.exists():
+            return candidate, d
+
+    # Fallback to builtin (will raise FileNotFoundError at ansible-runner time)
+    return _DEFAULT_PLAYBOOKS_DIR / playbook_filename, _DEFAULT_PLAYBOOKS_DIR
+
+
 def _write_static_inventory(tmpdir: str, hosts: list[tuple[str, str, str]]) -> str:
     lines = ["[targets]"]
     for hostname, ip, user in hosts:
@@ -59,7 +86,6 @@ def _write_static_inventory(tmpdir: str, hosts: list[tuple[str, str, str]]) -> s
 def _write_var_file(path: Path, vars_dict: dict) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(_yaml.dump(vars_dict, default_flow_style=False, allow_unicode=True))
-
 
 
 def _resolve_hosts(db, job: AnsibleJob, ssh_user: str) -> list[tuple[str, str, str]] | None:
@@ -87,6 +113,23 @@ def _resolve_hosts(db, job: AnsibleJob, ssh_user: str) -> list[tuple[str, str, s
     return None
 
 
+def _flush_stdout(job_uuid: _uuid.UUID, lines: list[str], last_task: str | None) -> None:
+    """Write accumulated stdout lines to DB mid-run so the UI can poll progress."""
+    if not lines:
+        return
+    try:
+        with get_sync_db() as db:
+            job = db.execute(select(AnsibleJob).where(AnsibleJob.id == job_uuid)).scalar_one_or_none()
+            if job:
+                job.stdout = "\n".join(lines)
+                if last_task:
+                    # Append a progress indicator so the operator can see where we are
+                    job.stdout += f"\n\n[running: {last_task}]"
+                db.commit()
+    except Exception as exc:
+        _log.warning("playbook_tasks: failed to flush stdout for job %s: %s", job_uuid, exc)
+
+
 @celery_app.task(
     name="fleet_platform.workers.playbook_tasks.run_playbook",
     bind=True,
@@ -95,74 +138,139 @@ def _resolve_hosts(db, job: AnsibleJob, ssh_user: str) -> list[tuple[str, str, s
 )
 def run_playbook(self, job_id: str, ssh_username: str | None = None, ssh_password: str | None = None) -> dict:
     job_uuid = _uuid.UUID(job_id)
+    stdout_lines: list[str] = []
+    result = None
 
-    with get_sync_db() as db:
-        job = db.execute(select(AnsibleJob).where(AnsibleJob.id == job_uuid)).scalar_one_or_none()
-        if not job:
-            return {"status": "error", "reason": "job_not_found"}
-        job.status = "running"
-        job.started_at = datetime.now(UTC)
-        db.commit()
-        _, _settings_ssh_user, _settings_ssh_password, _ = _get_bootstrap_settings(db)
-        # Per-run credentials override global platform settings
-        ssh_user = ssh_username or _settings_ssh_user
-        ssh_password = _settings_ssh_password if ssh_password is None else ssh_password
-        playbooks_dir = _get_playbooks_dir(db)
+    try:
+        with get_sync_db() as db:
+            job = db.execute(select(AnsibleJob).where(AnsibleJob.id == job_uuid)).scalar_one_or_none()
+            if not job:
+                return {"status": "error", "reason": "job_not_found"}
+            job.status = "running"
+            job.started_at = datetime.now(UTC)
+            db.commit()
+            _, _settings_ssh_user, _settings_ssh_password, _ = _get_bootstrap_settings(db)
+            ssh_user = ssh_username or _settings_ssh_user
+            ssh_password = _settings_ssh_password if ssh_password is None else ssh_password
 
-    with get_sync_db() as db:
-        job = db.execute(select(AnsibleJob).where(AnsibleJob.id == job_uuid)).scalar_one()
-        hosts = _resolve_hosts(db, job, ssh_user)
+            # Resolve playbook path across all configured sources (not just builtin)
+            playbook_path, playbooks_dir = _resolve_playbook_path(job.playbook, db)
 
-    if not hosts:
         with get_sync_db() as db:
             job = db.execute(select(AnsibleJob).where(AnsibleJob.id == job_uuid)).scalar_one()
-            job.status = "failed"
-            job.stdout = "No hosts with IP addresses found for the selected target."
+            hosts = _resolve_hosts(db, job, ssh_user)
+
+        if not hosts:
+            with get_sync_db() as db:
+                job = db.execute(select(AnsibleJob).where(AnsibleJob.id == job_uuid)).scalar_one()
+                job.status = "failed"
+                job.stdout = "No hosts with IP addresses found for the selected target."
+                job.completed_at = datetime.now(UTC)
+                db.commit()
+            return {"status": "error", "reason": "no_hosts"}
+
+        with get_sync_db() as db:
+            job = db.execute(select(AnsibleJob).where(AnsibleJob.id == job_uuid)).scalar_one()
+            if job.extravars:
+                if job.target_type == "node" and hosts:
+                    hostname = _safe_label(hosts[0][0])
+                    vf = playbooks_dir / "host_vars" / f"{hostname}.yml"
+                    _write_var_file(vf, job.extravars)
+                elif job.target_type == "group":
+                    vf = playbooks_dir / "group_vars" / f"{_safe_label(job.target_label)}.yml"
+                    _write_var_file(vf, job.extravars)
+
+        last_task: str | None = None
+        last_db_write: float = time.time()
+
+        with tempfile.TemporaryDirectory(prefix="kri-playbook-") as tmpdir:
+            inv_path = _write_static_inventory(tmpdir, hosts)
+
+            thread, runner = ansible_runner.run_async(
+                private_data_dir=tmpdir,
+                playbook=str(playbook_path),
+                inventory=inv_path,
+                extravars=job.extravars or {},
+                envvars={
+                    "ANSIBLE_USER": ssh_user,
+                    "ANSIBLE_PASSWORD": ssh_password,
+                    "ANSIBLE_COLLECTIONS_PATH": str(playbooks_dir / "collections" / "installed"),
+                    # Reduce SSH timeout so stalled tasks surface faster
+                    "ANSIBLE_TIMEOUT": "30",
+                    "ANSIBLE_SSH_RETRIES": "2",
+                },
+                quiet=False,
+                rotate_artifacts=1,
+            )
+
+            # Poll events from the running playbook and flush to DB every 30s
+            # so the UI can show real-time progress instead of waiting for completion.
+            while thread.is_alive() or not runner.events is None:
+                for event in runner.events:
+                    event_type = event.get("event", "")
+                    if event_type in ("runner_on_start", "playbook_on_task_start"):
+                        task_name = event.get("event_data", {}).get("task", "")
+                        if task_name:
+                            last_task = task_name
+
+                    msg = event.get("stdout", "")
+                    if msg:
+                        stdout_lines.append(msg)
+
+                now = time.time()
+                if now - last_db_write >= _LOG_BATCH_INTERVAL:
+                    _flush_stdout(job_uuid, stdout_lines, last_task if thread.is_alive() else None)
+                    last_db_write = now
+
+                if not thread.is_alive():
+                    break
+                time.sleep(1)
+
+            # Drain any remaining events after thread finishes
+            for event in runner.events:
+                msg = event.get("stdout", "")
+                if msg:
+                    stdout_lines.append(msg)
+
+            result = runner.config.artifact_dir
+            final_status = runner.status
+            final_rc = runner.rc
+
+        with get_sync_db() as db:
+            job = db.execute(select(AnsibleJob).where(AnsibleJob.id == job_uuid)).scalar_one()
+            job.status = "completed" if final_status == "successful" and final_rc == 0 else "failed"
+            job.rc = final_rc
+            job.stdout = "\n".join(stdout_lines) or f"rc={final_rc} status={final_status}"
             job.completed_at = datetime.now(UTC)
             db.commit()
-        return {"status": "error", "reason": "no_hosts"}
 
-    with get_sync_db() as db:
-        job = db.execute(select(AnsibleJob).where(AnsibleJob.id == job_uuid)).scalar_one()
-        if job.extravars:
-            if job.target_type == "node" and hosts:
-                hostname = _safe_label(hosts[0][0])
-                vf = playbooks_dir / "host_vars" / f"{hostname}.yml"
-                _write_var_file(vf, job.extravars)
-            elif job.target_type == "group":
-                vf = playbooks_dir / "group_vars" / f"{_safe_label(job.target_label)}.yml"
-                _write_var_file(vf, job.extravars)
+        return {"status": final_status, "rc": final_rc, "job_id": job_id}
 
-    playbook_path = playbooks_dir / job.playbook
-    stdout_lines = []
+    except SoftTimeLimitExceeded:
+        _log.warning("playbook_tasks: job %s hit soft time limit", job_uuid)
+        _flush_stdout(job_uuid, stdout_lines, f"TIMED OUT after {_LOG_BATCH_INTERVAL}s idle")
+        with get_sync_db() as db:
+            job = db.execute(select(AnsibleJob).where(AnsibleJob.id == job_uuid)).scalar_one_or_none()
+            if job and job.status == "running":
+                job.status = "failed"
+                job.stdout = (
+                    ("\n".join(stdout_lines) + "\n\n" if stdout_lines else "")
+                    + "[ERROR] Celery task time limit exceeded — playbook was terminated."
+                )
+                job.completed_at = datetime.now(UTC)
+                db.commit()
+        return {"status": "timeout", "job_id": job_id}
 
-    with tempfile.TemporaryDirectory(prefix="kri-playbook-") as tmpdir:
-        inv_path = _write_static_inventory(tmpdir, hosts)
-        result = ansible_runner.run(
-            private_data_dir=tmpdir,
-            playbook=str(playbook_path),
-            inventory=inv_path,
-            extravars=job.extravars or {},
-            envvars={
-                "ANSIBLE_USER": ssh_user,
-                "ANSIBLE_PASSWORD": ssh_password,
-                "ANSIBLE_COLLECTIONS_PATH": str(playbooks_dir / "collections" / "installed"),
-            },
-            quiet=False,
-            rotate_artifacts=1,
-            timeout=1200,
-        )
-        for event in result.events:
-            msg = event.get("stdout", "")
-            if msg:
-                stdout_lines.append(msg)
-
-    with get_sync_db() as db:
-        job = db.execute(select(AnsibleJob).where(AnsibleJob.id == job_uuid)).scalar_one()
-        job.status = "completed" if result.status == "successful" and result.rc == 0 else "failed"
-        job.rc = result.rc
-        job.stdout = "\n".join(stdout_lines) or f"rc={result.rc} status={result.status}"
-        job.completed_at = datetime.now(UTC)
-        db.commit()
-
-    return {"status": result.status, "rc": result.rc, "job_id": job_id}
+    except Exception as exc:
+        _log.exception("playbook_tasks: unexpected error in job %s", job_uuid)
+        with get_sync_db() as db:
+            job = db.execute(select(AnsibleJob).where(AnsibleJob.id == job_uuid)).scalar_one_or_none()
+            if job and job.status == "running":
+                job.status = "failed"
+                job.stdout = (
+                    ("\n".join(stdout_lines) + "\n\n" if stdout_lines else "")
+                    + f"[ERROR] {type(exc).__name__}: {exc}"
+                )
+                job.completed_at = datetime.now(UTC)
+                db.commit()
+        raise

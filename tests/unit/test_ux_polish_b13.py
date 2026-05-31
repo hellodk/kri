@@ -43,9 +43,13 @@ def test_drift_has_empty_state():
 
 
 def test_execution_history_has_empty_state():
-    assert "No executions" in EXEC or "no executions" in EXEC.lower(), (
-        "ExecutionHistory must show empty state when no executions"
-    )
+    # ExecutionHistory now shows separate sections for ansible runs and salt runs
+    assert (
+        "No executions" in EXEC
+        or "no executions" in EXEC.lower()
+        or "No playbook runs" in EXEC
+        or "No salt" in EXEC
+    ), "ExecutionHistory must show empty state when no executions"
 
 
 def test_node_detail_executions_has_empty_state():

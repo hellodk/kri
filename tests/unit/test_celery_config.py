@@ -102,27 +102,41 @@ def test_alert_tasks_no_asyncio_run_at_top_level():
                     )
 
 
-def test_playbook_task_has_timeout():
-    """Fix #129 — run_playbook ansible_runner call must include timeout=1200."""
-    import ast
+def test_playbook_task_uses_run_async():
+    """run_playbook must use ansible_runner.run_async() for real-time log streaming.
+
+    run_async returns a (thread, runner) pair and lets us poll events and flush
+    partial stdout to DB every 30s so the UI shows progress before completion.
+    Using blocking ansible_runner.run() means stdout is NULL until the entire
+    playbook finishes (potentially 20+ minutes with no feedback).
+    """
     import inspect
-
     from fleet_platform.workers import playbook_tasks
-
     source = inspect.getsource(playbook_tasks)
-    tree = ast.parse(source)
+    assert "run_async" in source, (
+        "run_playbook must use ansible_runner.run_async() not ansible_runner.run() "
+        "so stdout can be flushed to DB incrementally during the run."
+    )
 
-    timeout_found = False
-    for node in ast.walk(tree):
-        if isinstance(node, ast.Call):
-            func = node.func
-            # Look for ansible_runner.run(...)
-            if isinstance(func, ast.Attribute) and func.attr == "run":
-                for kw in node.keywords:
-                    if kw.arg == "timeout":
-                        if isinstance(kw.value, ast.Constant) and kw.value.value == 1200:
-                            timeout_found = True
 
-    assert timeout_found, (
-        "ansible_runner.run() in playbook_tasks must include timeout=1200"
+def test_playbook_task_flushes_logs_periodically():
+    """run_playbook must write partial stdout to DB at intervals, not only at end."""
+    import inspect
+    from fleet_platform.workers import playbook_tasks
+    source = inspect.getsource(playbook_tasks)
+    assert "_LOG_BATCH_INTERVAL" in source, (
+        "run_playbook must define _LOG_BATCH_INTERVAL and flush stdout periodically"
+    )
+    assert "_flush_stdout" in source or "flush_stdout" in source, (
+        "run_playbook must call a flush function to write partial logs to DB"
+    )
+
+
+def test_playbook_task_handles_soft_time_limit():
+    """run_playbook must catch SoftTimeLimitExceeded and write terminal status to DB."""
+    import inspect
+    from fleet_platform.workers import playbook_tasks
+    source = inspect.getsource(playbook_tasks)
+    assert "SoftTimeLimitExceeded" in source, (
+        "run_playbook must catch SoftTimeLimitExceeded so jobs don't get stuck in 'running'"
     )
