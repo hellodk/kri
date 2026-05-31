@@ -24,6 +24,7 @@ _log = logging.getLogger(__name__)
 _SKIP_SUBDIRS = frozenset({
     "roles", "tasks", "handlers", "vars", "defaults", "meta",
     "templates", "files", "group_vars", "host_vars", ".git",
+    "collections",  # Ansible collections contain thousands of test YAMLs — skip entirely
 })
 
 
