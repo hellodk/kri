@@ -100,6 +100,7 @@ services:
       # Salt key listing reads from mm1 via SALT_PKI_SSH (set SALT_MASTER_SSH_HOST).
       - /home/dk/Documents/git/pulse:/mnt/pulse:ro   # host playbook repos
       - ../salt/states:/srv/salt/states:ro
+      - git-repos-cache:/home/appuser/.kri/git-repos  # persist cloned git sources across redeploys
     healthcheck:
       test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health/ready', timeout=5)"]
       interval: 30s
@@ -140,6 +141,7 @@ services:
       # Issue #91: operator personal ~/.ssh removed.
       - ${WORKER_SSH_DIR:-./ssh}:/home/appuser/.ssh:ro
       - ~/.kri:/home/appuser/.kri:ro
+      - git-repos-cache:/home/appuser/.kri/git-repos  # persist cloned git sources across redeploys
       - /home/dk/Documents/git/pulse:/mnt/pulse:ro   # host playbook repos
       # Docker socket intentionally NOT mounted — container escape risk. Issue #82.
       # Salt commands now use Salt HTTP API instead of docker exec.
@@ -216,6 +218,5 @@ services:
 volumes:
   pgdata:
   redisdata:
-  # salt-pillar volume removed — pillar now lives on mm1 at /srv/salt/pillar/
-  # managed by kri worker via SSH/salt-api
   pgbackups:
+  git-repos-cache:   # cloned git playbook sources — survives api/worker redeploys
