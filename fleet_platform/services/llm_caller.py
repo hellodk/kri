@@ -1,7 +1,14 @@
 # fleet_platform/services/llm_caller.py
+import json as _json
+
 import httpx
 
-OPENAI_COMPAT_TIMEOUT = 90.0  # local Ollama models can be slow
+# Per-chunk read timeout: as long as tokens keep flowing, the request won't
+# abort — only a silent/stalled stream triggers this. Connect timeout is
+# separate so fast failures (wrong URL) still surface quickly (#274).
+_CONNECT_TIMEOUT = 10.0
+_READ_TIMEOUT = 30.0   # max silence between consecutive SSE chunks
+_STREAM_TIMEOUT = httpx.Timeout(connect=_CONNECT_TIMEOUT, read=_READ_TIMEOUT, write=10.0, pool=5.0)
 
 
 class LLMCallError(Exception):
@@ -81,29 +88,57 @@ async def call_openai_compat(
     # Small-model stop tokens are counter-productive on thinking/frontier models
     if not is_thinking:
         payload["stop"] = ["</s>", "<|im_end|>", "<|endoftext|>", "Human:", "User:"]
+    payload["stream"] = True
+
+    content_parts: list[str] = []
+    prompt_tokens = 0
+    completion_tokens = 0
 
     try:
-        async with httpx.AsyncClient(timeout=OPENAI_COMPAT_TIMEOUT) as client:
-            response = await client.post(
+        async with httpx.AsyncClient(timeout=_STREAM_TIMEOUT) as client:
+            async with client.stream(
+                "POST",
                 f"{normalize_openai_base_url(base_url)}/v1/chat/completions",
                 headers=headers,
                 json=payload,
-            )
-            response.raise_for_status()
+            ) as response:
+                response.raise_for_status()
+                async for raw_line in response.aiter_lines():
+                    line = raw_line.strip()
+                    if not line or not line.startswith("data:"):
+                        continue
+                    data_str = line[len("data:"):].strip()
+                    if data_str == "[DONE]":
+                        break
+                    try:
+                        chunk = _json.loads(data_str)
+                    except _json.JSONDecodeError:
+                        continue
+                    # Aggregate delta content
+                    for choice in chunk.get("choices", []):
+                        delta = choice.get("delta", {})
+                        if delta.get("content"):
+                            content_parts.append(delta["content"])
+                    # Some providers send usage in the final chunk
+                    if "usage" in chunk and chunk["usage"]:
+                        prompt_tokens = chunk["usage"].get("prompt_tokens", 0) or 0
+                        completion_tokens = chunk["usage"].get("completion_tokens", 0) or 0
     except httpx.HTTPStatusError as exc:
         raise LLMCallError(f"HTTP {exc.response.status_code} from {base_url}") from exc
+    except httpx.ReadTimeout as exc:
+        raise LLMCallError(
+            f"Stream stalled — no chunk received within {_READ_TIMEOUT}s. "
+            "Model may be overloaded or still loading."
+        ) from exc
     except httpx.TimeoutException as exc:
-        raise LLMCallError(f"Request timed out after {OPENAI_COMPAT_TIMEOUT}s") from exc
+        raise LLMCallError(f"Connection timed out after {_CONNECT_TIMEOUT}s") from exc
     except httpx.RequestError as exc:
         raise LLMCallError(f"Network error: {exc}") from exc
 
-    try:
-        data = response.json()
-        content: str = data["choices"][0]["message"]["content"]
-    except (KeyError, IndexError, ValueError) as exc:
-        raise LLMCallError(f"Unexpected response shape from {base_url}: {exc}") from exc
+    content: str = "".join(content_parts)
 
-    usage = data.get("usage", {})
+    if not content:
+        content = "[Model returned an empty stream response. Try a larger model or simplify your question.]"
 
     # Strip <think>...</think> reasoning blocks from thinking models
     if is_thinking:
@@ -114,7 +149,7 @@ async def call_openai_compat(
         # Echo-detection only makes sense for small non-thinking models
         content = _validate_response(content, system_prompt)
 
-    return content, usage.get("prompt_tokens", 0), usage.get("completion_tokens", 0)
+    return content, prompt_tokens, completion_tokens
 
 
 def _validate_response(content: str, system_prompt: str) -> str:

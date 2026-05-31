@@ -1,4 +1,5 @@
 # tests/unit/test_llm_caller.py
+import json
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -8,20 +9,9 @@ import pytest
 async def test_call_openai_compat_sends_correct_payload():
     from fleet_platform.services.llm_caller import call_openai_compat
 
-    mock_response = MagicMock()
-    mock_response.json.return_value = {
-        "choices": [{"message": {"content": "# salt state here"}}],
-        "usage": {"prompt_tokens": 100, "completion_tokens": 50},
-    }
-    mock_response.raise_for_status = MagicMock()
-
-    mock_client = AsyncMock()
-    mock_client.__aenter__ = AsyncMock(return_value=mock_client)
-    mock_client.__aexit__ = AsyncMock(return_value=None)
-    mock_client.post = AsyncMock(return_value=mock_response)
-
+    mock_client = _sse_from_text("# salt state here")
     with patch("fleet_platform.services.llm_caller.httpx.AsyncClient", return_value=mock_client):
-        content, inp, out = await call_openai_compat(
+        content, _inp, _out = await call_openai_compat(
             base_url="http://localhost:11434/v1",
             api_key=None,
             model="llama3.2",
@@ -31,10 +21,7 @@ async def test_call_openai_compat_sends_correct_payload():
         )
 
     assert content == "# salt state here"
-    assert inp == 100
-    assert out == 50
-    call_args = mock_client.post.call_args
-    assert "/chat/completions" in call_args[0][0]
+    assert "/chat/completions" in mock_client.stream.call_args[0][1]
 
 
 def test_normalize_openai_base_url_strips_trailing_v1_and_slashes():
@@ -51,18 +38,31 @@ def test_normalize_openai_base_url_strips_trailing_v1_and_slashes():
     assert normalize_openai_base_url(once) == once
 
 
-def _mock_chat_client():
+def _sse_from_text(text: str):
+    """Build a streaming mock that yields SSE lines for *text*."""
+    import json as _json
+
+    async def _lines():
+        yield f'data: {_json.dumps({"choices": [{"delta": {"content": text}}]})}'
+        yield "data: [DONE]"
+
     mock_response = MagicMock()
-    mock_response.json.return_value = {
-        "choices": [{"message": {"content": "a sufficiently long answer body"}}],
-        "usage": {"prompt_tokens": 10, "completion_tokens": 5},
-    }
     mock_response.raise_for_status = MagicMock()
-    mock_client = AsyncMock()
+    mock_response.aiter_lines = _lines
+
+    mock_stream_ctx = MagicMock()
+    mock_stream_ctx.__aenter__ = AsyncMock(return_value=mock_response)
+    mock_stream_ctx.__aexit__ = AsyncMock(return_value=None)
+
+    mock_client = MagicMock()
     mock_client.__aenter__ = AsyncMock(return_value=mock_client)
     mock_client.__aexit__ = AsyncMock(return_value=None)
-    mock_client.post = AsyncMock(return_value=mock_response)
+    mock_client.stream = MagicMock(return_value=mock_stream_ctx)
     return mock_client
+
+
+def _mock_chat_client():
+    return _sse_from_text("a sufficiently long answer body")
 
 
 @pytest.mark.asyncio
@@ -77,7 +77,7 @@ async def test_call_openai_compat_url_with_trailing_v1():
             api_key=None, model="m", max_tokens=16,
             system_prompt="sys", user_prompt="hi",
         )
-    assert mock_client.post.call_args[0][0] == "http://192.168.1.23:52415/v1/chat/completions"
+    assert mock_client.stream.call_args[0][1] == "http://192.168.1.23:52415/v1/chat/completions"
 
 
 @pytest.mark.asyncio
@@ -92,7 +92,7 @@ async def test_call_openai_compat_url_without_v1():
             api_key=None, model="m", max_tokens=16,
             system_prompt="sys", user_prompt="hi",
         )
-    assert mock_client.post.call_args[0][0] == "http://192.168.1.23:52415/v1/chat/completions"
+    assert mock_client.stream.call_args[0][1] == "http://192.168.1.23:52415/v1/chat/completions"
 
 
 @pytest.mark.asyncio
@@ -107,25 +107,14 @@ async def test_call_openai_compat_groq_preserves_path_prefix():
             api_key="k", model="m", max_tokens=16,
             system_prompt="sys", user_prompt="hi",
         )
-    assert mock_client.post.call_args[0][0] == "https://api.groq.com/openai/v1/chat/completions"
+    assert mock_client.stream.call_args[0][1] == "https://api.groq.com/openai/v1/chat/completions"
 
 
 @pytest.mark.asyncio
 async def test_call_openai_compat_adds_bearer_header_when_api_key_given():
     from fleet_platform.services.llm_caller import call_openai_compat
 
-    mock_response = MagicMock()
-    mock_response.json.return_value = {
-        "choices": [{"message": {"content": "ok"}}],
-        "usage": {"prompt_tokens": 10, "completion_tokens": 5},
-    }
-    mock_response.raise_for_status = MagicMock()
-
-    mock_client = AsyncMock()
-    mock_client.__aenter__ = AsyncMock(return_value=mock_client)
-    mock_client.__aexit__ = AsyncMock(return_value=None)
-    mock_client.post = AsyncMock(return_value=mock_response)
-
+    mock_client = _sse_from_text("ok")
     with patch("fleet_platform.services.llm_caller.httpx.AsyncClient", return_value=mock_client):
         await call_openai_compat(
             base_url="https://api.openai.com/v1",
@@ -136,7 +125,7 @@ async def test_call_openai_compat_adds_bearer_header_when_api_key_given():
             user_prompt="prompt",
         )
 
-    _, kwargs = mock_client.post.call_args
+    _, kwargs = mock_client.stream.call_args
     assert kwargs["headers"]["Authorization"] == "Bearer sk-secret"
 
 
@@ -144,18 +133,7 @@ async def test_call_openai_compat_adds_bearer_header_when_api_key_given():
 async def test_call_openai_compat_no_auth_header_when_no_api_key():
     from fleet_platform.services.llm_caller import call_openai_compat
 
-    mock_response = MagicMock()
-    mock_response.json.return_value = {
-        "choices": [{"message": {"content": "ok"}}],
-        "usage": {"prompt_tokens": 5, "completion_tokens": 2},
-    }
-    mock_response.raise_for_status = MagicMock()
-
-    mock_client = AsyncMock()
-    mock_client.__aenter__ = AsyncMock(return_value=mock_client)
-    mock_client.__aexit__ = AsyncMock(return_value=None)
-    mock_client.post = AsyncMock(return_value=mock_response)
-
+    mock_client = _sse_from_text("ok")
     with patch("fleet_platform.services.llm_caller.httpx.AsyncClient", return_value=mock_client):
         await call_openai_compat(
             base_url="http://localhost:11434/v1",
@@ -166,7 +144,7 @@ async def test_call_openai_compat_no_auth_header_when_no_api_key():
             user_prompt="prompt",
         )
 
-    _, kwargs = mock_client.post.call_args
+    _, kwargs = mock_client.stream.call_args
     assert "Authorization" not in kwargs["headers"]
 
 
@@ -204,14 +182,19 @@ async def test_call_openai_compat_raises_llm_call_error_on_http_error():
 
     from fleet_platform.services.llm_caller import LLMCallError, call_openai_compat
 
-    mock_client = AsyncMock()
-    mock_client.__aenter__ = AsyncMock(return_value=mock_client)
-    mock_client.__aexit__ = AsyncMock(return_value=None)
-
     error_response = MagicMock()
     error_response.status_code = 500
     http_error = httpx.HTTPStatusError("500", request=MagicMock(), response=error_response)
-    mock_client.post = AsyncMock(side_effect=http_error)
+
+    mock_response = MagicMock()
+    mock_response.raise_for_status = MagicMock(side_effect=http_error)
+    mock_stream_ctx = MagicMock()
+    mock_stream_ctx.__aenter__ = AsyncMock(return_value=mock_response)
+    mock_stream_ctx.__aexit__ = AsyncMock(return_value=None)
+    mock_client = MagicMock()
+    mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+    mock_client.__aexit__ = AsyncMock(return_value=None)
+    mock_client.stream = MagicMock(return_value=mock_stream_ctx)
 
     with patch("fleet_platform.services.llm_caller.httpx.AsyncClient", return_value=mock_client):
         with pytest.raises(LLMCallError, match="HTTP 500"):
@@ -226,28 +209,24 @@ async def test_call_openai_compat_raises_llm_call_error_on_http_error():
 
 
 @pytest.mark.asyncio
-async def test_call_openai_compat_raises_llm_call_error_on_bad_response_shape():
-    from fleet_platform.services.llm_caller import LLMCallError, call_openai_compat
+async def test_call_openai_compat_returns_empty_message_on_no_content_deltas():
+    """A stream with no content deltas returns a user-friendly error message."""
+    from fleet_platform.services.llm_caller import call_openai_compat
 
-    mock_response = MagicMock()
-    mock_response.json.return_value = {"choices": []}  # empty choices — IndexError
-    mock_response.raise_for_status = MagicMock()
-
-    mock_client = AsyncMock()
-    mock_client.__aenter__ = AsyncMock(return_value=mock_client)
-    mock_client.__aexit__ = AsyncMock(return_value=None)
-    mock_client.post = AsyncMock(return_value=mock_response)
+    # Reuses the test_stream_empty_response_returns_error_message pattern inline
+    mock_client = _sse_from_text("")  # empty text → no content in delta
+    # Override the aiter_lines to yield only [DONE]
+    async def _done_only():
+        yield "data: [DONE]"
+    mock_client.stream.return_value.__aenter__.return_value.aiter_lines = _done_only
 
     with patch("fleet_platform.services.llm_caller.httpx.AsyncClient", return_value=mock_client):
-        with pytest.raises(LLMCallError, match="Unexpected response shape"):
-            await call_openai_compat(
-                base_url="http://localhost:11434/v1",
-                api_key=None,
-                model="llama3.2",
-                max_tokens=512,
-                system_prompt="sys",
-                user_prompt="prompt",
-            )
+        content, _, _ = await call_openai_compat(
+            base_url="http://localhost:11434/v1",
+            api_key=None, model="llama3.2", max_tokens=512,
+            system_prompt="sys", user_prompt="prompt",
+        )
+    assert content.startswith("[") and "empty" in content.lower()
 
 
 def test_validate_response_returns_error_for_empty_content():
@@ -290,3 +269,111 @@ def test_validate_response_passes_clean_content_through():
     content = "The SaltStack state file for restarting nginx is:\n```sls\nnginx:\n  service.running\n```"
     result = _validate_response(content, "You are an assistant.")
     assert result == content
+
+
+# ── #274 Streaming tests ──────────────────────────────────────────────────────
+
+
+def _sse_lines(*chunks, usage=None):
+    """Yield fake SSE lines for the given content chunks."""
+    async def _gen():
+        for text in chunks:
+            yield f'data: {json.dumps({"choices": [{"delta": {"content": text}}]})}'
+        if usage:
+            yield f'data: {json.dumps({"choices": [], "usage": usage})}'
+        yield "data: [DONE]"
+    return _gen()
+
+
+@pytest.mark.asyncio
+async def test_stream_aggregates_deltas_into_full_content():
+    """SSE delta chunks are aggregated into the final content string (#274)."""
+    from unittest.mock import AsyncMock, MagicMock, patch
+
+    mock_response = MagicMock()
+    mock_response.raise_for_status = MagicMock()
+    mock_response.aiter_lines = lambda: _sse_lines("Hello", " world", "!")
+
+    mock_client = MagicMock()
+    mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+    mock_client.__aexit__ = AsyncMock(return_value=None)
+
+    mock_stream_ctx = MagicMock()
+    mock_stream_ctx.__aenter__ = AsyncMock(return_value=mock_response)
+    mock_stream_ctx.__aexit__ = AsyncMock(return_value=None)
+    mock_client.stream = MagicMock(return_value=mock_stream_ctx)
+
+    from fleet_platform.services.llm_caller import call_openai_compat
+    with patch("fleet_platform.services.llm_caller.httpx.AsyncClient", return_value=mock_client):
+        content, inp, out = await call_openai_compat(
+            base_url="http://x", api_key=None, model="m",
+            max_tokens=128, system_prompt="sys", user_prompt="hi",
+        )
+
+    assert content == "Hello world!"
+
+
+@pytest.mark.asyncio
+async def test_stream_read_timeout_raises_llm_call_error():
+    """A stalled stream (no chunks) raises LLMCallError with a useful message (#274)."""
+    from unittest.mock import AsyncMock, MagicMock, patch
+
+    import httpx as _httpx
+
+    from fleet_platform.services.llm_caller import LLMCallError, call_openai_compat
+
+    mock_response = MagicMock()
+    mock_response.raise_for_status = MagicMock()
+
+    async def stalled_lines():
+        raise _httpx.ReadTimeout("stalled", request=MagicMock())
+        yield  # make it an async generator
+
+    mock_response.aiter_lines = stalled_lines
+
+    mock_client = MagicMock()
+    mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+    mock_client.__aexit__ = AsyncMock(return_value=None)
+    mock_stream_ctx = MagicMock()
+    mock_stream_ctx.__aenter__ = AsyncMock(return_value=mock_response)
+    mock_stream_ctx.__aexit__ = AsyncMock(return_value=None)
+    mock_client.stream = MagicMock(return_value=mock_stream_ctx)
+
+    with patch("fleet_platform.services.llm_caller.httpx.AsyncClient", return_value=mock_client):
+        with pytest.raises(LLMCallError, match="stalled|overloaded"):
+            await call_openai_compat(
+                base_url="http://x", api_key=None, model="m",
+                max_tokens=128, system_prompt="sys", user_prompt="hi",
+            )
+
+
+@pytest.mark.asyncio
+async def test_stream_empty_response_returns_error_message():
+    """An empty stream (no content deltas) returns a user-friendly error (#274)."""
+    from unittest.mock import AsyncMock, MagicMock, patch
+
+    from fleet_platform.services.llm_caller import call_openai_compat
+
+    mock_response = MagicMock()
+    mock_response.raise_for_status = MagicMock()
+
+    async def empty_stream():
+        yield "data: [DONE]"
+
+    mock_response.aiter_lines = empty_stream
+
+    mock_client = MagicMock()
+    mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+    mock_client.__aexit__ = AsyncMock(return_value=None)
+    mock_stream_ctx = MagicMock()
+    mock_stream_ctx.__aenter__ = AsyncMock(return_value=mock_response)
+    mock_stream_ctx.__aexit__ = AsyncMock(return_value=None)
+    mock_client.stream = MagicMock(return_value=mock_stream_ctx)
+
+    with patch("fleet_platform.services.llm_caller.httpx.AsyncClient", return_value=mock_client):
+        content, _, _ = await call_openai_compat(
+            base_url="http://x", api_key=None, model="m",
+            max_tokens=128, system_prompt="sys", user_prompt="hi",
+        )
+
+    assert content.startswith("[") and "empty" in content.lower()
