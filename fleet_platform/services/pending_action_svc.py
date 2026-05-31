@@ -78,7 +78,7 @@ async def expire_old(db: AsyncSession) -> int:
         .values(status="expired")
     )
     await db.commit()
-    return result.rowcount
+    return result.rowcount  # type: ignore[attr-defined]
 
 
 async def _send_approval_email(action: PendingAction, node, requested_by: str) -> None:

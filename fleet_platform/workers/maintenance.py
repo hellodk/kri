@@ -131,4 +131,4 @@ def reap_orphaned_jobs() -> dict:
             )
         )
         db.commit()
-    return {"reaped": result.rowcount}
+    return {"reaped": result.rowcount}  # type: ignore[attr-defined]
