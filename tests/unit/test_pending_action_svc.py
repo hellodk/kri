@@ -46,6 +46,7 @@ async def test_create_pending_action():
 @pytest.mark.asyncio
 async def test_expire_does_not_approve_expired():
     from datetime import UTC, datetime, timedelta
+
     from fleet_platform.services.pending_action_svc import approve
 
     db = AsyncMock()
@@ -62,6 +63,7 @@ async def test_expire_does_not_approve_expired():
 @pytest.mark.asyncio
 async def test_approve_marks_approved():
     from datetime import UTC, datetime, timedelta
+
     from fleet_platform.services.pending_action_svc import approve
 
     db = AsyncMock()
