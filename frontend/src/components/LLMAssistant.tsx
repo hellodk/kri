@@ -15,8 +15,17 @@ export default function LLMAssistant() {
   }, [messages])
 
   const mutation = useMutation({
-    mutationFn: (text: string) =>
-      llmApi.submitQuery({ prompt: text, intent: 'explain' }),
+    mutationFn: (text: string) => {
+      const historyMessages = messages
+        .slice(-10)
+        .filter(m => !m.error)
+        .map(m => ({ role: m.role as 'user' | 'assistant', content: m.content }))
+      return llmApi.submitQuery({
+        prompt: text,
+        intent: 'fleet_query',
+        history: historyMessages,
+      })
+    },
     onSuccess: (data: LLMQueryResponse) => {
       addMessage({
         role: 'assistant',

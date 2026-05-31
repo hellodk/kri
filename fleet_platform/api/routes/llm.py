@@ -194,6 +194,11 @@ async def submit_query(
     api_key = llm_svc.get_decrypted_api_key(endpoint)
     system_prompt = await build_fleet_context(db, payload.intent)
 
+    history_dicts: list[dict] = [
+        {"role": m.role, "content": m.content}
+        for m in payload.history
+    ] if payload.history else []
+
     t0 = time.perf_counter()
     error: str | None = None
     content: str = ""
@@ -208,6 +213,7 @@ async def submit_query(
                 max_tokens=endpoint.max_tokens,
                 system_prompt=system_prompt,
                 user_prompt=payload.prompt,
+                history=history_dicts,
             )
         else:
             content, input_tokens, output_tokens = await call_openai_compat(
@@ -217,6 +223,7 @@ async def submit_query(
                 max_tokens=endpoint.max_tokens,
                 system_prompt=system_prompt,
                 user_prompt=payload.prompt,
+                history=history_dicts,
             )
     except (LLMCallError, Exception) as exc:
         error = str(exc)
