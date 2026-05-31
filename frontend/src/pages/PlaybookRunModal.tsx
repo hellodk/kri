@@ -208,6 +208,11 @@ export function PlaybookRunModal({ playbook, onClose }: Props) {
                 <div className="w-4 h-4 border-2 border-brand-600 border-t-transparent rounded-full animate-spin" />
               )}
             </div>
+            {(status === 'running' || status === 'pending') && (
+              <p className="text-xs text-gray-400">
+                Closing this window does not stop the playbook — it runs on the server until complete.
+              </p>
+            )}
 
             {jobData?.stdout && (
               <div>
@@ -243,7 +248,7 @@ export function PlaybookRunModal({ playbook, onClose }: Props) {
         ) : (
           <button onClick={onClose}
             className="w-full py-2.5 border border-gray-300 text-gray-700 rounded-lg text-sm font-medium hover:bg-gray-50">
-            {status === 'completed' || status === 'failed' ? 'Close' : 'Close (runs in background)'}
+            {status === 'completed' || status === 'failed' ? 'Close' : 'Close — runs in background (see Executions tab)'}
           </button>
         )}
         </div>

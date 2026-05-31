@@ -1043,8 +1043,21 @@ async def list_ansible_jobs(
     if status:
         q = q.where(AnsibleJob.status == status)
     if node_id:
-        # Match jobs where target_id is this node or a group containing this node
-        q = q.where(AnsibleJob.target_id == node_id)
+        # Include both direct-node jobs AND group jobs for groups this node belongs to
+        from sqlalchemy import or_
+
+        from fleet_platform.models.group import GroupMember
+        group_ids_result = await db.execute(
+            select(GroupMember.group_id).where(
+                GroupMember.node_id == uuid.UUID(node_id)
+            )
+        )
+        group_ids = [str(gid) for gid in group_ids_result.scalars().all()]
+        # Match: target_id == node_id (direct) OR target_id in group_ids (group run)
+        conditions = [AnsibleJob.target_id == node_id]
+        if group_ids:
+            conditions.append(AnsibleJob.target_id.in_(group_ids))
+        q = q.where(or_(*conditions))
     q = q.offset((page - 1) * per_page).limit(per_page)
     result = await db.execute(q)
     jobs = result.scalars().all()
