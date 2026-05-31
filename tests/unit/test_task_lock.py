@@ -77,6 +77,19 @@ def test_drift_tasks_uses_unique_task():
     assert "unique_task" in src, "drift_tasks must use @unique_task for compute_drift"
 
 
+def test_get_sync_redis_uses_settings_url():
+    """_get_sync_redis must instantiate a connection using settings.redis_url (coverage L12-14)."""
+    mock_settings = MagicMock()
+    mock_settings.redis_url = "redis://localhost:6379/0"
+    with patch("fleet_platform.core.config.settings", mock_settings), \
+         patch("fleet_platform.services.task_lock.sync_redis") as mock_sync_redis:
+        from fleet_platform.services.task_lock import _get_sync_redis
+        _get_sync_redis()
+    mock_sync_redis.from_url.assert_called_once_with(
+        "redis://localhost:6379/0", decode_responses=True
+    )
+
+
 def test_health_tasks_uses_unique_task():
     with open("fleet_platform/workers/ansible_tasks.py") as f:
         src = f.read()

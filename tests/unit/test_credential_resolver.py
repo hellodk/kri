@@ -274,3 +274,44 @@ async def test_node_auth_mode_propagated():
     result = await resolve_node_credentials(node, db)
 
     assert result["auth_mode"] == "key"
+
+
+# ---------------------------------------------------------------------------
+# Test 15: global fallback, SSH_PASSWORD Fernet decryption fails gracefully
+# ---------------------------------------------------------------------------
+
+async def test_node_level_ssh_key_decrypt_failure_swallowed():
+    """ssh_key decryption failure is swallowed; ssh_key="" returned (covers lines 50-51)."""
+    node = _node(ssh_username="admin", ssh_key_enc="not-valid-fernet-key-data")
+    db = AsyncMock(spec=AsyncSession)
+
+    result = await resolve_node_credentials(node, db)
+
+    assert result["credential_source"] == "node"
+    assert result["ssh_key"] == ""
+
+
+async def test_group_level_ssh_key_decrypt_failure_swallowed():
+    """Group ssh_key decryption failure is swallowed (covers lines 90-91)."""
+    encrypted_key = "not-valid-fernet-data"
+    node = _node()
+    group = _group(ssh_username="guser", ssh_key_enc=encrypted_key, ssh_auth_mode="key")
+    db = _make_db(group)
+
+    result = await resolve_node_credentials(node, db)
+
+    assert result["credential_source"].startswith("group:")
+    assert result["ssh_key"] == ""
+
+
+async def test_global_fallback_decrypt_failure_returns_empty():
+    """_get_global_setting swallows Fernet errors and returns ''."""
+    node = _node()
+    user_row = _platform_row("admin", is_encrypted=False)
+    pw_row = _platform_row("not-valid-fernet-ciphertext", is_encrypted=True)
+    db = _make_db(None, user_row, pw_row)
+
+    result = await resolve_node_credentials(node, db)
+
+    assert result["credential_source"] == "global"
+    assert result["ssh_password"] == ""
