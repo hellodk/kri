@@ -1529,7 +1529,7 @@ function LLMEndpointsSection() {
       {showForm && (
         <LLMEndpointForm
           endpoint={editingEndpoint}
-          onClose={() => setShowForm(false)}
+          onClose={() => { setShowForm(false); setEditingEndpoint(undefined) }}
           onSaved={handleSaved}
         />
       )}
