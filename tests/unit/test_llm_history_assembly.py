@@ -27,84 +27,96 @@ def test_history_message_role_must_be_user_or_assistant():
         ChatHistoryMessage(role="system", content="not allowed")
 
 
-def test_openai_compat_includes_history_in_messages(monkeypatch):
+@pytest.mark.asyncio
+async def test_openai_compat_includes_history_in_messages():
     """History entries appear between system and user in the messages list."""
-    import asyncio
     import json as _json
-
-    import httpx
+    from unittest.mock import AsyncMock, MagicMock, patch
 
     from fleet_platform.services.llm_caller import call_openai_compat
 
     captured: dict = {}
 
-    async def fake_post(self, url, *, headers, json, **kw):
-        captured["messages"] = json["messages"]
-        request = httpx.Request("POST", url)
-        return httpx.Response(
-            200,
-            request=request,
-            content=_json.dumps({
-                "choices": [{"message": {"content": "hello"}}],
-                "usage": {"prompt_tokens": 50, "completion_tokens": 10},
-            }).encode(),
-            headers={"content-type": "application/json"},
-        )
+    async def _lines():
+        yield f'data: {_json.dumps({"choices": [{"delta": {"content": "hello"}}]})}'
+        yield "data: [DONE]"
 
-    monkeypatch.setattr(httpx.AsyncClient, "post", fake_post)
+    mock_response = MagicMock()
+    mock_response.raise_for_status = MagicMock()
+    mock_response.aiter_lines = _lines
+
+    mock_stream_ctx = MagicMock()
+    mock_stream_ctx.__aenter__ = AsyncMock(return_value=mock_response)
+    mock_stream_ctx.__aexit__ = AsyncMock(return_value=None)
+
+    def _capture_stream(method, url, *, headers, json, **kw):
+        captured["messages"] = json["messages"]
+        return mock_stream_ctx
+
+    mock_client = MagicMock()
+    mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+    mock_client.__aexit__ = AsyncMock(return_value=None)
+    mock_client.stream = _capture_stream
 
     history = [
         {"role": "user", "content": "Hi"},
         {"role": "assistant", "content": "Hello"},
     ]
-    asyncio.run(call_openai_compat(
-        base_url="http://localhost:11434",
-        api_key=None,
-        model="llama3",
-        max_tokens=256,
-        system_prompt="You are a fleet assistant.",
-        user_prompt="What are the node names?",
-        history=history,
-    ))
+    with patch("fleet_platform.services.llm_caller.httpx.AsyncClient", return_value=mock_client):
+        await call_openai_compat(
+            base_url="http://localhost:11434",
+            api_key=None,
+            model="llama3",
+            max_tokens=256,
+            system_prompt="You are a fleet assistant.",
+            user_prompt="What are the node names?",
+            history=history,
+        )
 
     roles = [m["role"] for m in captured["messages"]]
     assert roles == ["system", "user", "assistant", "user"]
     assert captured["messages"][-1]["content"] == "What are the node names?"
 
 
-def test_no_history_produces_system_plus_user(monkeypatch):
-    import asyncio
+@pytest.mark.asyncio
+async def test_no_history_produces_system_plus_user():
     import json as _json
-
-    import httpx
+    from unittest.mock import AsyncMock, MagicMock, patch
 
     from fleet_platform.services.llm_caller import call_openai_compat
 
     captured: dict = {}
 
-    async def fake_post(self, url, *, headers, json, **kw):
+    async def _lines():
+        yield f'data: {_json.dumps({"choices": [{"delta": {"content": "hi"}}]})}'
+        yield "data: [DONE]"
+
+    mock_response = MagicMock()
+    mock_response.raise_for_status = MagicMock()
+    mock_response.aiter_lines = _lines
+
+    mock_stream_ctx = MagicMock()
+    mock_stream_ctx.__aenter__ = AsyncMock(return_value=mock_response)
+    mock_stream_ctx.__aexit__ = AsyncMock(return_value=None)
+
+    def _capture_stream(method, url, *, headers, json, **kw):
         captured["messages"] = json["messages"]
-        request = httpx.Request("POST", url)
-        return httpx.Response(
-            200,
-            request=request,
-            content=_json.dumps({
-                "choices": [{"message": {"content": "hi"}}],
-                "usage": {"prompt_tokens": 10, "completion_tokens": 5},
-            }).encode(),
-            headers={"content-type": "application/json"},
+        return mock_stream_ctx
+
+    mock_client = MagicMock()
+    mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+    mock_client.__aexit__ = AsyncMock(return_value=None)
+    mock_client.stream = _capture_stream
+
+    with patch("fleet_platform.services.llm_caller.httpx.AsyncClient", return_value=mock_client):
+        await call_openai_compat(
+            base_url="http://localhost:11434",
+            api_key=None,
+            model="llama3",
+            max_tokens=256,
+            system_prompt="You are a fleet assistant.",
+            user_prompt="Hello",
         )
-
-    monkeypatch.setattr(httpx.AsyncClient, "post", fake_post)
-
-    asyncio.run(call_openai_compat(
-        base_url="http://localhost:11434",
-        api_key=None,
-        model="llama3",
-        max_tokens=256,
-        system_prompt="You are a fleet assistant.",
-        user_prompt="Hello",
-    ))
 
     roles = [m["role"] for m in captured["messages"]]
     assert roles == ["system", "user"]
