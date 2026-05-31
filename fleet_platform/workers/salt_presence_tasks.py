@@ -42,7 +42,7 @@ def _runner_call(fun: str, timeout: int = 30) -> list[str] | None:
                 "eauth": _SALT_API_EAUTH,
             },
             timeout=timeout,
-            verify=False,  # noqa: S501 — salt-api may use self-signed cert in lab
+            verify=False,  # nosec B501 — salt-api in lab uses self-signed cert
         )
         resp.raise_for_status()
         data = resp.json()
