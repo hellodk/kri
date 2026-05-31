@@ -229,6 +229,90 @@ async def ask_ai_about_node(
     }
 
 
+@router.get("/{node_id}/metrics")
+async def get_node_metrics(
+    node_id: uuid.UUID,
+    range: str = "1h",
+    db: AsyncSession = Depends(get_db),
+    _: dict = Depends(require_role("viewer", "operator", "admin")),
+):
+    """Proxy Prometheus range queries for a specific node's metrics.
+
+    Returns time-series data for CPU, memory, disk, network.
+    Falls back gracefully when Prometheus is unavailable or node_exporter not running.
+    """
+    import httpx as _httpx
+    from sqlalchemy import select as _sel
+
+    from fleet_platform.models.node import Node
+    from fleet_platform.services.platform_settings_svc import PROMETHEUS_URL, get_setting
+
+    node_result = await db.execute(_sel(Node).where(Node.id == node_id))
+    node = node_result.scalar_one_or_none()
+    if not node:
+        raise HTTPException(status_code=404, detail="Node not found")
+
+    node_ip = node.bootstrap_ip or node.ip_address
+    if not node_ip:
+        return {"available": False, "reason": "Node has no IP address — bootstrap first"}
+
+    prom_base = await get_setting(db, PROMETHEUS_URL) or "http://prometheus-operated.monitoring.svc:9090"
+    instance = f"{node_ip}:9100"
+
+    # Time range
+    range_map = {"15m": "15m", "1h": "1h", "6h": "6h", "24h": "24h"}
+    prom_range = range_map.get(range, "1h")
+    step_map = {"15m": "30s", "1h": "60s", "6h": "5m", "24h": "20m"}
+    step = step_map.get(range, "60s")
+
+    queries = {
+        "cpu": f'100 - avg(rate(node_cpu_seconds_total{{instance="{instance}",mode="idle"}}[5m])) * 100',
+        "mem_used_pct": (
+            f'(1 - node_memory_MemAvailable_bytes{{instance="{instance}"}}'
+            f' / node_memory_MemTotal_bytes{{instance="{instance}"}}) * 100'
+        ),
+        "disk_read_kbs": f'rate(node_disk_read_bytes_total{{instance="{instance}"}}[5m]) / 1024',
+        "disk_write_kbs": f'rate(node_disk_written_bytes_total{{instance="{instance}"}}[5m]) / 1024',
+        "net_rx_kbs": f'rate(node_network_receive_bytes_total{{instance="{instance}",device!="lo"}}[5m]) / 1024',
+        "net_tx_kbs": f'rate(node_network_transmit_bytes_total{{instance="{instance}",device!="lo"}}[5m]) / 1024',
+    }
+
+    results: dict = {"available": True, "instance": instance, "range": range, "series": {}}
+
+    try:
+        async with _httpx.AsyncClient(timeout=8.0) as client:
+            for key, query in queries.items():
+                try:
+                    resp = await client.get(
+                        f"{prom_base}/api/v1/query_range",
+                        params={"query": query, "start": f"now-{prom_range}", "end": "now", "step": step},
+                    )
+                    data = resp.json()
+                    if data.get("status") == "success":
+                        result_data = data.get("data", {}).get("result", [])
+                        if result_data:
+                            values = result_data[0].get("values", [])
+                            results["series"][key] = [
+                                {"t": int(v[0]), "v": float(v[1])} for v in values if v[1] != "NaN"
+                            ]
+                        else:
+                            results["series"][key] = []
+                    else:
+                        results["series"][key] = []
+                except Exception:
+                    results["series"][key] = []
+    except Exception as exc:
+        return {"available": False, "reason": f"Cannot reach Prometheus: {exc}"}
+
+    # Check if we got any data at all
+    total_points = sum(len(v) for v in results["series"].values())
+    if total_points == 0:
+        results["available"] = False
+        results["reason"] = f"No metrics for {instance} — is node_exporter running? Deploy it via the Overview tab."
+
+    return results
+
+
 @actions_router.get("/{token}/approve")
 async def approve_action(token: str, db: AsyncSession = Depends(get_db)):
     """Approve a pending destructive action via the emailed approval link."""

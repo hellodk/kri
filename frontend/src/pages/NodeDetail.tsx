@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useParams, Link } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { fleetApi } from '../api/fleet'
@@ -359,7 +359,30 @@ const BOOTSTRAP_STATUS_STYLE: Record<string, { label: string; colour: string; bg
   failed:       { label: 'Failed',           colour: 'text-red-700', bg: 'bg-red-50 border-red-200' },
 }
 
-type Tab = 'overview' | 'drift' | 'sbom' | 'executions' | 'bootstrap-history' | 'secrets' | 'ios' | 'services'
+type Tab = 'overview' | 'drift' | 'sbom' | 'executions' | 'bootstrap-history' | 'secrets' | 'ios' | 'services' | 'resources' | 'processes'
+
+function Sparkline({ data, color = '#3b82f6', height = 40 }: { data: Array<{t: number; v: number}>; color?: string; height?: number }) {
+  if (!data || data.length < 2) return <span className="text-xs text-gray-400">No data</span>
+  const vals = data.map(d => d.v)
+  const min = Math.min(...vals)
+  const max = Math.max(...vals)
+  const range = max - min || 1
+  const w = 180
+  const pts = data.map((d, i) => {
+    const x = (i / (data.length - 1)) * w
+    const y = height - ((d.v - min) / range) * (height - 4) - 2
+    return `${x},${y}`
+  })
+  const last = vals[vals.length - 1]
+  return (
+    <div className="flex items-center gap-2">
+      <svg width={w} height={height} className="shrink-0">
+        <polyline points={pts.join(' ')} fill="none" stroke={color} strokeWidth="1.5" />
+      </svg>
+      <span className="text-sm font-mono font-semibold text-gray-800">{last.toFixed(1)}</span>
+    </div>
+  )
+}
 
 export function NodeDetail() {
   const { nodeId } = useParams<{ nodeId: string }>()
@@ -399,6 +422,16 @@ export function NodeDetail() {
   // Service Manager state
   const [servicesLoading, setServicesLoading] = useState(false)
   const [servicesTaskId, setServicesTaskId] = useState<string | null>(null)
+  const [servicesPolling, setServicesPolling] = useState(false)
+  const [serviceList, setServiceList] = useState<Array<{name: string; running: boolean}>>([])
+  // Process Manager state
+  const [processLoading, setProcessLoading] = useState(false)
+  const [processTaskId, setProcessTaskId] = useState<string | null>(null)
+  const [processPolling, setProcessPolling] = useState(false)
+  const [processes, setProcesses] = useState<Array<{pid: string; name: string; cpu_percent: number; mem_percent: number; username: string; status: string}>>([])
+  const [processSort, setProcessSort] = useState<'cpu' | 'mem' | 'name'>('cpu')
+  // Resource profiling tab state
+  const [metricsRange, setMetricsRange] = useState<'15m' | '1h' | '6h' | '24h'>('1h')
   // AI Recommendations state
   const [aiLoading, setAiLoading] = useState(false)
   const [aiRecommendation, setAiRecommendation] = useState<string | null>(null)
@@ -492,6 +525,63 @@ export function NodeDetail() {
     },
   })
 
+  const { data: processTaskResult } = useQuery({
+    queryKey: ['process-task', processTaskId],
+    queryFn: () => api.get<{task_id: string; state: string; result?: unknown}>(
+      `/api/v1/ansible/tasks/${processTaskId}`
+    ),
+    enabled: !!processTaskId && processPolling,
+    refetchInterval: (q) => {
+      const s = q.state.data?.state
+      return (s === 'PENDING' || s === 'STARTED') ? 2000 : false
+    },
+  })
+
+  useEffect(() => {
+    if (!processTaskResult || processTaskResult.state !== 'SUCCESS') return
+    setProcessPolling(false)
+    try {
+      const ret = (processTaskResult.result as any)?.return?.[0]
+      if (!ret) return
+      const minionData = Object.values(ret)[0] as Record<string, any>
+      if (!minionData) return
+      const list = Object.entries(minionData).map(([pid, p]: [string, any]) => ({
+        pid,
+        name: p.name ?? p.cmdline?.[0]?.split('/').pop() ?? pid,
+        cpu_percent: Number(p.cpu_percent ?? 0),
+        mem_percent: Number(p.memory_percent ?? p.mem_percent ?? 0),
+        username: p.username ?? '—',
+        status: p.status ?? 'running',
+      }))
+      setProcesses(list)
+    } catch { /* parse error — keep empty */ }
+  }, [processTaskResult])
+
+  const { data: serviceTaskResult } = useQuery({
+    queryKey: ['service-task', servicesTaskId],
+    queryFn: () => api.get<{task_id: string; state: string; result?: unknown}>(
+      `/api/v1/ansible/tasks/${servicesTaskId}`
+    ),
+    enabled: !!servicesTaskId && servicesPolling,
+    refetchInterval: (q) => {
+      const s = q.state.data?.state
+      return (s === 'PENDING' || s === 'STARTED') ? 2000 : false
+    },
+  })
+
+  useEffect(() => {
+    if (!serviceTaskResult || serviceTaskResult.state !== 'SUCCESS') return
+    setServicesPolling(false)
+    try {
+      const ret = (serviceTaskResult.result as any)?.return?.[0]
+      if (!ret) return
+      const minionData = Object.values(ret)[0]
+      if (Array.isArray(minionData)) {
+        setServiceList((minionData as string[]).sort().map(name => ({ name, running: true })))
+      }
+    } catch { /* parse error */ }
+  }, [serviceTaskResult])
+
   const { data: executions } = useQuery({
     queryKey: ['executions-node', nodeId, execPage],
     queryFn: () => executionsApi.list({ node_id: nodeId!, page: execPage, per_page: 25 }),
@@ -548,6 +638,17 @@ export function NodeDetail() {
     staleTime: 30_000,
     refetchInterval: 30_000,
     enabled: !!nodeId && tab === 'overview',
+  })
+
+  const { data: metricsData, isLoading: metricsLoading, refetch: refetchMetrics } = useQuery({
+    queryKey: ['node-metrics', nodeId, metricsRange],
+    queryFn: () => api.get<{
+      available: boolean; reason?: string; instance?: string; range?: string;
+      series?: Record<string, Array<{t: number; v: number}>>
+    }>(`/api/v1/nodes/${nodeId}/metrics?range=${metricsRange}`),
+    enabled: !!nodeId && tab === 'resources',
+    staleTime: 30_000,
+    refetchInterval: tab === 'resources' ? 30_000 : false,
   })
 
   const addSecretMutation = useMutation({
@@ -705,11 +806,40 @@ export function NodeDetail() {
     try {
       const resp = await api.get<{task_id: string}>(`/api/v1/nodes/${nodeId}/services`)
       setServicesTaskId(resp.task_id)
+      setServicesPolling(true)
       toast('Service list queued')
     } catch (e: unknown) {
       toast(e instanceof Error ? e.message : 'Failed to fetch services', 'error')
     } finally {
       setServicesLoading(false)
+    }
+  }
+
+  async function fetchProcesses() {
+    if (!nodeId) return
+    setProcessLoading(true)
+    try {
+      const resp = await api.get<{task_id: string}>(`/api/v1/nodes/${nodeId}/processes`)
+      setProcessTaskId(resp.task_id)
+      setProcessPolling(true)
+      toast('Process list queued')
+    } catch (e: unknown) {
+      toast(e instanceof Error ? e.message : 'Failed to fetch processes', 'error')
+    } finally {
+      setProcessLoading(false)
+    }
+  }
+
+  async function requestProcessAction(pid: string, actionType: 'process_stop' | 'process_suspend' | 'process_resume') {
+    if (!nodeId) return
+    try {
+      const resp = await api.post<{status: string; message: string}>(`/api/v1/nodes/${nodeId}/actions`, {
+        action_type: actionType,
+        params: { pid, minion_id: node?.minion_id },
+      })
+      toast(resp.message || `${actionType} requested`)
+    } catch (e: unknown) {
+      toast(e instanceof Error ? e.message : 'Action failed', 'error')
     }
   }
 
@@ -780,12 +910,14 @@ export function NodeDetail() {
 
   const tabs: { id: Tab; label: string }[] = [
     { id: 'overview', label: 'Overview' },
+    { id: 'resources' as Tab, label: 'Resources' },
     { id: 'drift', label: 'Drift' },
     { id: 'sbom', label: 'SBOM' },
     { id: 'executions', label: 'Executions' },
     { id: 'bootstrap-history', label: 'Bootstrap History' },
     { id: 'secrets', label: 'Secrets' },
     { id: 'services' as Tab, label: 'Services' },
+    { id: 'processes' as Tab, label: 'Processes' },
     ...(isMacOSNode(node) ? [{ id: 'ios' as Tab, label: 'iOS' }] : []),
   ]
 
@@ -2156,16 +2288,12 @@ export function NodeDetail() {
             <h3 className="text-sm font-semibold text-gray-900">Services</h3>
             <button
               onClick={fetchServices}
-              disabled={servicesLoading}
+              disabled={servicesLoading || servicesPolling}
               className="px-3 py-1.5 text-xs font-medium bg-white border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 disabled:opacity-50"
             >
-              {servicesLoading ? 'Loading…' : '↺ Refresh'}
+              {servicesLoading ? 'Loading…' : servicesPolling ? '⟳ Fetching…' : serviceList.length > 0 ? '↺ Refresh' : '↺ Load'}
             </button>
           </div>
-
-          {servicesTaskId && (
-            <p className="text-xs text-brand-600 mb-3">Salt task queued: {servicesTaskId}. Results appear after task completes.</p>
-          )}
 
           <div className="rounded-lg border border-gray-200 overflow-hidden">
             <table className="w-full text-xs">
@@ -2177,33 +2305,41 @@ export function NodeDetail() {
                 </tr>
               </thead>
               <tbody>
-                {/* Service rows will be rendered here once Salt task result polling is wired up.
-                    Each row will include action buttons calling requestServiceAction(svcName, actionType). */}
-                {([] as {name: string; status: string}[]).map((svc) => (
-                  <tr key={svc.name} className="border-b border-gray-100 last:border-0 hover:bg-gray-50">
-                    <td className="py-2 px-3 text-gray-700 font-mono">{svc.name}</td>
-                    <td className="py-2 px-3 text-center">
-                      <span className={`px-1.5 py-0.5 rounded text-xs font-medium ${svc.status === 'running' ? 'bg-emerald-50 text-emerald-700' : 'bg-gray-100 text-gray-500'}`}>
-                        {svc.status}
-                      </span>
-                    </td>
-                    <td className="py-2 px-3 text-center">
-                      <div className="flex items-center justify-center gap-1">
-                        <button onClick={() => requestServiceAction(svc.name, 'service_start')} className="px-2 py-0.5 text-xs bg-white border border-gray-300 rounded hover:bg-gray-50">Start</button>
-                        <button onClick={() => requestServiceAction(svc.name, 'service_restart')} className="px-2 py-0.5 text-xs bg-white border border-gray-300 rounded hover:bg-gray-50">Restart</button>
-                        <button onClick={() => requestServiceAction(svc.name, 'service_stop')} className="px-2 py-0.5 text-xs bg-white border border-red-200 text-red-600 rounded hover:bg-red-50">Stop</button>
-                        <button onClick={() => requestServiceAction(svc.name, 'service_disable')} className="px-2 py-0.5 text-xs bg-white border border-red-200 text-red-600 rounded hover:bg-red-50">Disable</button>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-                <tr>
-                  <td colSpan={3} className="py-8 text-center text-gray-400 text-sm">
-                    Click Refresh to load services via Salt.
-                    <br/>
-                    <span className="text-xs">Start/Restart execute immediately. Stop/Disable require email approval.</span>
-                  </td>
-                </tr>
+                {serviceList.length > 0
+                  ? serviceList.map(svc => (
+                      <tr key={svc.name} className="border-b border-gray-100 last:border-0 hover:bg-gray-50">
+                        <td className="py-2 px-3 text-gray-700 font-mono text-xs truncate max-w-[200px]">{svc.name}</td>
+                        <td className="py-2 px-3 text-center">
+                          <span className="px-1.5 py-0.5 rounded text-xs font-medium bg-emerald-50 text-emerald-700">running</span>
+                        </td>
+                        <td className="py-2 px-3 text-center">
+                          <div className="flex items-center justify-center gap-1">
+                            <button onClick={() => requestServiceAction(svc.name, 'service_start')}
+                              className="px-2 py-0.5 text-xs bg-white border border-gray-300 rounded hover:bg-gray-50">Start</button>
+                            <button onClick={() => requestServiceAction(svc.name, 'service_restart')}
+                              className="px-2 py-0.5 text-xs bg-white border border-gray-300 rounded hover:bg-gray-50">Restart</button>
+                            <button onClick={() => requestServiceAction(svc.name, 'service_stop')}
+                              className="px-2 py-0.5 text-xs bg-white border border-red-200 text-red-600 rounded hover:bg-red-50">Stop</button>
+                            <button onClick={() => requestServiceAction(svc.name, 'service_disable')}
+                              className="px-2 py-0.5 text-xs bg-white border border-red-200 text-red-600 rounded hover:bg-red-50">Disable</button>
+                          </div>
+                        </td>
+                      </tr>
+                    ))
+                  : (
+                      <tr>
+                        <td colSpan={3} className="py-8 text-center text-sm text-gray-400">
+                          {servicesPolling ? (
+                            <span>Fetching service list…</span>
+                          ) : (
+                            <span>Click Load to fetch services via Salt.<br/>
+                              <span className="text-xs">Start/Restart execute immediately. Stop/Disable require email approval.</span>
+                            </span>
+                          )}
+                        </td>
+                      </tr>
+                    )
+                }
               </tbody>
             </table>
           </div>
@@ -2211,6 +2347,169 @@ export function NodeDetail() {
           <div className="mt-3 text-xs text-gray-400">
             Supports macOS (launchd) and Linux (systemd) nodes via Salt service module.
           </div>
+        </div>
+      )}
+
+      {tab === 'processes' && (
+        <div className="bg-white border border-gray-200 rounded-xl p-5">
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="text-sm font-semibold text-gray-900">Processes</h3>
+            <div className="flex items-center gap-2">
+              <select
+                value={processSort}
+                onChange={e => setProcessSort(e.target.value as 'cpu' | 'mem' | 'name')}
+                className="text-xs border border-gray-300 rounded px-2 py-1 focus:outline-none"
+              >
+                <option value="cpu">Sort: CPU%</option>
+                <option value="mem">Sort: Mem%</option>
+                <option value="name">Sort: Name</option>
+              </select>
+              <button
+                onClick={fetchProcesses}
+                disabled={processLoading || processPolling}
+                className="px-3 py-1.5 text-xs font-medium bg-white border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 disabled:opacity-50"
+              >
+                {processLoading ? 'Loading…' : processPolling ? '⟳ Fetching…' : processes.length > 0 ? '↺ Refresh' : '↺ Load'}
+              </button>
+            </div>
+          </div>
+
+          {processes.length > 0 ? (
+            <div className="overflow-x-auto rounded-lg border border-gray-200">
+              <table className="w-full text-xs">
+                <thead>
+                  <tr className="bg-gray-50 border-b border-gray-200">
+                    <th className="text-left py-2.5 px-3 text-gray-500 font-medium w-16">PID</th>
+                    <th className="text-left py-2.5 px-3 text-gray-500 font-medium">Name</th>
+                    <th className="text-left py-2.5 px-3 text-gray-500 font-medium w-24">User</th>
+                    <th className="text-right py-2.5 px-3 text-gray-500 font-medium w-16">CPU%</th>
+                    <th className="text-right py-2.5 px-3 text-gray-500 font-medium w-16">Mem%</th>
+                    <th className="text-center py-2.5 px-3 text-gray-500 font-medium w-40">Actions</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-100">
+                  {[...processes]
+                    .sort((a, b) =>
+                      processSort === 'cpu' ? b.cpu_percent - a.cpu_percent :
+                      processSort === 'mem' ? b.mem_percent - a.mem_percent :
+                      a.name.localeCompare(b.name)
+                    )
+                    .slice(0, 60)
+                    .map(p => (
+                      <tr key={p.pid} className="hover:bg-gray-50">
+                        <td className="py-2 px-3 font-mono text-gray-500">{p.pid}</td>
+                        <td className="py-2 px-3 font-medium text-gray-900 max-w-[200px] truncate" title={p.name}>{p.name}</td>
+                        <td className="py-2 px-3 text-gray-500 truncate max-w-[80px]">{p.username}</td>
+                        <td className={`py-2 px-3 text-right font-mono ${p.cpu_percent > 50 ? 'text-red-600 font-semibold' : p.cpu_percent > 20 ? 'text-amber-600' : 'text-gray-700'}`}>
+                          {p.cpu_percent.toFixed(1)}
+                        </td>
+                        <td className={`py-2 px-3 text-right font-mono ${p.mem_percent > 20 ? 'text-red-600 font-semibold' : p.mem_percent > 5 ? 'text-amber-600' : 'text-gray-700'}`}>
+                          {p.mem_percent.toFixed(1)}
+                        </td>
+                        <td className="py-2 px-3">
+                          <div className="flex items-center justify-center gap-1">
+                            <button onClick={() => requestProcessAction(p.pid, 'process_stop')}
+                              className="px-2 py-0.5 text-xs bg-amber-50 border border-amber-200 text-amber-700 rounded hover:bg-amber-100"
+                              title="Stop (SIGTERM) — requires email approval">Stop</button>
+                            <button onClick={() => requestProcessAction(p.pid, 'process_suspend')}
+                              className="px-2 py-0.5 text-xs bg-gray-50 border border-gray-200 text-gray-700 rounded hover:bg-gray-100"
+                              title="Suspend (SIGSTOP) — requires email approval">Suspend</button>
+                            <button onClick={() => requestProcessAction(p.pid, 'process_resume')}
+                              className="px-2 py-0.5 text-xs bg-emerald-50 border border-emerald-200 text-emerald-700 rounded hover:bg-emerald-100"
+                              title="Resume (SIGCONT)">Resume</button>
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                </tbody>
+              </table>
+              <div className="px-3 py-2 bg-gray-50 border-t border-gray-100 text-xs text-gray-400">
+                {processes.length} processes · Stop/Suspend require email approval · Kill (SIGKILL) disabled
+              </div>
+            </div>
+          ) : (
+            <div className="text-center py-10 text-gray-400">
+              {processPolling ? (
+                <div className="space-y-2">
+                  <div className="w-5 h-5 border-2 border-brand-500 border-t-transparent rounded-full animate-spin mx-auto" />
+                  <p className="text-sm">Fetching process list from node…</p>
+                </div>
+              ) : (
+                <p className="text-sm">Click Load to fetch the process list via Salt.<br/>
+                  <span className="text-xs">Stop/Suspend require email approval. Kill (SIGKILL) is disabled.</span>
+                </p>
+              )}
+            </div>
+          )}
+        </div>
+      )}
+
+      {tab === 'resources' && (
+        <div className="space-y-4">
+          {/* Header + range selector */}
+          <div className="flex items-center justify-between">
+            <h3 className="text-sm font-semibold text-gray-900">Resource Usage</h3>
+            <div className="flex items-center gap-2">
+              {(['15m', '1h', '6h', '24h'] as const).map(r => (
+                <button key={r} onClick={() => setMetricsRange(r)}
+                  className={`px-2.5 py-1 text-xs rounded font-medium ${metricsRange === r ? 'bg-brand-600 text-white' : 'bg-white border border-gray-300 text-gray-600 hover:bg-gray-50'}`}>
+                  {r}
+                </button>
+              ))}
+              <button onClick={() => refetchMetrics()} disabled={metricsLoading}
+                className="px-2.5 py-1 text-xs rounded bg-white border border-gray-300 text-gray-600 hover:bg-gray-50 disabled:opacity-50">
+                ↺
+              </button>
+            </div>
+          </div>
+
+          {metricsLoading ? (
+            <div className="flex items-center justify-center py-16 text-sm text-gray-400">
+              <div className="w-5 h-5 border-2 border-brand-500 border-t-transparent rounded-full animate-spin mr-2" />
+              Querying Prometheus…
+            </div>
+          ) : !metricsData?.available ? (
+            <div className="bg-amber-50 border border-amber-200 rounded-xl p-5 text-center">
+              <p className="text-sm font-medium text-amber-800">Metrics not available</p>
+              <p className="text-xs text-amber-600 mt-1">{metricsData?.reason ?? 'Unknown reason'}</p>
+              <p className="text-xs text-gray-500 mt-2">
+                Deploy node_exporter via the Overview tab → Deploy Monitoring button.
+              </p>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {[
+                { key: 'cpu', label: 'CPU Usage', unit: '%', color: '#ef4444', warn: 80 },
+                { key: 'mem_used_pct', label: 'Memory Usage', unit: '%', color: '#8b5cf6', warn: 85 },
+                { key: 'disk_read_kbs', label: 'Disk Read', unit: 'KB/s', color: '#06b6d4', warn: null },
+                { key: 'disk_write_kbs', label: 'Disk Write', unit: 'KB/s', color: '#f59e0b', warn: null },
+                { key: 'net_rx_kbs', label: 'Network In', unit: 'KB/s', color: '#10b981', warn: null },
+                { key: 'net_tx_kbs', label: 'Network Out', unit: 'KB/s', color: '#6366f1', warn: null },
+              ].map(({ key, label, unit, color, warn }) => {
+                const series = metricsData?.series?.[key] ?? []
+                const last = series.length > 0 ? series[series.length - 1].v : null
+                const isHigh = warn !== null && last !== null && last > warn
+                return (
+                  <div key={key} className={`bg-white border rounded-xl p-4 ${isHigh ? 'border-red-300 bg-red-50' : 'border-gray-200'}`}>
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="text-xs font-semibold text-gray-600 uppercase tracking-wide">{label}</span>
+                      {last !== null && (
+                        <span className={`text-sm font-bold ${isHigh ? 'text-red-600' : 'text-gray-800'}`}>
+                          {last.toFixed(1)} {unit}
+                          {isHigh && <span className="ml-1 text-xs">⚠</span>}
+                        </span>
+                      )}
+                    </div>
+                    <Sparkline data={series} color={isHigh ? '#ef4444' : color} height={36} />
+                  </div>
+                )
+              })}
+            </div>
+          )}
+
+          <p className="text-xs text-gray-400 text-center">
+            Source: Prometheus ({metricsData?.instance}) · Refreshes every 30s
+          </p>
         </div>
       )}
       {deletingSecretKey && (

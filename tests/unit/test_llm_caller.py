@@ -533,6 +533,6 @@ async def test_max_tokens_clamped_to_model_context_length():
             model_context_length=4096,
         )
 
-    _method, url, kwargs = mock_client.stream.call_args[0][0], mock_client.stream.call_args[0][1], mock_client.stream.call_args[1]
+    kwargs = mock_client.stream.call_args[1]
     sent_payload = kwargs["json"]
     assert sent_payload["max_tokens"] <= 4096

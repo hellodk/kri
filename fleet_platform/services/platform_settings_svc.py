@@ -57,6 +57,8 @@ LLM_INCLUDE_NODE_IPS = "llm_include_node_ips"  # "true" | "false", default "true
 SALT_ALLOWED_FUNCTIONS = "salt_allowed_functions"  # JSON array of allowed function names
 SALT_DENIED_FUNCTIONS = "salt_denied_functions"  # JSON array of denied function names
 
+PROMETHEUS_URL = "prometheus_url"
+
 # Default set of Salt functions that may be executed via the ad-hoc command API.
 # Mirrors the original hardcoded frozenset in salt_tasks.py.
 _DEFAULT_SALT_FUNCTIONS: frozenset[str] = frozenset(
