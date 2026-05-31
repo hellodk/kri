@@ -5,7 +5,7 @@ from typing import Literal
 from pydantic import BaseModel, Field
 
 VALID_PROVIDERS = Literal["openai_compat", "anthropic", "ollama", "vllm", "llamacpp"]
-VALID_INTENTS = Literal["salt_state", "ansible_playbook", "fleet_command", "explain"]
+VALID_INTENTS = Literal["salt_state", "ansible_playbook", "fleet_command", "explain", "fleet_query"]
 
 
 class LLMEndpointCreate(BaseModel):
@@ -52,10 +52,16 @@ class LLMEndpointTestResponse(BaseModel):
     error: str | None = None
 
 
+class ChatHistoryMessage(BaseModel):
+    role: Literal["user", "assistant"]
+    content: str = Field(..., max_length=4000)
+
+
 class LLMQueryRequest(BaseModel):
     prompt: str = Field(..., min_length=1, max_length=8000)
     intent: VALID_INTENTS
     endpoint_id: uuid.UUID | None = None
+    history: list[ChatHistoryMessage] = Field(default_factory=list)
 
 
 class LLMQueryResponse(BaseModel):

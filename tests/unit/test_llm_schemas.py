@@ -142,7 +142,7 @@ def test_llm_query_request_valid_intents():
     from pydantic import ValidationError
 
     from fleet_platform.schemas.llm import LLMQueryRequest
-    for intent in ("salt_state", "ansible_playbook", "fleet_command", "explain"):
+    for intent in ("salt_state", "ansible_playbook", "fleet_command", "explain", "fleet_query"):
         req = LLMQueryRequest(prompt="do something", intent=intent)
         assert req.intent == intent
     with pytest.raises(ValidationError):
