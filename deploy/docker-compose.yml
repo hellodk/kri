@@ -86,7 +86,7 @@ services:
       dockerfile: deploy/Dockerfile.api
     # migrate.sh acquires a PostgreSQL advisory lock before running alembic upgrade
     # head, preventing concurrent migration races when multiple API replicas start.
-    command: ["sh", "-c", "chown -R $(id -u):$(id -g) /home/appuser/.kri/git-repos 2>/dev/null || true && bash /app/deploy/migrate.sh && uv run uvicorn fleet_platform.api.main:app --host 0.0.0.0 --port 8000 --log-level info"]
+    command: ["sh", "-c", "chown $(id -u):$(id -g) /home/appuser/.kri 2>/dev/null || true && chown -R $(id -u):$(id -g) /home/appuser/.kri/git-repos 2>/dev/null || true && bash /app/deploy/migrate.sh && uv run uvicorn fleet_platform.api.main:app --host 0.0.0.0 --port 8000 --log-level info"]
     restart: unless-stopped
     env_file: ../.env.docker
     depends_on:
