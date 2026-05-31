@@ -37,6 +37,7 @@ from fleet_platform.services.platform_settings_svc import (
     SSH_USERNAME,
     VNC_ENABLED,
     get_setting,
+    get_settings_bulk,
     invalidate_salt_allowlist_cache,
     invalidate_salt_deny_cache,
     set_setting,
@@ -78,35 +79,56 @@ async def get_settings(
     _: dict = Depends(require_role("admin")),
 ):
     ensure_controller_keypair()
-    vnc_enabled_raw = await get_setting(db, VNC_ENABLED)
-    vnc_enabled = vnc_enabled_raw == "true"
-    oidc_enabled_raw = await get_setting(db, OIDC_ENABLED)
-    oidc_enabled = oidc_enabled_raw == "true"
-    salt_allowlist_raw = await get_setting(db, SALT_ALLOWED_FUNCTIONS)
-    salt_denylist_raw = await get_setting(db, SALT_DENIED_FUNCTIONS)
+    # Single bulk SELECT replaces 21 sequential queries (#284)
+    s = await get_settings_bulk(
+        db,
+        [
+            VNC_ENABLED,
+            OIDC_ENABLED,
+            SALT_ALLOWED_FUNCTIONS,
+            SALT_DENIED_FUNCTIONS,
+            SALT_MASTER,
+            KRI_API_URL,
+            SSH_USERNAME,
+            ANSIBLE_ENDPOINT_URL,
+            PLAYBOOKS_DIR,
+            PILLAR_DIR,
+            CXONE_URL,
+            SONARQUBE_URL,
+            LICENSE_POLICY,
+            OIDC_ISSUER_URL,
+            OIDC_CLIENT_ID,
+            OIDC_ROLE_PREFIX,
+            SMTP_HOST,
+            SMTP_PORT,
+            SMTP_USERNAME,
+            SMTP_FROM,
+            DIGEST_RECIPIENTS,
+        ],
+    )
     return PlatformSettingsResponse(
-        salt_master_address=await get_setting(db, SALT_MASTER),
-        kri_api_url=await get_setting(db, KRI_API_URL),
-        ssh_bootstrap_username=await get_setting(db, SSH_USERNAME),
+        salt_master_address=s[SALT_MASTER],
+        kri_api_url=s[KRI_API_URL],
+        ssh_bootstrap_username=s[SSH_USERNAME],
         controller_pubkey=get_controller_pubkey(),
-        ansible_endpoint_url=await get_setting(db, ANSIBLE_ENDPOINT_URL),
-        playbooks_dir=await get_setting(db, PLAYBOOKS_DIR),
-        pillar_dir=await get_setting(db, PILLAR_DIR),
-        cxone_url=await get_setting(db, CXONE_URL),
-        sonarqube_url=await get_setting(db, SONARQUBE_URL),
-        license_policy=await get_setting(db, LICENSE_POLICY),
-        vnc_enabled=vnc_enabled,
-        oidc_enabled=oidc_enabled,
-        oidc_issuer_url=await get_setting(db, OIDC_ISSUER_URL),
-        oidc_client_id=await get_setting(db, OIDC_CLIENT_ID),
-        oidc_role_prefix=await get_setting(db, OIDC_ROLE_PREFIX),
-        smtp_host=await get_setting(db, SMTP_HOST),
-        smtp_port=await get_setting(db, SMTP_PORT),
-        smtp_username=await get_setting(db, SMTP_USERNAME),
-        smtp_from=await get_setting(db, SMTP_FROM),
-        digest_recipients=await get_setting(db, DIGEST_RECIPIENTS),
-        salt_allowed_functions=_parse_salt_allowlist(salt_allowlist_raw),
-        salt_denied_functions=_parse_salt_denylist(salt_denylist_raw),
+        ansible_endpoint_url=s[ANSIBLE_ENDPOINT_URL],
+        playbooks_dir=s[PLAYBOOKS_DIR],
+        pillar_dir=s[PILLAR_DIR],
+        cxone_url=s[CXONE_URL],
+        sonarqube_url=s[SONARQUBE_URL],
+        license_policy=s[LICENSE_POLICY],
+        vnc_enabled=s[VNC_ENABLED] == "true",
+        oidc_enabled=s[OIDC_ENABLED] == "true",
+        oidc_issuer_url=s[OIDC_ISSUER_URL],
+        oidc_client_id=s[OIDC_CLIENT_ID],
+        oidc_role_prefix=s[OIDC_ROLE_PREFIX],
+        smtp_host=s[SMTP_HOST],
+        smtp_port=s[SMTP_PORT],
+        smtp_username=s[SMTP_USERNAME],
+        smtp_from=s[SMTP_FROM],
+        digest_recipients=s[DIGEST_RECIPIENTS],
+        salt_allowed_functions=_parse_salt_allowlist(s[SALT_ALLOWED_FUNCTIONS]),
+        salt_denied_functions=_parse_salt_denylist(s[SALT_DENIED_FUNCTIONS]),
     )
 
 
