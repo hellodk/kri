@@ -5,6 +5,7 @@ from sqlalchemy import select, update
 
 from fleet_platform.core.config import settings
 from fleet_platform.db.session import get_sync_db
+from fleet_platform.models.ansible_job import AnsibleJob
 from fleet_platform.models.bootstrap_run import BootstrapRun
 from fleet_platform.models.node import Node
 from fleet_platform.models.platform_setting import PlatformSetting
@@ -96,3 +97,38 @@ def cleanup_old_bootstrap_runs() -> dict:
         db.commit()
 
     return {"deleted": count, "cutoff_days": days}
+
+
+_ORPHAN_TIMEOUT_MINUTES = 40  # hard kill limit is 35 min; give 5 min buffer
+
+
+@celery_app.task(
+    name="fleet_platform.workers.maintenance.reap_orphaned_jobs",
+    queue="maintenance",
+)
+def reap_orphaned_jobs() -> dict:
+    """Mark ansible_jobs stuck in 'running' as failed if the worker was restarted.
+
+    Celery SoftTimeLimitExceeded only fires in a living worker. When a worker
+    is restarted mid-task, the DB row stays 'running' forever. This reaper runs
+    every 15 minutes and marks any job that has been 'running' for longer than
+    the Celery hard time limit (35 min) as failed with a clear explanation.
+    """
+    cutoff = datetime.now(UTC) - timedelta(minutes=_ORPHAN_TIMEOUT_MINUTES)
+    with get_sync_db() as db:
+        result = db.execute(
+            update(AnsibleJob)
+            .where(AnsibleJob.status == "running")
+            .where(AnsibleJob.started_at < cutoff)
+            .values(
+                status="failed",
+                completed_at=datetime.now(UTC),
+                stdout=(
+                    "[ERROR] Task orphaned — the Celery worker was restarted while this job "
+                    "was running. The playbook may or may not have executed on the target. "
+                    "Check the node directly and re-run the playbook if needed."
+                ),
+            )
+        )
+        db.commit()
+    return {"reaped": result.rowcount}
