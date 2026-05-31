@@ -135,7 +135,7 @@ async def call_anthropic(
         model=model,
         max_tokens=max_tokens,
         system=system_prompt,
-        messages=messages,
+        messages=messages,  # type: ignore[arg-type]  # dict is runtime-compatible with MessageParam
     )
     block = message.content[0]
     content: str = block.text if hasattr(block, "text") else ""

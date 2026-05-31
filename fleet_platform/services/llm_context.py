@@ -1,12 +1,14 @@
 # fleet_platform/services/llm_context.py
 from datetime import UTC, datetime
+
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 INTENT_ADDENDUM: dict[str, str] = {
     "fleet_query": (
         "Answer the operator's question using ONLY the Fleet Snapshot and Node Records below. "
-        "If the answer is not present in the provided context, say so explicitly — do not speculate or invent information. "
+        "If the answer is not present in the provided context, say so explicitly — "
+        "do not speculate or invent information. "
         "You cannot execute commands, scan nodes, or access live platform data beyond what is shown. "
         "Never claim to have performed a live action. "
         "If data is absent, tell the operator which specific data is missing and where they can find it in the kri UI."

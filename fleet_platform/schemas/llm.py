@@ -14,7 +14,7 @@ class LLMEndpointCreate(BaseModel):
     base_url: str = Field(..., min_length=1, max_length=500)
     api_key: str | None = None
     model: str = Field(..., min_length=1, max_length=255)
-    max_tokens: int = Field(default=4096, ge=256, le=128000)
+    max_tokens: int = Field(default=4096, ge=256, le=200000)
     is_default: bool = False
     enabled: bool = True
 
@@ -25,7 +25,7 @@ class LLMEndpointUpdate(BaseModel):
     base_url: str | None = Field(default=None, min_length=1, max_length=500)
     api_key: str | None = None
     model: str | None = Field(default=None, min_length=1, max_length=255)
-    max_tokens: int | None = Field(default=None, ge=256, le=128000)
+    max_tokens: int | None = Field(default=None, ge=256, le=200000)
     is_default: bool | None = None
     enabled: bool | None = None
 

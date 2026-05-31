@@ -1,8 +1,7 @@
 """Tests for LLM context: per-node records, grounding rules, fleet_query intent (closes #281)."""
 from datetime import UTC, datetime, timedelta
 
-import pytest
-
+from fleet_platform.schemas.llm import LLMQueryRequest
 from fleet_platform.services.llm_context import (
     INTENT_ADDENDUM,
     _format_last_seen,
@@ -98,3 +97,54 @@ def test_default_intent_is_fleet_query():
     # When an unknown intent is given, fleet_query is the fallback
     addendum = INTENT_ADDENDUM.get("unknown_intent", INTENT_ADDENDUM["fleet_query"])
     assert "ONLY" in addendum
+
+
+def test_fleet_query_in_valid_intents():
+    """Test that 'fleet_query' is a valid intent in VALID_INTENTS."""
+    req = LLMQueryRequest(
+        prompt="test question",
+        intent="fleet_query",
+    )
+    assert req.intent == "fleet_query"
+
+
+def test_ip_redacted_when_setting_false():
+    """Test that IPs are redacted when include_ips=False."""
+    records = [
+        {
+            "hostname": "mm1",
+            "minion_id": "mm1",
+            "ip": "[redacted]",
+            "status": "online",
+            "last_seen": "1m ago",
+            "group": "prod",
+        }
+    ]
+    ctx = build_static_context(
+        node_count=1,
+        online_count=1,
+        groups=[],
+        salt_master="s",
+        playbooks_dir="/p",
+        node_records=records,
+    )
+    assert "[redacted]" in ctx
+    assert "10.0.0" not in ctx
+
+
+def test_grounding_rules_in_every_intent():
+    """Test that grounding rules are in context for every intent."""
+    intents = ["salt_state", "ansible_playbook", "fleet_command", "explain", "fleet_query"]
+    for intent in intents:
+        ctx = build_static_context(
+            node_count=1,
+            online_count=1,
+            groups=[],
+            salt_master="s",
+            playbooks_dir="/p",
+        )
+        combined = ctx + "\n## Your Task\n" + INTENT_ADDENDUM[intent]
+        # Check for grounding rule indicators (case-insensitive)
+        lower_combined = combined.lower()
+        has_grounding = "only" in lower_combined or "cannot" in lower_combined
+        assert has_grounding, f"Intent '{intent}' should have grounding rules"

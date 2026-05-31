@@ -199,6 +199,14 @@ async def submit_query(
         for m in payload.history
     ] if payload.history else []
 
+    # Enforce a 6000-token total history budget — drop oldest turns first.
+    # Rough estimate: 1 token ≈ 4 chars.
+    _HISTORY_TOKEN_BUDGET = 6000
+    total_chars = sum(len(m["content"]) for m in history_dicts)
+    while history_dicts and total_chars > _HISTORY_TOKEN_BUDGET * 4:
+        removed = history_dicts.pop(0)
+        total_chars -= len(removed["content"])
+
     t0 = time.perf_counter()
     error: str | None = None
     content: str = ""

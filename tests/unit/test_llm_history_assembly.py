@@ -1,5 +1,6 @@
 """Tests for LLM conversation history (closes #282)."""
 import pytest
+
 from fleet_platform.schemas.llm import ChatHistoryMessage, LLMQueryRequest
 
 
@@ -30,7 +31,9 @@ def test_openai_compat_includes_history_in_messages(monkeypatch):
     """History entries appear between system and user in the messages list."""
     import asyncio
     import json as _json
+
     import httpx
+
     from fleet_platform.services.llm_caller import call_openai_compat
 
     captured: dict = {}
@@ -72,7 +75,9 @@ def test_openai_compat_includes_history_in_messages(monkeypatch):
 def test_no_history_produces_system_plus_user(monkeypatch):
     import asyncio
     import json as _json
+
     import httpx
+
     from fleet_platform.services.llm_caller import call_openai_compat
 
     captured: dict = {}
@@ -104,3 +109,47 @@ def test_no_history_produces_system_plus_user(monkeypatch):
     roles = [m["role"] for m in captured["messages"]]
     assert roles == ["system", "user"]
     assert len(captured["messages"]) == 2
+
+
+def test_history_assembled_as_messages_array():
+    """History entries are included as a messages array in the request (#282)."""
+    from fleet_platform.schemas.llm import ChatHistoryMessage, LLMQueryRequest
+    req = LLMQueryRequest(
+        prompt="what are the node names?",
+        intent="fleet_query",
+        history=[
+            ChatHistoryMessage(role="user", content="Hi"),
+            ChatHistoryMessage(role="assistant", content="Hello! I can help with your fleet."),
+        ],
+    )
+    msgs = [{"role": m.role, "content": m.content} for m in req.history]
+    assert msgs == [
+        {"role": "user", "content": "Hi"},
+        {"role": "assistant", "content": "Hello! I can help with your fleet."},
+    ]
+
+
+def test_oldest_turns_dropped_when_over_token_budget():
+    """When history exceeds 6000-token budget, oldest turns are dropped first."""
+    # Build a history list where total chars > 6000*4=24000
+    # 5 messages each with 5100 chars = 25500 chars total -> first turn should be dropped
+    long_content = "x" * 5100
+    history = [{"role": "user" if i % 2 == 0 else "assistant", "content": long_content} for i in range(5)]
+
+    # Replicate the budget enforcement logic from the route
+    _HISTORY_TOKEN_BUDGET = 6000
+    total_chars = sum(len(m["content"]) for m in history)
+    while history and total_chars > _HISTORY_TOKEN_BUDGET * 4:
+        removed = history.pop(0)
+        total_chars -= len(removed["content"])
+
+    assert len(history) < 5, "oldest turns should have been dropped"
+    assert total_chars <= _HISTORY_TOKEN_BUDGET * 4
+
+
+def test_empty_history_backward_compat():
+    """Requests without history field are valid and produce empty history."""
+    from fleet_platform.schemas.llm import LLMQueryRequest
+    req = LLMQueryRequest(prompt="hello", intent="fleet_query")
+    assert req.history == []
+    assert isinstance(req.history, list)

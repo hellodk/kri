@@ -80,7 +80,9 @@ async def test_build_fleet_context_assembles_prompt():
     membership_result = MagicMock()
     membership_result.all.return_value = []
 
-    mock_db.execute = AsyncMock(side_effect=[node_count_result, online_count_result, groups_result, nodes_result, membership_result])
+    mock_db.execute = AsyncMock(side_effect=[
+        node_count_result, online_count_result, groups_result, nodes_result, membership_result,
+    ])
 
     async def fake_get_setting(db, key):
         return {"salt_master_address": "salt.local", "ansible_endpoint_url": "/srv/plays"}.get(key)
@@ -118,7 +120,9 @@ async def test_build_fleet_context_appends_intent_addendum():
     membership_result2.all.return_value = []
 
     with patch.object(svc_mod, "get_setting", side_effect=fake_get_setting):
-        mock_db.execute = AsyncMock(side_effect=[count_result, count_result, groups_result, nodes_result2, membership_result2])
+        mock_db.execute = AsyncMock(side_effect=[
+            count_result, count_result, groups_result, nodes_result2, membership_result2,
+        ])
         ctx = await build_fleet_context(mock_db, "ansible_playbook")
 
     assert INTENT_ADDENDUM["ansible_playbook"] in ctx
