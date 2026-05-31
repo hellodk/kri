@@ -104,21 +104,21 @@ export function PlaybookDrawer({
   const [isDirty, setIsDirty] = useState(false)
 
   const { data: tree, isLoading: treeLoading, isError: treeError } = useQuery({
-    queryKey: ['playbook-tree', playbook.filename],
-    queryFn: () => ansibleApi.playbookTree(playbook.filename),
+    queryKey: ['playbook-tree', playbook.filename, playbook.source_dir],
+    queryFn: () => ansibleApi.playbookTree(playbook.filename, playbook.source_dir ?? undefined),
     staleTime: 30_000,
   })
 
   const { data: fileData, isLoading: fileLoading, isError: fileError, error: fileErrorObj } = useQuery({
-    queryKey: ['playbook-file-content', selectedNode?.path],
-    queryFn: () => ansibleApi.getFileContent(selectedNode!.path),
+    queryKey: ['playbook-file-content', selectedNode?.path, playbook.source_dir],
+    queryFn: () => ansibleApi.getFileContent(selectedNode!.path, playbook.source_dir ?? undefined),
     enabled: !!selectedNode && selectedNode.exists !== false,
     staleTime: 0,
     retry: false,
   })
 
   const saveMutation = useMutation({
-    mutationFn: () => ansibleApi.updateFileContent(selectedNode!.path, editedContent ?? ''),
+    mutationFn: () => ansibleApi.updateFileContent(selectedNode!.path, editedContent ?? '', playbook.source_dir ?? undefined),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['playbook-file-content', selectedNode?.path] })
       qc.invalidateQueries({ queryKey: ['playbooks'] })

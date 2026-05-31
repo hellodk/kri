@@ -316,17 +316,19 @@ async def list_playbooks(
     all_dirs = get_all_playbook_dirs(sources_json, _PLAYBOOKS_DIR)
     all_entries = []
     for d in all_dirs:
-        all_entries.extend(discover_all(d))
-    return [
-        PlaybookEntryResponse(
-            filename=e.filename,
-            name=e.name,
-            description=e.description,
-            entry_type=e.entry_type,
-            default_vars=e.default_vars,
+        all_entries.extend(
+            PlaybookEntryResponse(
+                filename=e.filename,
+                name=e.name,
+                description=e.description,
+                entry_type=e.entry_type,
+                default_vars=e.default_vars,
+                lint_errors=e.lint_errors,
+                source_dir=str(d),   # absolute path of the source directory
+            )
+            for e in discover_all(d)
         )
-        for e in all_entries
-    ]
+    return all_entries
 
 
 @router.get("/sources", response_model=list[PlaybookSourceResponse])
@@ -770,14 +772,28 @@ async def get_playbook_content(
 @router.get("/playbooks/tree")
 async def get_playbook_tree(
     filename: str = Query(..., description="Playbook filename or role name"),
+    source_dir: str | None = Query(None, description="Absolute source directory path"),
     db: AsyncSession = Depends(get_db),
-    _: dict = Depends(require_role("operator", "admin")),
+    _: dict = Depends(require_role("viewer", "operator", "admin")),
 ):
     """Return the dependency tree of a playbook/role in execution order."""
     import yaml as _yaml
 
-    from fleet_platform.services.platform_settings_svc import get_playbooks_dir
-    playbooks_dir = await get_playbooks_dir(db)
+    result = await db.execute(
+        select(PlatformSetting).where(PlatformSetting.key == "playbook_sources")
+    )
+    setting = result.scalar_one_or_none()
+    sources_json = setting.value if setting else None
+
+    # Find which directory contains this filename
+    if source_dir:
+        playbooks_dir = Path(source_dir)
+    else:
+        all_dirs = get_all_playbook_dirs(sources_json, _PLAYBOOKS_DIR)
+        playbooks_dir = next(
+            (d for d in all_dirs if (d / filename).exists() or (d / "roles" / filename.replace("roles/", "")).is_dir()),
+            _PLAYBOOKS_DIR,
+        )
 
     # Determine if this is a playbook file or a role directory
     playbook_path = playbooks_dir / filename
@@ -1063,45 +1079,74 @@ async def list_playbook_files(
 
 @router.get("/files/content")
 async def get_playbook_file(
-    path: str = Query(..., description="Relative path within playbooks dir"),
+    path: str = Query(..., description="Absolute or relative path of the file"),
+    source_dir: str | None = Query(None, description="Absolute source directory for relative paths"),
     db: AsyncSession = Depends(get_db),
-    _: dict = Depends(require_role("operator", "admin")),
+    _: dict = Depends(require_role("viewer", "operator", "admin")),
 ):
-    """Return the content of a file in the playbooks directory."""
-    from fleet_platform.services.platform_settings_svc import get_playbooks_dir
-    playbooks_dir = await get_playbooks_dir(db)
-    target = (playbooks_dir / path).resolve()
-    # Security: must remain inside playbooks_dir
-    if not str(target).startswith(str(playbooks_dir.resolve())):
-        raise HTTPException(status_code=400, detail="Path traversal not allowed")
+    """Return the content of a file in any configured playbooks directory."""
+    result = await db.execute(
+        select(PlatformSetting).where(PlatformSetting.key == "playbook_sources")
+    )
+    setting = result.scalar_one_or_none()
+    sources_json = setting.value if setting else None
+
+    all_dirs = get_all_playbook_dirs(sources_json, _PLAYBOOKS_DIR)
+    allowed_roots = [str(d.resolve()) for d in all_dirs]
+
+    # Resolve: if path is relative, use source_dir or builtin dir as base
+    if not Path(path).is_absolute():
+        base = Path(source_dir) if source_dir else _PLAYBOOKS_DIR
+        target = (base / path).resolve()
+    else:
+        target = Path(path).resolve()
+
+    # Security: must be inside one of the allowed source dirs
+    if not any(str(target).startswith(r) for r in allowed_roots):
+        raise HTTPException(status_code=400, detail="Path not in any configured playbook source")
     if not target.exists() or not target.is_file():
         raise HTTPException(status_code=404, detail="File not found")
     try:
         content = target.read_text(errors="replace")
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
-    return {"path": path, "content": content, "size": target.stat().st_size}
+    return {"path": str(target), "content": content, "size": target.stat().st_size}
 
 
 @router.put("/files/content")
 async def update_playbook_file(
-    path: str = Query(..., description="Relative path within playbooks dir"),
+    path: str = Query(..., description="Absolute or relative path of the file"),
+    source_dir: str | None = Query(None, description="Absolute source directory for relative paths"),
     payload: dict = Body(...),
     db: AsyncSession = Depends(get_db),
     claims: dict = Depends(require_role("admin")),
 ):
-    """Write content to a file in the playbooks directory. Admin only."""
-    from fleet_platform.services.platform_settings_svc import get_playbooks_dir
-    playbooks_dir = await get_playbooks_dir(db)
-    target = (playbooks_dir / path).resolve()
-    if not str(target).startswith(str(playbooks_dir.resolve())):
-        raise HTTPException(status_code=400, detail="Path traversal not allowed")
+    """Write content to a file in any configured playbooks directory. Admin only."""
+    result = await db.execute(
+        select(PlatformSetting).where(PlatformSetting.key == "playbook_sources")
+    )
+    setting = result.scalar_one_or_none()
+    sources_json = setting.value if setting else None
+
+    all_dirs = get_all_playbook_dirs(sources_json, _PLAYBOOKS_DIR)
+    allowed_roots = [str(d.resolve()) for d in all_dirs]
+
+    # Resolve: if path is relative, use source_dir or builtin dir as base
+    if not Path(path).is_absolute():
+        base = Path(source_dir) if source_dir else _PLAYBOOKS_DIR
+        target = (base / path).resolve()
+    else:
+        target = Path(path).resolve()
+
+    # Security: must be inside one of the allowed source dirs
+    if not any(str(target).startswith(r) for r in allowed_roots):
+        raise HTTPException(status_code=400, detail="Path not in any configured playbook source")
     content = payload.get("content", "")
     if not isinstance(content, str):
         raise HTTPException(status_code=422, detail="content must be a string")
     target.parent.mkdir(parents=True, exist_ok=True)
     target.write_text(content)
-    return {"path": path, "size": target.stat().st_size, "saved": True}
+    return {"path": str(target), "size": target.stat().st_size, "saved": True}
 
 
 @router.get("/playbooks/{playbook_name:path}/stats")

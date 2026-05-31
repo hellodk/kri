@@ -155,7 +155,17 @@ export const ansibleApi = {
   collectGrains: (nodeId: string) =>
     api.post<{ task_id: string; node_id: string; status: string }>(`/api/v1/ansible/nodes/${nodeId}/collect-grains`),
   listFiles: () => api.get<{root: string, tree: FileNode[]}>('/api/v1/ansible/files'),
-  getFileContent: (path: string) => api.get<{path: string, content: string, size: number}>(`/api/v1/ansible/files/content?path=${encodeURIComponent(path)}`),
-  updateFileContent: (path: string, content: string) => api.put<{path: string, saved: boolean}>(`/api/v1/ansible/files/content?path=${encodeURIComponent(path)}`, { content }),
-  playbookTree: (filename: string) => api.get<PlaybookTree>(`/api/v1/ansible/playbooks/tree?filename=${encodeURIComponent(filename)}`),
+  getFileContent: (path: string, sourceDir?: string) =>
+    api.get<{path: string, content: string, size: number}>(
+      `/api/v1/ansible/files/content?path=${encodeURIComponent(path)}${sourceDir ? `&source_dir=${encodeURIComponent(sourceDir)}` : ''}`
+    ),
+  updateFileContent: (path: string, content: string, sourceDir?: string) =>
+    api.put<{path: string, saved: boolean}>(
+      `/api/v1/ansible/files/content?path=${encodeURIComponent(path)}${sourceDir ? `&source_dir=${encodeURIComponent(sourceDir)}` : ''}`,
+      { content }
+    ),
+  playbookTree: (filename: string, sourceDir?: string) =>
+    api.get<PlaybookTree>(
+      `/api/v1/ansible/playbooks/tree?filename=${encodeURIComponent(filename)}${sourceDir ? `&source_dir=${encodeURIComponent(sourceDir)}` : ''}`
+    ),
 }

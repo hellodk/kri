@@ -13,6 +13,7 @@ class PlaybookEntryResponse(BaseModel):
     entry_type: str
     default_vars: dict
     lint_errors: list[str] = []
+    source_dir: str | None = None   # absolute path of the directory this was discovered in
 
 
 class PlaybookRunRequest(BaseModel):
