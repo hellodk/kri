@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import { api } from '../api/client'
 
 interface VNCViewerProps {
   nodeId: string
@@ -33,6 +34,23 @@ export function VNCViewer({ nodeId, nodeName, onClose }: VNCViewerProps) {
       })
       rfb.scaleViewport = true
       rfb.resizeSession = false
+
+      rfb.addEventListener('credentialsrequired', async () => {
+        try {
+          const creds = await api.get<{password: string | null}>(`/api/v1/vnc/session/${nodeId}/creds`)
+          if (creds.password) {
+            rfb.sendCredentials({ password: creds.password })
+          } else {
+            setStatus('error')
+            setErrorMsg('VNC requires a password — go to Node → Secrets → VNC Password')
+            rfb.disconnect()
+          }
+        } catch {
+          setStatus('error')
+          setErrorMsg('Failed to retrieve VNC credentials')
+          rfb.disconnect()
+        }
+      })
     }
 
     init().catch(e => {

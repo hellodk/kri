@@ -5,7 +5,8 @@ Security:
   - JWT auth required (same as SSH)
   - Session logged to ssh_sessions table (type='vnc')
   - Node must be online and have a known IP
-  - RFB authentication is performed server-side using the node's stored VNC password
+  - RFB authentication is handled entirely client-side by noVNC — the proxy bridges
+    raw TCP bytes without performing any server-side RFB handshake (#247).
 """
 import asyncio
 import struct
@@ -14,11 +15,12 @@ from datetime import UTC, datetime
 
 from cryptography.hazmat.decrepit.ciphers.algorithms import TripleDES as _TripleDES
 from cryptography.hazmat.primitives.ciphers import Cipher, modes
-from fastapi import APIRouter, Depends, WebSocket, WebSocketDisconnect
+from fastapi import APIRouter, Depends, HTTPException, WebSocket, WebSocketDisconnect
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from fleet_platform.api.deps import get_db
+from fleet_platform.core.auth import get_current_user
 from fleet_platform.db.session import AsyncSessionLocal
 from fleet_platform.models.node import Node
 from fleet_platform.models.ssh_session import SSHSession
@@ -130,6 +132,26 @@ async def _rfb_auth(
     return False
 
 
+@router.get("/session/{node_id}/creds")
+async def vnc_creds(
+    node_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+    claims: dict = Depends(get_current_user),
+):
+    """Return the stored VNC password for a node (decrypted, for noVNC client-side auth)."""
+    result = await db.execute(select(Node).where(Node.id == node_id))
+    node = result.scalar_one_or_none()
+    if not node:
+        raise HTTPException(status_code=404, detail="Node not found")
+    password: str | None = None
+    if node.vnc_password_enc:
+        try:
+            password = decrypt_secret(node.vnc_password_enc)
+        except Exception:
+            pass
+    return {"password": password}
+
+
 @router.websocket("/session/{node_id}")
 async def vnc_session(
     websocket: WebSocket,
@@ -167,14 +189,6 @@ async def vnc_session(
         await websocket.close(code=4000, reason="Node has no known IP — bootstrap first")
         return
 
-    # Retrieve stored VNC password (if any)
-    vnc_password: str | None = None
-    if node.vnc_password_enc:
-        try:
-            vnc_password = decrypt_secret(node.vnc_password_enc)
-        except Exception:
-            pass  # proceed — server may not require auth
-
     # Log session
     async with AsyncSessionLocal() as sdb:
         session_rec = SSHSession(
@@ -201,30 +215,6 @@ async def vnc_session(
     except (asyncio.TimeoutError, ConnectionRefusedError, OSError) as e:
         err_msg = f"Cannot connect to VNC on {node.bootstrap_ip}:{VNC_PORT} — ensure Screen Sharing is enabled: {e}"
         await websocket.close(code=4000, reason=err_msg[:120])
-        await _close_session(session_id, "failed")
-        return
-
-    # Perform RFB server-side handshake before bridging the WebSocket
-    try:
-        auth_ok = await asyncio.wait_for(
-            _rfb_auth(reader, writer, vnc_password),
-            timeout=15,
-        )
-    except asyncio.TimeoutError:
-        auth_ok = False
-
-    if not auth_ok:
-        try:
-            writer.close()
-        except Exception:
-            pass
-        if vnc_password is None:
-            await websocket.close(
-                code=4005,
-                reason="VNC requires a password — go to Node → Secrets → VNC Password",
-            )
-        else:
-            await websocket.close(code=4006, reason="VNC authentication failed")
         await _close_session(session_id, "failed")
         return
 
