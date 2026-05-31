@@ -1,4 +1,5 @@
 # fleet_platform/api/routes/ansible.py
+import asyncio
 import re
 import secrets
 import subprocess
@@ -640,6 +641,20 @@ async def add_source(
         db.add(setting)
     await db.commit()
 
+    # For git sources: clone in the background so the repo appears immediately
+    # in the Playbooks tab without requiring a manual Sync click.
+    if payload.type == "git":
+        from fleet_platform.services.playbook_sources import _clone_git_source, _default_clone_path
+        local_path = payload.local_path or _default_clone_path(payload.url)
+        asyncio.create_task(
+            asyncio.to_thread(
+                _clone_git_source,
+                payload.url,
+                payload.branch or "main",
+                local_path,
+            )
+        )
+
     return PlaybookSourceResponse(index=new_index, **new_src)
 
 
@@ -673,13 +688,15 @@ async def sync_sources(
     db: AsyncSession = Depends(get_db),
     _: dict = Depends(require_role("operator", "admin")),
 ):
-    """Force-sync all configured git playbook sources."""
+    """Force-sync all configured git playbook sources (runs git pull in a thread)."""
+    import asyncio as _asyncio
     result = await db.execute(
         select(PlatformSetting).where(PlatformSetting.key == "playbook_sources")
     )
     setting = result.scalar_one_or_none()
     sources_json = setting.value if setting else None
-    sync_results = sync_all_git_sources(sources_json)
+    # Run blocking git pull in a thread so we don't stall the async event loop
+    sync_results = await _asyncio.to_thread(sync_all_git_sources, sources_json)
     return PlaybookSourceSyncResult(results=sync_results)
 
 
@@ -1015,6 +1032,7 @@ async def collect_grains(
 @router.get("/jobs", response_model=list[AnsibleJobResponse])
 async def list_ansible_jobs(
     status: str | None = Query(None, description="Filter by status: pending|running|completed|failed"),
+    node_id: str | None = Query(None, description="Filter by target node UUID"),
     page: int = Query(1, ge=1),
     per_page: int = Query(25, ge=1, le=100),
     db: AsyncSession = Depends(get_db),
@@ -1024,6 +1042,9 @@ async def list_ansible_jobs(
     q = select(AnsibleJob).order_by(AnsibleJob.created_at.desc())
     if status:
         q = q.where(AnsibleJob.status == status)
+    if node_id:
+        # Match jobs where target_id is this node or a group containing this node
+        q = q.where(AnsibleJob.target_id == node_id)
     q = q.offset((page - 1) * per_page).limit(per_page)
     result = await db.execute(q)
     jobs = result.scalars().all()

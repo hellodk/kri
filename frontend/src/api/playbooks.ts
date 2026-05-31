@@ -45,13 +45,22 @@ export const playbooksApi = {
   run: (playbook: string, target_type: string, target_id: string, extravars: Record<string, unknown>, sshUsername?: string, sshPassword?: string) =>
     api.post<PlaybookRunResponse>('/api/v1/ansible/playbooks/run', { playbook, target_type, target_id, extravars, ssh_username: sshUsername || undefined, ssh_password: sshPassword || undefined }),
   getJob: (jobId: string) => api.get<AnsibleJob>(`/api/v1/ansible/jobs/${jobId}`),
-  listJobs: (params?: { status?: string; page?: number; per_page?: number }) => {
+  listJobs: (params?: { status?: string; node_id?: string; page?: number; per_page?: number }) => {
     const q = new URLSearchParams()
     if (params?.status) q.set('status', params.status)
+    if (params?.node_id) q.set('node_id', params.node_id)
     if (params?.page) q.set('page', String(params.page))
     if (params?.per_page) q.set('per_page', String(params.per_page))
     return api.get<AnsibleJob[]>(`/api/v1/ansible/jobs?${q}`)
   },
   getStats: (filename: string) =>
     api.get<PlaybookStats>(`/api/v1/ansible/playbooks/${encodeURIComponent(filename)}/stats`),
+}
+
+export const playbookSourcesApi = {
+  list: () => api.get<{ index: number; type: string; url?: string; path?: string; label?: string }[]>('/api/v1/ansible/sources'),
+  add: (payload: { type: string; url?: string; branch?: string; path?: string; label?: string }) =>
+    api.post('/api/v1/ansible/sources', payload),
+  remove: (index: number) => api.delete(`/api/v1/ansible/sources/${index}`),
+  sync: () => api.post<{ results: { url?: string; status: string; error?: string }[] }>('/api/v1/ansible/sources/sync'),
 }

@@ -203,31 +203,33 @@ def run_playbook(self, job_id: str, ssh_username: str | None = None, ssh_passwor
                 rotate_artifacts=1,
             )
 
-            # Poll events from the running playbook and flush to DB every 30s
-            # so the UI can show real-time progress instead of waiting for completion.
-            while thread.is_alive() or not runner.events is None:
-                for event in runner.events:
+            # Poll events from the running playbook and flush to DB every 30s.
+            # runner.events re-reads ALL events from disk on every call, so we
+            # track processed_count to only consume NEW events each iteration.
+            processed_count = 0
+            while thread.is_alive():
+                all_events = list(runner.events)
+                for event in all_events[processed_count:]:
                     event_type = event.get("event", "")
                     if event_type in ("runner_on_start", "playbook_on_task_start"):
                         task_name = event.get("event_data", {}).get("task", "")
                         if task_name:
                             last_task = task_name
-
                     msg = event.get("stdout", "")
                     if msg:
                         stdout_lines.append(msg)
+                processed_count = len(all_events)
 
                 now = time.time()
                 if now - last_db_write >= _LOG_BATCH_INTERVAL:
-                    _flush_stdout(job_uuid, stdout_lines, last_task if thread.is_alive() else None)
+                    _flush_stdout(job_uuid, stdout_lines, last_task)
                     last_db_write = now
 
-                if not thread.is_alive():
-                    break
                 time.sleep(1)
 
-            # Drain any remaining events after thread finishes
-            for event in runner.events:
+            # Drain any remaining events the thread wrote after loop exited
+            all_events = list(runner.events)
+            for event in all_events[processed_count:]:
                 msg = event.get("stdout", "")
                 if msg:
                     stdout_lines.append(msg)

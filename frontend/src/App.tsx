@@ -15,6 +15,7 @@ import { GroupExplorer } from './pages/GroupExplorer'
 import { GroupDetail } from './pages/GroupDetail'
 import { ExecutionHistory } from './pages/ExecutionHistory'
 import { JobDetail } from './pages/JobDetail'
+import { PlaybookJobDetail } from './pages/PlaybookJobDetail'
 import { SettingsPage } from './pages/SettingsPage'
 import { PlaybooksPage } from './pages/PlaybooksPage'
 import { BaselinesPage } from './pages/BaselinesPage'
@@ -149,6 +150,7 @@ export default function App() {
             <Route path="/groups/:groupId" element={<GroupDetail />} />
             <Route path="/executions" element={<ExecutionHistory />} />
             <Route path="/executions/:jobId" element={<JobDetail />} />
+            <Route path="/playbook-job/:jobId" element={<PlaybookJobDetail />} />
             <Route path="/playbooks" element={<PlaybooksPage />} />
             <Route path="/baselines" element={<BaselinesPage />} />
             <Route path="/provisioning" element={<ProvisioningPage />} />

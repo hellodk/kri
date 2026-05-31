@@ -53,6 +53,10 @@ def test_execution_history_has_empty_state():
 
 
 def test_node_detail_executions_has_empty_state():
-    assert "No executions" in NODE_DETAIL or "no executions" in NODE_DETAIL.lower(), (
-        "NodeDetail executions tab must show empty state when node has no executions"
-    )
+    # Executions tab now shows separate sections for ansible runs and salt runs
+    assert (
+        "No executions" in NODE_DETAIL
+        or "no executions" in NODE_DETAIL.lower()
+        or "No salt state runs" in NODE_DETAIL
+        or "No ansible" in NODE_DETAIL.lower()
+    ), "NodeDetail executions tab must show empty state when node has no executions"
