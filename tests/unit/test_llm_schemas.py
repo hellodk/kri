@@ -164,6 +164,24 @@ def test_llm_endpoint_update_all_fields_optional():
     assert obj.base_url is None
     assert obj.model is None
 
+
+def test_llm_endpoint_update_accepts_provider():
+    """Provider must be editable on update, not silently dropped (#277)."""
+    from fleet_platform.schemas.llm import LLMEndpointUpdate
+    obj = LLMEndpointUpdate(provider="openai_compat")
+    assert obj.provider == "openai_compat"
+    # Omitted -> None (so update_endpoint leaves it unchanged)
+    assert LLMEndpointUpdate().provider is None
+
+
+def test_llm_endpoint_update_rejects_unknown_provider():
+    import pytest
+    from pydantic import ValidationError
+
+    from fleet_platform.schemas.llm import LLMEndpointUpdate
+    with pytest.raises(ValidationError):
+        LLMEndpointUpdate(provider="gemini")
+
 def test_llm_endpoint_response_model_validate_with_api_key():
     import datetime
 

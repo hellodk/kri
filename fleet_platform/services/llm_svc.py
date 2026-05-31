@@ -70,6 +70,8 @@ async def update_endpoint(
 ) -> LLMEndpoint:
     if payload.name is not None:
         endpoint.name = payload.name
+    if payload.provider is not None:
+        endpoint.provider = payload.provider
     if payload.base_url is not None:
         endpoint.base_url = payload.base_url
     if payload.api_key is not None:
