@@ -248,3 +248,45 @@ async def test_call_openai_compat_raises_llm_call_error_on_bad_response_shape():
                 system_prompt="sys",
                 user_prompt="prompt",
             )
+
+
+def test_validate_response_returns_error_for_empty_content():
+    """Too-short content (< 5 chars) returns a helpful error message."""
+    from fleet_platform.services.llm_caller import _validate_response
+    result = _validate_response("hi", "You are a fleet assistant.")
+    assert result.startswith("[")
+    assert "empty" in result.lower() or "model" in result.lower()
+
+
+def test_validate_response_detects_system_prompt_echo():
+    """Content that echoes the system prompt is flagged as garbled."""
+    from fleet_platform.services.llm_caller import _validate_response
+    sys_prompt = "You are an AI assistant embedded in kri fleet management."
+    garbled = sys_prompt + " you are a user you are a user"
+    result = _validate_response(garbled, sys_prompt)
+    assert result.startswith("[")
+    assert "echoed" in result.lower() or "model" in result.lower()
+
+
+def test_validate_response_strips_chat_template_artifacts():
+    """Chat template tokens are stripped; good content underneath is returned."""
+    from fleet_platform.services.llm_caller import _validate_response
+    content = "<|im_start|>assistant\nHere is the salt state you need.<|im_end|>"
+    result = _validate_response(content, "You are helpful.")
+    assert "<|im_start|>" not in result
+    assert "salt state" in result
+
+
+def test_validate_response_returns_error_when_only_artifacts():
+    """Content consisting only of chat template tokens gets an error message."""
+    from fleet_platform.services.llm_caller import _validate_response
+    result = _validate_response("<|im_start|><|im_end|>", "System prompt here.")
+    assert result.startswith("[")
+
+
+def test_validate_response_passes_clean_content_through():
+    """Normal, useful content is returned unchanged."""
+    from fleet_platform.services.llm_caller import _validate_response
+    content = "The SaltStack state file for restarting nginx is:\n```sls\nnginx:\n  service.running\n```"
+    result = _validate_response(content, "You are an assistant.")
+    assert result == content
