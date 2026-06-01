@@ -5,6 +5,8 @@ import { fleetApi } from '../api/fleet'
 import { groupsApi } from '../api/groups'
 import { api } from '../api/client'
 import { iosTrackingApi } from '../api/iosTracking'
+import { playbooksApi } from '../api/playbooks'
+import { ansibleApi } from '../api/ansible'
 import { useAuthStore } from '../stores/authStore'
 import { useToastStore } from '../stores/toastStore'
 import { StatusBadge } from '../components/StatusBadge'
@@ -35,6 +37,8 @@ function AddNodeModal({ onClose }: { onClose: () => void }) {
   const [hostname, setHostname] = useState('')
   const [ipAddress, setIpAddress] = useState('')
   const [groupId, setGroupId] = useState('')
+  const [bootstrapAfterAdd, setBootstrapAfterAdd] = useState(true)
+  const [bootstrapPlaybook, setBootstrapPlaybook] = useState('bootstrap_mac_mini.yml')
 
   // ── Minion ID uniqueness check ─────────────────────────────────────────────
   const [minionIdStatus, setMinionIdStatus] = useState<
@@ -114,6 +118,14 @@ function AddNodeModal({ onClose }: { onClose: () => void }) {
     staleTime: 60_000,
   })
 
+  // ── Playbooks query ────────────────────────────────────────────────────────
+  const { data: playbooksData } = useQuery({
+    queryKey: ['playbooks-for-add-node'],
+    queryFn: () => playbooksApi.list(),
+    staleTime: 60_000,
+  })
+  const playbooks = (playbooksData ?? []).filter(p => p.entry_type === 'playbook')
+
   // ── Mutation ───────────────────────────────────────────────────────────────
   const mutation = useMutation({
     mutationFn: async () => {
@@ -123,12 +135,22 @@ function AddNodeModal({ onClose }: { onClose: () => void }) {
         ip_address: ipAddress.trim() || undefined,
       })
       await groupsApi.addMember(groupId, node.id)
+
+      if (bootstrapAfterAdd) {
+        await ansibleApi.bootstrap(
+          minionId.trim(),
+          ipAddress.trim() || hostname.trim() || minionId.trim(),
+          undefined,  // ssh_username — resolved server-side from group/global settings
+          undefined,  // ssh_password — resolved server-side from group/global settings
+        )
+      }
+
       return node
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['nodes'] })
       qc.invalidateQueries({ queryKey: ['fleet-overview'] })
-      toast('Node added and assigned to group')
+      toast(bootstrapAfterAdd ? 'Node added and bootstrap started' : 'Node added and assigned to group')
       onClose()
     },
     onError: (e: Error) => toast(e.message, 'error'),
@@ -243,6 +265,40 @@ function AddNodeModal({ onClose }: { onClose: () => void }) {
               className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm text-gray-900 focus:outline-none focus:border-brand-600"
             />
           </div>
+
+          {/* Bootstrap after adding */}
+          <div className="border-t border-gray-100 pt-4">
+            <label className="flex items-center gap-2 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={bootstrapAfterAdd}
+                onChange={e => setBootstrapAfterAdd(e.target.checked)}
+                className="rounded border-gray-300 text-brand-600 focus:ring-brand-500"
+              />
+              <span className="text-sm font-medium text-gray-700">Bootstrap this node after adding</span>
+            </label>
+
+            {bootstrapAfterAdd && (
+              <div className="mt-3 space-y-2">
+                <label className="block text-xs font-medium text-gray-500 uppercase tracking-wide">Playbook</label>
+                <select
+                  value={bootstrapPlaybook}
+                  onChange={e => setBootstrapPlaybook(e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm text-gray-900 focus:outline-none focus:border-brand-600 bg-white"
+                >
+                  {playbooks.length > 0
+                    ? playbooks.map(p => (
+                        <option key={p.filename} value={p.filename}>{p.name}</option>
+                      ))
+                    : <option value="bootstrap_mac_mini.yml">bootstrap_mac_mini.yml</option>
+                  }
+                </select>
+                <p className="text-xs text-gray-400">
+                  SSH credentials will be resolved from the node's group settings. Add credentials in Groups → SSH before bootstrapping.
+                </p>
+              </div>
+            )}
+          </div>
         </div>
 
         <div className="px-6 py-4 border-t border-gray-200 flex gap-3">
@@ -254,7 +310,7 @@ function AddNodeModal({ onClose }: { onClose: () => void }) {
             onClick={() => mutation.mutate()}
             className="flex-1 py-2.5 bg-brand-600 text-white rounded-lg text-sm font-medium hover:bg-brand-700 disabled:opacity-50"
           >
-            {mutation.isPending ? 'Adding…' : 'Add Node'}
+            {mutation.isPending ? (bootstrapAfterAdd ? 'Adding & bootstrapping…' : 'Adding…') : (bootstrapAfterAdd ? 'Add & Bootstrap' : 'Add Node')}
           </button>
         </div>
       </div>
