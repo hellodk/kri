@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import React, { useState, useEffect } from 'react'
 import { useParams, Link } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { fleetApi } from '../api/fleet'
@@ -380,6 +380,70 @@ function Sparkline({ data, color = '#3b82f6', height = 40 }: { data: Array<{t: n
         <polyline points={pts.join(' ')} fill="none" stroke={color} strokeWidth="1.5" />
       </svg>
       <span className="text-sm font-mono font-semibold text-gray-800">{last.toFixed(1)}</span>
+    </div>
+  )
+}
+
+/**
+ * Renders an AI recommendation text with light markdown-style formatting.
+ * Bold **text** is highlighted, numbered list items get visual separation,
+ * and the overall block is readable without depending on a markdown library.
+ */
+function AiRecommendationPanel({ text }: { text: string }) {
+  const lines = text.split('\n')
+
+  function renderLine(line: string, idx: number) {
+    // Bold: **text** or __text__
+    const boldPattern = /\*\*(.+?)\*\*|__(.+?)__/g
+    const parts: React.ReactNode[] = []
+    let last = 0
+    let match: RegExpExecArray | null
+    let key = 0
+    while ((match = boldPattern.exec(line)) !== null) {
+      if (match.index > last) parts.push(line.slice(last, match.index))
+      parts.push(<strong key={key++} className="font-semibold text-gray-900">{match[1] ?? match[2]}</strong>)
+      last = match.index + match[0].length
+    }
+    if (last < line.length) parts.push(line.slice(last))
+
+    // Numbered items get a subtle indent
+    const isNumbered = /^\s*\d+[.)]\s/.test(line)
+    // Bullet items
+    const isBullet = /^\s*[-*]\s/.test(line)
+    // Section headers (e.g. "## Heading" or "### Heading")
+    const isHeading = /^#{1,3}\s/.test(line)
+
+    if (isHeading) {
+      const headText = line.replace(/^#{1,3}\s/, '')
+      return (
+        <p key={idx} className="text-xs font-bold uppercase tracking-wide text-indigo-700 mt-3 mb-1">
+          {headText}
+        </p>
+      )
+    }
+    if (isNumbered || isBullet) {
+      return (
+        <div key={idx} className="flex gap-2 mt-1">
+          <span className="text-indigo-400 shrink-0 mt-0.5">{isBullet ? '•' : ''}</span>
+          <p className="text-sm text-gray-800 leading-relaxed">{parts.length ? parts : line}</p>
+        </div>
+      )
+    }
+    if (line.trim() === '') return <div key={idx} className="h-2" />
+
+    return (
+      <p key={idx} className="text-sm text-gray-800 leading-relaxed mt-0.5">
+        {parts.length ? parts : line}
+      </p>
+    )
+  }
+
+  return (
+    <div className="bg-white rounded-lg border border-blue-100 p-4 space-y-0.5">
+      {lines.map((line, idx) => renderLine(line, idx))}
+      <p className="text-xs text-gray-400 mt-3 pt-2 border-t border-gray-100">
+        AI-generated — verify before acting. Actions require approval.
+      </p>
     </div>
   )
 }
@@ -1403,12 +1467,12 @@ export function NodeDetail() {
             </div>
 
             {aiRecommendation ? (
-              <div className="bg-white rounded-lg border border-blue-100 p-4">
-                <pre className="text-sm text-gray-800 whitespace-pre-wrap font-sans leading-relaxed">{aiRecommendation}</pre>
-                <p className="text-xs text-gray-400 mt-3">AI-generated — verify before acting. Actions require approval.</p>
-              </div>
+              <AiRecommendationPanel text={aiRecommendation} />
             ) : aiError ? (
-              <p className="text-sm text-red-600">⚠ {aiError}</p>
+              <div className="flex items-start gap-2 p-3 bg-red-50 border border-red-200 rounded-lg">
+                <span className="text-red-500 mt-0.5">⚠</span>
+                <p className="text-sm text-red-700">{aiError}</p>
+              </div>
             ) : (
               <p className="text-sm text-gray-500">
                 Get AI-powered analysis of this node's health, resource usage, and drift — with actionable recommendations.
@@ -2516,6 +2580,41 @@ export function NodeDetail() {
           <p className="text-xs text-gray-400 text-center">
             Source: Prometheus ({metricsData?.instance}) · Refreshes every 30s
           </p>
+
+          {/* AI Recommendations — Resources tab */}
+          <div className="bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200 rounded-xl p-5">
+            <div className="flex items-center justify-between mb-3">
+              <div className="flex items-center gap-2">
+                <span className="text-base">🤖</span>
+                <h3 className="text-sm font-semibold text-gray-900">AI Analysis</h3>
+                <span className="text-xs text-gray-500">Resource usage, drift &amp; alerts</span>
+              </div>
+              <button
+                onClick={askAI}
+                disabled={aiLoading}
+                className="px-3 py-1.5 text-xs font-medium bg-blue-600 hover:bg-blue-700 text-white rounded-lg disabled:opacity-50 transition-colors flex items-center gap-1.5"
+              >
+                {aiLoading ? (
+                  <><span className="w-3 h-3 border border-white/40 border-t-white rounded-full animate-spin inline-block" />Analyzing…</>
+                ) : (
+                  'Get AI Analysis'
+                )}
+              </button>
+            </div>
+
+            {aiRecommendation ? (
+              <AiRecommendationPanel text={aiRecommendation} />
+            ) : aiError ? (
+              <div className="flex items-start gap-2 p-3 bg-red-50 border border-red-200 rounded-lg">
+                <span className="text-red-500 mt-0.5">⚠</span>
+                <p className="text-sm text-red-700">{aiError}</p>
+              </div>
+            ) : (
+              <p className="text-sm text-gray-500">
+                Click "Get AI Analysis" for an AI-powered assessment of this node's resource usage, configuration drift, and recent alerts — with ranked actionable recommendations.
+              </p>
+            )}
+          </div>
         </div>
       )}
       {deletingSecretKey && (
