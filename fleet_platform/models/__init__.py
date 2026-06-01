@@ -1,5 +1,11 @@
 from fleet_platform.models.ansible_job import AnsibleJob
+from fleet_platform.models.fleet_embedding import FleetEmbedding
 from fleet_platform.models.audit import AuditEvent
+from fleet_platform.models.mobileconfig import (
+    MobileconfigProfile,
+    ProfileDeploymentLog,
+    ProfileGroupAssignment,
+)
 from fleet_platform.models.base import Base, TimestampMixin
 from fleet_platform.models.drift import DesiredStateBaseline, DriftRecord
 from fleet_platform.models.execution import ExecutionJob, ExecutionResult
@@ -36,4 +42,8 @@ __all__ = [
     "NodeHealthSnapshot",
     "JenkinsBuildEvent",
     "PendingAction",
+    "FleetEmbedding",
+    "MobileconfigProfile",
+    "ProfileGroupAssignment",
+    "ProfileDeploymentLog",
 ]

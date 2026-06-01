@@ -1,0 +1,6 @@
+---
+- include_tasks: install.yml
+  when: mobileconfig_action == 'install'
+
+- include_tasks: remove.yml
+  when: mobileconfig_action == 'remove'

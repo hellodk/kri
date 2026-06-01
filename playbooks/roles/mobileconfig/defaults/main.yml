@@ -1,0 +1,4 @@
+---
+mobileconfig_action: install    # install | remove
+mobileconfig_xml: ""            # raw XML content — set by deploy task
+mobileconfig_profile_uuid: ""   # PayloadUUID — needed for remove
