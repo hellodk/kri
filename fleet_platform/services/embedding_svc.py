@@ -17,7 +17,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from fleet_platform.models.fleet_embedding import FleetEmbedding
 
-
 # --- Chunking helpers ---------------------------------------------------------
 
 def compute_content_hash(text: str) -> str:

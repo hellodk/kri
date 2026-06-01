@@ -101,6 +101,7 @@ def test_drift_engine_service_stopped_when_should_run():
 def test_sbom_parser_invalid_timestamp_falls_back():
     """SbomParser handles invalid scanned_at timestamps gracefully."""
     import uuid
+
     from fleet_platform.services.sbom_parser import SBOMParser
     parser = SBOMParser()
     # pass a payload with bad timestamp — should not raise

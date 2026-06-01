@@ -31,8 +31,8 @@ from fleet_platform.api.routes.audit import router as audit_router
 from fleet_platform.api.routes.builds import router as builds_router
 from fleet_platform.api.routes.group_secrets import router as group_secrets_router
 from fleet_platform.api.routes.ios_tracking import router as ios_tracking_router
-from fleet_platform.api.routes.mobileconfig import router as mobileconfig_router
 from fleet_platform.api.routes.llm import router as llm_router
+from fleet_platform.api.routes.mobileconfig import router as mobileconfig_router
 from fleet_platform.api.routes.monitoring import router as monitoring_router
 from fleet_platform.api.routes.node_actions import actions_router
 from fleet_platform.api.routes.node_actions import router as node_actions_router

@@ -85,9 +85,11 @@ def test_ssh_keypair_idempotent():
 
 def test_playbook_sources_nonexistent_local_warns(caplog):
     """get_all_playbook_dirs logs a warning for non-existent local paths."""
-    import json, logging
-    from fleet_platform.services.playbook_sources import get_all_playbook_dirs
+    import json
+    import logging
     from pathlib import Path
+
+    from fleet_platform.services.playbook_sources import get_all_playbook_dirs
 
     sources_json = json.dumps([{"type": "local", "path": "/nonexistent/path/xyz"}])
     builtin = Path("/tmp")
