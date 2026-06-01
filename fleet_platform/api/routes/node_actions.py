@@ -157,9 +157,16 @@ async def ask_ai_about_node(
     claims: dict = Depends(require_role("operator", "admin")),
 ):
     """Ask the LLM for recommendations about a specific node."""
+    from datetime import timedelta
+
+    from sqlalchemy import desc
+    from sqlalchemy import func as sqlfunc
     from sqlalchemy import select as _sel
 
+    from fleet_platform.models.alert import AlertEvent as _AlertEvent
+    from fleet_platform.models.drift import DriftRecord as _DriftRecord
     from fleet_platform.models.node import Node as _Node
+    from fleet_platform.models.node_health_snapshot import NodeHealthSnapshot as _Snapshot
     from fleet_platform.services.llm_caller import LLMCallError, call_anthropic, call_openai_compat
     from fleet_platform.services.llm_context import build_fleet_context
     from fleet_platform.services.llm_svc import get_decrypted_api_key, get_default_endpoint
@@ -179,15 +186,85 @@ async def ask_ai_about_node(
     mem_info = f"{node.mem_usage_pct:.1f}%" if node.mem_usage_pct is not None else "unknown"
     drift_info = str(node.drift_score)
 
-    node_context = (
-        f"Analyze node '{node_name}' and provide actionable recommendations.\n\n"
-        f"Node status: {node.status}\n"
-        f"CPU usage: {cpu_info}\n"
-        f"Memory usage: {mem_info}\n"
-        f"Drift score: {drift_info}/100\n\n"
-        "Provide: (1) Assessment of current health, (2) Top 2-3 actionable recommendations, "
-        "(3) Risk level (Low/Medium/High). Be concise. Do not invent data not shown above."
+    # Fetch latest health snapshot for richer metrics
+    snapshot_result = await db.execute(
+        _sel(_Snapshot)
+        .where(_Snapshot.node_id == node_id)
+        .order_by(desc(_Snapshot.collected_at))
+        .limit(1)
     )
+    snapshot = snapshot_result.scalar_one_or_none()
+
+    # Fetch latest drift record for detail on what drifted
+    drift_result = await db.execute(
+        _sel(_DriftRecord)
+        .where(_DriftRecord.node_id == node_id)
+        .order_by(desc(_DriftRecord.computed_at))
+        .limit(1)
+    )
+    latest_drift = drift_result.scalar_one_or_none()
+
+    # Count recent alert events (last 24 h)
+    since = datetime.now(UTC) - timedelta(hours=24)
+    alert_count_result = await db.execute(
+        _sel(sqlfunc.count(_AlertEvent.id))
+        .where(_AlertEvent.node_id == node_id)
+        .where(_AlertEvent.fired_at >= since)
+    )
+    recent_alert_count: int = alert_count_result.scalar_one() or 0
+
+    # Compose enriched context block
+    lines: list[str] = [
+        f"Analyze node '{node_name}' and provide actionable recommendations.\n",
+        f"Node status: {node.status}",
+        f"CPU usage: {cpu_info}",
+        f"Memory usage: {mem_info}",
+        f"Drift score: {drift_info}/100",
+        f"Alert events (last 24 h): {recent_alert_count}",
+    ]
+
+    if snapshot:
+        if snapshot.disk_root_pct is not None:
+            lines.append(f"Disk usage (/): {snapshot.disk_root_pct}%")
+        if snapshot.disk_root_used_gb is not None and snapshot.disk_root_total_gb is not None:
+            lines.append(
+                f"Disk space: {float(snapshot.disk_root_used_gb):.1f} GB used"
+                f" / {float(snapshot.disk_root_total_gb):.1f} GB total"
+            )
+        if snapshot.cpu_load_1m is not None:
+            lines.append(
+                f"CPU load avg: {float(snapshot.cpu_load_1m):.2f} (1m)"
+                + (f" / {float(snapshot.cpu_load_5m):.2f} (5m)" if snapshot.cpu_load_5m is not None else "")
+                + (f" / {float(snapshot.cpu_load_15m):.2f} (15m)" if snapshot.cpu_load_15m is not None else "")
+            )
+        if snapshot.uptime_seconds is not None:
+            uptime_h = snapshot.uptime_seconds // 3600
+            lines.append(f"Uptime: {uptime_h} hours")
+        if snapshot.thermal_pressure:
+            lines.append(f"Thermal pressure: {snapshot.thermal_pressure}")
+
+    if latest_drift:
+        if latest_drift.missing_packages:
+            pkgs = ", ".join(str(p) for p in latest_drift.missing_packages[:5])
+            lines.append(f"Missing packages (up to 5): {pkgs}")
+        if latest_drift.extra_packages:
+            pkgs = ", ".join(str(p) for p in latest_drift.extra_packages[:5])
+            lines.append(f"Extra packages (up to 5): {pkgs}")
+        if latest_drift.service_drift:
+            svcs = ", ".join(str(s) for s in latest_drift.service_drift[:3])
+            lines.append(f"Service drift (up to 3): {svcs}")
+        if latest_drift.version_mismatches:
+            mismatches = len(latest_drift.version_mismatches)
+            lines.append(f"Package version mismatches: {mismatches}")
+
+    lines.append(
+        "\nProvide: (1) Assessment of current health, "
+        "(2) Top 2-3 actionable recommendations, "
+        "(3) Risk level (Low/Medium/High). "
+        "Be concise. Do not invent data not shown above."
+    )
+
+    node_context = "\n".join(lines)
 
     system_prompt = await build_fleet_context(db, "fleet_query")
     api_key = get_decrypted_api_key(endpoint)
