@@ -3,25 +3,25 @@
 
 - name: Create krisalt system user for salt-api auth
   shell: |
-    # Create the user if it doesn't exist
-    if ! id {{ salt_api_user }} &>/dev/null; then
-      sysadminctl -addUser {{ salt_api_user }} \
+    if ! id "{{ salt_api_user }}" &>/dev/null; then
+      sysadminctl -addUser "{{ salt_api_user }}" \
         -fullName "kri Salt API" \
         -password "{{ kri_salt_api_password }}" \
-        -roleAccount 2>/dev/null || \
-      dscl . -create /Users/{{ salt_api_user }} && \
-      dscl . -create /Users/{{ salt_api_user }} UserShell /bin/false && \
-      dscl . -create /Users/{{ salt_api_user }} RealName "kri Salt API" && \
-      dscl . -create /Users/{{ salt_api_user }} UniqueID "$(echo $((800 + RANDOM % 100)))" && \
-      dscl . -create /Users/{{ salt_api_user }} PrimaryGroupID 20 && \
-      dscl . -passwd /Users/{{ salt_api_user }} "{{ kri_salt_api_password }}"
+        -roleAccount 2>/dev/null \
+      || ( \
+        dscl . -create /Users/{{ salt_api_user }} && \
+        dscl . -create /Users/{{ salt_api_user }} UserShell /bin/false && \
+        dscl . -create /Users/{{ salt_api_user }} RealName "kri Salt API" && \
+        dscl . -create /Users/{{ salt_api_user }} UniqueID "$(( 800 + RANDOM % 100 ))" && \
+        dscl . -create /Users/{{ salt_api_user }} PrimaryGroupID 20 && \
+        dscl . -passwd /Users/{{ salt_api_user }} "{{ kri_salt_api_password }}" \
+      )
       echo "created"
     else
-      # Update password in case it changed
       dscl . -passwd /Users/{{ salt_api_user }} "{{ kri_salt_api_password }}" 2>/dev/null || true
       echo "exists"
     fi
   become: true
   register: api_user_result
   changed_when: "'created' in api_user_result.stdout"
-  no_log: true  # don't log password
+  no_log: true
