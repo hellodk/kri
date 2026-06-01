@@ -248,6 +248,21 @@ def run_playbook(self, job_id: str, ssh_username: str | None = None, ssh_passwor
         with tempfile.TemporaryDirectory(prefix="kri-playbook-") as tmpdir:
             inv_path = _write_static_inventory(tmpdir, hosts)
 
+            # If the selected item is a role directory (not a .yml file), synthesize
+            # a minimal wrapper playbook so it can be executed by ansible-runner.
+            if playbook_path.is_dir():
+                role_name = playbook_path.name
+                wrapper_path = Path(tmpdir) / f"_run_{_safe_label(role_name)}.yml"
+                wrapper_path.write_text(
+                    f"---\n- name: Apply role {role_name}\n"
+                    f"  hosts: targets\n"
+                    f"  gather_facts: true\n"
+                    f"  roles:\n"
+                    f"    - {role_name}\n"
+                )
+                _log.info("playbook_tasks: role %r → synthesized wrapper at %s", role_name, wrapper_path)
+                playbook_path = wrapper_path
+
             thread, runner = ansible_runner.run_async(
                 private_data_dir=tmpdir,
                 playbook=str(playbook_path),
@@ -257,6 +272,8 @@ def run_playbook(self, job_id: str, ssh_username: str | None = None, ssh_passwor
                     # SSH credentials are set per host in the inventory (#279),
                     # resolved node → group → global — not via a single global env.
                     "ANSIBLE_COLLECTIONS_PATH": str(playbooks_dir / "collections" / "installed"),
+                    # Point ansible at the source roles dir so role-only runs can find the role
+                    "ANSIBLE_ROLES_PATH": str(playbooks_dir / "roles"),
                     # Reduce SSH timeout so stalled tasks surface faster
                     "ANSIBLE_TIMEOUT": "30",
                     "ANSIBLE_SSH_RETRIES": "2",
