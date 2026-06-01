@@ -168,8 +168,9 @@ def test_celery_queues_schema_has_active():
 
 def test_get_monitoring_summary_returns_dict():
     """get_monitoring_summary handles missing Redis gracefully."""
-    from unittest.mock import AsyncMock, MagicMock, patch
     import asyncio
+    from unittest.mock import AsyncMock, MagicMock, patch
+
     from fleet_platform.services.monitoring_svc import get_monitoring_summary
 
     async def _run():
