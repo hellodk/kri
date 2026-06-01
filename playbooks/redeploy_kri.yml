@@ -1,0 +1,55 @@
+---
+# playbooks/redeploy_kri.yml
+# Rebuild and restart kri containers on the kri host.
+# Run from the Automation Hub: select this playbook, set extravars kri_host=<ip>
+#
+# Variables:
+#   kri_host         IP/hostname of the machine running docker compose (required)
+#   kri_deploy_path  Path to the kri repo on the host (default: /home/dk/Documents/git/kri)
+#   ansible_user     SSH user on the kri host (default: dk)
+#
+# Usage:
+#   ansible-playbook playbooks/redeploy_kri.yml \
+#     -i playbooks/inventory/hosts.ini \
+#     -e "kri_host=<KRI_HOST_IP>"
+
+- name: Redeploy kri — pull latest and rebuild containers
+  hosts: kri_host
+  gather_facts: false
+  vars:
+    kri_deploy_path: "/home/dk/Documents/git/kri"
+
+  tasks:
+    - name: Git pull latest code
+      command: git pull --ff-only
+      args:
+        chdir: "{{ kri_deploy_path }}"
+      register: git_result
+
+    - name: Show git pull result
+      debug:
+        msg: "{{ git_result.stdout }}"
+
+    - name: Rebuild and restart containers
+      command: docker compose up -d --build api worker beat
+      args:
+        chdir: "{{ kri_deploy_path }}/deploy"
+      register: compose_result
+
+    - name: Wait for API to become healthy
+      uri:
+        url: "http://localhost/health/ready"
+        status_code: 200
+        timeout: 10
+      register: health
+      until: health.status == 200
+      retries: 18
+      delay: 5
+
+    - name: Show new version
+      command: cat "{{ kri_deploy_path }}/VERSION"
+      register: version_result
+
+    - name: Report
+      debug:
+        msg: "kri redeployed successfully. Version: {{ version_result.stdout }}"
