@@ -204,10 +204,11 @@ async def submit_query(
     )
 
     # Resolve 'auto' intent via heuristic classifier before building context
-    intent = payload.intent
-    if intent == "auto":
+    resolved_intent: str = payload.intent
+    if payload.intent == "auto":
         from fleet_platform.services.llm_intent import classify_intent
-        intent = classify_intent(payload.prompt)
+        resolved_intent = classify_intent(payload.prompt)
+    intent = resolved_intent
 
     system_prompt = await build_fleet_context(db, intent, query=payload.prompt)
 

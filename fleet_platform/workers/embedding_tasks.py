@@ -5,7 +5,6 @@ Schedule:
   reindex_playbooks      — every 15 min (playbook file changes)
   reindex_drift_history  — every 5 min (new drift records)
 """
-import os
 from pathlib import Path
 
 from fleet_platform.workers.celery_app import celery_app
@@ -18,7 +17,7 @@ def reindex_nodes() -> dict:
 
     from sqlalchemy import select
 
-    from fleet_platform.db.session import async_session_factory
+    from fleet_platform.db.session import AsyncSessionLocal as async_session_factory
     from fleet_platform.models.group import Group, GroupMember
     from fleet_platform.models.node import Node
     from fleet_platform.services.embedding_svc import chunk_node, upsert_chunks
@@ -69,7 +68,7 @@ def reindex_playbooks() -> dict:
     """Embed per-play chunks for all playbooks in the configured directory."""
     import asyncio
 
-    from fleet_platform.db.session import async_session_factory
+    from fleet_platform.db.session import AsyncSessionLocal as async_session_factory
     from fleet_platform.services.embedding_svc import chunk_playbook, upsert_chunks
     from fleet_platform.services.platform_settings_svc import (
         LLM_EMBED_BASE_URL,
@@ -111,7 +110,7 @@ def reindex_drift_history() -> dict:
 
     from sqlalchemy import select
 
-    from fleet_platform.db.session import async_session_factory
+    from fleet_platform.db.session import AsyncSessionLocal as async_session_factory
     from fleet_platform.models.drift import DriftRecord
     from fleet_platform.models.node import Node
     from fleet_platform.services.embedding_svc import chunk_drift_record, upsert_chunks

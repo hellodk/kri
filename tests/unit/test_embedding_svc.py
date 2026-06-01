@@ -4,7 +4,6 @@ All tests run without a real embedding endpoint — embed_texts is mocked.
 """
 import hashlib
 
-
 # --- Task 1: DB model ---------------------------------------------------------
 
 def test_fleet_embedding_model_importable():
@@ -173,3 +172,50 @@ def test_embedding_tasks_importable():
     assert hasattr(embedding_tasks, "reindex_nodes")
     assert hasattr(embedding_tasks, "reindex_playbooks")
     assert hasattr(embedding_tasks, "reindex_drift_history")
+
+
+# --- Chunker coverage additions ------------------------------------------------
+
+def test_chunk_playbook_parses_plays():
+    from fleet_platform.services.embedding_svc import chunk_playbook
+    yaml_content = "- name: Deploy app\n  hosts: all\n  tasks:\n    - name: Install\n    - name: Start\n"
+    chunks = chunk_playbook("deploy.yml", yaml_content)
+    assert len(chunks) == 1
+    assert chunks[0]["source_type"] == "playbook"
+    assert "Deploy app" in chunks[0]["chunk_text"]
+
+
+def test_chunk_playbook_invalid_yaml_returns_empty_v2():
+    from fleet_platform.services.embedding_svc import chunk_playbook
+    assert chunk_playbook("bad.yml", ": {invalid:") == []
+
+
+def test_chunk_playbook_non_list_returns_empty():
+    from fleet_platform.services.embedding_svc import chunk_playbook
+    assert chunk_playbook("vars.yml", "key: value") == []
+
+
+def test_chunk_salt_state_parses_state_ids():
+    from fleet_platform.services.embedding_svc import chunk_salt_state
+    chunks = chunk_salt_state("nginx.sls", "nginx:\n  service.running:\n    - enable: true\n")
+    assert len(chunks) == 1
+    assert chunks[0]["source_type"] == "salt_state"
+    assert "nginx" in chunks[0]["chunk_text"]
+
+
+def test_chunk_salt_state_invalid_yaml_returns_empty():
+    from fleet_platform.services.embedding_svc import chunk_salt_state
+    assert chunk_salt_state("bad.sls", ": {broken:") == []
+
+
+def test_chunk_drift_record_produces_single_chunk():
+    from fleet_platform.services.embedding_svc import chunk_drift_record
+    chunks = chunk_drift_record(
+        drift_id="abc", node_hostname="mm1", computed_at="2026-06-01",
+        drift_score=42, missing_packages=["nginx"], extra_packages=[],
+        version_mismatches=[],
+    )
+    assert len(chunks) == 1
+    assert chunks[0]["source_type"] == "drift"
+    assert "mm1" in chunks[0]["chunk_text"]
+    assert "missing: nginx" in chunks[0]["chunk_text"]

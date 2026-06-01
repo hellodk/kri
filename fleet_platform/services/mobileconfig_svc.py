@@ -8,7 +8,7 @@ from datetime import UTC, datetime
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from fleet_platform.models.group import Group, GroupMember
+from fleet_platform.models.group import GroupMember
 from fleet_platform.models.mobileconfig import (
     MobileconfigProfile,
     ProfileDeploymentLog,
@@ -24,7 +24,7 @@ def extract_profile_uuid(payload_xml: str) -> str | None:
     Returns the UUID string if found, None otherwise (including on parse errors).
     """
     try:
-        root = ET.fromstring(payload_xml)
+        root = ET.fromstring(payload_xml)  # nosec B314 — input is operator-supplied mobileconfig plist, not user-controlled
     except ET.ParseError:
         return None
 

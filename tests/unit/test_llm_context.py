@@ -149,7 +149,7 @@ def test_estimate_tokens_minimum_one():
 
 def test_grounding_rules_never_truncated():
     """Grounding rules must survive even with a short context window."""
-    from fleet_platform.services.llm_context import _GROUNDING_RULES, build_static_context
+    from fleet_platform.services.llm_context import build_static_context
     ctx = build_static_context(
         node_count=2,
         online_count=1,
@@ -204,3 +204,29 @@ def test_grounding_rules_after_rag_slot():
     rag_pos = ctx.find("[src: test/chunk]")
     rules_pos = ctx.find("## Rules")
     assert rag_pos < rules_pos, "RAG slot must appear before Rules section"
+
+
+def test_format_last_seen_seconds():
+    from fleet_platform.services.llm_context import _format_last_seen
+    from datetime import UTC, datetime, timedelta
+    recent = datetime.now(UTC) - timedelta(seconds=30)
+    result = _format_last_seen(recent)
+    assert result.endswith("s ago")
+
+
+def test_format_last_seen_days():
+    from fleet_platform.services.llm_context import _format_last_seen
+    from datetime import UTC, datetime, timedelta
+    old = datetime.now(UTC) - timedelta(days=3)
+    result = _format_last_seen(old)
+    assert result.endswith("d ago")
+
+
+def test_format_last_seen_naive_datetime():
+    """Naive datetimes (no tzinfo) are handled by attaching UTC."""
+    from fleet_platform.services.llm_context import _format_last_seen
+    from datetime import datetime, timedelta
+    # naive datetime (no tzinfo)
+    naive_dt = datetime.utcnow() - timedelta(minutes=5)
+    result = _format_last_seen(naive_dt)
+    assert "m ago" in result or "s ago" in result

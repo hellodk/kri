@@ -164,3 +164,23 @@ def test_celery_queues_schema_has_active():
     from fleet_platform.schemas.monitoring import CeleryQueuesSchema
     fields = set(CeleryQueuesSchema.model_fields.keys())
     assert "active" in fields
+
+
+def test_get_monitoring_summary_returns_dict():
+    """get_monitoring_summary handles missing Redis gracefully."""
+    from unittest.mock import AsyncMock, MagicMock, patch
+    import asyncio
+    from fleet_platform.services.monitoring_svc import get_monitoring_summary
+
+    async def _run():
+        db = AsyncMock()
+        mock_res = MagicMock()
+        mock_res.scalar_one.return_value = 0
+        mock_res.scalars.return_value.all.return_value = []
+        mock_res.all.return_value = []
+        db.execute = AsyncMock(return_value=mock_res)
+        with patch("fleet_platform.services.monitoring_svc.get_celery_queue_stats", return_value={}):
+            return await get_monitoring_summary(db)
+
+    result = asyncio.run(_run())
+    assert isinstance(result, dict)

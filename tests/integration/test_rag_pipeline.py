@@ -5,11 +5,9 @@ The BM25 tests do not require the embedding endpoint — they insert FleetEmbedd
 directly and query via Postgres FTS. The dense-vector tests skip if the embed URL is
 absent.
 """
-import hashlib
 from datetime import UTC, datetime
 
 import pytest
-import pytest_asyncio
 
 
 @pytest.mark.asyncio
@@ -156,7 +154,7 @@ async def test_content_hash_triggers_reembed(db_session):
         select(FleetEmbedding).where(FleetEmbedding.source_id == unique_id)
     )
     inserted_v1 = result.scalar_one()
-    embedded_at_v1 = inserted_v1.embedded_at
+    _embedded_at_v1 = inserted_v1.embedded_at  # captured for potential future assertion
 
     # Change chunk text — hash changes
     chunk_v2_text = f"[src: node/{unique_id}] Node: {unique_id} Status: offline"
