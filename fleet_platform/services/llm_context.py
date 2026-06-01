@@ -58,6 +58,11 @@ def _format_last_seen(last_seen_at) -> str:
     return f"{delta_s // 86400}d ago"
 
 
+def _sanitize_cell(value: str) -> str:
+    """Strip Markdown table-breaking characters from node-controlled strings."""
+    return value.replace("|", "\\|").replace("\n", " ").replace("\r", "")
+
+
 def build_static_context(
     *,
     node_count: int,
@@ -86,9 +91,10 @@ def build_static_context(
         for n in node_records:
             ip = n.get("ip") or "—"
             group = n.get("group") or "—"
+            sc = _sanitize_cell
             parts.append(
-                f"| {n['hostname']} | {n['minion_id']} | {ip} | {n['status']} "
-                f"| {n['last_seen']} | {group} |\n"
+                f"| {sc(n['hostname'])} | {sc(n['minion_id'])} | {sc(ip)}"
+                f" | {sc(n['status'])} | {sc(n['last_seen'])} | {sc(group)} |\n"
             )
 
     parts.append(
@@ -109,7 +115,7 @@ async def build_fleet_context(db: AsyncSession, intent: str) -> str:
     from fleet_platform.services.llm_svc import _redact_sensitive_data
     from fleet_platform.services.platform_settings_svc import (
         LLM_INCLUDE_NODE_IPS,
-        get_setting,
+        get_settings_bulk,
     )
     from fleet_platform.services.platform_settings_svc import (
         PLAYBOOKS_DIR as PLAYBOOKS_DIR_KEY,
@@ -144,11 +150,10 @@ async def build_fleet_context(db: AsyncSession, intent: str) -> str:
     )
     node_group_map: dict = {str(row.node_id): row.name for row in membership_result.all()}
 
-    salt_master = await get_setting(db, SALT_MASTER_KEY) or ""
-    playbooks_dir = await get_setting(db, PLAYBOOKS_DIR_KEY) or ""
-
-    include_ips_setting = await get_setting(db, LLM_INCLUDE_NODE_IPS)
-    include_ips = (include_ips_setting or "true").lower() != "false"
+    _settings = await get_settings_bulk(db, [SALT_MASTER_KEY, PLAYBOOKS_DIR_KEY, LLM_INCLUDE_NODE_IPS])
+    salt_master = _settings[SALT_MASTER_KEY] or ""
+    playbooks_dir = _settings[PLAYBOOKS_DIR_KEY] or ""
+    include_ips = (_settings[LLM_INCLUDE_NODE_IPS] or "true").lower() != "false"
 
     node_records = []
     for row in node_rows:
