@@ -1,50 +1,130 @@
-# kri — Mac Mini Fleet Platform
+# kri — Self-Hosted Fleet Operations Platform
+
+Kri (Sanskrit: "Create") — a self-hosted control plane for teams running physical build infrastructure.
 
 [![CI](https://github.com/hellodk/kri/actions/workflows/ci.yml/badge.svg)](https://github.com/hellodk/kri/actions/workflows/ci.yml)
 [![Version](https://img.shields.io/github/v/release/hellodk/kri?include_prereleases)](https://github.com/hellodk/kri/releases)
 [![Issues](https://img.shields.io/github/issues/hellodk/kri)](https://github.com/hellodk/kri/issues)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+[![Python 3.13](https://img.shields.io/badge/Python-3.13-blue)](https://www.python.org/)
+[![React 18](https://img.shields.io/badge/React-18-61DAFB)](https://react.dev/)
 
-Kri ("Create" in Sanskrit) — an enterprise-grade fleet management platform for Apple Mac Mini hardware. Manages bootstrapping, drift detection, configuration, Ansible playbook execution, and SaltStack integration across a fleet of Mac Minis.
+**kri is a self-hosted control plane for teams running physical build infrastructure — Apple Silicon build agents, edge servers, on-prem Mac Minis, and mixed hardware labs.** It bootstraps any SSH-reachable Linux or macOS node, runs Salt states and Ansible playbooks from one interface, scores every node against a declared baseline, and answers natural-language questions about fleet state. Unlike AWX/Ansible Tower (Ansible only, no drift model) or Jamf/MDM tools (Apple-only, no Salt/Ansible), kri unifies configuration, drift, processes, and AI over heterogeneous hardware you actually own.
 
 ---
 
 ## Features
 
-| Feature | Description | Status |
-|---------|-------------|--------|
-| 🚀 Node bootstrapping | SSH-based onboarding — registers new Mac Minis, installs the Salt minion, and adds the node to the fleet | ✅ |
-| 📊 Real-time drift detection | Scores each node against a stored baseline; surfaces configuration drift with per-key breakdowns | ✅ |
-| 🧂 SaltStack state management | Applies Salt states across individual nodes or groups; tracks accepted and pending minion keys | ✅ |
-| 📓 Ansible playbook execution | Discovers, runs, and tracks Ansible playbooks and roles; full job history with stdout streaming | ✅ |
-| 💻 SSH multi-session terminal | Tabbed in-browser SSH terminal powered by asyncssh and xterm.js | ✅ |
-| 🖥️ VNC remote desktop | Browser-based VNC access to any fleet node via noVNC | ✅ |
-| 📈 Prometheus metrics + Grafana | Per-node and fleet-wide metrics exported to Prometheus; ready-made Grafana dashboards | ✅ |
-| 📦 SBOM pipeline | Generates and tracks software bills of materials for each node | ✅ |
-| 👥 Group management | Logical grouping of nodes for bulk operations, secrets scoping, and targeted playbook runs | ✅ |
-| 🔐 Secrets management | Per-node and per-group encrypted secret storage with role-scoped access | ✅ |
-| 🛡️ Role-based access control | Three-tier RBAC: viewer / operator / admin with JWT-authenticated sessions | ✅ |
-| 📱 iOS device tracking | Tracks iOS devices associated with fleet Mac Minis | ✅ |
-| 📋 Audit log | Immutable audit trail of every action across the platform | ✅ |
-| 🔔 Alerts | Configurable alerting rules surfaced in the Security and Alerts dashboards | ✅ |
-| 🤖 AI assistant | LLM-powered fleet assistant for natural-language queries and diagnostics | 🚧 In progress |
+### 🖥️ Fleet Operations
+| | |
+|---|---|
+| **One-click bootstrap** | Onboard any SSH-reachable host from the web UI — node picker discovers the target, installs the Salt minion, and joins it to the fleet. macOS or Linux. |
+| **Process & service manager** | Per-node CPU / memory / disk / IO. Kill, stop, and continue processes. Full `launchctl` (macOS) and `systemd` (Linux) service control. |
+| **SSH multi-session terminal** | Tabbed in-browser SSH powered by asyncssh and xterm.js. |
+| **VNC remote desktop** | Browser-based VNC access to any fleet node via noVNC. |
+| **Group management** | Logical node grouping for bulk operations, secrets scoping, and targeted runs. |
+
+### ⚙️ Configuration Management
+| | |
+|---|---|
+| **SaltStack + Ansible, one interface** | Write Salt states or Ansible playbooks, run them across nodes or groups, stream logs live. Tracks accepted and pending minion keys. |
+| **Drift detection** | Every node is scored against a stored baseline. Drift is surfaced immediately with per-key attribution and stored as TimescaleDB time-series, queryable over any window. |
+| **macOS config profiles** | Upload `.mobileconfig` profiles, deploy via Ansible, enforce via Salt, and track compliance per node. |
+| **Playbook & state discovery** | Auto-discovers playbooks, roles, and states; full job history with stdout streaming. |
+
+### 📊 Observability & Security
+| | |
+|---|---|
+| **Prometheus + Grafana** | Per-node and fleet-wide metrics with ready-made dashboards. OTEL instrumentation throughout. |
+| **Role-based access control** | Three tiers — viewer / operator / admin — with JWT-authenticated sessions. |
+| **Encrypted secrets** | Per-node and per-group secret storage with role-scoped access. |
+| **Audit trail** | Immutable record of every action across the platform. |
+| **URL health monitoring** | Auto-ping configured endpoints and surface availability. |
+| **SBOM pipeline** | Generates and tracks software bills of materials per node. |
+| **Alerts** | Configurable rules surfaced in the Security and Alerts dashboards. |
+
+### 🤖 AI & Automation
+| | |
+|---|---|
+| **AI Fleet Assistant** | Ask in plain language about fleet state. Auto-classifies intent — fleet query vs. Salt state generation vs. Ansible playbook generation — and responds accordingly. |
+| **RAG over your fleet** | pgvector-backed retrieval over your playbooks, states, and events grounds every answer in your actual configuration, not generic knowledge. |
+| **Bring your own LLM** | Local-first — Ollama, vLLM, and exo — or Anthropic. No data leaves your network unless you choose it to. |
 
 ---
 
-## Tech Stack
+## Architecture
 
-| Layer | Technologies |
-|-------|-------------|
-| **Backend** | FastAPI, SQLAlchemy 2.0 async, PostgreSQL 17 (TimescaleDB), Redis 7, Celery, asyncssh |
-| **Automation** | SaltStack (salt-master + minions), Ansible, ansible-runner |
-| **Frontend** | React 18, TanStack Query 5, Tailwind CSS, Vite, xterm.js, noVNC |
-| **Infrastructure** | Docker Compose, Nginx, Alembic migrations |
-| **Observability** | Prometheus metrics, Grafana dashboards, Trivy security scanning |
-| **Testing** | pytest, pytest-asyncio, Playwright E2E |
+kri runs three planes over a single Docker Compose stack:
+
+```
+    Browser (React)
+         │
+    nginx reverse proxy
+         │
+    FastAPI API ──── PostgreSQL (TimescaleDB)
+         │                    │
+    Celery workers ──── Redis  │
+         │                    │
+    salt-master ─── pgvector (RAG embeddings)
+         │
+    Fleet nodes (macOS / Linux)
+    ┌──────────┐  ┌──────────┐  ┌──────────┐
+    │ salt-min │  │ salt-min │  │ salt-min │
+    └──────────┘  └──────────┘  └──────────┘
+```
+
+- **Control plane** — the FastAPI backend drives every operation: bootstrapping nodes, applying Salt states, running Ansible playbooks, and triggering drift scans. It issues commands to the salt-master over ZeroMQ and tracks results in PostgreSQL. Each fleet node runs a Salt minion; long-running work (drift scans, playbook runs, SBOM generation, key management) is offloaded to Celery workers across the `default`, `maintenance`, `drift`, and `sbom` queues, with Celery Beat driving scheduled checks.
+- **Data plane** — node state is event-sourced. The drift engine snapshots Salt grains and custom returner output at configurable intervals, diffs against the baseline, and writes per-key drift scores as TimescaleDB hypertable records. Metrics, audit events, and job history all land in PostgreSQL.
+- **AI plane** — playbooks, states, and fleet events are embedded into pgvector. The assistant retrieves relevant context, classifies the query intent, and routes to a fleet-query, state-generation, or playbook-generation path against your configured LLM.
+
+The React frontend talks exclusively to the REST API; real-time updates use TanStack Query polling — no WebSocket layer.
+
+---
+
+## Sprint & Roadmap
+
+### Current Sprint
+
+**Sprint 2026-W23** (Mon 2 Jun – Sun 8 Jun)
+
+```
+Sprint 2026-W23  █████████░ 89% complete
+████████████████████ 8 / 9 issues closed
+```
+
+[![Open P0/P1](https://img.shields.io/github/issues/hellodk/kri/p1-high?label=P1%20open&color=red)](https://github.com/hellodk/kri/issues?q=is%3Aopen+label%3Ap1-high)
+[All open issues for this sprint](https://github.com/hellodk/kri/issues?q=is%3Aopen+milestone%3A%22Sprint+2026-W23%22)
+
+### Roadmap
+
+| Now | Next | Later |
+|-----|------|-------|
+| RAG pipeline live | Salt master on mm1 (native) | LLM fine-tuning on fleet telemetry |
+| macOS config profiles | System health service management | Multi-tenant RBAC |
+| Bootstrap UX overhaul | Token budget unified across LLM paths | Kubernetes node support |
+| AI recommendations on NodeDetail | Per-key decrypt isolation | Cost tracking per node |
+
+---
+
+## Development Velocity
+
+Sprints run weekly, Monday–Sunday. Story points: 1 (trivial) → 8 (split it — if a task is an 8, decompose it first).
+
+The [project board](https://github.com/hellodk/kri/issues) tracks work through five columns: **Backlog → This Sprint → In Progress → In Review → Done**. Issues cannot enter "This Sprint" without written acceptance criteria. PRs must reference an issue (`Closes #N`). No orphan PRs, no retroactive tickets.
+
+CI gates on every PR to master:
+- `pytest tests/unit/ -v` — zero failures
+- `npm run build` — zero TypeScript errors
+- `mypy`, `ruff`, `bandit` — zero violations
+- 80% line coverage floor on `fleet_platform/services/`
+
+Red CI blocks merge. No exceptions, no `--no-verify`.
 
 ---
 
 ## Quick Start
+
+kri runs on a laptop, a NUC, or a rack server — anything that runs Docker Compose. It manages **macOS and Linux nodes alike**, not just Mac Minis.
 
 ```bash
 # Clone the repository
@@ -58,6 +138,10 @@ cp .env.docker.example .env.docker
 docker compose -f deploy/docker-compose.yml up -d
 ```
 
+Then open **http://localhost** and log in with `admin` / `admin` — **change this immediately** under Settings.
+
+> The salt-master can run inside Docker (convenient for development) or natively on a dedicated fleet node (recommended for production). Point the API at the master via `.env.docker`.
+
 The stack exposes:
 
 | Service | URL |
@@ -70,15 +154,28 @@ The stack exposes:
 
 ---
 
-## Architecture
+## Managed Node Requirements
 
-Kri is built around a **Salt master agent model**. Each Mac Mini runs a Salt minion that connects to the central salt-master container over ZeroMQ. The FastAPI backend drives all operations — bootstrapping new nodes, applying states, triggering drift scans, and running Ansible playbooks — by issuing commands to the Salt master and tracking results in PostgreSQL (TimescaleDB).
+A node joins the fleet when it meets these requirements:
 
-Drift detection is **event-sourced**: the drift engine snapshots node state at configurable intervals using Salt grains and custom returners, diffs it against a stored baseline, and computes a per-key drift score. Results are time-series records in TimescaleDB, queryable over any window.
+- **OS** — macOS 12+ or Linux (Ubuntu / Debian / RHEL / Arch).
+- **Reachability** — SSH-reachable from the kri host for the initial bootstrap.
+- **Salt minion** — installed automatically by kri during bootstrap; no manual setup needed.
+- **macOS config profiles (optional)** — macOS 13+ with the standard `profiles` binary available.
 
-Celery workers handle all long-running tasks (drift scans, playbook runs, SBOM generation, key management) across four queues: `default`, `maintenance`, `drift`, and `sbom`. Celery Beat drives scheduled drift checks and maintenance windows.
+---
 
-The React frontend communicates exclusively through the FastAPI REST API. All real-time updates use TanStack Query polling — no WebSocket complexity.
+## Tech Stack
+
+| Layer | Technologies |
+|-------|-------------|
+| **Backend** | FastAPI, SQLAlchemy 2.0 async, PostgreSQL 17 (TimescaleDB), Redis 7, Celery, asyncssh |
+| **Automation** | SaltStack (salt-master + minions), Ansible, ansible-runner |
+| **AI** | pgvector (RAG embeddings), local LLM support (Ollama, vLLM, exo) and Anthropic |
+| **Frontend** | React 18, TanStack Query 5, Tailwind CSS, Vite, xterm.js, noVNC |
+| **Infrastructure** | Docker Compose, Nginx, Alembic migrations |
+| **Observability** | Prometheus, Grafana, OpenTelemetry, Trivy security scanning |
+| **Testing** | pytest, pytest-asyncio, Playwright E2E |
 
 ---
 
@@ -110,7 +207,7 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for the full branching, TDD, and PR workf
 
 ## Testing
 
-Kri follows a strict test pyramid. All layers must be green before a PR can merge.
+kri follows a strict test pyramid. All layers must be green before a PR can merge.
 
 | Layer | Location | Command | Notes |
 |-------|----------|---------|-------|
@@ -139,7 +236,7 @@ kri/
 │   ├── api/               # FastAPI routers and app entrypoint
 │   ├── models/            # SQLAlchemy ORM models
 │   ├── schemas/           # Pydantic request/response schemas
-│   ├── services/          # Business logic (drift engine, playbook runner, SBOM, etc.)
+│   ├── services/          # Business logic (drift engine, playbook runner, SBOM, AI, etc.)
 │   └── workers/           # Celery app, tasks, and beat schedule
 ├── frontend/              # React 18 SPA
 │   └── src/
@@ -160,7 +257,9 @@ kri/
 
 ---
 
-## Project Board
+## Contributing
+
+Work starts with a GitHub issue carrying acceptance criteria and a tests checklist, then a branch off `master`, then a PR that closes the issue. Tests come before implementation (TDD), and the full suite must be green before merge. See [CONTRIBUTING.md](CONTRIBUTING.md) for the complete workflow and [TESTING.md](TESTING.md) for the test strategy.
 
 Track sprint progress on the [kri Fleet Platform — GitHub Projects board](https://github.com/users/hellodk/projects/2).
 
