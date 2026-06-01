@@ -143,6 +143,9 @@ services:
       - ~/.kri:/home/appuser/.kri  # rw: worker needs to write id_rsa keypair (not :ro)
       - git-repos-cache:/home/appuser/.kri/git-repos  # persist cloned git sources across redeploys
       - /home/dk/Documents/git/pulse:/mnt/pulse:ro   # host playbook repos
+      # Mount playbooks/files so large binaries (salt .pkg, etc.) survive container rebuilds.
+      # These files are gitignored but required for air-gapped installs.
+      - /home/dk/Documents/git/kri/playbooks/files:/app/playbooks/files:ro
       # Docker socket intentionally NOT mounted — container escape risk. Issue #82.
       # Salt commands now use Salt HTTP API instead of docker exec.
     healthcheck:
