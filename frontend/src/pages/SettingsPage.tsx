@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Skeleton } from '../components/Skeleton'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { ansibleApi } from '../api/ansible'
@@ -42,6 +42,9 @@ export function SettingsPage() {
   const [jenkinsSecret, setJenkinsSecret] = useState('')
   const [digestSending, setDigestSending] = useState(false)
   const [llmEmbedBaseUrl, setLlmEmbedBaseUrl] = useState('')
+  const [embedUrlStatus, setEmbedUrlStatus] = useState<{ ok: boolean; latency_ms: number | null; error?: string } | null>(null)
+  const [embedUrlChecking, setEmbedUrlChecking] = useState(false)
+  const embedDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   const { data, isLoading } = useQuery({
     queryKey: ['settings'],
@@ -72,6 +75,29 @@ export function SettingsPage() {
       if (data.llm_embed_base_url) setLlmEmbedBaseUrl(data.llm_embed_base_url)
     }
   }, [data])
+
+  async function checkEmbedUrl(url?: string) {
+    const target = (url ?? llmEmbedBaseUrl).trim()
+    if (!target) { setEmbedUrlStatus(null); return }
+    setEmbedUrlChecking(true)
+    const t0 = Date.now()
+    try {
+      const resp = await fetch(`${target.replace(/\/+$/, '')}/v1/models`, {
+        signal: AbortSignal.timeout(5000),
+      })
+      const latency = Date.now() - t0
+      setEmbedUrlStatus({ ok: resp.ok, latency_ms: latency })
+    } catch {
+      setEmbedUrlStatus({ ok: false, latency_ms: null, error: 'Unreachable' })
+    } finally {
+      setEmbedUrlChecking(false)
+    }
+  }
+
+  useEffect(() => {
+    if (llmEmbedBaseUrl) checkEmbedUrl(llmEmbedBaseUrl)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [llmEmbedBaseUrl])
 
   const saveMutation = useMutation({
     mutationFn: () => ansibleApi.updateSettings({
@@ -564,13 +590,20 @@ export function SettingsPage() {
               <label className="block text-sm font-medium text-gray-700 mb-1">
                 Embedding Model URL
               </label>
-              <input
-                type="text"
-                value={llmEmbedBaseUrl}
-                onChange={(e) => setLlmEmbedBaseUrl(e.target.value)}
-                placeholder="http://192.168.1.23:52415"
-                className={inputClass}
-              />
+              <div className="flex items-center gap-2">
+                <input
+                  type="text"
+                  value={llmEmbedBaseUrl}
+                  onChange={(e) => {
+                    setLlmEmbedBaseUrl(e.target.value)
+                    if (embedDebounceRef.current) clearTimeout(embedDebounceRef.current)
+                    embedDebounceRef.current = setTimeout(() => checkEmbedUrl(e.target.value), 1000)
+                  }}
+                  placeholder="http://192.168.1.23:52415"
+                  className={inputClass}
+                />
+                <StatusPill result={embedUrlStatus ?? undefined} checking={embedUrlChecking} />
+              </div>
               <p className="text-xs text-gray-400 mt-1">
                 OpenAI-compatible endpoint for <code className="text-xs bg-gray-100 px-1 rounded">nomic-embed-text-v1.5</code> (used for RAG retrieval).
                 Leave blank to disable semantic retrieval — fleet context will use live DB facts only.
@@ -1478,6 +1511,30 @@ function PlaybookSourcesSection() {
 // LLM Endpoints sub-section
 // ---------------------------------------------------------------------------
 
+function StatusPill({ result, checking }: {
+  result?: { ok: boolean; latency_ms: number | null; error?: string | null }
+  checking: boolean
+}) {
+  if (checking) return (
+    <span className="inline-flex items-center gap-1 text-xs text-gray-400 whitespace-nowrap">
+      <span className="animate-spin inline-block">⟳</span> Checking
+    </span>
+  )
+  if (!result) return <span className="text-xs text-gray-300">—</span>
+  if (result.ok) return (
+    <span className="inline-flex items-center gap-1 text-xs font-medium text-emerald-600 whitespace-nowrap">
+      <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 inline-block flex-shrink-0" />
+      {result.latency_ms != null ? `${result.latency_ms} ms` : 'OK'}
+    </span>
+  )
+  return (
+    <span className="inline-flex items-center gap-1 text-xs font-medium text-red-600 whitespace-nowrap">
+      <span className="w-1.5 h-1.5 rounded-full bg-red-500 inline-block flex-shrink-0" />
+      {result.error?.slice(0, 30) ?? 'Unreachable'}
+    </span>
+  )
+}
+
 function ProviderBadge({ provider }: { provider: string }) {
   if (provider === 'anthropic') {
     return (
@@ -1499,14 +1556,22 @@ function LLMEndpointsSection() {
 
   const [showForm, setShowForm] = useState(false)
   const [editingEndpoint, setEditingEndpoint] = useState<LLMEndpoint | undefined>(undefined)
-  const [testingId, setTestingId] = useState<string | null>(null)
+  const [testingIds, setTestingIds] = useState<Set<string>>(new Set())
   const [deletingId, setDeletingId] = useState<string | null>(null)
+  const [settingDefaultId, setSettingDefaultId] = useState<string | null>(null)
   const [testResults, setTestResults] = useState<Record<string, { ok: boolean; latency_ms: number | null; error: string | null }>>({})
 
   const { data: endpoints = [], isLoading, isError } = useQuery({
     queryKey: ['llm-endpoints'],
     queryFn: llmApi.list,
   })
+
+  // Auto-ping all endpoints when the list loads or changes size
+  useEffect(() => {
+    if (endpoints.length === 0) return
+    endpoints.forEach(ep => handleTest(ep))
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [endpoints.length])
 
   const deleteMutation = useMutation({
     mutationFn: (id: string) => llmApi.delete(id),
@@ -1533,7 +1598,7 @@ function LLMEndpointsSection() {
   }
 
   async function handleTest(ep: LLMEndpoint) {
-    setTestingId(ep.id)
+    setTestingIds((prev) => new Set(prev).add(ep.id))
     setTestResults((prev) => {
       const next = { ...prev }
       delete next[ep.id]
@@ -1542,15 +1607,28 @@ function LLMEndpointsSection() {
     try {
       const result = await llmApi.test(ep.id)
       setTestResults((prev) => ({ ...prev, [ep.id]: result }))
-      if (result.ok) {
-        toast(`${ep.name}: OK (${result.latency_ms ?? '?'} ms)`)
-      } else {
-        toast(`${ep.name}: ${result.error ?? 'Test failed'}`, 'error')
-      }
-    } catch (e: any) {
-      toast(e.message ?? 'Test failed', 'error')
+    } catch {
+      setTestResults((prev) => ({ ...prev, [ep.id]: { ok: false, latency_ms: null, error: 'Unreachable' } }))
     } finally {
-      setTestingId(null)
+      setTestingIds((prev) => {
+        const next = new Set(prev)
+        next.delete(ep.id)
+        return next
+      })
+    }
+  }
+
+  async function handleSetDefault(ep: LLMEndpoint) {
+    if (ep.is_default) return
+    setSettingDefaultId(ep.id)
+    try {
+      await llmApi.update(ep.id, { is_default: true })
+      qc.invalidateQueries({ queryKey: ['llm-endpoints'] })
+      toast(`${ep.name} set as default`)
+    } catch (e: any) {
+      toast(e.message ?? 'Failed to set default', 'error')
+    } finally {
+      setSettingDefaultId(null)
     }
   }
 
@@ -1581,12 +1659,23 @@ function LLMEndpointsSection() {
               Configure LLM providers for AI-assisted fleet operations. Supports Ollama, OpenAI-compatible endpoints, and Anthropic.
             </p>
           </div>
-          <button
-            onClick={openAdd}
-            className="px-4 py-2 bg-brand-600 text-white text-sm rounded-lg font-medium hover:bg-brand-700 shadow-sm shrink-0"
-          >
-            Add Endpoint
-          </button>
+          <div className="flex items-center gap-3 shrink-0">
+            {endpoints.length > 0 && (
+              <button
+                onClick={() => endpoints.forEach(ep => handleTest(ep))}
+                className="text-xs text-gray-500 hover:text-gray-700 flex items-center gap-1 font-medium"
+                title="Re-ping all endpoints"
+              >
+                <span>↻</span> Refresh
+              </button>
+            )}
+            <button
+              onClick={openAdd}
+              className="px-4 py-2 bg-brand-600 text-white text-sm rounded-lg font-medium hover:bg-brand-700 shadow-sm"
+            >
+              Add Endpoint
+            </button>
+          </div>
         </div>
 
         {isLoading && (
@@ -1614,6 +1703,7 @@ function LLMEndpointsSection() {
                   <th className="text-left px-4 py-2.5 text-xs font-semibold text-gray-600 uppercase tracking-wide">Name</th>
                   <th className="text-left px-4 py-2.5 text-xs font-semibold text-gray-600 uppercase tracking-wide">Provider</th>
                   <th className="text-left px-4 py-2.5 text-xs font-semibold text-gray-600 uppercase tracking-wide">Model</th>
+                  <th className="text-left px-4 py-2.5 text-xs font-semibold text-gray-600 uppercase tracking-wide">Status</th>
                   <th className="text-center px-4 py-2.5 text-xs font-semibold text-gray-600 uppercase tracking-wide">Default</th>
                   <th className="text-center px-4 py-2.5 text-xs font-semibold text-gray-600 uppercase tracking-wide">Enabled</th>
                   <th className="text-center px-4 py-2.5 text-xs font-semibold text-gray-600 uppercase tracking-wide">Has Key</th>
@@ -1623,19 +1713,13 @@ function LLMEndpointsSection() {
               <tbody className="divide-y divide-gray-100">
                 {endpoints.map((ep) => {
                   const testResult = testResults[ep.id]
+                  const isChecking = testingIds.has(ep.id)
                   return (
                     <tr key={ep.id} className="hover:bg-gray-50 transition-colors">
                       <td className="px-4 py-3">
                         <span className="font-medium text-gray-900">{ep.name}</span>
                         {ep.base_url && (
                           <p className="text-xs font-mono text-gray-400 mt-0.5 truncate max-w-[180px]">{ep.base_url}</p>
-                        )}
-                        {testResult && (
-                          <p className={`text-xs mt-0.5 ${testResult.ok ? 'text-emerald-600' : 'text-red-600'}`}>
-                            {testResult.ok
-                              ? `✓ ${testResult.latency_ms ?? '?'} ms`
-                              : `✗ ${testResult.error ?? 'failed'}`}
-                          </p>
                         )}
                       </td>
                       <td className="px-4 py-3">
@@ -1644,12 +1728,22 @@ function LLMEndpointsSection() {
                       <td className="px-4 py-3">
                         <span className="font-mono text-gray-700 text-xs">{ep.model}</span>
                       </td>
+                      <td className="px-4 py-3">
+                        <StatusPill result={testResult} checking={isChecking} />
+                      </td>
                       <td className="px-4 py-3 text-center">
-                        {ep.is_default ? (
-                          <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-emerald-100 text-emerald-700">Yes</span>
-                        ) : (
-                          <span className="text-gray-300 text-xs">—</span>
-                        )}
+                        <button
+                          onClick={() => handleSetDefault(ep)}
+                          disabled={settingDefaultId === ep.id}
+                          title={ep.is_default ? 'Default endpoint' : 'Set as default'}
+                          className="w-5 h-5 rounded-full border-2 flex items-center justify-center mx-auto transition-colors hover:border-emerald-500 disabled:opacity-50"
+                          style={{
+                            borderColor: ep.is_default ? '#16a34a' : '#d1d5db',
+                            backgroundColor: ep.is_default ? '#16a34a' : 'white',
+                          }}
+                        >
+                          {ep.is_default && <span className="w-2 h-2 rounded-full bg-white block" />}
+                        </button>
                       </td>
                       <td className="px-4 py-3 text-center">
                         {ep.enabled ? (
@@ -1667,13 +1761,6 @@ function LLMEndpointsSection() {
                       </td>
                       <td className="px-4 py-3">
                         <div className="flex items-center justify-end gap-2">
-                          <button
-                            onClick={() => handleTest(ep)}
-                            disabled={testingId === ep.id || deletingId === ep.id}
-                            className={btnSecondary}
-                          >
-                            {testingId === ep.id ? 'Testing…' : 'Test'}
-                          </button>
                           <button
                             onClick={() => openEdit(ep)}
                             disabled={deletingId === ep.id}
