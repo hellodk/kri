@@ -6,14 +6,16 @@ import { SBOMExplorer } from './SBOMExplorer'
 import { LicensePage } from './LicensePage'
 import { SecurityPage } from './SecurityPage'
 import { AlertsPage } from './AlertsPage'
+import { MobileconfigManager } from './MobileconfigManager'
 
 const TABS: HubTab[] = [
-  { key: 'drift',     label: 'Drift',     icon: '◑', component: DriftExplorer },
-  { key: 'baselines', label: 'Baselines', icon: '▬', component: BaselinesPage },
-  { key: 'sbom',      label: 'SBOM',      icon: '◉', component: SBOMExplorer },
-  { key: 'licenses',  label: 'Licenses',  icon: '⚖', component: LicensePage },
-  { key: 'security',  label: 'Security',  icon: '⛨', component: SecurityPage },
-  { key: 'alerts',    label: 'Alerts',    icon: '◭', component: AlertsPage },
+  { key: 'drift',     label: 'Drift',           icon: '◑', component: DriftExplorer },
+  { key: 'baselines', label: 'Baselines',        icon: '▬', component: BaselinesPage },
+  { key: 'sbom',      label: 'SBOM',             icon: '◉', component: SBOMExplorer },
+  { key: 'licenses',  label: 'Licenses',         icon: '⚖', component: LicensePage },
+  { key: 'security',  label: 'Security',         icon: '⛨', component: SecurityPage },
+  { key: 'alerts',    label: 'Alerts',           icon: '◭', component: AlertsPage },
+  { key: 'profiles',  label: 'Config Profiles',  icon: '⚙', component: MobileconfigManager },
 ]
 
 export function ComplianceHub() {

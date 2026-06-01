@@ -21,6 +21,7 @@ celery_app = Celery(
         "fleet_platform.workers.health_tasks",
         "fleet_platform.workers.digest_tasks",
         "fleet_platform.workers.embedding_tasks",
+        "fleet_platform.workers.mobileconfig_tasks",
     ],
 )
 

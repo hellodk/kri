@@ -115,18 +115,28 @@ async def deploy_profile(
 ):
     """Deploy or remove a profile on a set of nodes (operator+).
 
-    Creates a pending deployment log entry for each node. The actual Ansible
-    execution is handled asynchronously by the Automation Hub worker.
+    Creates a pending deployment log entry for each node and dispatches a
+    Celery task to run the Ansible playbook asynchronously.
     """
+    from sqlalchemy import select as _select
+
+    from fleet_platform.models.node import Node
+    from fleet_platform.workers.mobileconfig_tasks import deploy_mobileconfig_task
+
     profile = await mobileconfig_svc.get_profile(db, profile_id)
     if profile is None:
         raise HTTPException(status_code=404, detail="Profile not found")
 
     actor = current_user.get("sub", "unknown")
     now = datetime.now(UTC)
-    log_ids: list[str] = []
+    job_ids: list[str] = []
 
     for node_id in body.node_ids:
+        node_result = await db.execute(_select(Node).where(Node.id == node_id))
+        node = node_result.scalar_one_or_none()
+        if node is None:
+            continue
+
         log = ProfileDeploymentLog(
             profile_id=profile_id,
             node_id=node_id,
@@ -136,7 +146,18 @@ async def deploy_profile(
             deployed_at=now,
         )
         db.add(log)
-        log_ids.append(str(log.id) if log.id else "pending")
+        await db.flush()  # populate log.id before passing to Celery
+
+        task = deploy_mobileconfig_task.delay(
+            profile_id=str(profile_id),
+            profile_name=profile.name,
+            profile_payload_xml=profile.payload_xml if body.action == "install" else "",
+            profile_identifier=profile.profile_uuid or "",
+            node_hostname=node.hostname or node.minion_id or str(node.id),
+            action=body.action,
+            log_id=str(log.id),
+        )
+        job_ids.append(task.id)
 
     await db.commit()
 
@@ -144,6 +165,7 @@ async def deploy_profile(
         "profile_id": str(profile_id),
         "action": body.action,
         "node_count": len(body.node_ids),
+        "job_ids": job_ids,
         "status": "accepted",
     }
 
