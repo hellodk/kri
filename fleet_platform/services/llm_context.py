@@ -63,6 +63,11 @@ def _sanitize_cell(value: str) -> str:
     return value.replace("|", "\\|").replace("\n", " ").replace("\r", "")
 
 
+def estimate_tokens(text: str) -> int:
+    """Rough token count: 1 token ≈ 4 chars (adequate for budget gating)."""
+    return max(1, len(text) // 4)
+
+
 def build_static_context(
     *,
     node_count: int,
@@ -71,6 +76,7 @@ def build_static_context(
     salt_master: str,
     playbooks_dir: str,
     node_records: list[dict] | None = None,
+    retrieved_chunks: str | None = None,
 ) -> str:
     group_line = ", ".join(groups) if groups else "(none)"
     parts = [
@@ -97,6 +103,11 @@ def build_static_context(
                 f" | {sc(n['status'])} | {sc(n['last_seen'])} | {sc(group)} |\n"
             )
 
+    # RAG knowledge-plane slot — inserted before Rules so grounding rules are always last
+    if retrieved_chunks:
+        parts.append(f"\n{retrieved_chunks}\n")
+
+    # _GROUNDING_RULES is always last and is never conditional — must not be truncated
     parts.append(
         "\n## Rules\n"
         "- Never suggest commands that would destructively wipe filesystems.\n"
@@ -108,12 +119,18 @@ def build_static_context(
     return "".join(parts)
 
 
-async def build_fleet_context(db: AsyncSession, intent: str) -> str:
-    """Fetch live fleet state and build a system prompt."""
+async def build_fleet_context(db: AsyncSession, intent: str, query: str = "") -> str:
+    """Fetch live fleet state and build a system prompt.
+
+    When query is provided and intent is fleet_query or fleet_command,
+    performs hybrid RAG retrieval and injects top-k chunks into the context.
+    RAG failure is non-fatal — context degrades to live-plane only.
+    """
     from fleet_platform.models.group import Group, GroupMember
     from fleet_platform.models.node import Node
     from fleet_platform.services.llm_svc import _redact_sensitive_data
     from fleet_platform.services.platform_settings_svc import (
+        LLM_EMBED_BASE_URL,
         LLM_INCLUDE_NODE_IPS,
         get_settings_bulk,
     )
@@ -150,10 +167,14 @@ async def build_fleet_context(db: AsyncSession, intent: str) -> str:
     )
     node_group_map: dict = {str(row.node_id): row.name for row in membership_result.all()}
 
-    _settings = await get_settings_bulk(db, [SALT_MASTER_KEY, PLAYBOOKS_DIR_KEY, LLM_INCLUDE_NODE_IPS])
-    salt_master = _settings[SALT_MASTER_KEY] or ""
-    playbooks_dir = _settings[PLAYBOOKS_DIR_KEY] or ""
-    include_ips = (_settings[LLM_INCLUDE_NODE_IPS] or "true").lower() != "false"
+    _settings = await get_settings_bulk(
+        db,
+        [SALT_MASTER_KEY, PLAYBOOKS_DIR_KEY, LLM_INCLUDE_NODE_IPS, LLM_EMBED_BASE_URL],
+    )
+    salt_master = _settings.get(SALT_MASTER_KEY) or ""
+    playbooks_dir = _settings.get(PLAYBOOKS_DIR_KEY) or ""
+    include_ips = (_settings.get(LLM_INCLUDE_NODE_IPS) or "true").lower() != "false"
+    embed_url = _settings.get(LLM_EMBED_BASE_URL) or ""
 
     node_records = []
     for row in node_rows:
@@ -166,6 +187,19 @@ async def build_fleet_context(db: AsyncSession, intent: str) -> str:
             "group": node_group_map.get(str(row.minion_id), "—"),
         })
 
+    # RAG retrieval — non-fatal; degrades gracefully if embed_url is not configured
+    retrieved_chunks_text: str | None = None
+    if query and embed_url and intent in ("fleet_query", "fleet_command"):
+        try:
+            from fleet_platform.services.embedding_svc import (
+                format_retrieved_chunks,
+                retrieve,
+            )
+            chunks = await retrieve(db, query, embed_url, top_k=6)
+            retrieved_chunks_text = format_retrieved_chunks(chunks) or None
+        except Exception:
+            pass  # RAG failure is non-fatal
+
     base = build_static_context(
         node_count=node_count,
         online_count=online_count,
@@ -173,6 +207,7 @@ async def build_fleet_context(db: AsyncSession, intent: str) -> str:
         salt_master=salt_master,
         playbooks_dir=playbooks_dir,
         node_records=node_records,
+        retrieved_chunks=retrieved_chunks_text,
     )
     addendum = INTENT_ADDENDUM.get(intent, INTENT_ADDENDUM["fleet_query"])
     context = f"{base}\n## Your Task\n{addendum}"

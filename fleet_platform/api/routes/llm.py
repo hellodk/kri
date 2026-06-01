@@ -202,7 +202,14 @@ async def submit_query(
         [c.strip() for c in endpoint.model_capabilities.split(",") if c.strip()]
         if endpoint.model_capabilities else []
     )
-    system_prompt = await build_fleet_context(db, payload.intent)
+
+    # Resolve 'auto' intent via heuristic classifier before building context
+    intent = payload.intent
+    if intent == "auto":
+        from fleet_platform.services.llm_intent import classify_intent
+        intent = classify_intent(payload.prompt)
+
+    system_prompt = await build_fleet_context(db, intent, query=payload.prompt)
 
     history_dicts: list[dict] = [
         {"role": m.role, "content": m.content}
@@ -254,7 +261,7 @@ async def submit_query(
         db,
         endpoint_id=endpoint.id,
         user_id=claims["sub"],
-        intent=payload.intent,
+        intent=intent,  # resolved (auto → classified)
         prompt=payload.prompt,
         system_prompt=system_prompt,
         response=content or None,
@@ -273,7 +280,7 @@ async def submit_query(
         resource_id=None,
         new_value={
             "query": payload.prompt[:200],
-            "intent": payload.intent,
+            "intent": intent,  # resolved (auto → classified)
             "model": endpoint.model,
             "endpoint": endpoint.name,
         },
@@ -284,7 +291,7 @@ async def submit_query(
 
     return LLMQueryResponse(
         query_id=log.id,
-        intent=payload.intent,
+        intent=intent,  # resolved (auto → classified)
         result=content,
         model_used=endpoint.model,
         endpoint_name=endpoint.name,
