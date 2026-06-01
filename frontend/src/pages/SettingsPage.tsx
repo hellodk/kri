@@ -8,6 +8,23 @@ import { LLMEndpointForm } from '../components/LLMEndpointForm'
 import { useToastStore } from '../stores/toastStore'
 import { buildsApi } from '../api/builds'
 
+function UrlStatusPill({ status, checking }: { status?: { ok: boolean; latency_ms: number | null; error?: string } | null; checking: boolean }) {
+  if (checking) return <span className="text-xs text-gray-400 flex items-center gap-1"><span className="inline-block animate-spin">⟳</span> Checking</span>
+  if (!status) return null
+  if (status.ok) return (
+    <span className="text-xs font-medium text-emerald-600 flex items-center gap-1">
+      <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 inline-block" />
+      {status.latency_ms != null ? `${status.latency_ms}ms` : 'OK'}
+    </span>
+  )
+  return (
+    <span className="text-xs font-medium text-red-600 flex items-center gap-1">
+      <span className="w-1.5 h-1.5 rounded-full bg-red-500 inline-block" />
+      {status.error ?? 'Unreachable'}
+    </span>
+  )
+}
+
 export function SettingsPage() {
   const qc = useQueryClient()
   const toast = useToastStore((s) => s.add)
@@ -45,6 +62,18 @@ export function SettingsPage() {
   const [embedUrlStatus, setEmbedUrlStatus] = useState<{ ok: boolean; latency_ms: number | null; error?: string } | null>(null)
   const [embedUrlChecking, setEmbedUrlChecking] = useState(false)
   const embedDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const [saltMasterStatus, setSaltMasterStatus] = useState<{ ok: boolean; latency_ms: number | null; error?: string } | null>(null)
+  const [saltMasterChecking, setSaltMasterChecking] = useState(false)
+  const saltMasterDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const [ansibleStatus, setAnsibleStatus] = useState<{ ok: boolean; latency_ms: number | null; error?: string } | null>(null)
+  const [ansibleChecking, setAnsibleChecking] = useState(false)
+  const ansibleDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const [sonarStatus, setSonarStatus] = useState<{ ok: boolean; latency_ms: number | null; error?: string } | null>(null)
+  const [sonarChecking, setSonarChecking] = useState(false)
+  const sonarDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const [cxoneStatus, setCxoneStatus] = useState<{ ok: boolean; latency_ms: number | null; error?: string } | null>(null)
+  const [cxoneChecking, setCxoneChecking] = useState(false)
+  const cxoneDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   const { data, isLoading } = useQuery({
     queryKey: ['settings'],
@@ -73,7 +102,12 @@ export function SettingsPage() {
       if (data.smtp_from) setSmtpFrom(data.smtp_from)
       if (data.digest_recipients) setDigestRecipients(data.digest_recipients)
       if (data.llm_embed_base_url) setLlmEmbedBaseUrl(data.llm_embed_base_url)
+      if (data.salt_master_address) checkSaltMaster(data.salt_master_address)
+      if (data.ansible_endpoint_url) checkAnsible(data.ansible_endpoint_url)
+      if (data.sonarqube_url) checkSonar(data.sonarqube_url)
+      if (data.cxone_url) checkCxone(data.cxone_url)
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [data])
 
   async function checkEmbedUrl(url?: string) {
@@ -98,6 +132,66 @@ export function SettingsPage() {
     if (llmEmbedBaseUrl) checkEmbedUrl(llmEmbedBaseUrl)
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [llmEmbedBaseUrl])
+
+  async function checkSaltMaster(address?: string) {
+    const target = (address ?? master).trim()
+    if (!target) { setSaltMasterStatus(null); return }
+    setSaltMasterChecking(true)
+    const t0 = Date.now()
+    try {
+      const resp = await fetch(`http://${target}:8080`, { signal: AbortSignal.timeout(5000) })
+      setSaltMasterStatus({ ok: resp.ok, latency_ms: Date.now() - t0 })
+    } catch {
+      setSaltMasterStatus({ ok: false, latency_ms: null, error: 'Unreachable' })
+    } finally {
+      setSaltMasterChecking(false)
+    }
+  }
+
+  async function checkAnsible(url?: string) {
+    const target = (url ?? ansibleEndpoint).trim()
+    if (!target) { setAnsibleStatus(null); return }
+    setAnsibleChecking(true)
+    const t0 = Date.now()
+    try {
+      const resp = await fetch(target, { method: 'HEAD', signal: AbortSignal.timeout(5000) })
+      setAnsibleStatus({ ok: resp.ok, latency_ms: Date.now() - t0 })
+    } catch {
+      setAnsibleStatus({ ok: false, latency_ms: null, error: 'Unreachable' })
+    } finally {
+      setAnsibleChecking(false)
+    }
+  }
+
+  async function checkSonar(url?: string) {
+    const target = (url ?? sonarUrl).trim()
+    if (!target) { setSonarStatus(null); return }
+    setSonarChecking(true)
+    const t0 = Date.now()
+    try {
+      const resp = await fetch(`${target.replace(/\/+$/, '')}/api/system/status`, { signal: AbortSignal.timeout(5000) })
+      setSonarStatus({ ok: resp.ok, latency_ms: Date.now() - t0 })
+    } catch {
+      setSonarStatus({ ok: false, latency_ms: null, error: 'Unreachable' })
+    } finally {
+      setSonarChecking(false)
+    }
+  }
+
+  async function checkCxone(url?: string) {
+    const target = (url ?? cxoneUrl).trim()
+    if (!target) { setCxoneStatus(null); return }
+    setCxoneChecking(true)
+    const t0 = Date.now()
+    try {
+      const resp = await fetch(target, { method: 'HEAD', signal: AbortSignal.timeout(5000) })
+      setCxoneStatus({ ok: resp.ok, latency_ms: Date.now() - t0 })
+    } catch {
+      setCxoneStatus({ ok: false, latency_ms: null, error: 'Unreachable' })
+    } finally {
+      setCxoneChecking(false)
+    }
+  }
 
   const saveMutation = useMutation({
     mutationFn: () => ansibleApi.updateSettings({
@@ -217,13 +311,20 @@ export function SettingsPage() {
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Master address (IP or DNS, no port)</label>
-              <input
-                type="text"
-                value={master}
-                onChange={(e) => setMaster(e.target.value)}
-                placeholder="100.89.50.27  or  salt.fleet.local"
-                className={monoInputClass}
-              />
+              <div className="flex items-center gap-2">
+                <input
+                  type="text"
+                  value={master}
+                  onChange={(e) => {
+                    setMaster(e.target.value)
+                    if (saltMasterDebounceRef.current) clearTimeout(saltMasterDebounceRef.current)
+                    saltMasterDebounceRef.current = setTimeout(() => checkSaltMaster(e.target.value), 1000)
+                  }}
+                  placeholder="100.89.50.27  or  salt.fleet.local"
+                  className={`${monoInputClass} flex-1`}
+                />
+                <UrlStatusPill status={saltMasterStatus} checking={saltMasterChecking} />
+              </div>
               <p className="text-xs text-gray-400 mt-1">Salt minions connect to this on port 4505/4506.</p>
             </div>
           </div>
@@ -454,8 +555,16 @@ export function SettingsPage() {
             <div className="grid grid-cols-2 gap-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">CxOne URL</label>
-                <input type="text" value={cxoneUrl} onChange={e => setCxoneUrl(e.target.value)}
-                  placeholder="https://us.cxone.net" className={inputClass} />
+                <div className="flex items-center gap-2">
+                  <input type="text" value={cxoneUrl}
+                    onChange={e => {
+                      setCxoneUrl(e.target.value)
+                      if (cxoneDebounceRef.current) clearTimeout(cxoneDebounceRef.current)
+                      cxoneDebounceRef.current = setTimeout(() => checkCxone(e.target.value), 1000)
+                    }}
+                    placeholder="https://us.cxone.net" className={`${inputClass} flex-1`} />
+                  <UrlStatusPill status={cxoneStatus} checking={cxoneChecking} />
+                </div>
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -466,8 +575,16 @@ export function SettingsPage() {
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">SonarQube URL</label>
-                <input type="text" value={sonarUrl} onChange={e => setSonarUrl(e.target.value)}
-                  placeholder="http://sonarqube.utilities.svc.cluster.local:9000" className={inputClass} />
+                <div className="flex items-center gap-2">
+                  <input type="text" value={sonarUrl}
+                    onChange={e => {
+                      setSonarUrl(e.target.value)
+                      if (sonarDebounceRef.current) clearTimeout(sonarDebounceRef.current)
+                      sonarDebounceRef.current = setTimeout(() => checkSonar(e.target.value), 1000)
+                    }}
+                    placeholder="http://sonarqube.utilities.svc.cluster.local:9000" className={`${inputClass} flex-1`} />
+                  <UrlStatusPill status={sonarStatus} checking={sonarChecking} />
+                </div>
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -549,8 +666,16 @@ export function SettingsPage() {
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Endpoint URL</label>
-              <input type="text" value={ansibleEndpoint} onChange={(e) => setAnsibleEndpoint(e.target.value)}
-                placeholder="https://awx.example.com" className={inputClass} />
+              <div className="flex items-center gap-2">
+                <input type="text" value={ansibleEndpoint}
+                  onChange={(e) => {
+                    setAnsibleEndpoint(e.target.value)
+                    if (ansibleDebounceRef.current) clearTimeout(ansibleDebounceRef.current)
+                    ansibleDebounceRef.current = setTimeout(() => checkAnsible(e.target.value), 1000)
+                  }}
+                  placeholder="https://awx.example.com" className={`${inputClass} flex-1`} />
+                <UrlStatusPill status={ansibleStatus} checking={ansibleChecking} />
+              </div>
               <p className="text-xs text-gray-400 mt-1">Leave blank to use local ansible-runner.</p>
             </div>
             <div>
