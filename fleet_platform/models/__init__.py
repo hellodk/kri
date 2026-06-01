@@ -1,20 +1,20 @@
 from fleet_platform.models.ansible_job import AnsibleJob
-from fleet_platform.models.fleet_embedding import FleetEmbedding
 from fleet_platform.models.audit import AuditEvent
-from fleet_platform.models.mobileconfig import (
-    MobileconfigProfile,
-    ProfileDeploymentLog,
-    ProfileGroupAssignment,
-)
 from fleet_platform.models.base import Base, TimestampMixin
 from fleet_platform.models.drift import DesiredStateBaseline, DriftRecord
 from fleet_platform.models.execution import ExecutionJob, ExecutionResult
 from fleet_platform.models.facts import NodeFact
+from fleet_platform.models.fleet_embedding import FleetEmbedding
 from fleet_platform.models.group import Group, GroupMember
 from fleet_platform.models.group_secret import GroupSecret
 from fleet_platform.models.jenkins_build_event import JenkinsBuildEvent
 from fleet_platform.models.llm_endpoint import LLMEndpoint
 from fleet_platform.models.llm_query_log import LLMQueryLog
+from fleet_platform.models.mobileconfig import (
+    MobileconfigProfile,
+    ProfileDeploymentLog,
+    ProfileGroupAssignment,
+)
 from fleet_platform.models.node import Node, Tag
 from fleet_platform.models.node_health_snapshot import NodeHealthSnapshot
 from fleet_platform.models.node_secret import NodeSecret

@@ -159,7 +159,9 @@ async def ask_ai_about_node(
     """Ask the LLM for recommendations about a specific node."""
     from datetime import timedelta
 
-    from sqlalchemy import desc, func as sqlfunc, select as _sel
+    from sqlalchemy import desc
+    from sqlalchemy import func as sqlfunc
+    from sqlalchemy import select as _sel
 
     from fleet_platform.models.alert import AlertEvent as _AlertEvent
     from fleet_platform.models.drift import DriftRecord as _DriftRecord

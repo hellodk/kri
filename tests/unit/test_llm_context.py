@@ -207,16 +207,18 @@ def test_grounding_rules_after_rag_slot():
 
 
 def test_format_last_seen_seconds():
-    from fleet_platform.services.llm_context import _format_last_seen
     from datetime import UTC, datetime, timedelta
+
+    from fleet_platform.services.llm_context import _format_last_seen
     recent = datetime.now(UTC) - timedelta(seconds=30)
     result = _format_last_seen(recent)
     assert result.endswith("s ago")
 
 
 def test_format_last_seen_days():
-    from fleet_platform.services.llm_context import _format_last_seen
     from datetime import UTC, datetime, timedelta
+
+    from fleet_platform.services.llm_context import _format_last_seen
     old = datetime.now(UTC) - timedelta(days=3)
     result = _format_last_seen(old)
     assert result.endswith("d ago")
@@ -224,8 +226,9 @@ def test_format_last_seen_days():
 
 def test_format_last_seen_naive_datetime():
     """Naive datetimes (no tzinfo) are handled by attaching UTC."""
-    from fleet_platform.services.llm_context import _format_last_seen
     from datetime import datetime, timedelta
+
+    from fleet_platform.services.llm_context import _format_last_seen
     # naive datetime (no tzinfo)
     naive_dt = datetime.utcnow() - timedelta(minutes=5)
     result = _format_last_seen(naive_dt)

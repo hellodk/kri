@@ -107,9 +107,10 @@ async def test_list_query_logs_returns_empty():
 
 def test_get_decrypted_api_key_with_encrypted_key():
     """get_decrypted_api_key decrypts stored key."""
-    from fleet_platform.services.platform_settings_svc import encrypt_secret
-    from fleet_platform.services.llm_svc import get_decrypted_api_key
     from unittest.mock import MagicMock
+
+    from fleet_platform.services.llm_svc import get_decrypted_api_key
+    from fleet_platform.services.platform_settings_svc import encrypt_secret
     endpoint = MagicMock()
     endpoint.api_key_encrypted = encrypt_secret("my-secret-key")
     result = get_decrypted_api_key(endpoint)
@@ -132,8 +133,9 @@ def test_user_seeding_invalid_role_falls_back_to_viewer():
         "SEED_LOCAL_USER_1_PASSWORD": "pass",
         "SEED_LOCAL_USER_1_ROLE": "superadmin",  # not valid
     }):
-        from fleet_platform.services import user_seeding
         import importlib
+
+        from fleet_platform.services import user_seeding
         importlib.reload(user_seeding)
         # The function reads env at call time; just verify it imports
         assert callable(user_seeding.seed_local_users)
