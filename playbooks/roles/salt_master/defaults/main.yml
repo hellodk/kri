@@ -22,10 +22,6 @@ salt_api_port: 8080
 salt_api_user: "krisalt"
 kri_salt_api_password: "changeme-set-in-vault"
 
-# kri ingest URL — written into each minion's pillar so grain_report can POST back
-# This is the Tailscale IP of the host running the kri API container
-kri_ingest_base_url: "http://100.89.50.27/api/v1/ingest"
-
 # Salt-master listen address (0.0.0.0 = all interfaces incl Tailscale)
 salt_master_interface: "0.0.0.0"
 

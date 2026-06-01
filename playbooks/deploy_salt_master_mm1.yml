@@ -18,7 +18,6 @@
   vars:
     # Override on CLI: -e kri_salt_api_password=<password>
     kri_salt_api_password: "changeme-set-via-e-flag"
-    kri_ingest_base_url: "http://100.89.50.27/api/v1/ingest"
 
   pre_tasks:
     - name: Confirm target host
