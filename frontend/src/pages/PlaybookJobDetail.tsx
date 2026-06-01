@@ -33,6 +33,18 @@ export function PlaybookJobDetail() {
     },
   })
 
+  // Hooks must be declared before any early returns (Rules of Hooks)
+  const isLive = job?.status === 'running' || job?.status === 'pending'
+  const [elapsed, setElapsed] = useState(0)
+  useEffect(() => {
+    if (!isLive || !job?.started_at) { setElapsed(0); return }
+    const base = new Date(job.started_at).getTime()
+    const tick = () => setElapsed(Math.floor((Date.now() - base) / 1000))
+    tick()
+    const id = setInterval(tick, 1000)
+    return () => clearInterval(id)
+  }, [isLive, job?.started_at])
+
   if (isLoading) return (
     <div className="flex items-center justify-center h-64 text-sm text-gray-400">
       Loading job…
@@ -47,19 +59,6 @@ export function PlaybookJobDetail() {
       </div>
     </div>
   )
-
-  const isLive = job.status === 'running' || job.status === 'pending'
-
-  const [elapsed, setElapsed] = useState(0)
-
-  useEffect(() => {
-    if (!isLive || !job?.started_at) { setElapsed(0); return }
-    const base = new Date(job.started_at).getTime()
-    const tick = () => setElapsed(Math.floor((Date.now() - base) / 1000))
-    tick()
-    const id = setInterval(tick, 1000)
-    return () => clearInterval(id)
-  }, [isLive, job?.started_at])
 
   function fmtElapsed(s: number): string {
     const m = Math.floor(s / 60)
