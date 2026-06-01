@@ -29,6 +29,8 @@ export interface PlatformSettings {
   // Salt allowlist / denylist
   salt_allowed_functions: string[] | null
   salt_denied_functions: string[] | null
+  // RAG embedding
+  llm_embed_base_url: string | null
 }
 
 export interface BootstrapResponse {
@@ -132,6 +134,8 @@ export const ansibleApi = {
     // Salt allowlist / denylist
     salt_allowed_functions?: string[]
     salt_denied_functions?: string[]
+    // RAG embedding
+    llm_embed_base_url?: string
   }) => api.put<PlatformSettings>('/api/v1/settings', payload),
   bootstrap: (minion_id: string, target_ip: string, sshUsername?: string, sshPassword?: string) =>
     api.post<BootstrapResponse>('/api/v1/ansible/bootstrap', {

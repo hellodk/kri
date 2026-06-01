@@ -4,11 +4,22 @@ import { llmApi } from '../api/llm'
 import type { LLMQueryResponse } from '../api/llm'
 import { useLLMStore } from '../stores/llmStore'
 
+function classifyIntentHint(prompt: string): string {
+  const p = prompt.toLowerCase()
+  if ((p.includes('write') || p.includes('generate')) && (p.includes('sls') || p.includes('salt state'))) return 'Salt State'
+  if ((p.includes('write') || p.includes('generate')) && (p.includes('playbook') || p.includes('ansible'))) return 'Ansible Playbook'
+  if (p.includes('run') || p.includes('execute')) return 'Fleet Command'
+  if (p.startsWith('explain') || p.includes('what does') || p.includes('how does')) return 'Explain'
+  return 'Fleet Query'
+}
+
 export default function LLMAssistant() {
   const [open, setOpen] = useState(false)
   const [prompt, setPrompt] = useState('')
+  const [intentHint, setIntentHint] = useState('Fleet Query')
   const { messages, addMessage, clearMessages } = useLLMStore()
   const bottomRef = useRef<HTMLDivElement>(null)
+  const intentDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
@@ -16,7 +27,7 @@ export default function LLMAssistant() {
 
   const mutation = useMutation({
     mutationFn: ({ text, history }: { text: string; history: Array<{ role: 'user' | 'assistant'; content: string }> }) =>
-      llmApi.submitQuery({ prompt: text, intent: 'fleet_query', history }),
+      llmApi.submitQuery({ prompt: text, intent: 'auto', history }),
     onSuccess: (data: LLMQueryResponse) => {
       addMessage({
         role: 'assistant',
@@ -50,6 +61,15 @@ export default function LLMAssistant() {
     addMessage({ role: 'user', content: text })
     setPrompt('')
     mutation.mutate({ text, history })
+  }
+
+  const handlePromptChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    const val = e.target.value
+    setPrompt(val)
+    if (intentDebounceRef.current) clearTimeout(intentDebounceRef.current)
+    intentDebounceRef.current = setTimeout(() => {
+      setIntentHint(classifyIntentHint(val))
+    }, 500)
   }
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
@@ -143,23 +163,28 @@ export default function LLMAssistant() {
             <div ref={bottomRef} />
           </div>
 
-          <div className="border-t border-gray-200 p-3 flex gap-2">
-            <textarea
-              value={prompt}
-              onChange={e => setPrompt(e.target.value)}
-              onKeyDown={handleKeyDown}
-              placeholder="Ask about your fleet… (Enter to send)"
-              rows={2}
-              className="flex-1 resize-none border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 placeholder-gray-400"
-              disabled={mutation.isPending}
-            />
-            <button
-              onClick={handleSubmit}
-              disabled={!prompt.trim() || mutation.isPending}
-              className="px-3 py-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white rounded-lg text-sm font-medium transition-colors self-end"
-            >
-              Send
-            </button>
+          <div className="border-t border-gray-200 p-3 space-y-1.5">
+            <div className="flex gap-2">
+              <textarea
+                value={prompt}
+                onChange={handlePromptChange}
+                onKeyDown={handleKeyDown}
+                placeholder="Ask about your fleet… (Enter to send)"
+                rows={2}
+                className="flex-1 resize-none border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 placeholder-gray-400"
+                disabled={mutation.isPending}
+              />
+              <button
+                onClick={handleSubmit}
+                disabled={!prompt.trim() || mutation.isPending}
+                className="px-3 py-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white rounded-lg text-sm font-medium transition-colors self-end"
+              >
+                Send
+              </button>
+            </div>
+            {prompt.trim() && (
+              <p className="text-xs text-gray-400">Detected: {intentHint}</p>
+            )}
           </div>
         </div>
       )}

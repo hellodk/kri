@@ -125,6 +125,47 @@ def test_chunk_salt_state_non_dict_returns_empty():
     assert chunks == []
 
 
+# --- Task 7: Golden eval gate — regression prevention -------------------------
+
+def test_grounding_rules_never_truncated():
+    """Grounding rules must appear in final context regardless of chunk size."""
+    from fleet_platform.services.llm_context import build_static_context
+
+    huge_chunks = "x" * 10000
+    ctx = build_static_context(
+        node_count=2,
+        online_count=1,
+        groups=["fleet"],
+        salt_master="",
+        playbooks_dir="",
+        retrieved_chunks=huge_chunks,
+    )
+    # Grounding rules must be present regardless of context size
+    assert "Answer ONLY from" in ctx or "ONLY" in ctx
+    assert "never claim" in ctx.lower()
+
+
+def test_estimate_tokens_never_zero():
+    from fleet_platform.services.llm_context import estimate_tokens
+
+    assert estimate_tokens("") >= 1
+    assert estimate_tokens("hello world") == max(1, len("hello world") // 4)
+
+
+def test_intent_classifier_defaults_to_fleet_query():
+    from fleet_platform.services.llm_intent import classify_intent
+
+    assert classify_intent("what is mm1 doing") == "fleet_query"
+    assert classify_intent("Hi there") == "fleet_query"
+
+
+def test_intent_classifier_generates_salt_state():
+    from fleet_platform.services.llm_intent import classify_intent
+
+    assert classify_intent("write a salt state to install nginx") == "salt_state"
+    assert classify_intent("generate an sls file for redis") == "salt_state"
+
+
 # --- Task 5: Celery task imports -----------------------------------------------
 
 def test_embedding_tasks_importable():
