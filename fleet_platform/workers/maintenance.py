@@ -1,7 +1,7 @@
 from datetime import UTC, datetime, timedelta
 
 import redis as sync_redis
-from sqlalchemy import select, update
+from sqlalchemy import func, or_, select, update
 
 from fleet_platform.core.config import settings
 from fleet_platform.db.session import get_sync_db
@@ -101,6 +101,12 @@ def cleanup_old_bootstrap_runs() -> dict:
 
 _ORPHAN_TIMEOUT_MINUTES = 40  # hard kill limit is 35 min; give 5 min buffer
 
+_ORPHAN_MESSAGE = (
+    "\n\n[ERROR] Task orphaned — the Celery worker was restarted while this job "
+    "was running. The playbook may or may not have executed on the target. "
+    "Check the node directly and re-run the playbook if needed."
+)
+
 
 @celery_app.task(
     name="fleet_platform.workers.maintenance.reap_orphaned_jobs",
@@ -109,25 +115,28 @@ _ORPHAN_TIMEOUT_MINUTES = 40  # hard kill limit is 35 min; give 5 min buffer
 def reap_orphaned_jobs() -> dict:
     """Mark ansible_jobs stuck in 'running' as failed if the worker was restarted.
 
-    Celery SoftTimeLimitExceeded only fires in a living worker. When a worker
-    is restarted mid-task, the DB row stays 'running' forever. This reaper runs
-    every 15 minutes and marks any job that has been 'running' for longer than
-    the Celery hard time limit (35 min) as failed with a clear explanation.
+    Guards:
+    - completed_at IS NULL: skip jobs that finished legitimately (race guard, closes #305)
+    - started_at IS NULL fallback via created_at: catches permanent orphans
+    - func.coalesce: append to existing stdout instead of overwriting evidence
     """
-    cutoff = datetime.now(UTC) - timedelta(minutes=_ORPHAN_TIMEOUT_MINUTES)
+    now = datetime.now(UTC)
+    cutoff = now - timedelta(minutes=_ORPHAN_TIMEOUT_MINUTES)
     with get_sync_db() as db:
         result = db.execute(
             update(AnsibleJob)
             .where(AnsibleJob.status == "running")
-            .where(AnsibleJob.started_at < cutoff)
+            .where(AnsibleJob.completed_at.is_(None))
+            .where(
+                or_(
+                    AnsibleJob.started_at < cutoff,
+                    AnsibleJob.started_at.is_(None) & (AnsibleJob.created_at < cutoff),
+                )
+            )
             .values(
                 status="failed",
-                completed_at=datetime.now(UTC),
-                stdout=(
-                    "[ERROR] Task orphaned — the Celery worker was restarted while this job "
-                    "was running. The playbook may or may not have executed on the target. "
-                    "Check the node directly and re-run the playbook if needed."
-                ),
+                completed_at=now,
+                stdout=func.coalesce(AnsibleJob.stdout, "") + _ORPHAN_MESSAGE,
             )
         )
         db.commit()

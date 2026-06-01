@@ -15,17 +15,8 @@ export default function LLMAssistant() {
   }, [messages])
 
   const mutation = useMutation({
-    mutationFn: (text: string) => {
-      const historyMessages = messages
-        .slice(-10)
-        .filter(m => !m.error)
-        .map(m => ({ role: m.role as 'user' | 'assistant', content: m.content }))
-      return llmApi.submitQuery({
-        prompt: text,
-        intent: 'fleet_query',
-        history: historyMessages,
-      })
-    },
+    mutationFn: ({ text, history }: { text: string; history: Array<{ role: 'user' | 'assistant'; content: string }> }) =>
+      llmApi.submitQuery({ prompt: text, intent: 'fleet_query', history }),
     onSuccess: (data: LLMQueryResponse) => {
       addMessage({
         role: 'assistant',
@@ -50,9 +41,15 @@ export default function LLMAssistant() {
   const handleSubmit = () => {
     const text = prompt.trim()
     if (!text || mutation.isPending) return
+    // Capture history BEFORE addMessage — prevents the new message appearing
+    // in both history and prompt (duplicate turn bug, closes #303)
+    const history = messages
+      .filter(m => !m.error)
+      .slice(-10)
+      .map(m => ({ role: m.role as 'user' | 'assistant', content: m.content }))
     addMessage({ role: 'user', content: text })
     setPrompt('')
-    mutation.mutate(text)
+    mutation.mutate({ text, history })
   }
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {

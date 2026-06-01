@@ -67,7 +67,7 @@ class LLMQueryRequest(BaseModel):
     prompt: str = Field(..., min_length=1, max_length=8000)
     intent: VALID_INTENTS
     endpoint_id: uuid.UUID | None = None
-    history: list[ChatHistoryMessage] = Field(default_factory=list)
+    history: list[ChatHistoryMessage] = Field(default_factory=list, max_length=50)
 
 
 class LLMQueryResponse(BaseModel):
