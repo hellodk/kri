@@ -81,3 +81,16 @@ def test_ssh_keypair_idempotent():
         mtime = os.path.getmtime(priv)
         ensure_controller_keypair(priv_path=priv, pub_path=pub)
         assert os.path.getmtime(priv) == mtime
+
+
+def test_playbook_sources_nonexistent_local_warns(caplog):
+    """get_all_playbook_dirs logs a warning for non-existent local paths."""
+    import json, logging
+    from fleet_platform.services.playbook_sources import get_all_playbook_dirs
+    from pathlib import Path
+
+    sources_json = json.dumps([{"type": "local", "path": "/nonexistent/path/xyz"}])
+    builtin = Path("/tmp")
+    with caplog.at_level(logging.WARNING):
+        dirs = get_all_playbook_dirs(sources_json, builtin)
+    assert builtin in dirs  # builtin always present

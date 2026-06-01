@@ -41,6 +41,7 @@ export function SettingsPage() {
   const [digestRecipients, setDigestRecipients] = useState('')
   const [jenkinsSecret, setJenkinsSecret] = useState('')
   const [digestSending, setDigestSending] = useState(false)
+  const [llmEmbedBaseUrl, setLlmEmbedBaseUrl] = useState('')
 
   const { data, isLoading } = useQuery({
     queryKey: ['settings'],
@@ -68,6 +69,7 @@ export function SettingsPage() {
       if (data.smtp_username) setSmtpUsername(data.smtp_username)
       if (data.smtp_from) setSmtpFrom(data.smtp_from)
       if (data.digest_recipients) setDigestRecipients(data.digest_recipients)
+      if (data.llm_embed_base_url) setLlmEmbedBaseUrl(data.llm_embed_base_url)
     }
   }, [data])
 
@@ -99,6 +101,7 @@ export function SettingsPage() {
       smtp_from: smtpFrom || undefined,
       digest_recipients: digestRecipients || undefined,
       jenkins_ingest_secret: jenkinsSecret || undefined,
+      llm_embed_base_url: llmEmbedBaseUrl || undefined,
     }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['settings'] })
@@ -548,6 +551,39 @@ export function SettingsPage() {
       {activeTab === 'LLM' && (
         <div className="space-y-6">
           <LLMEndpointsSection />
+
+          {/* RAG Embedding endpoint */}
+          <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-6 space-y-4">
+            <div>
+              <h2 className="text-base font-semibold text-gray-900">RAG Embedding</h2>
+              <p className="text-sm text-gray-500 mt-1">
+                Configure the embedding model endpoint for the RAG knowledge-plane retrieval pipeline.
+              </p>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Embedding Model URL
+              </label>
+              <input
+                type="text"
+                value={llmEmbedBaseUrl}
+                onChange={(e) => setLlmEmbedBaseUrl(e.target.value)}
+                placeholder="http://192.168.1.23:52415"
+                className={inputClass}
+              />
+              <p className="text-xs text-gray-400 mt-1">
+                OpenAI-compatible endpoint for <code className="text-xs bg-gray-100 px-1 rounded">nomic-embed-text-v1.5</code> (used for RAG retrieval).
+                Leave blank to disable semantic retrieval — fleet context will use live DB facts only.
+              </p>
+            </div>
+            <button
+              onClick={() => saveMutation.mutate()}
+              disabled={saveMutation.isPending}
+              className="px-4 py-2 bg-brand-600 text-white text-sm rounded-lg font-medium hover:bg-brand-700 disabled:opacity-50 shadow-sm"
+            >
+              {saveMutation.isPending ? 'Saving…' : 'Save Embedding URL'}
+            </button>
+          </div>
         </div>
       )}
 

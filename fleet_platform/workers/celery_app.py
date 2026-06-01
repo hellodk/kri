@@ -20,6 +20,8 @@ celery_app = Celery(
         "fleet_platform.workers.ios_tasks",
         "fleet_platform.workers.health_tasks",
         "fleet_platform.workers.digest_tasks",
+        "fleet_platform.workers.embedding_tasks",
+        "fleet_platform.workers.mobileconfig_tasks",
     ],
 )
 
@@ -87,6 +89,18 @@ celery_app.conf.update(
         "reap-orphaned-jobs": {
             "task": "fleet_platform.workers.maintenance.reap_orphaned_jobs",
             "schedule": 900,  # every 15 minutes — clears jobs orphaned by worker restarts
+        },
+        "reindex-nodes": {
+            "task": "fleet_platform.workers.embedding_tasks.reindex_nodes",
+            "schedule": 300,  # every 5 min — tracks node status changes
+        },
+        "reindex-playbooks": {
+            "task": "fleet_platform.workers.embedding_tasks.reindex_playbooks",
+            "schedule": 900,  # every 15 min — tracks playbook file changes
+        },
+        "reindex-drift-history": {
+            "task": "fleet_platform.workers.embedding_tasks.reindex_drift_history",
+            "schedule": 300,  # every 5 min — tracks new drift records
         },
     },
 )

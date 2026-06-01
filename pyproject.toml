@@ -36,6 +36,7 @@ dependencies = [
     "asyncssh>=2.14.0",
     "requests>=2.32.0",
     "prometheus-client>=0.20",
+    "pgvector>=0.4.2",
 ]
 
 [project.optional-dependencies]

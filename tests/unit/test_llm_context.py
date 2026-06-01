@@ -130,3 +130,103 @@ async def test_build_fleet_context_appends_intent_addendum():
         ctx = await build_fleet_context(mock_db, "ansible_playbook")
 
     assert INTENT_ADDENDUM["ansible_playbook"] in ctx
+
+
+# --- Task 3: Token budget + RAG slot -----------------------------------------
+
+def test_estimate_tokens_reasonable():
+    from fleet_platform.services.llm_context import estimate_tokens
+    # ~4 chars per token rule: 400 chars ≈ 100 tokens
+    t = estimate_tokens("x" * 400)
+    assert 90 <= t <= 110
+
+
+def test_estimate_tokens_minimum_one():
+    from fleet_platform.services.llm_context import estimate_tokens
+    assert estimate_tokens("") == 1
+    assert estimate_tokens("x") == 1
+
+
+def test_grounding_rules_never_truncated():
+    """Grounding rules must survive even with a short context window."""
+    from fleet_platform.services.llm_context import build_static_context
+    ctx = build_static_context(
+        node_count=2,
+        online_count=1,
+        groups=["build"],
+        salt_master="mm1",
+        playbooks_dir="/playbooks",
+        node_records=[],
+    )
+    # Grounding rules must always be present — even for small contexts
+    assert "ONLY" in ctx
+    assert "cannot execute" in ctx.lower()
+
+
+def test_rag_slot_present_when_chunks_provided():
+    from fleet_platform.services.llm_context import build_static_context
+    ctx = build_static_context(
+        node_count=1,
+        online_count=1,
+        groups=[],
+        salt_master="",
+        playbooks_dir="",
+        retrieved_chunks="[src: playbooks/foo.yml:play_0] Install Homebrew on all nodes",
+    )
+    assert "Retrieved Knowledge" not in ctx  # raw string passed — format_retrieved_chunks not called here
+    assert "[src: playbooks/foo.yml:play_0]" in ctx
+
+
+def test_rag_slot_absent_when_no_chunks():
+    from fleet_platform.services.llm_context import build_static_context
+    ctx = build_static_context(
+        node_count=1,
+        online_count=1,
+        groups=[],
+        salt_master="",
+        playbooks_dir="",
+        retrieved_chunks=None,
+    )
+    assert "Retrieved Knowledge" not in ctx
+
+
+def test_grounding_rules_after_rag_slot():
+    """Grounding rules must appear after the RAG section (never truncatable)."""
+    from fleet_platform.services.llm_context import build_static_context
+    ctx = build_static_context(
+        node_count=1,
+        online_count=1,
+        groups=[],
+        salt_master="",
+        playbooks_dir="",
+        retrieved_chunks="[src: test/chunk] some knowledge",
+    )
+    rag_pos = ctx.find("[src: test/chunk]")
+    rules_pos = ctx.find("## Rules")
+    assert rag_pos < rules_pos, "RAG slot must appear before Rules section"
+
+
+def test_format_last_seen_seconds():
+    from fleet_platform.services.llm_context import _format_last_seen
+    from datetime import UTC, datetime, timedelta
+    recent = datetime.now(UTC) - timedelta(seconds=30)
+    result = _format_last_seen(recent)
+    assert result.endswith("s ago")
+
+
+def test_format_last_seen_days():
+    from fleet_platform.services.llm_context import _format_last_seen
+    from datetime import UTC, datetime, timedelta
+    old = datetime.now(UTC) - timedelta(days=3)
+    result = _format_last_seen(old)
+    assert result.endswith("d ago")
+
+
+def test_format_last_seen_naive_datetime():
+    """Naive datetimes (no tzinfo) are handled by attaching UTC."""
+    from fleet_platform.services.llm_context import _format_last_seen
+    from datetime import datetime, timedelta
+    # naive datetime (no tzinfo)
+    naive_dt = datetime.utcnow() - timedelta(minutes=5)
+    result = _format_last_seen(naive_dt)
+    assert "m ago" in result or "s ago" in result

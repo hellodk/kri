@@ -1,7 +1,7 @@
 import { api } from './client'
 
 export type LLMProvider = 'openai_compat' | 'anthropic' | 'ollama' | 'vllm' | 'llamacpp'
-export type LLMIntent = 'salt_state' | 'ansible_playbook' | 'fleet_command' | 'explain' | 'fleet_query'
+export type LLMIntent = 'salt_state' | 'ansible_playbook' | 'fleet_command' | 'explain' | 'fleet_query' | 'auto'
 
 export interface LLMEndpoint {
   id: string

@@ -53,6 +53,7 @@ NODE_STALE_THRESHOLD_MINUTES = "node_stale_threshold_minutes"
 NODE_OFFLINE_THRESHOLD_HOURS = "node_offline_threshold_hours"
 
 LLM_INCLUDE_NODE_IPS = "llm_include_node_ips"  # "true" | "false", default "true"
+LLM_EMBED_BASE_URL = "llm_embed_base_url"  # e.g. http://192.168.1.23:52415
 
 SALT_ALLOWED_FUNCTIONS = "salt_allowed_functions"  # JSON array of allowed function names
 SALT_DENIED_FUNCTIONS = "salt_denied_functions"  # JSON array of denied function names
