@@ -22,9 +22,13 @@ _UUID_PREFIX_LEN = 8      # search by first N chars of a UUID
 
 
 def _is_uuid_prefix(q: str) -> bool:
-    """Return True if q looks like a UUID prefix (hex chars + optional hyphens)."""
+    """True only if q looks like a UUID prefix — requires 8+ hex chars or contains a hyphen."""
     cleaned = q.replace("-", "")
-    return len(cleaned) >= 6 and all(c in "0123456789abcdefABCDEF" for c in cleaned)
+    has_hyphen = "-" in q
+    return (
+        all(c in "0123456789abcdefABCDEF" for c in cleaned)
+        and (has_hyphen or len(cleaned) >= _UUID_PREFIX_LEN)
+    )
 
 
 def _uuid_like(q: str) -> str:
@@ -61,6 +65,10 @@ async def _search_nodes(db: AsyncSession, q: str, pattern: str) -> list[dict]:
             "status": r.status,
             "url": f"/nodes/{r.id}",
             "score": float(r.score),
+            # top-level for backwards compat — real values not display strings
+            "minion_id": r.minion_id,
+            "ip_address": r.ip_address,
+            "hostname": r.hostname or r.minion_id,
         }
         for r in rows.all()
     ]
@@ -138,7 +146,7 @@ async def _search_ansible_jobs(db: AsyncSession, q: str, pattern: str, is_uuid: 
     ]
 
 
-async def _search_salt_executions(db: AsyncSession, q: str, is_uuid: bool) -> list[dict]:
+async def _search_salt_executions(db: AsyncSession, q: str, pattern: str, is_uuid: bool) -> list[dict]:
     if is_uuid:
         uuid_pat = _uuid_like(q)
         rows = await db.execute(
@@ -162,7 +170,7 @@ async def _search_salt_executions(db: AsyncSession, q: str, is_uuid: bool) -> li
                 ORDER BY score DESC, started_at DESC NULLS LAST
                 LIMIT :lim
             """),
-            {"q": q, "pat": f"%{q}%", "lim": _MAX_PER_TYPE},
+            {"q": q, "pat": pattern, "lim": _MAX_PER_TYPE},
         )
     return [
         {
@@ -178,7 +186,7 @@ async def _search_salt_executions(db: AsyncSession, q: str, is_uuid: bool) -> li
     ]
 
 
-async def _search_llm_queries(db: AsyncSession, q: str, pattern: str, is_uuid: bool) -> list[dict]:
+async def _search_llm_queries(db: AsyncSession, q: str, pattern: str, is_uuid: bool, user_id: str) -> list[dict]:
     # Only search last 30 days of LLM queries to keep results relevant
     cutoff = datetime.now(UTC) - timedelta(days=30)
     if is_uuid:
@@ -189,10 +197,11 @@ async def _search_llm_queries(db: AsyncSession, q: str, pattern: str, is_uuid: b
                 FROM llm_query_log
                 WHERE cast(id AS text) LIKE :uuid_pat
                   AND created_at > :cutoff
+                  AND user_id = :user_id
                 ORDER BY created_at DESC
                 LIMIT :lim
             """),
-            {"uuid_pat": uuid_pat, "cutoff": cutoff, "lim": _MAX_PER_TYPE},
+            {"uuid_pat": uuid_pat, "cutoff": cutoff, "lim": _MAX_PER_TYPE, "user_id": user_id},
         )
     else:
         rows = await db.execute(
@@ -200,12 +209,13 @@ async def _search_llm_queries(db: AsyncSession, q: str, pattern: str, is_uuid: b
                 SELECT id, intent, prompt, created_at,
                        similarity(prompt, :q) AS score
                 FROM llm_query_log
-                WHERE (prompt ILIKE :pat OR prompt % :q)
+                WHERE prompt % :q
                   AND created_at > :cutoff
+                  AND user_id = :user_id
                 ORDER BY score DESC, created_at DESC
                 LIMIT :lim
             """),
-            {"q": q, "pat": pattern, "cutoff": cutoff, "lim": _MAX_PER_TYPE},
+            {"q": q, "cutoff": cutoff, "lim": _MAX_PER_TYPE, "user_id": user_id},
         )
     return [
         {
@@ -224,16 +234,18 @@ async def _search_llm_queries(db: AsyncSession, q: str, pattern: str, is_uuid: b
 async def search(
     q: str = Query(min_length=2, description="Search term — min 2 chars, UUID prefix supported"),
     db: AsyncSession = Depends(get_db),
-    _: dict = Depends(get_current_user),
+    claims: dict = Depends(get_current_user),
 ):
     """Unified fuzzy search across nodes, groups, playbook jobs, Salt executions, and LLM queries.
 
     Supports:
     - Partial name/hostname matches with typo tolerance (pg_trgm)
-    - UUID prefix search (first 6+ hex chars of any execution ID)
+    - UUID prefix search (first 8+ hex chars of any execution ID)
     - IP address substring matching for nodes
     """
     q = q.strip()
+    if len(q) < 2:
+        return {"query": "", "is_uuid_search": False, "results": [], "items": [], "nodes": [], "total": 0, "page": 1, "per_page": 0}
     pattern = f"%{q}%"
     is_uuid = _is_uuid_prefix(q)
 
@@ -244,8 +256,8 @@ async def search(
     nodes = await _search_nodes(db, q, pattern)
     groups = await _search_groups(db, q, pattern)
     ansible = await _search_ansible_jobs(db, q, pattern, is_uuid)
-    salt = await _search_salt_executions(db, q, is_uuid)
-    llm = await _search_llm_queries(db, q, pattern, is_uuid)
+    salt = await _search_salt_executions(db, q, pattern, is_uuid)
+    llm = await _search_llm_queries(db, q, pattern, is_uuid, user_id=claims["sub"])
 
     results = nodes + groups + ansible + salt + llm
 
@@ -258,7 +270,12 @@ async def search(
         "results": results,
         # Backwards-compat fields for existing frontend
         "items": [
-            {**r, "hostname": r.get("title"), "minion_id": r.get("subtitle", ""), "status": r.get("status", "")}
+            {
+                **r,
+                "hostname": r.get("hostname", r.get("title")),
+                "minion_id": r.get("minion_id", ""),   # now real minion_id
+                "ip_address": r.get("ip_address"),
+            }
             for r in nodes
         ],
         "nodes": nodes,
