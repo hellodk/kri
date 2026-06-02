@@ -325,8 +325,8 @@ def run_playbook(self, job_id: str, ssh_username: str | None = None, ssh_passwor
                     "ANSIBLE_TASK_TIMEOUT": "300",
                 },
                 event_handler=_event_handler,
-                quiet=True,            # DB is the sole sink — don't echo to worker stdout
-                rotate_artifacts=None,  # don't prune job_events/ mid-run (would drop events)
+                quiet=True,          # DB is the sole sink — don't echo to worker stdout
+                rotate_artifacts=0,  # 0 disables rotation (None breaks: runner does None>0 → TypeError)
             )
 
             # Non-blocking flush loop: event_handler fills stdout_lines on the
