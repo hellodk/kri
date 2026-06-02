@@ -29,6 +29,9 @@
 - name: Check for a pre-provisioned master keypair on the controller
   stat:
     path: "{{ playbook_dir }}/../deploy/salt-pki/master.pem"
+    follow: true   # master.pem is a symlink to a versioned file — resolve it so
+                   # stat.exists reflects the real target (a dangling link → false,
+                   # so the slurp/copy skip and salt-master self-generates instead)
   delegate_to: localhost
   register: _master_pem
 
