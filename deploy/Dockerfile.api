@@ -13,9 +13,13 @@ RUN uv sync --frozen --no-dev
 FROM python:3.13.3-slim AS runtime
 WORKDIR /app
 
-# Only runtime deps needed: libpq5 (psycopg), git and openssh-client (ansible-runner + git clone)
+# Runtime deps:
+#   libpq5       — psycopg PostgreSQL driver
+#   git          — ansible-runner git source support
+#   openssh-client — SSH connectivity for Ansible playbooks
+#   sshpass      — required for Ansible password-based SSH auth (no TTY in container)
 RUN apt-get update && apt-get upgrade -y && apt-get install -y --no-install-recommends \
-    libpq5 git openssh-client \
+    libpq5 git openssh-client sshpass \
     && rm -rf /var/lib/apt/lists/*
 
 COPY --from=builder /app/.venv /app/.venv
