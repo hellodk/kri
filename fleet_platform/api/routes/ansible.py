@@ -984,6 +984,7 @@ async def run_playbook_endpoint(
         target_id=payload.target_id,
         target_label=target_label,
         extravars=payload.extravars,
+        verbosity=max(0, min(4, payload.verbosity or 0)),
         status="pending",
         triggered_by=claims["sub"],
     )
@@ -995,6 +996,7 @@ async def run_playbook_endpoint(
         str(job.id),
         ssh_username=payload.ssh_username,
         ssh_password=payload.ssh_password,
+        verbosity=job.verbosity,
     )
     job.celery_task_id = task.id
     await db.commit()

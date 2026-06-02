@@ -24,6 +24,7 @@ class PlaybookRunRequest(BaseModel):
     extravars: dict = {}
     ssh_username: str | None = None   # overrides platform setting ssh_bootstrap_username
     ssh_password: str | None = None   # overrides platform setting ssh_bootstrap_password
+    verbosity: int = 0                # 0=default, 1=-v, 2=-vv, 3=-vvv, 4=-vvvv
 
 
 class PlaybookRunResponse(BaseModel):

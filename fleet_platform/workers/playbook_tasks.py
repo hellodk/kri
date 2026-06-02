@@ -196,7 +196,7 @@ def _flush_stdout(job_uuid: _uuid.UUID, lines: list[str], last_task: str | None)
     soft_time_limit=600,   # 10 min soft limit → raises SoftTimeLimitExceeded
     time_limit=660,        # 11 min hard kill
 )
-def run_playbook(self, job_id: str, ssh_username: str | None = None, ssh_password: str | None = None) -> dict:
+def run_playbook(self, job_id: str, ssh_username: str | None = None, ssh_password: str | None = None, verbosity: int = 0) -> dict:
     job_uuid = _uuid.UUID(job_id)
     stdout_lines: list[str] = []
 
@@ -275,6 +275,7 @@ def run_playbook(self, job_id: str, ssh_username: str | None = None, ssh_passwor
                 playbook=str(playbook_path),
                 inventory=inv_path,
                 extravars=job.extravars or {},
+                verbosity=max(0, min(4, verbosity or 0)),
                 envvars={
                     # SSH credentials are set per host in the inventory (#279),
                     # resolved node → group → global — not via a single global env.

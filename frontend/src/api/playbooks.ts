@@ -46,8 +46,8 @@ export interface PlaybookStats {
 
 export const playbooksApi = {
   list: () => api.get<PlaybookEntry[]>('/api/v1/ansible/playbooks'),
-  run: (playbook: string, target_type: string, target_id: string, extravars: Record<string, unknown>, sshUsername?: string, sshPassword?: string) =>
-    api.post<PlaybookRunResponse>('/api/v1/ansible/playbooks/run', { playbook, target_type, target_id, extravars, ssh_username: sshUsername || undefined, ssh_password: sshPassword || undefined }),
+  run: (playbook: string, target_type: string, target_id: string, extravars: Record<string, unknown>, sshUsername?: string, sshPassword?: string, verbosity?: number) =>
+    api.post<PlaybookRunResponse>('/api/v1/ansible/playbooks/run', { playbook, target_type, target_id, extravars, ssh_username: sshUsername || undefined, ssh_password: sshPassword || undefined, verbosity: verbosity || 0 }),
   getJob: (jobId: string) => api.get<AnsibleJob>(`/api/v1/ansible/jobs/${jobId}`),
   listJobs: (params?: { status?: string; node_id?: string; page?: number; per_page?: number }) => {
     const q = new URLSearchParams()

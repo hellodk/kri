@@ -178,6 +178,7 @@ function fmtDuration(secs: number): string {
 export function PlaybookRunModal({ playbook, onClose, initialTargetType, initialTargetId, initialVars }: Props) {
   const [targetType, setTargetType] = useState<'node' | 'group'>(initialTargetType ?? 'node')
   const [targetId, setTargetId] = useState(initialTargetId ?? '')
+  const [verbosity, setVerbosity] = useState(0)
   const [jobId, setJobId] = useState<string | null>(null)
   const [vars, setVars] = useState<Record<string, string>>(
     initialVars ?? Object.fromEntries(
@@ -216,7 +217,7 @@ export function PlaybookRunModal({ playbook, onClose, initialTargetType, initial
         else if (v !== '' && !isNaN(Number(v))) extravars[k] = Number(v)
         else extravars[k] = v
       }
-      return playbooksApi.run(playbook.filename, targetType, targetId, extravars)
+      return playbooksApi.run(playbook.filename, targetType, targetId, extravars, undefined, undefined, verbosity)
     },
     onSuccess: (data) => { setJobId(data.job_id); toast('Playbook queued') },
     onError: (e: Error) => toast(e.message, 'error'),
@@ -356,6 +357,36 @@ export function PlaybookRunModal({ playbook, onClose, initialTargetType, initial
                 </div>
               </div>
             )}
+            {/* Verbosity */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Verbosity</label>
+              <div className="flex gap-2">
+                {[
+                  { value: 0, label: 'Default' },
+                  { value: 1, label: '-v' },
+                  { value: 2, label: '-vv' },
+                  { value: 3, label: '-vvv' },
+                  { value: 4, label: '-vvvv' },
+                ].map(({ value, label }) => (
+                  <button
+                    key={value}
+                    type="button"
+                    onClick={() => setVerbosity(value)}
+                    className={`px-3 py-1 text-xs rounded-lg border font-mono transition-colors ${
+                      verbosity === value
+                        ? 'bg-brand-600 text-white border-brand-600'
+                        : 'bg-white text-gray-600 border-gray-300 hover:border-brand-400'
+                    }`}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+              {verbosity > 0 && (
+                <p className="text-xs text-gray-400 mt-1">Higher verbosity shows more Ansible detail in the output log.</p>
+              )}
+            </div>
+
             {/* SSH Credentials — resolved automatically, no prompt */}
             <div className="border-t border-gray-100 pt-4">
               <div className="flex items-start gap-2 rounded-lg border border-gray-200 bg-gray-50 px-3 py-2.5">
