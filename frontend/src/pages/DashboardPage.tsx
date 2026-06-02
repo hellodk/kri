@@ -165,11 +165,11 @@ export function DashboardPage() {
 
   // Live clock for the header (updates every minute)
   const [clockTime, setClockTime] = useState(() =>
-    new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+    new Date().toLocaleTimeString('en-IN', { timeZone: 'Asia/Kolkata', hour: '2-digit', minute: '2-digit', hour12: false })
   )
   useEffect(() => {
     const id = setInterval(() => {
-      setClockTime(new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }))
+      setClockTime(new Date().toLocaleTimeString('en-IN', { timeZone: 'Asia/Kolkata', hour: '2-digit', minute: '2-digit', hour12: false }))
     }, 60_000)
     return () => clearInterval(id)
   }, [])

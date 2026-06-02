@@ -3,7 +3,6 @@ import { useQuery } from '@tanstack/react-query'
 import { executionsApi } from '../api/executions'
 import { Skeleton } from '../components/Skeleton'
 import { ErrorState } from '../components/ErrorState'
-import { format } from 'date-fns'
 
 export function JobDetail() {
   const { jobId } = useParams<{ jobId: string }>()
@@ -46,8 +45,8 @@ export function JobDetail() {
             ['Salt JID', job.salt_jid ?? '—'],
             ['Target', `${job.target_type}${job.target_id ? ':' + job.target_id.slice(0, 8) : ''}`],
             ['Triggered By', job.triggered_by],
-            ['Started', job.started_at ? format(new Date(job.started_at), 'PPpp') : '—'],
-            ['Completed', job.completed_at ? format(new Date(job.completed_at), 'PPpp') : '—'],
+            ['Started', job.started_at ? new Date(job.started_at).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata', day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false }) + ' IST' : '—'],
+            ['Completed', job.completed_at ? new Date(job.completed_at).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata', day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false }) + ' IST' : '—'],
           ] as [string, string][]
         ).map(([label, value]) => (
           <div key={label}>
@@ -71,7 +70,7 @@ export function JobDetail() {
                     exit {r.exit_code ?? '?'}
                   </span>
                   <span className="ml-auto text-xs text-gray-400">
-                    {format(new Date(r.completed_at), 'HH:mm:ss')}
+                    {new Date(r.completed_at).toLocaleTimeString('en-IN', { timeZone: 'Asia/Kolkata', hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false })} IST
                   </span>
                 </summary>
                 {(r.stdout || r.stderr) && (
