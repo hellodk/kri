@@ -41,7 +41,7 @@
     "postcss": "^8.5.15",
     "tailwindcss": "^3.4.19",
     "typescript": "~6.0.2",
-    "typescript-eslint": "^8.59.4",
+    "typescript-eslint": "^8.60.1",
     "vite": "^8.0.12"
   },
   "license": "UNLICENSED"
