@@ -261,7 +261,9 @@ export function AuditPage() {
                     <>
                       <tr key={e.id} className={`hover:bg-gray-50 ${hasChanges ? 'cursor-pointer' : ''}`} onClick={() => hasChanges && setExpandedId(isExpanded ? null : e.id)}>
                         <td className="px-4 py-3 text-gray-500 whitespace-nowrap text-xs">
-                          {formatDistanceToNow(new Date(e.event_at), { addSuffix: true })}
+                          <span title={formatDistanceToNow(new Date(e.event_at), { addSuffix: true })}>
+                            {new Date(e.event_at).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata', day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false })} IST
+                          </span>
                         </td>
                         <td className="px-4 py-3 font-mono text-xs text-gray-700 max-w-[180px] truncate">
                           {e.actor}
