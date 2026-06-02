@@ -22,6 +22,14 @@ salt_api_port: 8080
 salt_api_user: "krisalt"
 kri_salt_api_password: "changeme-set-in-vault"
 
+# Variable descriptions shown in kri Automation Hub run modal
+_kri_var_descriptions:
+  kri_salt_api_password: "Password for the krisalt system user. Grants kri API/worker access to salt-api on this host. Must match SALT_API_PASSWORD in .env.docker."
+  salt_api_user: "Username for salt-api PAM authentication (default: krisalt). Change only if you need a custom service account name."
+  salt_version: "Salt version to install. Must match the version already running on fleet minions — mismatches cause auth failures."
+  artifactory_binary_url: "Base URL for your Artifactory generic repo containing salt installer binaries. Leave blank to use the local bundle or official URL."
+  salt_master_interface: "Network interface salt-master listens on. 0.0.0.0 binds to all interfaces including Tailscale. Restrict to a specific IP for tighter network isolation."
+
 # Salt-master listen address (0.0.0.0 = all interfaces incl Tailscale)
 salt_master_interface: "0.0.0.0"
 

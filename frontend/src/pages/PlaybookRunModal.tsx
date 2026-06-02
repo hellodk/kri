@@ -163,39 +163,41 @@ export function PlaybookRunModal({ playbook, onClose }: Props) {
                     (changes committed to git before run)
                   </span>
                 </label>
-                <div className="space-y-2 bg-gray-50 rounded-lg border border-gray-200 p-3 max-h-64 overflow-y-auto">
+                <div className="space-y-3 bg-gray-50 rounded-lg border border-gray-200 p-3 max-h-72 overflow-y-auto">
                   {Object.entries(vars).map(([key, value]) => {
                     const isSensitive = /password|secret|token|api_key|apikey|passphrase/i.test(key)
                     const isPlaceholder = value === key || /^changeme|^change.me|^<.*>$|^your.*/i.test(value)
+                    const helpText = playbook.var_descriptions?.[key]
                     return (
-                      <div key={key} className="flex items-start gap-3">
-                        <div className="flex flex-col w-52 shrink-0">
-                          <span className="text-xs font-mono text-gray-700">{key}</span>
+                      <div key={key} className="space-y-1">
+                        <div className="flex items-center gap-2">
+                          <span className="text-xs font-mono font-medium text-gray-800">{key}</span>
                           {isSensitive && (
-                            <span className="text-xs text-blue-500">🔒 sensitive</span>
+                            <span className="text-xs text-blue-500 bg-blue-50 px-1.5 py-0.5 rounded">🔒 sensitive</span>
                           )}
                           {SYSTEM_VARS.has(key) && (
-                            <span className="text-xs text-amber-600">⚠ system var</span>
+                            <span className="text-xs text-amber-600 bg-amber-50 px-1.5 py-0.5 rounded">⚠ system</span>
                           )}
                         </div>
-                        <div className="flex-1 space-y-1">
-                          <input
-                            type={isSensitive ? 'password' : 'text'}
-                            value={value}
-                            placeholder={isSensitive ? `Enter ${key}…` : undefined}
-                            onChange={(e) => setVars((prev) => ({ ...prev, [key]: e.target.value }))}
-                            className={`w-full px-2.5 py-1.5 text-sm border rounded-lg focus:outline-none font-mono ${
-                              isPlaceholder
-                                ? 'border-red-300 bg-red-50 focus:border-red-500'
-                                : SYSTEM_VARS.has(key)
-                                ? 'border-amber-300 bg-amber-50 focus:border-amber-500'
-                                : 'border-gray-300 focus:border-brand-600'
-                            }`}
-                          />
-                          {isPlaceholder && (
-                            <p className="text-xs text-red-600">⚠ Replace this placeholder with a real value before running</p>
-                          )}
-                        </div>
+                        {helpText && (
+                          <p className="text-xs text-gray-500 leading-snug">{helpText}</p>
+                        )}
+                        <input
+                          type={isSensitive ? 'password' : 'text'}
+                          value={value}
+                          placeholder={isSensitive ? `Enter value for ${key}…` : helpText ? `e.g. ${helpText.split('.')[0]}` : undefined}
+                          onChange={(e) => setVars((prev) => ({ ...prev, [key]: e.target.value }))}
+                          className={`w-full px-2.5 py-1.5 text-sm border rounded-lg focus:outline-none font-mono ${
+                            isPlaceholder
+                              ? 'border-red-300 bg-red-50 focus:border-red-500'
+                              : SYSTEM_VARS.has(key)
+                              ? 'border-amber-300 bg-amber-50 focus:border-amber-500'
+                              : 'border-gray-300 focus:border-brand-600'
+                          }`}
+                        />
+                        {isPlaceholder && (
+                          <p className="text-xs text-red-600">⚠ Replace this placeholder with a real value before running</p>
+                        )}
                       </div>
                     )
                   })}

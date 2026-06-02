@@ -18,6 +18,8 @@
   vars:
     # Override on CLI: -e kri_salt_api_password=<password>
     kri_salt_api_password: "changeme-set-via-e-flag"
+    _kri_var_descriptions:
+      kri_salt_api_password: "Password for the krisalt system user created on the target. Used by kri workers to authenticate with salt-api. Use a strong password — it grants full fleet control via Salt."
 
   pre_tasks:
     - name: Confirm target host

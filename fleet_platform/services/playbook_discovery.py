@@ -28,6 +28,9 @@ _SKIP_SUBDIRS = frozenset({
 })
 
 
+_VAR_DESCRIPTIONS_KEY = "_kri_var_descriptions"
+
+
 @dataclass
 class PlaybookEntry:
     filename: str        # "deploy_config.yml", "playbooks/deploy.yml", "roles/salt_minion"
@@ -35,7 +38,20 @@ class PlaybookEntry:
     description: str | None
     entry_type: str      # "playbook" | "role"
     default_vars: dict = field(default_factory=dict)
+    var_descriptions: dict = field(default_factory=dict)  # {var_name: help_text}
     lint_errors: list[str] = field(default_factory=list)
+
+
+def _extract_var_descriptions(vars_dict: dict) -> tuple[dict, dict]:
+    """Split _kri_var_descriptions out of vars_dict.
+
+    Returns (clean_vars, descriptions) where clean_vars has the meta-key removed
+    and descriptions is the {var_name: help_text} mapping (empty dict if absent).
+    """
+    descriptions = vars_dict.pop(_VAR_DESCRIPTIONS_KEY, {}) or {}
+    if not isinstance(descriptions, dict):
+        descriptions = {}
+    return vars_dict, descriptions
 
 
 def _lint_yaml(path: Path) -> list[str]:
@@ -86,12 +102,14 @@ def _discover_playbooks_in_dir(scan_dir: Path, prefix: str = "") -> list[Playboo
         filename = f"{prefix}{path.name}" if prefix else path.name
         try:
             raw = path.read_text()
+            clean_vars, var_descs = _extract_var_descriptions(default_vars)
             results.append(PlaybookEntry(
                 filename=filename,
                 name=play_name,
                 description=_parse_description(raw),
                 entry_type="playbook",
-                default_vars=default_vars,
+                default_vars=clean_vars,
+                var_descriptions=var_descs,
                 lint_errors=lint_errors,
             ))
         except Exception:
@@ -121,12 +139,14 @@ def _discover_roles_in_dir(roles_dir: Path, prefix: str = "roles/") -> list[Play
                 description = _parse_description(raw)
             except Exception:
                 pass
+        clean_vars, var_descs = _extract_var_descriptions(default_vars)
         results.append(PlaybookEntry(
             filename=f"{prefix}{role_path.name}",
             name=role_path.name.replace("_", " ").title(),
             description=description,
             entry_type="role",
-            default_vars=default_vars,
+            default_vars=clean_vars,
+            var_descriptions=var_descs,
             lint_errors=lint_errors,
         ))
     return results

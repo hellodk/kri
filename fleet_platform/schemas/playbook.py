@@ -12,6 +12,7 @@ class PlaybookEntryResponse(BaseModel):
     description: str | None
     entry_type: str
     default_vars: dict
+    var_descriptions: dict = {}    # {var_name: help_text} — shown in kri run modal
     lint_errors: list[str] = []
     source_dir: str | None = None   # absolute path of the directory this was discovered in
 
