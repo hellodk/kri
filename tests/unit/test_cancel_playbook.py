@@ -35,8 +35,8 @@ def test_ansible_connect_timeout_removed():
     import fleet_platform.workers.playbook_tasks as pt
 
     source = inspect.getsource(pt.run_playbook)
-    assert '"ANSIBLE_CONNECT_TIMEOUT": "10"' in source, (
-        "ANSIBLE_CONNECT_TIMEOUT must be set to 10s"
+    assert "ANSIBLE_CONNECT_TIMEOUT" not in source, (
+        "ANSIBLE_CONNECT_TIMEOUT is not a real Ansible env var — must be removed"
     )
 
 
