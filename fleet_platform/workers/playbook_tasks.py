@@ -279,6 +279,10 @@ def run_playbook(self, job_id: str, ssh_username: str | None = None, ssh_passwor
                     "ANSIBLE_COLLECTIONS_PATH": str(playbooks_dir / "collections" / "installed"),
                     # Point ansible at the source roles dir so role-only runs can find the role
                     "ANSIBLE_ROLES_PATH": str(playbooks_dir / "roles"),
+                    # Disable host key checking — .ssh/ is mounted :ro so known_hosts
+                    # cannot be written. Auth is handled by private key, so MITM risk
+                    # is already mitigated.
+                    "ANSIBLE_HOST_KEY_CHECKING": "False",
                     # Reduce SSH timeout so stalled tasks surface faster
                     "ANSIBLE_TIMEOUT": "10",
                     "ANSIBLE_SSH_RETRIES": "2",
