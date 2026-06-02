@@ -48,6 +48,8 @@ class AnsibleJobResponse(BaseModel):
     stdout: str | None
     rc: int | None
     created_at: datetime
+    celery_task_id: str | None = None
+    cancelled_at: datetime | None = None
 
 
 class PlaybookSourceRequest(BaseModel):

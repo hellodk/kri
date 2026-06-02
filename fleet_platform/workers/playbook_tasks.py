@@ -280,8 +280,9 @@ def run_playbook(self, job_id: str, ssh_username: str | None = None, ssh_passwor
                     # Point ansible at the source roles dir so role-only runs can find the role
                     "ANSIBLE_ROLES_PATH": str(playbooks_dir / "roles"),
                     # Reduce SSH timeout so stalled tasks surface faster
-                    "ANSIBLE_TIMEOUT": "30",
+                    "ANSIBLE_TIMEOUT": "10",
                     "ANSIBLE_SSH_RETRIES": "2",
+                    "ANSIBLE_CONNECT_TIMEOUT": "10",
                 },
                 quiet=False,
                 rotate_artifacts=1,

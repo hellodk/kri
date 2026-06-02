@@ -26,13 +26,15 @@ export interface AnsibleJob {
   target_label: string
   target_id: string | null
   extravars: Record<string, unknown>
-  status: 'pending' | 'running' | 'completed' | 'failed'
+  status: 'pending' | 'running' | 'completed' | 'failed' | 'cancelled'
   triggered_by: string
   started_at: string | null
   completed_at: string | null
+  cancelled_at?: string | null
   stdout: string | null
   rc: number | null
   created_at: string
+  celery_task_id?: string | null
 }
 
 export interface PlaybookStats {
@@ -57,6 +59,11 @@ export const playbooksApi = {
   },
   getStats: (filename: string) =>
     api.get<PlaybookStats>(`/api/v1/ansible/playbooks/${encodeURIComponent(filename)}/stats`),
+  cancel: (jobId: string) =>
+    api.post<{ job_id: string; status: string; message: string }>(
+      `/api/v1/ansible/jobs/${jobId}/cancel`,
+      {},
+    ),
 }
 
 export const playbookSourcesApi = {
