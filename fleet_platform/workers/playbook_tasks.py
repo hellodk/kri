@@ -193,6 +193,8 @@ def _flush_stdout(job_uuid: _uuid.UUID, lines: list[str], last_task: str | None)
     bind=True,
     max_retries=0,
     queue="maintenance",
+    soft_time_limit=600,   # 10 min soft limit → raises SoftTimeLimitExceeded
+    time_limit=660,        # 11 min hard kill
 )
 def run_playbook(self, job_id: str, ssh_username: str | None = None, ssh_password: str | None = None) -> dict:
     job_uuid = _uuid.UUID(job_id)
@@ -285,11 +287,17 @@ def run_playbook(self, job_id: str, ssh_username: str | None = None, ssh_passwor
                     # "Failed to add host to known_hosts" and connection close.
                     # Fix: route known_hosts writes to /dev/null via UserKnownHostsFile.
                     "ANSIBLE_HOST_KEY_CHECKING": "False",
-                    "ANSIBLE_SSH_ARGS": "-o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no -o ControlMaster=no",
-                    # Reduce SSH timeout so stalled tasks surface faster
+                    # UserKnownHostsFile=/dev/null: .ssh is :ro, SSH can't write known_hosts
+                    # StrictHostKeyChecking=no: skip host verification
+                    # ConnectAttempts=3: exactly 3 SSH attempts then fail
+                    "ANSIBLE_SSH_ARGS": "-o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no -o ControlMaster=no -o ConnectAttempts=3",
+                    # SSH connection timeout per attempt
                     "ANSIBLE_TIMEOUT": "10",
+                    # 2 retries = 3 total SSH attempts, then UNREACHABLE
                     "ANSIBLE_SSH_RETRIES": "2",
                     "ANSIBLE_CONNECT_TIMEOUT": "10",
+                    # Per-task execution timeout (catches stuck file copies, installs etc.)
+                    "ANSIBLE_TASK_TIMEOUT": "300",
                 },
                 quiet=False,
                 rotate_artifacts=1,
