@@ -19,7 +19,18 @@
     - "{{ salt_pki_dir }}/minions_rejected"
   become: true
 
-- name: Copy master private key
+# A pre-provisioned master keypair (deploy/salt-pki/) gives the master a STABLE
+# identity across reinstalls, so minions never need to re-accept its key. If it
+# doesn't exist on the controller (fresh install), skip these — salt-master
+# generates its own master.pem/master.pub automatically on first start.
+- name: Check for a pre-provisioned master keypair on the controller
+  stat:
+    path: "{{ playbook_dir }}/../deploy/salt-pki/master.pem"
+  delegate_to: localhost
+  become: false
+  register: _master_pem
+
+- name: Copy master private key (only if pre-provisioned)
   copy:
     src: "{{ playbook_dir }}/../deploy/salt-pki/master.pem"
     dest: "{{ salt_pki_dir }}/master.pem"
@@ -27,13 +38,9 @@
     group: wheel
     mode: "0400"
   become: true
-  # master.pem may be a symlink on the controller — resolve it
-  # The controller's salt-pki/master.pem symlinks to the versioned file;
-  # copy the actual content, not the symlink.
-  vars:
-    ansible_local_follow_symlinks: true
+  when: _master_pem.stat.exists
 
-- name: Copy master public key
+- name: Copy master public key (only if pre-provisioned)
   copy:
     src: "{{ playbook_dir }}/../deploy/salt-pki/master.pub"
     dest: "{{ salt_pki_dir }}/master.pub"
@@ -41,6 +48,7 @@
     group: wheel
     mode: "0444"
   become: true
+  when: _master_pem.stat.exists
 
 - name: Copy accepted minion keys
   copy:
