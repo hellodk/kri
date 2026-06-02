@@ -56,6 +56,10 @@ const SYSTEM_VARS = new Set([
 interface Props {
   playbook: PlaybookEntry
   onClose: () => void
+  // Optional pre-fill for re-run
+  initialTargetType?: 'node' | 'group'
+  initialTargetId?: string
+  initialVars?: Record<string, string>
 }
 
 const STATUS_STYLE: Record<string, { label: string; colour: string }> = {
@@ -71,12 +75,12 @@ function fmtDuration(secs: number): string {
   return m > 0 ? `${m}m ${s}s` : `${s}s`
 }
 
-export function PlaybookRunModal({ playbook, onClose }: Props) {
-  const [targetType, setTargetType] = useState<'node' | 'group'>('node')
-  const [targetId, setTargetId] = useState('')
+export function PlaybookRunModal({ playbook, onClose, initialTargetType, initialTargetId, initialVars }: Props) {
+  const [targetType, setTargetType] = useState<'node' | 'group'>(initialTargetType ?? 'node')
+  const [targetId, setTargetId] = useState(initialTargetId ?? '')
   const [jobId, setJobId] = useState<string | null>(null)
   const [vars, setVars] = useState<Record<string, string>>(
-    Object.fromEntries(
+    initialVars ?? Object.fromEntries(
       Object.entries(playbook.default_vars).map(([k, v]) => [k, String(v ?? '')])
     )
   )

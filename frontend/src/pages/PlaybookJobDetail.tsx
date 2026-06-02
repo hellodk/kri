@@ -2,6 +2,7 @@ import { useParams, Link } from 'react-router-dom'
 import { useEffect, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { playbooksApi, type AnsibleJob } from '../api/playbooks'
+import { PlaybookRunModal } from './PlaybookRunModal'
 import { formatDistanceToNow, formatDuration, intervalToDuration } from 'date-fns'
 
 function statusBadge(status: string) {
@@ -19,6 +20,16 @@ function jobDuration(job: AnsibleJob): string {
   return formatDuration(d, { format: ['minutes', 'seconds'] }) || '<1s'
 }
 
+function buildRerunVars(extravars: Record<string, unknown>): Record<string, string> {
+  const SENSITIVE = /password|secret|token|api_key|apikey|passphrase/i
+  return Object.fromEntries(
+    Object.entries(extravars).map(([k, v]) => [
+      k,
+      SENSITIVE.test(k) ? '' : String(v ?? ''),
+    ])
+  )
+}
+
 export function PlaybookJobDetail() {
   const { jobId } = useParams<{ jobId: string }>()
 
@@ -34,6 +45,16 @@ export function PlaybookJobDetail() {
   })
 
   // Hooks must be declared before any early returns (Rules of Hooks)
+  const [showRerun, setShowRerun] = useState(false)
+
+  const { data: allPlaybooks } = useQuery({
+    queryKey: ['playbooks-for-rerun'],
+    queryFn: () => playbooksApi.list(),
+    staleTime: 60_000,
+    enabled: showRerun,
+  })
+  const rerunEntry = allPlaybooks?.find(p => p.filename === job?.playbook)
+
   const isLive = job?.status === 'running' || job?.status === 'pending'
   const [elapsed, setElapsed] = useState(0)
   useEffect(() => {
@@ -97,16 +118,29 @@ export function PlaybookJobDetail() {
               )}
             </p>
           </div>
-          <div className="text-right text-sm text-gray-500 shrink-0 space-y-0.5">
-            {job.started_at && (
-              <p>{formatDistanceToNow(new Date(job.started_at), { addSuffix: true })}</p>
+          <div className="flex flex-col items-end gap-2 shrink-0">
+            {(job.status === 'completed' || job.status === 'failed') && (
+              <button
+                onClick={() => setShowRerun(true)}
+                className="px-3 py-1.5 text-sm font-medium bg-white border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 flex items-center gap-1.5 shrink-0"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                </svg>
+                Re-run
+              </button>
             )}
-            <p className="font-mono">{jobDuration(job)}</p>
-            {typeof job.rc === 'number' && (
-              <p className="font-mono">
-                Exit: <span className={job.rc === 0 ? 'text-green-600 font-bold' : 'text-red-600 font-bold'}>{job.rc}</span>
-              </p>
-            )}
+            <div className="text-right text-sm text-gray-500 space-y-0.5">
+              {job.started_at && (
+                <p>{formatDistanceToNow(new Date(job.started_at), { addSuffix: true })}</p>
+              )}
+              <p className="font-mono">{jobDuration(job)}</p>
+              {typeof job.rc === 'number' && (
+                <p className="font-mono">
+                  Exit: <span className={job.rc === 0 ? 'text-green-600 font-bold' : 'text-red-600 font-bold'}>{job.rc}</span>
+                </p>
+              )}
+            </div>
           </div>
         </div>
 
@@ -157,6 +191,24 @@ export function PlaybookJobDetail() {
           </div>
         )}
       </div>
+
+      {/* Re-run modal */}
+      {showRerun && rerunEntry && (
+        <PlaybookRunModal
+          playbook={rerunEntry}
+          onClose={() => setShowRerun(false)}
+          initialTargetType={job.target_type as 'node' | 'group'}
+          initialTargetId={job.target_id ?? undefined}
+          initialVars={buildRerunVars(job.extravars ?? {})}
+        />
+      )}
+      {showRerun && !rerunEntry && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-xl p-6 text-sm text-gray-600">
+            Loading playbook details…
+          </div>
+        </div>
+      )}
     </div>
   )
 }

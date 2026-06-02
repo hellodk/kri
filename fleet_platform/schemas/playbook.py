@@ -39,6 +39,7 @@ class AnsibleJobResponse(BaseModel):
     playbook: str
     target_type: str
     target_label: str
+    target_id: str | None = None   # UUID of the targeted node/group — needed for re-run
     extravars: dict
     status: str
     triggered_by: str

@@ -24,6 +24,7 @@ export interface AnsibleJob {
   playbook: string
   target_type: string
   target_label: string
+  target_id: string | null
   extravars: Record<string, unknown>
   status: 'pending' | 'running' | 'completed' | 'failed'
   triggered_by: string
