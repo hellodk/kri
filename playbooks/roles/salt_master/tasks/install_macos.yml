@@ -14,8 +14,12 @@
     salt_pkg_local_path: "{{ playbook_dir }}/files/salt-{{ salt_version }}-py3-arm64.pkg"
     salt_pkg_tmp: "/tmp/kri-salt-{{ salt_version }}-py3-arm64.pkg"
 
+# NOTE: do NOT use `/opt/salt/salt-master --version` for detection — on the
+# macOS onedir build it prints the version then continues booting the daemon
+# (never reaches EOF), so a piped `| awk` hangs until ANSIBLE_TASK_TIMEOUT.
+# pkgutil reads the installed .pkg receipt and exits cleanly+instantly.
 - name: Check if correct salt-master version is already installed
-  shell: /opt/salt/salt-master --version 2>/dev/null | awk '{print $2}'
+  shell: pkgutil --pkg-info com.saltstack.salt 2>/dev/null | awk '/^version:/ {print $2}'
   args:
     executable: "{{ ansible_shell_executable | default('/bin/bash') }}"
   register: installed_salt_version
@@ -153,8 +157,9 @@
   changed_when: false
   when: installed_salt_version.stdout | trim != salt_version
 
-- name: Confirm salt-master binary exists after install
-  shell: /opt/salt/salt-master --version 2>/dev/null
+# Use pkgutil (clean exit) instead of `salt-master --version` (boots daemon → hangs).
+- name: Confirm salt-master installed at the target version
+  shell: pkgutil --pkg-info com.saltstack.salt 2>/dev/null | awk '/^version:/ {print $2}'
   args:
     executable: "{{ ansible_shell_executable | default('/bin/bash') }}"
   register: post_install_version
