@@ -290,13 +290,13 @@ def run_playbook(self, job_id: str, ssh_username: str | None = None, ssh_passwor
                     "ANSIBLE_HOST_KEY_CHECKING": "False",
                     # UserKnownHostsFile=/dev/null: .ssh is :ro, SSH can't write known_hosts
                     # StrictHostKeyChecking=no: skip host verification
-                    # ConnectionAttempts=2: 2 SSH-level attempts before giving up (correct option name)
-                    "ANSIBLE_SSH_ARGS": "-o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no -o ControlMaster=no -o ConnectionAttempts=2",
+                    # No ConnectionAttempts in SSH args — not supported as -o on all SSH versions.
+                    # ANSIBLE_SSH_RETRIES=2 below handles retry at the Ansible level (3 total attempts).
+                    "ANSIBLE_SSH_ARGS": "-o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no -o ControlMaster=no",
                     # SSH connection timeout per attempt
                     "ANSIBLE_TIMEOUT": "10",
                     # 2 retries = 3 total SSH attempts, then UNREACHABLE
                     "ANSIBLE_SSH_RETRIES": "2",
-                    "ANSIBLE_CONNECT_TIMEOUT": "10",
                     # Per-task execution timeout (catches stuck file copies, installs etc.)
                     "ANSIBLE_TASK_TIMEOUT": "300",
                 },
