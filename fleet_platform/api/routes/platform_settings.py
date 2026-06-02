@@ -1,5 +1,10 @@
 # fleet_platform/api/routes/platform_settings.py
+import asyncio
+import time
+
+import httpx
 from fastapi import APIRouter, Depends
+from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from fleet_platform.api.deps import get_db
@@ -45,6 +50,56 @@ from fleet_platform.services.platform_settings_svc import (
 from fleet_platform.services.ssh_keypair import get_controller_pubkey
 
 router = APIRouter(prefix="/api/v1/settings")
+
+
+class ConnectivityCheckRequest(BaseModel):
+    # Either a full URL, or a bare host (port applied) — the server probes it.
+    target: str
+    port: int | None = None  # if set and target has no scheme/port, build http://target:port
+
+
+class ConnectivityCheckResponse(BaseModel):
+    ok: bool
+    latency_ms: int | None = None
+    status_code: int | None = None
+    error: str | None = None
+
+
+def _build_probe_url(target: str, port: int | None) -> str:
+    """Normalise a target into an http(s) URL the server can probe."""
+    t = target.strip()
+    if t.startswith("http://") or t.startswith("https://"):
+        return t
+    if port:
+        return f"http://{t}:{port}"
+    return f"http://{t}"
+
+
+@router.post("/check-connectivity", response_model=ConnectivityCheckResponse)
+async def check_connectivity(
+    payload: ConnectivityCheckRequest,
+    _: dict = Depends(require_role("operator", "admin")),
+):
+    """Server-side reachability probe — avoids browser CORS limits (#362).
+
+    The kri backend can reach internal services (Salt API, Ansible, Sonar) that
+    the browser cannot due to Same-Origin Policy. Returns reachability + latency.
+    Any HTTP response (even 401/404) counts as reachable — we only care that the
+    service answered.
+    """
+    url = _build_probe_url(payload.target, payload.port)
+    t0 = time.monotonic()
+    try:
+        async with httpx.AsyncClient(verify=False, timeout=5.0, follow_redirects=True) as client:
+            resp = await client.get(url)
+        latency = int((time.monotonic() - t0) * 1000)
+        return ConnectivityCheckResponse(ok=True, latency_ms=latency, status_code=resp.status_code)
+    except (httpx.ConnectError, httpx.ConnectTimeout):
+        return ConnectivityCheckResponse(ok=False, error="Unreachable")
+    except httpx.TimeoutException:
+        return ConnectivityCheckResponse(ok=False, error="Timed out")
+    except (httpx.HTTPError, asyncio.TimeoutError, OSError) as exc:
+        return ConnectivityCheckResponse(ok=False, error=type(exc).__name__)
 
 
 def _parse_salt_allowlist(raw: str | None) -> list[str]:

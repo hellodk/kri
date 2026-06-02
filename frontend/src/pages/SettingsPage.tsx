@@ -6,6 +6,7 @@ import { playbookSourcesApi, type PlaybookSource, type PlaybookSourceValidateRes
 import { llmApi, type LLMEndpoint } from '../api/llm'
 import { LLMEndpointForm } from '../components/LLMEndpointForm'
 import { useToastStore } from '../stores/toastStore'
+import { api } from '../api/client'
 import { buildsApi } from '../api/builds'
 
 function UrlStatusPill({ status, checking }: { status?: { ok: boolean; latency_ms: number | null; error?: string } | null; checking: boolean }) {
@@ -110,17 +111,23 @@ export function SettingsPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [data])
 
+  // Connectivity probes run on the BACKEND (#362) — the browser cannot reach
+  // internal services (Salt API, Ansible, Sonar) due to Same-Origin Policy/CORS.
+  async function probe(target: string, port?: number): Promise<{ ok: boolean; latency_ms: number | null; error?: string }> {
+    const resp = await api.post<{ ok: boolean; latency_ms: number | null; error?: string }>(
+      '/api/v1/settings/check-connectivity',
+      { target, port },
+    )
+    return resp
+  }
+
   async function checkEmbedUrl(url?: string) {
     const target = (url ?? llmEmbedBaseUrl).trim()
     if (!target) { setEmbedUrlStatus(null); return }
     setEmbedUrlChecking(true)
-    const t0 = Date.now()
     try {
-      const resp = await fetch(`${target.replace(/\/+$/, '')}/v1/models`, {
-        signal: AbortSignal.timeout(5000),
-      })
-      const latency = Date.now() - t0
-      setEmbedUrlStatus({ ok: resp.ok, latency_ms: latency })
+      const r = await probe(`${target.replace(/\/+$/, '')}/v1/models`)
+      setEmbedUrlStatus({ ok: r.ok, latency_ms: r.latency_ms })
     } catch {
       setEmbedUrlStatus({ ok: false, latency_ms: null, error: 'Unreachable' })
     } finally {
@@ -137,10 +144,9 @@ export function SettingsPage() {
     const target = (address ?? master).trim()
     if (!target) { setSaltMasterStatus(null); return }
     setSaltMasterChecking(true)
-    const t0 = Date.now()
     try {
-      const resp = await fetch(`http://${target}:8080`, { signal: AbortSignal.timeout(5000) })
-      setSaltMasterStatus({ ok: resp.ok, latency_ms: Date.now() - t0 })
+      const r = await probe(target, 8080)
+      setSaltMasterStatus({ ok: r.ok, latency_ms: r.latency_ms })
     } catch {
       setSaltMasterStatus({ ok: false, latency_ms: null, error: 'Unreachable' })
     } finally {
@@ -152,10 +158,9 @@ export function SettingsPage() {
     const target = (url ?? ansibleEndpoint).trim()
     if (!target) { setAnsibleStatus(null); return }
     setAnsibleChecking(true)
-    const t0 = Date.now()
     try {
-      const resp = await fetch(target, { method: 'HEAD', signal: AbortSignal.timeout(5000) })
-      setAnsibleStatus({ ok: resp.ok, latency_ms: Date.now() - t0 })
+      const r = await probe(target)
+      setAnsibleStatus({ ok: r.ok, latency_ms: r.latency_ms })
     } catch {
       setAnsibleStatus({ ok: false, latency_ms: null, error: 'Unreachable' })
     } finally {
@@ -167,10 +172,9 @@ export function SettingsPage() {
     const target = (url ?? sonarUrl).trim()
     if (!target) { setSonarStatus(null); return }
     setSonarChecking(true)
-    const t0 = Date.now()
     try {
-      const resp = await fetch(`${target.replace(/\/+$/, '')}/api/system/status`, { signal: AbortSignal.timeout(5000) })
-      setSonarStatus({ ok: resp.ok, latency_ms: Date.now() - t0 })
+      const r = await probe(`${target.replace(/\/+$/, '')}/api/system/status`)
+      setSonarStatus({ ok: r.ok, latency_ms: r.latency_ms })
     } catch {
       setSonarStatus({ ok: false, latency_ms: null, error: 'Unreachable' })
     } finally {
@@ -182,10 +186,9 @@ export function SettingsPage() {
     const target = (url ?? cxoneUrl).trim()
     if (!target) { setCxoneStatus(null); return }
     setCxoneChecking(true)
-    const t0 = Date.now()
     try {
-      const resp = await fetch(target, { method: 'HEAD', signal: AbortSignal.timeout(5000) })
-      setCxoneStatus({ ok: resp.ok, latency_ms: Date.now() - t0 })
+      const r = await probe(target)
+      setCxoneStatus({ ok: r.ok, latency_ms: r.latency_ms })
     } catch {
       setCxoneStatus({ ok: false, latency_ms: null, error: 'Unreachable' })
     } finally {
