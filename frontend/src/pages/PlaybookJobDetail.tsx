@@ -106,7 +106,7 @@ export function PlaybookJobDetail() {
   }
 
   return (
-    <div className="space-y-6 max-w-5xl">
+    <div className="flex flex-col max-w-5xl" style={{ minHeight: 'calc(100vh - 120px)' }}>
       <div className="flex items-center gap-3">
         <Link to="/automation?tab=executions" className="text-sm text-brand-600 hover:underline">← Executions</Link>
         <span className="text-gray-300">/</span>
@@ -199,7 +199,7 @@ export function PlaybookJobDetail() {
       </div>
 
       {/* Logs */}
-      <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
+      <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden flex flex-col flex-1">
         <div className="flex items-center justify-between px-4 py-2.5 border-b border-gray-100 bg-gray-50">
           <div>
             <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Output</p>
@@ -214,25 +214,26 @@ export function PlaybookJobDetail() {
             <span className="text-xs text-blue-500">Polling every 3s…</span>
           )}
         </div>
-        {job.stdout ? (
-          <pre
-            className="text-xs font-mono bg-gray-950 text-green-300 p-4 overflow-auto leading-relaxed whitespace-pre-wrap"
-            style={{ minHeight: '400px', maxHeight: '70vh' }}
-          >
-            {job.stdout}
-          </pre>
-        ) : (
-          <div className="flex items-center justify-center bg-gray-950" style={{ minHeight: '200px' }}>
-            {isLive ? (
-              <div className="text-center space-y-2">
-                <div className="w-6 h-6 border-2 border-blue-400 border-t-transparent rounded-full animate-spin mx-auto" />
-                <p className="text-xs text-gray-500">Waiting for output…</p>
-              </div>
-            ) : (
-              <p className="text-xs text-gray-500">No output recorded</p>
-            )}
-          </div>
-        )}
+        <div className="flex-1 overflow-hidden">
+          {job.stdout ? (
+            <pre
+              className="text-xs font-mono bg-gray-950 text-green-300 p-4 overflow-auto leading-relaxed whitespace-pre-wrap h-full"
+            >
+              {job.stdout}
+            </pre>
+          ) : (
+            <div className="flex items-center justify-center bg-gray-950 flex-1">
+              {isLive ? (
+                <div className="text-center space-y-2">
+                  <div className="w-6 h-6 border-2 border-blue-400 border-t-transparent rounded-full animate-spin mx-auto" />
+                  <p className="text-xs text-gray-500">Waiting for output…</p>
+                </div>
+              ) : (
+                <p className="text-xs text-gray-500">No output recorded</p>
+              )}
+            </div>
+          )}
+        </div>
       </div>
 
       {/* Re-run modal */}

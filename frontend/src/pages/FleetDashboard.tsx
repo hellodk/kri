@@ -808,16 +808,23 @@ export function FleetDashboard() {
   const [showSaltStateDropdown, setShowSaltStateDropdown] = useState(false)
   const [saltStateConfirm, setSaltStateConfirm] = useState<string | null>(null)
   const [macosOnly, setMacosOnly] = useState(false)
+  const [showMoreFilters, setShowMoreFilters] = useState(false)
 
   const user = useAuthStore((s) => s.user)
   const canManage = user?.role === 'admin' || user?.role === 'operator'
 
   const filters = { search, statusFilter, osFilter, tagFilter, driftMin, driftMax, cpuMin, memMin, sort }
 
+  const secondaryFilterCount = [
+    driftMin, driftMax, cpuMin, memMin,
+    osFilter, tagFilter,
+  ].filter(Boolean).length
+
   function resetFilters() {
     setSearch(''); setStatusFilter(''); setOsFilter('')
     setTagFilter(''); setDriftMin(''); setDriftMax(''); setCpuMin(''); setMemMin(''); setSort('drift_score:desc')
     setMacosOnly(false)
+    setShowMoreFilters(false)
     setPage(1)
   }
 
@@ -1021,7 +1028,7 @@ export function FleetDashboard() {
 
       {/* Filter bar */}
       <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-4 space-y-3">
-        {/* Row 1: search + status + OS */}
+        {/* Row 1: search + status + More filters toggle */}
         <div className="flex flex-wrap items-center gap-3">
           {/* Search */}
           <div className="relative flex-1 min-w-[180px]">
@@ -1044,16 +1051,6 @@ export function FleetDashboard() {
             <option value="unknown">Unknown</option>
           </select>
 
-          {/* OS Version */}
-          <input value={osFilter} onChange={(e) => { setOsFilter(e.target.value); setPage(1) }}
-            placeholder="OS (e.g. 14.4)"
-            className="w-36 px-3 py-1.5 border border-gray-300 text-sm text-gray-900 rounded-lg focus:outline-none focus:border-brand-600" />
-
-          {/* Tag filter */}
-          <input value={tagFilter} onChange={(e) => { setTagFilter(e.target.value); setPage(1) }}
-            placeholder="Tag key:value"
-            className="w-40 px-3 py-1.5 border border-gray-300 text-sm text-gray-900 rounded-lg focus:outline-none focus:border-brand-600" />
-
           {/* macOS toggle */}
           <button
             onClick={() => { setMacosOnly((v) => !v); setPage(1) }}
@@ -1065,48 +1062,28 @@ export function FleetDashboard() {
           >
             macOS
           </button>
-        </div>
 
-        {/* Row 2: drift range + sort + reset */}
-        <div className="flex flex-wrap items-center gap-3">
-          <span className="text-sm text-gray-500 font-medium">Drift:</span>
-          <input value={driftMin} onChange={(e) => { setDriftMin(e.target.value); setPage(1) }}
-            placeholder="Min" type="number" min="0"
-            className="w-20 px-3 py-1.5 border border-gray-300 text-sm text-gray-900 rounded-lg focus:outline-none focus:border-brand-600" />
-          <span className="text-gray-400 text-sm">–</span>
-          <input value={driftMax} onChange={(e) => { setDriftMax(e.target.value); setPage(1) }}
-            placeholder="Max" type="number" min="0"
-            className="w-20 px-3 py-1.5 border border-gray-300 text-sm text-gray-900 rounded-lg focus:outline-none focus:border-brand-600" />
+          {/* More filters toggle */}
+          <button
+            onClick={() => setShowMoreFilters(!showMoreFilters)}
+            className={`px-3 py-1.5 text-sm rounded-lg border flex items-center gap-1.5 transition-colors ${
+              showMoreFilters || secondaryFilterCount > 0
+                ? 'border-brand-600 text-brand-600 bg-brand-50'
+                : 'border-gray-300 text-gray-600 hover:bg-gray-50'
+            }`}
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2a1 1 0 01-.293.707L13 13.414V19a1 1 0 01-.553.894l-4 2A1 1 0 017 21v-7.586L3.293 6.707A1 1 0 013 6V4z" />
+            </svg>
+            Filters
+            {secondaryFilterCount > 0 && (
+              <span className="w-5 h-5 rounded-full bg-brand-600 text-white text-xs flex items-center justify-center font-medium">
+                {secondaryFilterCount}
+              </span>
+            )}
+          </button>
 
-          <span className="text-sm text-gray-500 font-medium">CPU%:</span>
-          <input
-            type="number" min="0" max="100" placeholder="≥"
-            value={cpuMin} onChange={e => { setCpuMin(e.target.value); setPage(1) }}
-            className="w-20 px-3 py-1.5 border border-gray-300 text-sm text-gray-900 rounded-lg focus:outline-none focus:border-brand-600"
-          />
-
-          <span className="text-sm text-gray-500 font-medium">Mem%:</span>
-          <input
-            type="number" min="0" max="100" placeholder="≥"
-            value={memMin} onChange={e => { setMemMin(e.target.value); setPage(1) }}
-            className="w-20 px-3 py-1.5 border border-gray-300 text-sm text-gray-900 rounded-lg focus:outline-none focus:border-brand-600"
-          />
-
-          <div className="flex-1" />
-
-          {/* Sort */}
-          <select value={sort} onChange={(e) => { setSort(e.target.value); setPage(1) }}
-            className="text-sm bg-white border border-gray-300 text-gray-900 rounded-lg px-3 py-1.5 focus:outline-none focus:border-brand-600">
-            <option value="drift_score:desc">Drift ↓</option>
-            <option value="drift_score:asc">Drift ↑</option>
-            <option value="hostname:asc">Hostname A–Z</option>
-            <option value="hostname:desc">Hostname Z–A</option>
-            <option value="last_seen_at:desc">Last Seen ↓</option>
-            <option value="last_seen_at:asc">Last Seen ↑</option>
-            <option value="status:asc">Status A–Z</option>
-          </select>
-
-          {/* Reset */}
+          {/* Reset (always visible when filters active) */}
           {hasActiveFilters && (
             <button onClick={resetFilters}
               className="text-sm text-gray-500 hover:text-gray-700 border border-gray-200 rounded-lg px-3 py-1.5 hover:bg-gray-50">
@@ -1114,6 +1091,61 @@ export function FleetDashboard() {
             </button>
           )}
         </div>
+
+        {/* Row 2 (toggleable): OS, tag, drift, cpu, mem, sort */}
+        {showMoreFilters && (
+          <div className="flex flex-wrap items-center gap-3 pt-2 border-t border-gray-100">
+            {/* OS Version */}
+            <input value={osFilter} onChange={(e) => { setOsFilter(e.target.value); setPage(1) }}
+              placeholder="OS (e.g. 14.4)"
+              className="w-36 px-3 py-1.5 border border-gray-300 text-sm text-gray-900 rounded-lg focus:outline-none focus:border-brand-600" />
+
+            {/* Tag filter */}
+            <input value={tagFilter} onChange={(e) => { setTagFilter(e.target.value); setPage(1) }}
+              placeholder="Tag key:value"
+              className="w-40 px-3 py-1.5 border border-gray-300 text-sm text-gray-900 rounded-lg focus:outline-none focus:border-brand-600" />
+
+            {/* Drift range */}
+            <span className="text-sm text-gray-500 font-medium">Drift:</span>
+            <input value={driftMin} onChange={(e) => { setDriftMin(e.target.value); setPage(1) }}
+              placeholder="Min" type="number" min="0"
+              className="w-20 px-3 py-1.5 border border-gray-300 text-sm text-gray-900 rounded-lg focus:outline-none focus:border-brand-600" />
+            <span className="text-gray-400 text-sm">–</span>
+            <input value={driftMax} onChange={(e) => { setDriftMax(e.target.value); setPage(1) }}
+              placeholder="Max" type="number" min="0"
+              className="w-20 px-3 py-1.5 border border-gray-300 text-sm text-gray-900 rounded-lg focus:outline-none focus:border-brand-600" />
+
+            {/* CPU min */}
+            <span className="text-sm text-gray-500 font-medium">CPU%:</span>
+            <input
+              type="number" min="0" max="100" placeholder="≥"
+              value={cpuMin} onChange={e => { setCpuMin(e.target.value); setPage(1) }}
+              className="w-20 px-3 py-1.5 border border-gray-300 text-sm text-gray-900 rounded-lg focus:outline-none focus:border-brand-600"
+            />
+
+            {/* Mem min */}
+            <span className="text-sm text-gray-500 font-medium">Mem%:</span>
+            <input
+              type="number" min="0" max="100" placeholder="≥"
+              value={memMin} onChange={e => { setMemMin(e.target.value); setPage(1) }}
+              className="w-20 px-3 py-1.5 border border-gray-300 text-sm text-gray-900 rounded-lg focus:outline-none focus:border-brand-600"
+            />
+
+            <div className="flex-1" />
+
+            {/* Sort */}
+            <select value={sort} onChange={(e) => { setSort(e.target.value); setPage(1) }}
+              className="text-sm bg-white border border-gray-300 text-gray-900 rounded-lg px-3 py-1.5 focus:outline-none focus:border-brand-600">
+              <option value="drift_score:desc">Drift ↓</option>
+              <option value="drift_score:asc">Drift ↑</option>
+              <option value="hostname:asc">Hostname A–Z</option>
+              <option value="hostname:desc">Hostname Z–A</option>
+              <option value="last_seen_at:desc">Last Seen ↓</option>
+              <option value="last_seen_at:asc">Last Seen ↑</option>
+              <option value="status:asc">Status A–Z</option>
+            </select>
+          </div>
+        )}
       </div>
 
       {/* Node table */}
@@ -1203,8 +1235,8 @@ export function FleetDashboard() {
                     : (nodes?.items ?? [])
                   return (
                 <table className="w-full text-sm">
-                  <thead>
-                    <tr className="bg-gray-50 border-b border-gray-200 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide">
+                  <thead className="sticky top-0 z-10 bg-white">
+                    <tr className="bg-white border-b border-gray-200 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide">
                       {canManage && (
                         <th className="pl-4 py-3 w-8">
                           <input type="checkbox" checked={allSelected} onChange={toggleAll}

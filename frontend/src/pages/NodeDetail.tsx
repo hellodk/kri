@@ -1081,7 +1081,7 @@ export function NodeDetail() {
         </div>
       </div>
 
-      <div className="border-b border-gray-200 flex gap-1">
+      <div className="sticky top-0 z-20 bg-white border-b border-gray-200 flex gap-1 -mx-6 px-6">
         {tabs.map((t) => (
           <button
             key={t.id}
