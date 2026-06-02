@@ -7,7 +7,6 @@ POST /api/v1/fleet/nodes/import/commit
 import secrets
 from datetime import UTC, datetime
 
-import pytest
 import pytest_asyncio
 from httpx import ASGITransport, AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
@@ -245,7 +244,7 @@ async def test_validate_summary_counts(operator_client: AsyncClient, existing_no
         "source": "paste",
         "text": (
             "valid-fresh-node-a,10.201.1.1\n"  # new
-            f"bulk-import-existing.local,10.0.0.5\n"  # duplicate (minion_id clash)
+            "bulk-import-existing.local,10.0.0.5\n"  # duplicate (minion_id clash)
             "bad-node!,not-an-ip\n"  # invalid
         ),
     }
@@ -315,6 +314,7 @@ async def test_commit_with_group_id_adds_members(
 
     # Verify GroupMember was created in the DB
     import uuid
+
     from sqlalchemy import select as sa_select
     from sqlalchemy.ext.asyncio import async_sessionmaker
 

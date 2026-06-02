@@ -5,7 +5,6 @@ in the frontend source files. They run fast (pure file reads, no DOM).
 """
 import re
 
-
 # ── #363 Sticky thead ──────────────────────────────────────────────────────────
 
 def test_fleet_dashboard_thead_is_sticky():
