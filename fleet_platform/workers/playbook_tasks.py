@@ -279,10 +279,13 @@ def run_playbook(self, job_id: str, ssh_username: str | None = None, ssh_passwor
                     "ANSIBLE_COLLECTIONS_PATH": str(playbooks_dir / "collections" / "installed"),
                     # Point ansible at the source roles dir so role-only runs can find the role
                     "ANSIBLE_ROLES_PATH": str(playbooks_dir / "roles"),
-                    # Disable host key checking — .ssh/ is mounted :ro so known_hosts
-                    # cannot be written. Auth is handled by private key, so MITM risk
-                    # is already mitigated.
+                    # .ssh/ is mounted :ro — SSH cannot write to known_hosts.
+                    # ANSIBLE_HOST_KEY_CHECKING=False sets StrictHostKeyChecking=no but
+                    # OpenSSH still tries to RECORD new host keys in known_hosts, causing
+                    # "Failed to add host to known_hosts" and connection close.
+                    # Fix: route known_hosts writes to /dev/null via UserKnownHostsFile.
                     "ANSIBLE_HOST_KEY_CHECKING": "False",
+                    "ANSIBLE_SSH_ARGS": "-o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no -o ControlMaster=no",
                     # Reduce SSH timeout so stalled tasks surface faster
                     "ANSIBLE_TIMEOUT": "10",
                     "ANSIBLE_SSH_RETRIES": "2",
