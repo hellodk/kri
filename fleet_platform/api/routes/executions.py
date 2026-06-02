@@ -8,10 +8,33 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from fleet_platform.api.deps import get_db
 from fleet_platform.core.auth import get_current_user
 from fleet_platform.models.execution import ExecutionJob, ExecutionResult
+from fleet_platform.models.group import Group
+from fleet_platform.models.node import Node
 from fleet_platform.schemas.common import PaginatedResponse
 from fleet_platform.schemas.execution import ExecutionJobResponse, ExecutionResultResponse
 
 router = APIRouter(prefix="/api/v1/executions")
+
+
+async def _resolve_label(db: AsyncSession, target_type: str, target_id: uuid.UUID | None) -> str | None:
+    """Resolve a target UUID to a human-readable label (hostname or group name)."""
+    if not target_id:
+        return None
+    if target_type == "node":
+        row = await db.execute(select(Node.hostname, Node.minion_id).where(Node.id == target_id))
+        n = row.one_or_none()
+        return (n.hostname or n.minion_id) if n else str(target_id)[:8]
+    if target_type == "group":
+        row = await db.execute(select(Group.name).where(Group.id == target_id))
+        g = row.scalar_one_or_none()
+        return g if g else str(target_id)[:8]
+    return None
+
+
+def _to_response(job: ExecutionJob, label: str | None) -> ExecutionJobResponse:
+    r = ExecutionJobResponse.model_validate(job)
+    r.target_label = label
+    return r
 
 
 @router.get("", response_model=PaginatedResponse[ExecutionJobResponse])
@@ -34,10 +57,12 @@ async def list_executions(
     result = await db.execute(query.offset((page - 1) * per_page).limit(per_page))
     jobs = result.scalars().all()
 
-    return PaginatedResponse(
-        items=[ExecutionJobResponse.model_validate(j) for j in jobs],
-        total=total, page=page, per_page=per_page,
-    )
+    items = []
+    for j in jobs:
+        label = await _resolve_label(db, j.target_type, j.target_id)
+        items.append(_to_response(j, label))
+
+    return PaginatedResponse(items=items, total=total, page=page, per_page=per_page)
 
 
 @router.get("/{job_id}", response_model=ExecutionJobResponse)
@@ -50,7 +75,8 @@ async def get_execution(
     job = result.scalar_one_or_none()
     if not job:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Job not found")
-    return ExecutionJobResponse.model_validate(job)
+    label = await _resolve_label(db, job.target_type, job.target_id)
+    return _to_response(job, label)
 
 
 @router.get("/{job_id}/results", response_model=PaginatedResponse[ExecutionResultResponse])

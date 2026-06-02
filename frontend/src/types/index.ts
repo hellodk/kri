@@ -169,6 +169,7 @@ export interface ExecutionJob {
   type: string
   target_type: string
   target_id: string | null
+  target_label: string | null
   triggered_by: string
   status: 'pending' | 'running' | 'completed' | 'failed'
   started_at: string | null

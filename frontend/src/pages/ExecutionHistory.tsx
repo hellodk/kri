@@ -157,7 +157,12 @@ export function ExecutionHistory() {
                       </Link>
                     </td>
                     <td className="px-4 py-3"><StatusBadge status={j.status} /></td>
-                    <td className="px-4 py-3 text-gray-600 text-xs">{j.target_label || j.target_type}</td>
+                    <td className="px-4 py-3 text-gray-600 text-xs">
+                      <span className="inline-flex items-center gap-1">
+                        <span className="text-gray-400 text-xs">{j.target_type === 'node' ? '💻' : '▦'}</span>
+                        <span>{j.target_label || j.target_type}</span>
+                      </span>
+                    </td>
                     <td className="px-4 py-3 text-gray-500 text-xs">
                       {j.started_at ? formatDistanceToNow(new Date(j.started_at), { addSuffix: true }) : '—'}
                     </td>
@@ -228,8 +233,14 @@ export function ExecutionHistory() {
                         <Link to={`/executions/${j.id}`} className="text-brand-600 hover:underline font-mono text-xs">{j.type}</Link>
                       </td>
                       <td className="px-4 py-3"><StatusBadge status={j.status} /></td>
-                      <td className="px-4 py-3 text-gray-600 text-xs font-mono">
-                        {j.target_type}{j.target_id ? `:${j.target_id.slice(0, 8)}` : ''}
+                      <td className="px-4 py-3 text-gray-600 text-xs">
+                        <span className="inline-flex items-center gap-1">
+                          <span className="text-gray-400">{j.target_type === 'node' ? '💻' : '▦'}</span>
+                          <span>{j.target_label || j.target_type}</span>
+                          {j.target_id && !j.target_label && (
+                            <span className="text-gray-400 font-mono">{j.target_id.slice(0, 8)}</span>
+                          )}
+                        </span>
                       </td>
                       <td className="px-4 py-3 text-gray-600 text-xs">{j.triggered_by}</td>
                       <td className="px-4 py-3 text-gray-500 text-xs">
