@@ -15,6 +15,7 @@ import { Skeleton } from '../components/Skeleton'
 import { ErrorState } from '../components/ErrorState'
 import { Pagination } from '../components/Pagination'
 import { BootstrapModal } from './BootstrapModal'
+import { ImportNodesModal } from './ImportNodesModal'
 import { ConfirmDialog } from '../components/ConfirmDialog'
 import { formatDistanceToNow, differenceInDays, parseISO } from 'date-fns'
 import type { Node } from '../types'
@@ -795,6 +796,7 @@ export function FleetDashboard() {
   const [sort, setSort] = useState('drift_score:desc')
   const [showBootstrap, setShowBootstrap] = useState(false)
   const [showAddNode, setShowAddNode] = useState(false)
+  const [showImport, setShowImport] = useState(false)
   const [editingNode, setEditingNode] = useState<Node | null>(null)
   const [deletingNode, setDeletingNode] = useState<Node | null>(null)
   const [selected, setSelected] = useState<Set<string>>(new Set())
@@ -975,6 +977,14 @@ export function FleetDashboard() {
               className="px-4 py-2 bg-white border border-gray-300 text-gray-700 text-sm font-medium rounded-lg hover:bg-gray-50 shadow-sm"
             >
               + Add Node
+            </button>
+          )}
+          {canManage && (
+            <button
+              onClick={() => setShowImport(true)}
+              className="px-4 py-2 bg-white border border-gray-300 text-gray-700 text-sm font-medium rounded-lg hover:bg-gray-50 shadow-sm"
+            >
+              + Import
             </button>
           )}
           <button
@@ -1304,6 +1314,7 @@ export function FleetDashboard() {
 
       {showBootstrap && <BootstrapModal onClose={() => setShowBootstrap(false)} />}
       {showAddNode && <AddNodeModal onClose={() => setShowAddNode(false)} />}
+      {showImport && <ImportNodesModal onClose={() => setShowImport(false)} />}
       {editingNode && <EditNodeModal node={editingNode} onClose={() => setEditingNode(null)} />}
       {deletingNode && <DeleteNodeDialog node={deletingNode} onClose={() => setDeletingNode(null)} />}
       {saltStateConfirm && (

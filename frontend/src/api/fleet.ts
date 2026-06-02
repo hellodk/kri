@@ -1,6 +1,28 @@
 import { api } from './client'
 import type { FleetOverview, Node, NodeDetail, Paginated, Tag } from '../types'
 
+export interface ImportRow {
+  minion_id: string
+  hostname: string | null
+  ip: string | null
+  group: string | null
+  ssh_user: string | null
+  status: 'new' | 'duplicate' | 'invalid'
+  reason: string
+}
+
+export interface ImportValidateResponse {
+  rows: ImportRow[]
+  summary: { new: number; duplicate: number; invalid: number; total: number }
+}
+
+export interface ImportCommitResponse {
+  created: number
+  skipped: number
+  node_ids: string[]
+  bootstrap_queued: number
+}
+
 export const fleetApi = {
   overview: () => api.get<FleetOverview>('/api/v1/fleet/overview'),
   nodes: (params: {
@@ -39,4 +61,8 @@ export const fleetApi = {
     api.delete(`/api/v1/nodes/${nodeId}/tags/${key}`),
   maintenanceMode: (nodeId: string, enabled: boolean) =>
     api.patch<NodeDetail>(`/api/v1/nodes/${nodeId}/maintenance`, { enabled }),
+  importValidate: (body: { source: string; text?: string; csv_content?: string; mapping?: Record<string, string> }) =>
+    api.post<ImportValidateResponse>('/api/v1/fleet/nodes/import/validate', body),
+  importCommit: (body: { rows: ImportRow[]; group_id?: string; ssh_username?: string; ssh_password?: string; auto_bootstrap?: boolean }) =>
+    api.post<ImportCommitResponse>('/api/v1/fleet/nodes/import/commit', body),
 }
