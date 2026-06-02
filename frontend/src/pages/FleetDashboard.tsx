@@ -125,6 +125,28 @@ function AddNodeModal({ onClose }: { onClose: () => void }) {
   const [inlineAuthMode, setInlineAuthMode] = useState<'password' | 'key'>('password')
   const [inlineSshKey, setInlineSshKey] = useState('')
 
+  // Inline group creation
+  const [showNewGroup, setShowNewGroup] = useState(false)
+  const [newGroupName, setNewGroupName] = useState('')
+  const [creatingGroup, setCreatingGroup] = useState(false)
+
+  async function handleCreateGroup() {
+    const name = newGroupName.trim()
+    if (!name) return
+    setCreatingGroup(true)
+    try {
+      const created = await groupsApi.create({ name, type: 'static' })
+      qc.invalidateQueries({ queryKey: ['groups-for-add-node'] })
+      setShowNewGroup(false)
+      setNewGroupName('')
+      await onGroupChange(created.id)
+    } catch (e: any) {
+      toast(e.message ?? 'Failed to create group', 'error')
+    } finally {
+      setCreatingGroup(false)
+    }
+  }
+
   async function onGroupChange(newGroupId: string) {
     setGroupId(newGroupId)
     setInlineSshUsername('')
@@ -264,18 +286,48 @@ function AddNodeModal({ onClose }: { onClose: () => void }) {
               Group <span className="text-red-500">*</span>
             </label>
             <select
-              required
+              required={!showNewGroup}
               value={groupId}
-              onChange={(e) => onGroupChange(e.target.value)}
+              onChange={(e) => {
+                if (e.target.value === '__new__') { setShowNewGroup(true); return }
+                setShowNewGroup(false)
+                onGroupChange(e.target.value)
+              }}
               className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm text-gray-900 focus:outline-none focus:border-brand-600 bg-white"
             >
               <option value="">Select a group…</option>
               {(groups?.items ?? []).filter(g => g.type === 'static').map(g => (
                 <option key={g.id} value={g.id}>{g.name}</option>
               ))}
+              <option value="__new__">+ Create new group…</option>
             </select>
-            {(groups?.items ?? []).filter(g => g.type === 'static').length === 0 && (
-              <p className="text-xs text-amber-600 mt-1">No static groups yet — <a href="/groups" className="underline">create one first</a>.</p>
+            {showNewGroup && (
+              <div className="mt-2 flex gap-2 items-center">
+                <input
+                  autoFocus
+                  type="text"
+                  value={newGroupName}
+                  onChange={e => setNewGroupName(e.target.value)}
+                  onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); handleCreateGroup() } if (e.key === 'Escape') { setShowNewGroup(false); setNewGroupName('') } }}
+                  placeholder="Group name…"
+                  className="flex-1 px-3 py-1.5 border border-brand-400 rounded-lg text-sm text-gray-900 focus:outline-none focus:border-brand-600 bg-white"
+                />
+                <button
+                  type="button"
+                  onClick={handleCreateGroup}
+                  disabled={!newGroupName.trim() || creatingGroup}
+                  className="px-3 py-1.5 bg-brand-600 text-white text-sm rounded-lg hover:bg-brand-700 disabled:opacity-50"
+                >
+                  {creatingGroup ? 'Creating…' : 'Create'}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => { setShowNewGroup(false); setNewGroupName('') }}
+                  className="px-3 py-1.5 border border-gray-300 text-gray-600 text-sm rounded-lg hover:bg-gray-50"
+                >
+                  Cancel
+                </button>
+              </div>
             )}
             {groupCredStatus === 'checking' && (
               <p className="text-xs text-gray-400 mt-1">Checking credentials…</p>
