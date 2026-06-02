@@ -290,8 +290,8 @@ def run_playbook(self, job_id: str, ssh_username: str | None = None, ssh_passwor
                     "ANSIBLE_HOST_KEY_CHECKING": "False",
                     # UserKnownHostsFile=/dev/null: .ssh is :ro, SSH can't write known_hosts
                     # StrictHostKeyChecking=no: skip host verification
-                    # ConnectAttempts=3: exactly 3 SSH attempts then fail
-                    "ANSIBLE_SSH_ARGS": "-o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no -o ControlMaster=no -o ConnectAttempts=3",
+                    # ConnectionAttempts=2: 2 SSH-level attempts before giving up (correct option name)
+                    "ANSIBLE_SSH_ARGS": "-o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no -o ControlMaster=no -o ConnectionAttempts=2",
                     # SSH connection timeout per attempt
                     "ANSIBLE_TIMEOUT": "10",
                     # 2 retries = 3 total SSH attempts, then UNREACHABLE
