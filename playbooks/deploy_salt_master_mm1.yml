@@ -12,7 +12,7 @@
 #   2. Restart kri: docker compose -f deploy/docker-compose.yml up -d
 #   3. Minion configs already set salt_master_address=100.102.68.75
 
-- name: Deploy salt-master natively on mm1
+- name: Deploy salt-master (native install)
   hosts: all  # kri sets targets via inventory; use all to run on selected nodes
   gather_facts: false
   vars:
