@@ -17,7 +17,7 @@
 - name: Check if correct salt-master version is already installed
   shell: /opt/salt/salt-master --version 2>/dev/null | awk '{print $2}'
   args:
-    executable: /bin/bash
+    executable: "{{ ansible_shell_executable | default('/bin/bash') }}"
   register: installed_salt_version
   changed_when: false
   failed_when: false
@@ -124,14 +124,14 @@
     fi
     echo "ok"
   args:
-    executable: /bin/bash
+    executable: "{{ ansible_shell_executable | default('/bin/bash') }}"
   when: installed_salt_version.stdout | trim != salt_version
   changed_when: false
 
 - name: Stop existing salt-master (if running) before install
   shell: launchctl stop com.saltstack.salt.master 2>/dev/null; true
   args:
-    executable: /bin/bash
+    executable: "{{ ansible_shell_executable | default('/bin/bash') }}"
   become: true
   changed_when: false
   when: installed_salt_version.stdout | trim != salt_version
@@ -139,7 +139,7 @@
 - name: Install salt .pkg
   shell: installer -pkg /tmp/{{ salt_pkg_filename }} -target /
   args:
-    executable: /bin/bash
+    executable: "{{ ansible_shell_executable | default('/bin/bash') }}"
   become: true
   when: installed_salt_version.stdout | trim != salt_version
   timeout: 300
@@ -147,7 +147,7 @@
 - name: Clean up tmp files
   shell: rm -f /tmp/{{ salt_pkg_filename }} /tmp/{{ salt_pkg_filename }}.sha512 {{ salt_pkg_tmp }}
   args:
-    executable: /bin/bash
+    executable: "{{ ansible_shell_executable | default('/bin/bash') }}"
   delegate_to: localhost
   become: false
   changed_when: false
@@ -156,7 +156,7 @@
 - name: Confirm salt-master binary exists after install
   shell: /opt/salt/salt-master --version 2>/dev/null
   args:
-    executable: /bin/bash
+    executable: "{{ ansible_shell_executable | default('/bin/bash') }}"
   register: post_install_version
   changed_when: false
   failed_when: salt_version not in post_install_version.stdout

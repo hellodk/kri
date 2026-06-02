@@ -117,7 +117,7 @@
       -o ServerAliveInterval=30
       -o ServerAliveCountMax=6
     # Use bash explicitly — macOS default zsh startup scripts can close the connection
-    ansible_shell_executable: /bin/bash
+    ansible_shell_executable: "{{ ansible_shell_executable | default('/bin/bash') }}"
 
     # Salt-master listens on all interfaces — Tailscale overlay provides the security layer
     salt_master_interface: "0.0.0.0"
