@@ -23,31 +23,45 @@
 # identity across reinstalls, so minions never need to re-accept its key. If it
 # doesn't exist on the controller (fresh install), skip these — salt-master
 # generates its own master.pem/master.pub automatically on first start.
+# Read the (root-owned) controller keys via slurp on localhost — become reads
+# them as root on the controller. `copy: src=` could NOT do this: the copy action
+# plugin reads a local src as the unprivileged ansible user, never via become.
 - name: Check for a pre-provisioned master keypair on the controller
   stat:
     path: "{{ playbook_dir }}/../deploy/salt-pki/master.pem"
   delegate_to: localhost
-  become: true
   register: _master_pem
 
-- name: Copy master private key (only if pre-provisioned)
-  copy:
+- name: Read master private key from controller (privileged)
+  slurp:
     src: "{{ playbook_dir }}/../deploy/salt-pki/master.pem"
+  delegate_to: localhost
+  register: _master_pem_content
+  when: _master_pem.stat.exists
+
+- name: Read master public key from controller (privileged)
+  slurp:
+    src: "{{ playbook_dir }}/../deploy/salt-pki/master.pub"
+  delegate_to: localhost
+  register: _master_pub_content
+  when: _master_pem.stat.exists
+
+- name: Install master private key on target
+  copy:
+    content: "{{ _master_pem_content.content | b64decode }}"
     dest: "{{ salt_pki_dir }}/master.pem"
     owner: root
     group: wheel
     mode: "0400"
-  become: true
   when: _master_pem.stat.exists
 
-- name: Copy master public key (only if pre-provisioned)
+- name: Install master public key on target
   copy:
-    src: "{{ playbook_dir }}/../deploy/salt-pki/master.pub"
+    content: "{{ _master_pub_content.content | b64decode }}"
     dest: "{{ salt_pki_dir }}/master.pub"
     owner: root
     group: wheel
     mode: "0444"
-  become: true
   when: _master_pem.stat.exists
 
 - name: Copy accepted minion keys

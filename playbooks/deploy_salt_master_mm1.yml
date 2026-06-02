@@ -15,6 +15,8 @@
 - name: Deploy salt-master (native install)
   hosts: all  # kri sets targets via inventory; use all to run on selected nodes
   gather_facts: false
+  become: true  # all install/config/service ops need root on the target;
+                # also elevates localhost-delegated tasks (PKI key read) on the controller
   vars:
     # Override on CLI: -e kri_salt_api_password=<password>
     kri_salt_api_password: "changeme-set-via-e-flag"
