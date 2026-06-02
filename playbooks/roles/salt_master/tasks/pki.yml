@@ -29,8 +29,12 @@
   delegate_to: localhost
   become: false
   register: _master_pem
+  # If the path is missing OR unreadable (e.g. root-owned leftover from the old
+  # Docker salt-master), don't fail — just treat it as "no pre-provisioned key"
+  # and let salt-master generate its own on first start.
+  failed_when: false
 
-- name: Copy master private key (only if pre-provisioned)
+- name: Copy master private key (only if pre-provisioned and readable)
   copy:
     src: "{{ playbook_dir }}/../deploy/salt-pki/master.pem"
     dest: "{{ salt_pki_dir }}/master.pem"
@@ -38,9 +42,9 @@
     group: wheel
     mode: "0400"
   become: true
-  when: _master_pem.stat.exists
+  when: _master_pem.stat.exists | default(false)
 
-- name: Copy master public key (only if pre-provisioned)
+- name: Copy master public key (only if pre-provisioned and readable)
   copy:
     src: "{{ playbook_dir }}/../deploy/salt-pki/master.pub"
     dest: "{{ salt_pki_dir }}/master.pub"
@@ -48,7 +52,7 @@
     group: wheel
     mode: "0444"
   become: true
-  when: _master_pem.stat.exists
+  when: _master_pem.stat.exists | default(false)
 
 - name: Copy accepted minion keys
   copy:
