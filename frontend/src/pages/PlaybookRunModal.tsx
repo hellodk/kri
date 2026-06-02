@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { playbooksApi } from '../api/playbooks'
 import type { PlaybookEntry } from '../api/playbooks'
@@ -179,7 +179,7 @@ export function PlaybookRunModal({ playbook, onClose, initialTargetType, initial
   const [targetType, setTargetType] = useState<'node' | 'group'>(initialTargetType ?? 'node')
   const [targetId, setTargetId] = useState(initialTargetId ?? '')
   const [verbosity, setVerbosity] = useState(0)
-  const [jobId, setJobId] = useState<string | null>(null)
+  const [jobId] = useState<string | null>(null)
   const [vars, setVars] = useState<Record<string, string>>(
     initialVars ?? Object.fromEntries(
       Object.entries(playbook.default_vars).map(([k, v]) => [k, String(v ?? '')])
@@ -187,6 +187,7 @@ export function PlaybookRunModal({ playbook, onClose, initialTargetType, initial
   )
   const toast = useToastStore((s) => s.add)
   const qc = useQueryClient()
+  const navigate = useNavigate()
 
   const { data: nodes } = useQuery({
     queryKey: ['nodes-for-playbook'],
@@ -219,7 +220,11 @@ export function PlaybookRunModal({ playbook, onClose, initialTargetType, initial
       }
       return playbooksApi.run(playbook.filename, targetType, targetId, extravars, undefined, undefined, verbosity)
     },
-    onSuccess: (data) => { setJobId(data.job_id); toast('Playbook queued') },
+    onSuccess: (data) => {
+      toast('Playbook queued')
+      onClose()
+      navigate(`/playbook-job/${data.job_id}`)
+    },
     onError: (e: Error) => toast(e.message, 'error'),
   })
 
