@@ -8,10 +8,12 @@ salt_version: "3007.14"
 artifactory_binary_url: "http://10.105.205.92:8082/artifactory/example-repo-local/salt"
 salt_pkg_official_base: "https://packages.broadcom.com/artifactory/saltproject-generic/onedir/{{ salt_version }}"
 
-# Directories on the salt-master host
+# Directories on the salt-master host.
+# Everything lives under /etc/salt — consistent across macOS and Linux, and
+# avoids /srv which is read-only on macOS (Catalina+ root volume).
 salt_pki_dir: /etc/salt/pki/master
-salt_states_dir: /srv/salt/states
-salt_pillar_dir: /srv/salt/pillar
+salt_states_dir: /etc/salt/states
+salt_pillar_dir: /etc/salt/pillar
 salt_log_dir: /var/log/salt
 
 # salt-api HTTP port (used by kri API/worker for ad-hoc commands)

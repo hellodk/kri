@@ -40,16 +40,6 @@
     brew_prefix: "{{ '/opt/homebrew' if 'arm64' in uname_result.stdout else '/usr/local' }}"
   when: _salt_os == 'macos'
 
-# macOS has a read-only root volume (Catalina+), so /srv cannot be created.
-# Use a writable base (/etc/salt/srv) on macOS; keep the standard /srv on Linux.
-# All pillar/state tasks AND the master config template derive from these vars,
-# so overriding them here propagates everywhere consistently.
-- name: Use writable salt data dirs on macOS (read-only root volume)
-  set_fact:
-    salt_states_dir: /etc/salt/srv/states
-    salt_pillar_dir: /etc/salt/srv/pillar
-  when: _salt_os == 'macos'
-
 - name: Install salt-master (per OS family)
   include_tasks: "install_{{ _salt_os }}.yml"
 

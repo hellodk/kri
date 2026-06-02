@@ -11,14 +11,13 @@
   become: true
 
 - name: Sync salt states from kri repo
-  # Copies salt/states/ from the Ansible controller (Linux host with kri git repo)
-  # to mm1's /srv/salt/states/. Subsequent state updates are handled by
-  # re-running the playbook or a cron-based sync.
-  synchronize:
+  # Recursively copies salt/states/ from the controller (kri worker container)
+  # to the master's states dir. Uses the copy module (not synchronize/rsync) —
+  # the worker image has no rsync binary. copy over SSH needs no remote rsync.
+  copy:
     src: "{{ playbook_dir }}/../salt/states/"
     dest: "{{ salt_states_dir }}/"
-    delete: true
-    rsync_opts:
-      - "--exclude=*.pyc"
-      - "--exclude=__pycache__"
+    owner: root
+    group: wheel
+    mode: "0644"
   become: true
