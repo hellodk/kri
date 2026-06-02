@@ -23,6 +23,8 @@ class AuditEventResponse(BaseModel):
     resource_type: str | None
     resource_id: uuid.UUID | None
     ip_address: str | None
+    old_value: dict | None = None
+    new_value: dict | None = None
 
     model_config = {"from_attributes": True}
 
@@ -38,6 +40,8 @@ class AuditEventResponse(BaseModel):
             resource_type=obj.resource_type,
             resource_id=obj.resource_id,
             ip_address=str(ip) if ip is not None else None,
+            old_value=obj.old_value,
+            new_value=obj.new_value,
         )
 
 

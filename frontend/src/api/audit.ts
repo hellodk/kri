@@ -8,6 +8,8 @@ export interface AuditEvent {
   resource_type: string | null
   resource_id: string | null
   ip_address: string | null
+  old_value: Record<string, unknown> | null
+  new_value: Record<string, unknown> | null
 }
 
 export interface AuditListParams {

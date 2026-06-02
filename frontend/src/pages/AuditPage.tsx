@@ -1,4 +1,4 @@
-import { useMemo } from 'react'
+import { useMemo, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { auditApi } from '../api/audit'
@@ -30,6 +30,42 @@ function isoLocal(dt: string): string {
   return new Date(dt).toISOString()
 }
 
+
+function formatVal(v: unknown): string {
+  if (v === null || v === undefined) return '—'
+  if (v === '[redacted]') return '••••••••'
+  return String(v)
+}
+
+function DiffPanel({ event }: { event: { old_value: Record<string, unknown> | null; new_value: Record<string, unknown> | null } }) {
+  const old_ = event.old_value ?? {}
+  const new_ = event.new_value ?? {}
+  const keys = Array.from(new Set([...Object.keys(old_), ...Object.keys(new_)]))
+  if (keys.length === 0) return <span className="text-xs text-gray-400 italic">no changes recorded</span>
+  return (
+    <div className="space-y-0.5">
+      {keys.map(k => {
+        const ov = old_[k], nv = new_[k]
+        const changed = JSON.stringify(ov) !== JSON.stringify(nv)
+        return (
+          <div key={k} className="flex items-baseline gap-2 font-mono text-xs">
+            <span className="text-gray-500 min-w-[140px] shrink-0">{k}</span>
+            {changed ? (
+              <>
+                <span className="text-red-500 line-through">{formatVal(ov)}</span>
+                <span className="text-gray-400">→</span>
+                <span className="text-emerald-600 font-medium">{formatVal(nv)}</span>
+              </>
+            ) : (
+              <span className="text-gray-400">{formatVal(nv)}</span>
+            )}
+          </div>
+        )
+      })}
+    </div>
+  )
+}
+
 export function AuditPage() {
   const [params, setParams] = useSearchParams()
 
@@ -39,6 +75,7 @@ export function AuditPage() {
   const fromTs = params.get('from_ts') ?? ''
   const toTs = params.get('to_ts') ?? ''
   const page = parseInt(params.get('page') ?? '1', 10)
+  const [expandedId, setExpandedId] = useState<number | null>(null)
 
   function set(key: string, value: string) {
     setParams(prev => {
@@ -206,6 +243,7 @@ export function AuditPage() {
                   <th className="px-4 py-3">Action</th>
                   <th className="px-4 py-3">Resource Type</th>
                   <th className="px-4 py-3">Resource ID</th>
+                  <th className="px-4 py-3">Changes</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100">
@@ -216,25 +254,45 @@ export function AuditPage() {
                     </td>
                   </tr>
                 )}
-                {data?.items.map((e) => (
-                  <tr key={e.id} className="hover:bg-gray-50">
-                    <td className="px-4 py-3 text-gray-500 whitespace-nowrap text-xs">
-                      {formatDistanceToNow(new Date(e.event_at), { addSuffix: true })}
-                    </td>
-                    <td className="px-4 py-3 font-mono text-xs text-gray-700 max-w-[180px] truncate">
-                      {e.actor}
-                    </td>
-                    <td className="px-4 py-3">
-                      <span className={`inline-block px-2 py-0.5 rounded text-xs font-medium font-mono ${actionBadgeClass(e.action)}`}>
-                        {e.action}
-                      </span>
-                    </td>
-                    <td className="px-4 py-3 text-gray-600 text-xs">{e.resource_type ?? '—'}</td>
-                    <td className="px-4 py-3 text-gray-500 font-mono text-xs">
-                      {e.resource_id ? e.resource_id.slice(0, 8) : '—'}
-                    </td>
-                  </tr>
-                ))}
+                {data?.items.map((e) => {
+                  const hasChanges = (e.old_value && Object.keys(e.old_value).length > 0) || (e.new_value && Object.keys(e.new_value).length > 0)
+                  const isExpanded = expandedId === e.id
+                  return (
+                    <>
+                      <tr key={e.id} className={`hover:bg-gray-50 ${hasChanges ? 'cursor-pointer' : ''}`} onClick={() => hasChanges && setExpandedId(isExpanded ? null : e.id)}>
+                        <td className="px-4 py-3 text-gray-500 whitespace-nowrap text-xs">
+                          {formatDistanceToNow(new Date(e.event_at), { addSuffix: true })}
+                        </td>
+                        <td className="px-4 py-3 font-mono text-xs text-gray-700 max-w-[180px] truncate">
+                          {e.actor}
+                        </td>
+                        <td className="px-4 py-3">
+                          <span className={`inline-block px-2 py-0.5 rounded text-xs font-medium font-mono ${actionBadgeClass(e.action)}`}>
+                            {e.action}
+                          </span>
+                        </td>
+                        <td className="px-4 py-3 text-gray-600 text-xs">{e.resource_type ?? '—'}</td>
+                        <td className="px-4 py-3 text-gray-500 font-mono text-xs">
+                          {e.resource_id ? e.resource_id.slice(0, 8) : '—'}
+                        </td>
+                        <td className="px-4 py-3 text-gray-400 text-xs">
+                          {hasChanges ? (
+                            <button className="text-brand-600 hover:underline text-xs" onClick={(ev) => { ev.stopPropagation(); setExpandedId(isExpanded ? null : e.id) }}>
+                              {isExpanded ? '▾ hide' : '▸ diff'}
+                            </button>
+                          ) : '—'}
+                        </td>
+                      </tr>
+                      {isExpanded && hasChanges && (
+                        <tr key={`${e.id}-diff`} className="bg-gray-50">
+                          <td colSpan={6} className="px-6 py-3 border-b border-gray-100">
+                            <DiffPanel event={e} />
+                          </td>
+                        </tr>
+                      )}
+                    </>
+                  )
+                })}
               </tbody>
             </table>
             {data && (
