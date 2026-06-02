@@ -5,7 +5,7 @@
 salt_version: "3007.14"
 
 # Download source: Artifactory mirror first, falls back to official URL
-artifactory_binary_url: ""
+artifactory_binary_url: "http://10.105.205.92:8082/artifactory/example-repo-local/salt"
 salt_pkg_official_base: "https://packages.broadcom.com/artifactory/saltproject-generic/onedir/{{ salt_version }}"
 
 # Directories on the salt-master host

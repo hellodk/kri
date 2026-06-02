@@ -1,21 +1,18 @@
 ---
-# tasks/install.yml — install salt from a LOCAL .pkg bundled with kri repo
+# tasks/install.yml — install salt-master from Artifactory or local bundle
 #
-# Air-gapped installation: no internet access required on the target.
-# The .pkg file is stored at playbooks/files/salt-{{ salt_version }}-py3-arm64.pkg
-# and is copied from the Ansible controller (kri server) to the target via SSH.
+# Download priority:
+#   1. Artifactory mirror (artifactory_binary_url set) — fastest, no internet on target
+#   2. Local bundle  (playbooks/files/*.pkg)          — air-gapped fallback
+#   3. Official URL  (salt_pkg_official_base)         — requires internet on controller
+#
+# The target node never needs internet access — the controller downloads and copies via SSH.
 
 - name: Set pkg filename
   set_fact:
     salt_pkg_filename: "salt-{{ salt_version }}-py3-arm64.pkg"
     salt_pkg_local_path: "{{ playbook_dir }}/files/salt-{{ salt_version }}-py3-arm64.pkg"
-
-- name: Verify bundled .pkg exists on controller
-  local_action: stat path="{{ salt_pkg_local_path }}"
-  register: pkg_stat
-  failed_when: not pkg_stat.stat.exists
-  run_once: true
-  become: false
+    salt_pkg_tmp: "/tmp/kri-salt-{{ salt_version }}-py3-arm64.pkg"
 
 - name: Check if correct salt-master version is already installed
   shell: /opt/salt/salt-master --version 2>/dev/null | awk '{print $2}'
@@ -33,15 +30,80 @@
       — target: {{ salt_version }}
       — will install: {{ installed_salt_version.stdout | trim != salt_version }}
 
-- name: Copy salt .pkg to target (air-gapped — no internet on target needed)
+# ── Source 1: Artifactory ────────────────────────────────────────────────────
+
+- name: Download salt .pkg from Artifactory
+  get_url:
+    url: "{{ artifactory_binary_url }}/{{ salt_pkg_filename }}"
+    dest: "{{ salt_pkg_tmp }}"
+    mode: "0644"
+    timeout: 60
+    validate_certs: false
+  delegate_to: localhost
+  become: false
+  register: artifactory_download
+  when:
+    - installed_salt_version.stdout | trim != salt_version
+    - artifactory_binary_url | length > 0
+  ignore_errors: true
+
+# ── Source 2: Local bundle (air-gapped fallback) ─────────────────────────────
+
+- name: Check if local bundle exists on controller
+  local_action: stat path="{{ salt_pkg_local_path }}"
+  register: pkg_stat
+  become: false
+  when:
+    - installed_salt_version.stdout | trim != salt_version
+    - artifactory_download is skipped or artifactory_download is failed
+
+- name: Use local bundle (copy to tmp on controller)
   copy:
     src: "{{ salt_pkg_local_path }}"
+    dest: "{{ salt_pkg_tmp }}"
+    mode: "0644"
+  delegate_to: localhost
+  become: false
+  when:
+    - installed_salt_version.stdout | trim != salt_version
+    - artifactory_download is skipped or artifactory_download is failed
+    - pkg_stat.stat is defined and pkg_stat.stat.exists
+
+# ── Source 3: Official URL (requires internet on controller) ─────────────────
+
+- name: Download salt .pkg from official URL (last resort)
+  get_url:
+    url: "{{ salt_pkg_official_base }}/{{ salt_pkg_filename }}"
+    dest: "{{ salt_pkg_tmp }}"
+    mode: "0644"
+    timeout: 120
+  delegate_to: localhost
+  become: false
+  when:
+    - installed_salt_version.stdout | trim != salt_version
+    - artifactory_download is skipped or artifactory_download is failed
+    - pkg_stat.stat is not defined or not pkg_stat.stat.exists
+
+# ── Verify pkg is ready ───────────────────────────────────────────────────────
+
+- name: Verify pkg exists on controller before copying to target
+  local_action: stat path="{{ salt_pkg_tmp }}"
+  register: pkg_ready
+  become: false
+  failed_when: not pkg_ready.stat.exists
+  when: installed_salt_version.stdout | trim != salt_version
+
+# ── Deploy to target ──────────────────────────────────────────────────────────
+
+- name: Copy salt .pkg to target via SSH
+  copy:
+    src: "{{ salt_pkg_tmp }}"
     dest: "/tmp/{{ salt_pkg_filename }}"
     mode: "0644"
   become: false
   when: installed_salt_version.stdout | trim != salt_version
 
-- name: Copy sha512 checksum file to target
+- name: Copy sha512 checksum file to target (if present)
   copy:
     src: "{{ salt_pkg_local_path }}.sha512"
     dest: "/tmp/{{ salt_pkg_filename }}.sha512"
@@ -80,10 +142,11 @@
   become: true
   when: installed_salt_version.stdout | trim != salt_version
 
-- name: Remove .pkg and checksum from /tmp
-  shell: rm -f /tmp/{{ salt_pkg_filename }} /tmp/{{ salt_pkg_filename }}.sha512
+- name: Clean up tmp files
+  shell: rm -f /tmp/{{ salt_pkg_filename }} /tmp/{{ salt_pkg_filename }}.sha512 {{ salt_pkg_tmp }}
   args:
     executable: /bin/bash
+  delegate_to: localhost
   become: false
   changed_when: false
   when: installed_salt_version.stdout | trim != salt_version
