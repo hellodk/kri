@@ -78,6 +78,7 @@ export function TopBar() {
 
   // Flat list for keyboard navigation
   const flat = results
+  const resultIndexMap = new Map(results.map((r, i) => [r, i]))
 
   useEffect(() => {
     setOpen(q.length >= 2)
@@ -173,7 +174,6 @@ export function TopBar() {
                   </div>
                 )}
                 {Object.entries(grouped).map(([type, items]) => {
-                  const flatOffset = flat.indexOf(items[0])
                   return (
                     <div key={type}>
                       <div className="px-4 py-1 bg-gray-50 border-b border-gray-100">
@@ -181,8 +181,8 @@ export function TopBar() {
                           {TYPE_ICON[type]} {TYPE_LABEL[type] ?? type}
                         </span>
                       </div>
-                      {items.map((r, i) => {
-                        const globalIdx = flatOffset + i
+                      {items.map((r) => {
+                        const globalIdx = resultIndexMap.get(r) ?? -1
                         return (
                           <button
                             key={r.id}

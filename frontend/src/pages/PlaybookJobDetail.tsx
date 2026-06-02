@@ -21,6 +21,17 @@ function jobDuration(job: AnsibleJob): string {
   return formatDuration(d, { format: ['minutes', 'seconds'] }) || '<1s'
 }
 
+const SENSITIVE_KEY = /password|secret|token|api_key|apikey|passphrase/i
+
+function maskExtravars(extravars: Record<string, unknown>): Record<string, unknown> {
+  return Object.fromEntries(
+    Object.entries(extravars).map(([k, v]) => [
+      k,
+      SENSITIVE_KEY.test(k) ? '••••••••' : v,
+    ])
+  )
+}
+
 function buildRerunVars(extravars: Record<string, unknown>): Record<string, string> {
   // Pre-fill all vars including sensitive ones — they render masked (type=password).
   // User can change any value before submitting.
@@ -181,7 +192,7 @@ export function PlaybookJobDetail() {
           <div>
             <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-1">Extra Vars</p>
             <pre className="text-xs bg-gray-50 border border-gray-100 rounded p-3 font-mono text-gray-700 overflow-x-auto">
-              {JSON.stringify(job.extravars, null, 2)}
+              {JSON.stringify(maskExtravars(job.extravars), null, 2)}
             </pre>
           </div>
         )}
