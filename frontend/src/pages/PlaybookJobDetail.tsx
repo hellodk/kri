@@ -1,5 +1,5 @@
 import { useParams, Link } from 'react-router-dom'
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { playbooksApi, type AnsibleJob } from '../api/playbooks'
 import { PlaybookRunModal } from './PlaybookRunModal'
@@ -53,6 +53,17 @@ export function PlaybookJobDetail() {
       return s === 'running' || s === 'pending' ? 3000 : false
     },
   })
+
+  // Auto-scroll the log pane to the bottom as new output streams in.
+  // Only auto-scrolls when the user is already near the bottom, so manual
+  // scroll-up to read earlier output isn't yanked away.
+  const logRef = useRef<HTMLPreElement>(null)
+  useEffect(() => {
+    const el = logRef.current
+    if (!el) return
+    const nearBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 120
+    if (nearBottom) el.scrollTop = el.scrollHeight
+  }, [job?.stdout])
 
   // Hooks must be declared before any early returns (Rules of Hooks)
   const qc = useQueryClient()
@@ -187,6 +198,24 @@ export function PlaybookJobDetail() {
           </div>
         </div>
 
+        {/* Command being run */}
+        <div>
+          <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-1">Command</p>
+          <pre className="text-xs bg-gray-950 text-green-300 border border-gray-800 rounded p-3 font-mono overflow-x-auto whitespace-pre-wrap">
+            {(() => {
+              const masked = maskExtravars(job.extravars || {})
+              const eFlags = Object.entries(masked)
+                .map(([k, v]) => `-e ${k}='${v}'`)
+                .join(' ')
+              const vFlag = job.verbosity && job.verbosity > 0 ? ' -' + 'v'.repeat(job.verbosity) : ''
+              return `ansible-playbook ${job.playbook}`
+                + ` --limit ${job.target_label ?? job.target_id}`
+                + (eFlags ? ` ${eFlags}` : '')
+                + vFlag
+            })()}
+          </pre>
+        </div>
+
         {/* Extra vars */}
         {job.extravars && Object.keys(job.extravars).length > 0 && (
           <div>
@@ -217,6 +246,7 @@ export function PlaybookJobDetail() {
         <div className="flex-1 overflow-hidden">
           {job.stdout ? (
             <pre
+              ref={logRef}
               className="text-xs font-mono bg-gray-950 text-green-300 p-4 overflow-auto leading-relaxed whitespace-pre-wrap h-full"
             >
               {job.stdout}

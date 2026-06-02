@@ -48,6 +48,7 @@ class AnsibleJobResponse(BaseModel):
     completed_at: datetime | None
     stdout: str | None
     rc: int | None
+    verbosity: int = 0
     created_at: datetime
     celery_task_id: str | None = None
     cancelled_at: datetime | None = None

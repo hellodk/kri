@@ -193,8 +193,8 @@ def _flush_stdout(job_uuid: _uuid.UUID, lines: list[str], last_task: str | None)
     bind=True,
     max_retries=0,
     queue="maintenance",
-    soft_time_limit=600,   # 10 min soft limit → raises SoftTimeLimitExceeded
-    time_limit=660,        # 11 min hard kill
+    soft_time_limit=1800,  # 30 min — real salt-master deploys can take 15-20 min
+    time_limit=1860,       # 31 min hard kill
 )
 def run_playbook(self, job_id: str, ssh_username: str | None = None, ssh_password: str | None = None, verbosity: int = 0) -> dict:
     job_uuid = _uuid.UUID(job_id)
@@ -270,6 +270,30 @@ def run_playbook(self, job_id: str, ssh_username: str | None = None, ssh_passwor
                 _log.info("playbook_tasks: role %r → synthesized wrapper at %s", role_name, wrapper_path)
                 playbook_path = wrapper_path
 
+            # ansible-runner's `runner.events` is a BLOCKING generator
+            # (while status=='running': yield) — calling list(runner.events)
+            # blocks until the whole run finishes, so polling it never streams
+            # mid-run. Use the event_handler push callback instead: the runner
+            # thread invokes it per-event as each one is written. We append to a
+            # lock-guarded buffer and the main thread flushes it to the DB on a
+            # cadence, so the UI sees logs grow live (#347).
+            import threading as _threading
+            _buf_lock = _threading.Lock()
+
+            def _event_handler(event: dict) -> bool:
+                et = event.get("event", "")
+                if et in ("runner_on_start", "playbook_on_task_start"):
+                    t = event.get("event_data", {}).get("task", "")
+                    if t:
+                        _last_task_ref["task"] = t
+                msg = event.get("stdout", "")
+                if msg:
+                    with _buf_lock:
+                        stdout_lines.append(msg)
+                return True
+
+            _last_task_ref: dict = {"task": None}
+
             thread, runner = ansible_runner.run_async(
                 private_data_dir=tmpdir,
                 playbook=str(playbook_path),
@@ -300,41 +324,25 @@ def run_playbook(self, job_id: str, ssh_username: str | None = None, ssh_passwor
                     # Per-task execution timeout (catches stuck file copies, installs etc.)
                     "ANSIBLE_TASK_TIMEOUT": "300",
                 },
-                quiet=False,
-                rotate_artifacts=1,
+                event_handler=_event_handler,
+                quiet=True,            # DB is the sole sink — don't echo to worker stdout
+                rotate_artifacts=None,  # don't prune job_events/ mid-run (would drop events)
             )
 
-            # Poll events from the running playbook and flush to DB every 30s.
-            # runner.events re-reads ALL events from disk on every call, so we
-            # track processed_count to only consume NEW events each iteration.
-            processed_count = 0
+            # Non-blocking flush loop: event_handler fills stdout_lines on the
+            # runner thread; here we just snapshot+flush to the DB every few
+            # seconds so the UI streams. Does NOT touch runner.events.
             while thread.is_alive():
-                all_events = list(runner.events)
-                for event in all_events[processed_count:]:
-                    event_type = event.get("event", "")
-                    if event_type in ("runner_on_start", "playbook_on_task_start"):
-                        task_name = event.get("event_data", {}).get("task", "")
-                        if task_name:
-                            last_task = task_name
-                    msg = event.get("stdout", "")
-                    if msg:
-                        stdout_lines.append(msg)
-                processed_count = len(all_events)
-
                 now = time.time()
                 if now - last_db_write >= _LOG_BATCH_INTERVAL:
-                    _flush_stdout(job_uuid, stdout_lines, last_task)
+                    with _buf_lock:
+                        snapshot = list(stdout_lines)
+                    _flush_stdout(job_uuid, snapshot, _last_task_ref["task"])
                     last_db_write = now
-
                 time.sleep(1)
+            thread.join()
 
-            # Drain any remaining events the thread wrote after loop exited
-            all_events = list(runner.events)
-            for event in all_events[processed_count:]:
-                msg = event.get("stdout", "")
-                if msg:
-                    stdout_lines.append(msg)
-
+            last_task = _last_task_ref["task"]
             final_status = runner.status
             final_rc = runner.rc
 

@@ -33,6 +33,7 @@ export interface AnsibleJob {
   cancelled_at?: string | null
   stdout: string | null
   rc: number | null
+  verbosity?: number
   created_at: string
   celery_task_id?: string | null
 }
