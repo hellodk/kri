@@ -13,6 +13,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from fleet_platform.api.deps import get_db
 from fleet_platform.api.limiter import limiter
+from fleet_platform.core.audit import audit
 from fleet_platform.core.auth import get_current_user, hash_password, require_role
 from fleet_platform.models.ansible_job import AnsibleJob
 from fleet_platform.models.node import Node
@@ -990,11 +991,13 @@ async def run_playbook_endpoint(
     await db.commit()
     await db.refresh(job)
 
-    run_playbook.delay(
+    task = run_playbook.delay(
         str(job.id),
         ssh_username=payload.ssh_username,
         ssh_password=payload.ssh_password,
     )
+    job.celery_task_id = task.id
+    await db.commit()
 
     return PlaybookRunResponse(
         job_id=job.id,
@@ -1080,6 +1083,8 @@ async def list_ansible_jobs(
             stdout=j.stdout,
             rc=j.rc,
             created_at=j.created_at,
+            celery_task_id=j.celery_task_id,
+            cancelled_at=j.cancelled_at,
         )
         for j in jobs
     ]
@@ -1109,7 +1114,59 @@ async def get_ansible_job(
         stdout=job.stdout,
         rc=job.rc,
         created_at=job.created_at,
+        celery_task_id=job.celery_task_id,
+        cancelled_at=job.cancelled_at,
     )
+
+
+@router.post("/jobs/{job_id}/cancel", status_code=200)
+async def cancel_playbook_job(
+    job_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+    claims: dict = Depends(require_role("operator", "admin")),
+):
+    """Cancel a running or pending playbook job (#342)."""
+    from fleet_platform.workers.celery_app import celery_app as _celery
+
+    result = await db.execute(select(AnsibleJob).where(AnsibleJob.id == job_id))
+    job = result.scalar_one_or_none()
+    if not job:
+        raise HTTPException(status_code=404, detail="Job not found")
+
+    if job.status not in ("running", "pending"):
+        raise HTTPException(
+            status_code=409,
+            detail=f"Job is already in terminal state '{job.status}' — cannot cancel",
+        )
+
+    # Revoke the Celery task (SIGTERM to the worker process) — best-effort
+    if job.celery_task_id:
+        try:
+            _celery.control.revoke(job.celery_task_id, terminate=True, signal="SIGTERM")
+        except Exception:
+            pass  # revoke is best-effort — DB update still proceeds
+
+    now = datetime.now(UTC)
+    job.status = "cancelled"
+    job.completed_at = now
+    job.cancelled_at = now
+    existing_stdout = job.stdout or ""
+    job.stdout = (
+        existing_stdout
+        + f"\n\n[CANCELLED] Job manually cancelled by {claims['sub']} at {now.isoformat()}"
+    ).lstrip()
+    await db.commit()
+
+    await audit(
+        db,
+        actor=claims["sub"],
+        action="playbook_job_cancelled",
+        resource_type="ansible_job",
+        resource_id=job_id,
+        new_value={"job_id": str(job_id), "playbook": job.playbook},
+    )
+
+    return {"job_id": str(job_id), "status": "cancelled", "message": "Job cancelled successfully"}
 
 
 @router.get("/files")

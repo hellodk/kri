@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
-import { useQuery } from '@tanstack/react-query'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { executionsApi } from '../api/executions'
 import { playbooksApi, type AnsibleJob } from '../api/playbooks'
 import { Skeleton } from '../components/Skeleton'
@@ -17,9 +17,10 @@ function jobDuration(job: { started_at: string | null; completed_at: string | nu
 
 function StatusBadge({ status }: { status: string }) {
   const cls =
-    status === 'completed' ? 'bg-green-100 text-green-800' :
-    status === 'failed'    ? 'bg-red-100 text-red-800' :
-    status === 'running'   ? 'bg-blue-100 text-blue-800 animate-pulse' :
+    status === 'completed'  ? 'bg-green-100 text-green-800' :
+    status === 'failed'     ? 'bg-red-100 text-red-800' :
+    status === 'running'    ? 'bg-blue-100 text-blue-800 animate-pulse' :
+    status === 'cancelled'  ? 'bg-amber-100 text-amber-800' :
     'bg-gray-100 text-gray-700'
   return <span className={`text-xs px-2 py-0.5 rounded font-medium ${cls}`}>{status}</span>
 }
@@ -28,6 +29,7 @@ export function ExecutionHistory() {
   const [page, setPage] = useState(1)
   const [ansiblePage, setAnsiblePage] = useState(1)
   const { executionStatus } = useFilterStore()
+  const qc = useQueryClient()
   const [searchParams, setSearchParams] = useSearchParams()
   const statusFilter = searchParams.get('status') || 'all'
   const typeFilter = searchParams.get('type') || 'all'
@@ -137,11 +139,12 @@ export function ExecutionHistory() {
                   <th className="px-4 py-3">Started</th>
                   <th className="px-4 py-3">Duration</th>
                   <th className="px-4 py-3">RC</th>
+                  <th className="px-4 py-3"></th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100">
                 {ansibleItems.length === 0 && (
-                  <tr><td colSpan={6} className="px-4 py-8 text-center text-sm text-gray-400">
+                  <tr><td colSpan={7} className="px-4 py-8 text-center text-sm text-gray-400">
                     No playbook runs yet. Click ▷ Run on a playbook to execute it.
                   </td></tr>
                 )}
@@ -163,6 +166,25 @@ export function ExecutionHistory() {
                       {typeof j.rc === 'number' ? (
                         <span className={j.rc === 0 ? 'text-green-600' : 'text-red-600'}>{j.rc}</span>
                       ) : '—'}
+                    </td>
+                    <td className="px-4 py-2">
+                      {(j.status === 'running' || j.status === 'pending') && (
+                        <button
+                          onClick={async (e) => {
+                            e.stopPropagation()
+                            if (window.confirm(`Cancel "${j.playbook}"?`)) {
+                              try {
+                                await playbooksApi.cancel(j.id)
+                                qc.invalidateQueries({ queryKey: ['ansible-jobs'] })
+                              } catch { /* ignore */ }
+                            }
+                          }}
+                          className="text-xs text-red-500 hover:text-red-700 hover:bg-red-50 px-2 py-0.5 rounded border border-red-200 transition-colors"
+                          title="Cancel this job"
+                        >
+                          ✕ Cancel
+                        </button>
+                      )}
                     </td>
                   </tr>
                 ))}

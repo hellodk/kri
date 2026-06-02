@@ -26,6 +26,8 @@ class AnsibleJob(Base):
     completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     stdout: Mapped[str | None] = mapped_column(Text, nullable=True)
     rc: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    celery_task_id: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    cancelled_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now()
     )

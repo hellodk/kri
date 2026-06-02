@@ -1,15 +1,16 @@
 import { useParams, Link } from 'react-router-dom'
 import { useEffect, useState } from 'react'
-import { useQuery } from '@tanstack/react-query'
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { playbooksApi, type AnsibleJob } from '../api/playbooks'
 import { PlaybookRunModal } from './PlaybookRunModal'
 import { formatDistanceToNow, formatDuration, intervalToDuration } from 'date-fns'
 
 function statusBadge(status: string) {
   const cls =
-    status === 'completed' ? 'bg-green-100 text-green-800' :
-    status === 'failed'    ? 'bg-red-100 text-red-800' :
-    status === 'running'   ? 'bg-blue-100 text-blue-800 animate-pulse' :
+    status === 'completed'  ? 'bg-green-100 text-green-800' :
+    status === 'failed'     ? 'bg-red-100 text-red-800' :
+    status === 'running'    ? 'bg-blue-100 text-blue-800 animate-pulse' :
+    status === 'cancelled'  ? 'bg-amber-100 text-amber-800' :
     'bg-gray-100 text-gray-700'
   return <span className={`text-xs px-2 py-0.5 rounded font-medium ${cls}`}>{status}</span>
 }
@@ -43,6 +44,14 @@ export function PlaybookJobDetail() {
   })
 
   // Hooks must be declared before any early returns (Rules of Hooks)
+  const qc = useQueryClient()
+  const cancelMutation = useMutation({
+    mutationFn: () => playbooksApi.cancel(jobId!),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['ansible-job', jobId] })
+    },
+  })
+
   const [showRerun, setShowRerun] = useState(false)
 
   const { data: allPlaybooks } = useQuery({
@@ -117,6 +126,31 @@ export function PlaybookJobDetail() {
             </p>
           </div>
           <div className="flex flex-col items-end gap-2 shrink-0">
+            {isLive && (
+              <button
+                onClick={() => {
+                  if (window.confirm('Cancel this playbook run? This will send SIGTERM to the Ansible process.')) {
+                    cancelMutation.mutate()
+                  }
+                }}
+                disabled={cancelMutation.isPending}
+                className="px-3 py-1.5 text-sm font-medium bg-white border border-red-300 text-red-600 rounded-lg hover:bg-red-50 flex items-center gap-1.5 shrink-0 disabled:opacity-50"
+              >
+                {cancelMutation.isPending ? (
+                  <>
+                    <span className="w-3 h-3 border border-red-400 border-t-transparent rounded-full animate-spin" />
+                    Cancelling…
+                  </>
+                ) : (
+                  <>
+                    <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                    Cancel
+                  </>
+                )}
+              </button>
+            )}
             {(job.status === 'completed' || job.status === 'failed') && (
               <button
                 onClick={() => setShowRerun(true)}

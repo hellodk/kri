@@ -1,5 +1,4 @@
 """Enable pg_trgm extension and add trigram indexes for fuzzy unified search."""
-import sqlalchemy as sa
 from alembic import op
 
 revision = '034'
