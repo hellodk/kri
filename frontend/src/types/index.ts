@@ -32,6 +32,9 @@ export interface Node {
   bootstrap_ip?: string | null
   xcode_version?: string | null
   macos_version?: string | null
+  // Resource usage metrics (percentage, 0-100)
+  cpu_usage_pct?: number | null
+  mem_usage_pct?: number | null
   // SSH credential metadata (present when loaded via detail endpoint)
   ssh_username?: string | null
   ssh_auth_mode?: 'password' | 'key'

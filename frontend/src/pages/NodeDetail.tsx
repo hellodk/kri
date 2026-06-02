@@ -1025,6 +1025,19 @@ export function NodeDetail() {
         </div>
         <div className="flex items-center gap-2">
           <button
+            onClick={askAI}
+            disabled={aiLoading}
+            title="Get AI recommendations for this node"
+            className="px-3 py-2 text-sm font-medium rounded-lg border border-blue-200 bg-blue-50 text-blue-600 hover:bg-blue-100 shadow-sm disabled:opacity-50 transition-colors flex items-center gap-1.5"
+          >
+            {aiLoading ? (
+              <span className="w-3.5 h-3.5 border border-blue-400 border-t-transparent rounded-full animate-spin" />
+            ) : (
+              <span>🤖</span>
+            )}
+            <span className="hidden sm:inline">Ask AI</span>
+          </button>
+          <button
             onClick={() => maintenanceMutation.mutate(!node.maintenance_mode)}
             disabled={maintenanceMutation.isPending}
             className={`px-3 py-2 text-sm font-medium rounded-lg border shadow-sm disabled:opacity-50 transition-colors ${

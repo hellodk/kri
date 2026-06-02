@@ -144,9 +144,23 @@ export function ExecutionHistory() {
               </thead>
               <tbody className="divide-y divide-gray-100">
                 {ansibleItems.length === 0 && (
-                  <tr><td colSpan={7} className="px-4 py-8 text-center text-sm text-gray-400">
-                    No playbook runs yet. Click ▷ Run on a playbook to execute it.
-                  </td></tr>
+                  <tr>
+                    <td colSpan={7} className="px-4 py-12 text-center">
+                      <div className="flex flex-col items-center gap-3">
+                        <div className="w-12 h-12 rounded-full bg-gray-100 flex items-center justify-center text-2xl">▷</div>
+                        <div>
+                          <p className="text-sm font-medium text-gray-700">No playbook runs yet</p>
+                          <p className="text-xs text-gray-400 mt-1">Go to Automation → Playbooks to run your first playbook</p>
+                        </div>
+                        <a
+                          href="/automation?tab=playbooks"
+                          className="px-4 py-1.5 text-xs font-medium bg-brand-600 text-white rounded-lg hover:bg-brand-700 transition-colors"
+                        >
+                          Browse Playbooks →
+                        </a>
+                      </div>
+                    </td>
+                  </tr>
                 )}
                 {ansibleItems.map((j: AnsibleJob) => (
                   <tr key={j.id} className="hover:bg-gray-50">
@@ -223,9 +237,23 @@ export function ExecutionHistory() {
                 </thead>
                 <tbody className="divide-y divide-gray-100">
                   {saltItems.length === 0 && !saltLoading && (
-                    <tr><td colSpan={6} className="px-4 py-8 text-center text-sm text-gray-400">
-                      No salt state runs yet.
-                    </td></tr>
+                    <tr>
+                      <td colSpan={6} className="px-4 py-12 text-center">
+                        <div className="flex flex-col items-center gap-3">
+                          <div className="w-12 h-12 rounded-full bg-gray-100 flex items-center justify-center text-2xl">⬡</div>
+                          <div>
+                            <p className="text-sm font-medium text-gray-700">No Salt state runs yet</p>
+                            <p className="text-xs text-gray-400 mt-1">Apply a state from Automation → Salt Ops</p>
+                          </div>
+                          <a
+                            href="/automation?tab=salt-ops"
+                            className="px-4 py-1.5 text-xs font-medium bg-gray-700 text-white rounded-lg hover:bg-gray-800 transition-colors"
+                          >
+                            Go to Salt Ops →
+                          </a>
+                        </div>
+                      </td>
+                    </tr>
                   )}
                   {saltItems.map((j) => (
                     <tr key={j.id} className="hover:bg-gray-50">

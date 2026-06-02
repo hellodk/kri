@@ -18,6 +18,7 @@ import { BootstrapModal } from './BootstrapModal'
 import { ImportNodesModal } from './ImportNodesModal'
 import { ConfirmDialog } from '../components/ConfirmDialog'
 import { formatDistanceToNow, differenceInDays, parseISO } from 'date-fns'
+import { formatIST } from '../utils/time'
 import type { Node } from '../types'
 
 function isMacOSNode(node: Node): boolean {
@@ -1320,10 +1321,50 @@ export function FleetDashboard() {
                           )}
                         </td>
                         <td className="px-4 py-3">
-                          <div className="flex items-center gap-1.5 flex-wrap">
-                            <StatusBadge status={node.status} />
-                            {node.maintenance_mode && (
-                              <span className="text-xs px-1.5 py-0.5 rounded bg-amber-100 text-amber-700 border border-amber-200">⚙ Maint.</span>
+                          <div className="flex flex-col gap-1.5">
+                            <div className="flex items-center gap-1.5 flex-wrap">
+                              <StatusBadge status={node.status} />
+                              {node.maintenance_mode && (
+                                <span className="text-xs px-1.5 py-0.5 rounded bg-amber-100 text-amber-700 border border-amber-200">⚙ Maint.</span>
+                              )}
+                            </div>
+                            {((node.cpu_usage_pct ?? 0) > 0 || (node.mem_usage_pct ?? 0) > 0) && (
+                              <div className="flex flex-col gap-0.5 min-w-[72px]">
+                                {(node.cpu_usage_pct ?? 0) > 0 && (
+                                  <div className="flex items-center gap-1">
+                                    <span className="text-[10px] text-gray-400 w-6 shrink-0">CPU</span>
+                                    <div className="flex-1 bg-gray-100 rounded-full h-1.5 overflow-hidden">
+                                      <div
+                                        className={`h-full rounded-full ${
+                                          (node.cpu_usage_pct ?? 0) > 80 ? 'bg-red-500' :
+                                          (node.cpu_usage_pct ?? 0) > 50 ? 'bg-amber-500' : 'bg-emerald-500'
+                                        }`}
+                                        style={{ width: `${Math.min(node.cpu_usage_pct ?? 0, 100)}%` }}
+                                      />
+                                    </div>
+                                    <span className="text-[10px] text-gray-500 w-7 text-right tabular-nums">
+                                      {(node.cpu_usage_pct ?? 0).toFixed(0)}%
+                                    </span>
+                                  </div>
+                                )}
+                                {(node.mem_usage_pct ?? 0) > 0 && (
+                                  <div className="flex items-center gap-1">
+                                    <span className="text-[10px] text-gray-400 w-6 shrink-0">MEM</span>
+                                    <div className="flex-1 bg-gray-100 rounded-full h-1.5 overflow-hidden">
+                                      <div
+                                        className={`h-full rounded-full ${
+                                          (node.mem_usage_pct ?? 0) > 85 ? 'bg-red-500' :
+                                          (node.mem_usage_pct ?? 0) > 60 ? 'bg-amber-500' : 'bg-emerald-500'
+                                        }`}
+                                        style={{ width: `${Math.min(node.mem_usage_pct ?? 0, 100)}%` }}
+                                      />
+                                    </div>
+                                    <span className="text-[10px] text-gray-500 w-7 text-right tabular-nums">
+                                      {(node.mem_usage_pct ?? 0).toFixed(0)}%
+                                    </span>
+                                  </div>
+                                )}
+                              </div>
                             )}
                           </div>
                         </td>
@@ -1332,9 +1373,11 @@ export function FleetDashboard() {
                           <DriftBadge score={node.drift_score} />
                         </td>
                         <td className="px-4 py-3 text-gray-500">
-                          {node.last_seen_at
-                            ? formatDistanceToNow(new Date(node.last_seen_at), { addSuffix: true })
-                            : '—'}
+                          {node.last_seen_at ? (
+                            <span title={formatIST(node.last_seen_at)}>
+                              {formatDistanceToNow(new Date(node.last_seen_at), { addSuffix: true })}
+                            </span>
+                          ) : '—'}
                         </td>
                         <td className="px-4 py-3">
                           <div className="flex flex-wrap gap-1">
