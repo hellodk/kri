@@ -28,6 +28,9 @@ COPY --from=builder /app/pyproject.toml /app/pyproject.toml
 COPY --from=builder /usr/local/bin/uv /usr/local/bin/uv
 COPY fleet_platform/ ./fleet_platform/
 COPY playbooks/ ./playbooks/
+# salt/ holds the state tree the salt_master role syncs to the master host
+# (playbook references {{ playbook_dir }}/../salt/states/ = /app/salt/states).
+COPY salt/ ./salt/
 COPY alembic.ini ./
 COPY deploy/migrate.sh /app/deploy/migrate.sh
 
