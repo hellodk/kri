@@ -5,20 +5,14 @@ Uses PostgreSQL pg_trgm for fuzzy matching — handles typos, partial IDs, and
 substring matches. Results are grouped by entity type and ranked by similarity score.
 UUID prefix search allows finding any execution by its first 8 characters.
 """
-import uuid as _uuid
 from datetime import UTC, datetime, timedelta
 
 from fastapi import APIRouter, Depends, Query
-from sqlalchemy import func, or_, select, text
+from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from fleet_platform.api.deps import get_db
 from fleet_platform.core.auth import get_current_user
-from fleet_platform.models.ansible_job import AnsibleJob
-from fleet_platform.models.execution import ExecutionJob
-from fleet_platform.models.group import Group
-from fleet_platform.models.llm_query_log import LLMQueryLog
-from fleet_platform.models.node import Node
 
 router = APIRouter(prefix="/api/v1")
 
