@@ -1,10 +1,110 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
+import { Link } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { playbooksApi } from '../api/playbooks'
 import type { PlaybookEntry } from '../api/playbooks'
 import { fleetApi } from '../api/fleet'
 import { groupsApi } from '../api/groups'
 import { useToastStore } from '../stores/toastStore'
+
+// Strip ANSI escape codes from Ansible/Salt output
+function stripAnsi(str: string): string {
+  // eslint-disable-next-line no-control-regex
+  return str.replace(/\x1b\[[0-9;]*m/g, '')
+}
+
+// Running job output panel — fills available height, auto-scrolls while live
+function JobOutput({ jobData, jobId, status, label, colour }: {
+  jobData: { target_label?: string; stdout?: string | null; rc?: number | null } | undefined
+  jobId: string | null
+  status: string | undefined
+  label: string
+  colour: string
+}) {
+  const logRef = useRef<HTMLPreElement>(null)
+  const isLive = status === 'pending' || status === 'running'
+  const [userScrolled, setUserScrolled] = useState(false)
+
+  // Auto-scroll to bottom while running, unless user has scrolled up
+  useEffect(() => {
+    if (!isLive || userScrolled) return
+    const el = logRef.current
+    if (el) el.scrollTop = el.scrollHeight
+  }, [jobData?.stdout, isLive, userScrolled])
+
+  function handleScroll() {
+    const el = logRef.current
+    if (!el) return
+    // If user scrolled up more than 40px from bottom, stop auto-scroll
+    const atBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 40
+    setUserScrolled(!atBottom)
+  }
+
+  const stdout = jobData?.stdout ? stripAnsi(jobData.stdout) : null
+
+  return (
+    <div className="flex flex-col h-full space-y-3">
+      {/* Status bar */}
+      <div className="flex items-center gap-3 px-4 py-3 bg-gray-50 rounded-xl border border-gray-200 shrink-0">
+        <span className={`text-sm font-semibold ${colour}`}>{label}</span>
+        {jobData?.target_label && (
+          <span className="text-sm text-gray-600 flex-1">on <span className="font-medium font-mono">{jobData.target_label}</span></span>
+        )}
+        {isLive && (
+          <div className="w-4 h-4 border-2 border-brand-600 border-t-transparent rounded-full animate-spin shrink-0" />
+        )}
+        {jobId && (
+          <Link
+            to={`/playbook-job/${jobId}`}
+            className="text-xs text-brand-600 hover:underline shrink-0"
+            onClick={() => {/* modal stays open; user navigates in same tab */}}
+          >
+            Full logs →
+          </Link>
+        )}
+      </div>
+
+      {/* Background notice */}
+      {isLive && (
+        <div className="flex items-center gap-2 px-3 py-2 bg-blue-50 border border-blue-100 rounded-lg shrink-0">
+          <span className="text-blue-400 text-xs">ℹ</span>
+          <p className="text-xs text-blue-700">Closing this window does not stop the playbook — it continues running on the server.</p>
+        </div>
+      )}
+
+      {/* Log output — fills available space */}
+      <div className="flex-1 flex flex-col min-h-0">
+        <div className="flex items-center justify-between mb-1 shrink-0">
+          <p className="text-xs font-medium text-gray-400 uppercase tracking-wide">Output</p>
+          {isLive && userScrolled && (
+            <button
+              type="button"
+              onClick={() => { setUserScrolled(false); const el = logRef.current; if (el) el.scrollTop = el.scrollHeight }}
+              className="text-xs text-brand-600 hover:underline"
+            >
+              ↓ Scroll to bottom
+            </button>
+          )}
+        </div>
+        <pre
+          ref={logRef}
+          onScroll={handleScroll}
+          className="flex-1 text-xs font-mono bg-gray-950 text-green-300 rounded-lg p-4 overflow-auto whitespace-pre-wrap leading-relaxed min-h-0"
+          style={{ minHeight: '280px' }}
+        >
+          {stdout ?? (isLive ? 'Waiting for output…' : 'No output recorded.')}
+        </pre>
+      </div>
+
+      {/* Exit code */}
+      {typeof jobData?.rc === 'number' && (
+        <p className="text-xs text-gray-400 shrink-0">
+          Exit code: <span className={jobData.rc === 0 ? 'text-green-600 font-bold' : 'text-red-600 font-bold'}>{jobData.rc}</span>
+        </p>
+      )}
+    </div>
+  )
+}
 
 // Eye-icon show/hide input — same pattern as LoginPage for consistency
 function SensitiveInput({ value, onChange, placeholder, isSystemVar }: {
@@ -56,6 +156,10 @@ const SYSTEM_VARS = new Set([
 interface Props {
   playbook: PlaybookEntry
   onClose: () => void
+  // Optional pre-fill for re-run
+  initialTargetType?: 'node' | 'group'
+  initialTargetId?: string
+  initialVars?: Record<string, string>
 }
 
 const STATUS_STYLE: Record<string, { label: string; colour: string }> = {
@@ -71,12 +175,12 @@ function fmtDuration(secs: number): string {
   return m > 0 ? `${m}m ${s}s` : `${s}s`
 }
 
-export function PlaybookRunModal({ playbook, onClose }: Props) {
-  const [targetType, setTargetType] = useState<'node' | 'group'>('node')
-  const [targetId, setTargetId] = useState('')
+export function PlaybookRunModal({ playbook, onClose, initialTargetType, initialTargetId, initialVars }: Props) {
+  const [targetType, setTargetType] = useState<'node' | 'group'>(initialTargetType ?? 'node')
+  const [targetId, setTargetId] = useState(initialTargetId ?? '')
   const [jobId, setJobId] = useState<string | null>(null)
   const [vars, setVars] = useState<Record<string, string>>(
-    Object.fromEntries(
+    initialVars ?? Object.fromEntries(
       Object.entries(playbook.default_vars).map(([k, v]) => [k, String(v ?? '')])
     )
   )
@@ -156,8 +260,8 @@ export function PlaybookRunModal({ playbook, onClose }: Props) {
           <button onClick={onClose} className="flex items-center justify-center w-8 h-8 rounded-lg text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-colors text-lg">×</button>
         </div>
 
-        {/* Scrollable body */}
-        <div className="flex-1 overflow-y-auto px-6 py-5">
+        {/* Body — scrollable for pre-run form, flex for running output */}
+        <div className={`flex-1 px-6 py-5 min-h-0 ${jobId ? 'flex flex-col overflow-hidden' : 'overflow-y-auto'}`}>
         {!jobId ? (
           <div className="space-y-5">
             <div>
@@ -265,33 +369,7 @@ export function PlaybookRunModal({ playbook, onClose }: Props) {
             </div>
           </div>
         ) : (
-          <div className="space-y-4">
-            <div className="flex items-center gap-3 p-4 bg-gray-50 rounded-xl border border-gray-200">
-              <div className={`text-sm font-semibold ${colour}`}>{label}</div>
-              <div className="text-sm text-gray-600 flex-1">{jobData?.target_label}</div>
-              {(status === 'pending' || status === 'running') && (
-                <div className="w-4 h-4 border-2 border-brand-600 border-t-transparent rounded-full animate-spin" />
-              )}
-            </div>
-            {(status === 'running' || status === 'pending') && (
-              <p className="text-xs text-gray-400">
-                Closing this window does not stop the playbook — it runs on the server until complete.
-              </p>
-            )}
-
-            {jobData?.stdout && (
-              <div>
-                <p className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-1">Output</p>
-                <pre className="text-sm font-mono bg-gray-900 text-gray-100 rounded-lg p-4 overflow-auto min-h-32 max-h-[40vh] whitespace-pre-wrap leading-relaxed">
-                  {jobData.stdout}
-                </pre>
-              </div>
-            )}
-
-            {typeof jobData?.rc === 'number' && (
-              <p className="text-xs text-gray-400">Exit code: {jobData.rc}</p>
-            )}
-          </div>
+          <JobOutput jobData={jobData} jobId={jobId} status={status} label={label} colour={colour} />
         )}
         </div>
 
@@ -311,10 +389,12 @@ export function PlaybookRunModal({ playbook, onClose }: Props) {
             </div>
           </form>
         ) : (
-          <button onClick={onClose}
-            className="w-full py-2.5 border border-gray-300 text-gray-700 rounded-lg text-sm font-medium hover:bg-gray-50">
-            {status === 'completed' || status === 'failed' ? 'Close' : 'Close — runs in background (see Executions tab)'}
-          </button>
+          <div className="flex justify-end">
+            <button onClick={onClose}
+              className="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg text-sm font-medium hover:bg-gray-50">
+              {status === 'completed' || status === 'failed' ? 'Close' : 'Close'}
+            </button>
+          </div>
         )}
         </div>
 
