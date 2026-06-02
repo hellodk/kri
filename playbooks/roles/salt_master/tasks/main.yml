@@ -1,22 +1,49 @@
 ---
 # playbooks/roles/salt_master/tasks/main.yml
 
-- name: Detect CPU architecture
+- name: Determine OS family for salt install
+  set_fact:
+    _salt_os: >-
+      {{ 'macos' if ansible_system == 'Darwin'
+      else 'debian' if ansible_os_family == 'Debian'
+      else 'redhat' if ansible_os_family == 'RedHat'
+      else 'unsupported' }}
+
+- name: Fail clearly on unsupported OS
+  fail:
+    msg: >
+      salt-master install is not supported on {{ ansible_system }}
+      / {{ ansible_os_family | default('unknown') }}.
+      Supported: macOS, Debian/Ubuntu, RHEL/Rocky/Alma.
+  when: _salt_os == 'unsupported'
+
+- name: Detect CPU architecture (macOS only — needed for .pkg arch)
   shell: uname -m
   args:
     executable: "{{ ansible_shell_executable | default('/bin/bash') }}"
   register: uname_result
   changed_when: false
+  when: _salt_os == 'macos'
 
-- name: Set arch facts
+- name: Set arch facts (macOS only)
   set_fact:
     cpu_arch: "{{ 'arm64' if 'arm64' in uname_result.stdout else 'x86_64' }}"
     brew_prefix: "{{ '/opt/homebrew' if 'arm64' in uname_result.stdout else '/usr/local' }}"
+  when: _salt_os == 'macos'
 
-- import_tasks: install.yml
+- name: Install salt-master (per OS family)
+  include_tasks: "install_{{ _salt_os }}.yml"
+
 - import_tasks: configure.yml
 - import_tasks: pki.yml
 - import_tasks: pillar.yml
 - import_tasks: states.yml
 - import_tasks: api_user.yml
-- import_tasks: service.yml
+
+- name: Configure service (macOS launchctl)
+  include_tasks: service_macos.yml
+  when: _salt_os == 'macos'
+
+- name: Configure service (Linux systemd)
+  include_tasks: service_systemd.yml
+  when: _salt_os != 'macos'

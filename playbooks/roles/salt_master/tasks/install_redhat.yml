@@ -1,0 +1,17 @@
+---
+# tasks/install_redhat.yml — install salt-master on RHEL/Rocky/Alma via dnf
+- name: Add Salt project dnf repo
+  yum_repository:
+    name: salt
+    description: Salt repo
+    baseurl: https://packages.broadcom.com/artifactory/saltproject-rpm/
+    gpgcheck: true
+    gpgkey: https://packages.broadcom.com/artifactory/api/security/keypair/SaltProjectKey/public
+    enabled: true
+  become: true
+
+- name: Install salt-master
+  dnf:
+    name: "salt-master-{{ salt_version }}"
+    state: present
+  become: true

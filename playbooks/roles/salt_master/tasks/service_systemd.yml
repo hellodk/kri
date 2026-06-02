@@ -1,0 +1,17 @@
+---
+# tasks/service_systemd.yml — enable+start salt-master (and salt-api if present) via systemd
+- name: Enable and start salt-master
+  systemd:
+    name: salt-master
+    enabled: true
+    state: restarted
+    daemon_reload: true
+  become: true
+
+- name: Enable and start salt-api (if installed)
+  systemd:
+    name: salt-api
+    enabled: true
+    state: restarted
+  become: true
+  failed_when: false
