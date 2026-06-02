@@ -1,6 +1,15 @@
 ---
 # playbooks/roles/salt_master/tasks/main.yml
 
+- name: Gather facts for OS detection (callers may run with gather_facts:false)
+  setup:
+    gather_subset:
+      - '!all'
+      - '!min'
+      - distribution
+      - platform
+  when: ansible_system is not defined or ansible_os_family is not defined
+
 - name: Determine OS family for salt install
   set_fact:
     _salt_os: >-
