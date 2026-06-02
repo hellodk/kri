@@ -303,8 +303,27 @@ async def list_nodes(
     result = await db.execute(paged)
     nodes = result.scalars().all()
 
+    # Build group_count per node in one aggregate query
+    if nodes:
+        from fleet_platform.models.group import GroupMember as _GM
+        node_ids = [n.id for n in nodes]
+        gc_result = await db.execute(
+            select(_GM.node_id, func.count(_GM.group_id).label("cnt"))
+            .where(_GM.node_id.in_(node_ids))
+            .group_by(_GM.node_id)
+        )
+        group_count_map = {row.node_id: row.cnt for row in gc_result}
+    else:
+        group_count_map = {}
+
+    items = []
+    for n in nodes:
+        item = NodeListItem.model_validate(n)
+        item.group_count = group_count_map.get(n.id, 0)
+        items.append(item)
+
     return PaginatedResponse(
-        items=[NodeListItem.model_validate(n) for n in nodes],
+        items=items,
         total=total,
         page=page,
         per_page=per_page,

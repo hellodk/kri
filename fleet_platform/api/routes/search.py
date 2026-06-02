@@ -245,7 +245,10 @@ async def search(
     """
     q = q.strip()
     if len(q) < 2:
-        return {"query": "", "is_uuid_search": False, "results": [], "items": [], "nodes": [], "total": 0, "page": 1, "per_page": 0}
+        return {
+            "query": "", "is_uuid_search": False, "results": [],
+            "items": [], "nodes": [], "total": 0, "page": 1, "per_page": 0,
+        }
     pattern = f"%{q}%"
     is_uuid = _is_uuid_prefix(q)
 

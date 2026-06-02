@@ -34,6 +34,7 @@ class NodeListItem(BaseModel):
     maintenance_mode: bool = False
     xcode_version: str | None = None
     macos_version: str | None = None
+    group_count: int = 0  # number of groups this node belongs to
 
     model_config = {"from_attributes": True}
 

@@ -28,6 +28,7 @@ export interface Node {
   last_seen_at: string | null
   tags: Tag[]
   maintenance_mode: boolean
+  group_count: number        // how many groups this node belongs to (0 = ungrouped)
   bootstrap_ip?: string | null
   xcode_version?: string | null
   macos_version?: string | null
