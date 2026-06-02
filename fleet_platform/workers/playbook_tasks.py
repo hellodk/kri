@@ -88,6 +88,8 @@ def _write_static_inventory(tmpdir: str, hosts: list[dict]) -> str:
     inline per host rather than via a single global env var. Private keys are
     written to 0600 files in *tmpdir* and referenced, never inlined (#279).
     """
+    # [targets] is the kri-managed group (referenced by kri-synthesized wrappers).
+    # [all:children] makes all hosts visible to playbooks using `hosts: all`.
     lines = ["[targets]"]
     for h in hosts:
         parts = [h["hostname"], f"ansible_host={h['ip']}", f"ansible_user={h['ssh_user']}"]
@@ -99,6 +101,9 @@ def _write_static_inventory(tmpdir: str, hosts: list[dict]) -> str:
         elif h.get("ssh_password"):
             parts.append(f"ansible_ssh_pass={h['ssh_password']}")
         lines.append(" ".join(parts))
+    # Add [all:children] so playbooks using `hosts: all` see the selected nodes.
+    # This fixes playbooks that use `hosts: all` instead of `hosts: targets`.
+    lines += ["", "[all:children]", "targets"]
     inv_path = Path(tmpdir) / "inventory.ini"
     inv_path.write_text("\n".join(lines))
     inv_path.chmod(0o600)  # holds SSH passwords + IPs — never world/group readable

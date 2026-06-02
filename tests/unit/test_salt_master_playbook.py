@@ -9,7 +9,7 @@ def test_deploy_salt_master_playbook_exists():
     assert path.exists(), "deploy_salt_master_mm1.yml must exist"
     plays = yaml.safe_load(path.read_text())
     assert isinstance(plays, list)
-    assert plays[0]["hosts"] == "salt_master"
+    assert plays[0]["hosts"] == "all"  # updated: kri uses all to target selected nodes
 
 
 def test_deploy_salt_master_applies_role():

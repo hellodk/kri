@@ -164,26 +164,41 @@ export function PlaybookRunModal({ playbook, onClose }: Props) {
                   </span>
                 </label>
                 <div className="space-y-2 bg-gray-50 rounded-lg border border-gray-200 p-3 max-h-64 overflow-y-auto">
-                  {Object.entries(vars).map(([key, value]) => (
-                    <div key={key} className="flex items-start gap-3">
-                      <div className="flex flex-col w-52 shrink-0">
-                        <span className="text-xs font-mono text-gray-700">{key}</span>
-                        {SYSTEM_VARS.has(key) && (
-                          <span className="text-xs text-amber-600">⚠ system var</span>
-                        )}
+                  {Object.entries(vars).map(([key, value]) => {
+                    const isSensitive = /password|secret|token|api_key|apikey|passphrase/i.test(key)
+                    const isPlaceholder = value === key || /^changeme|^change.me|^<.*>$|^your.*/i.test(value)
+                    return (
+                      <div key={key} className="flex items-start gap-3">
+                        <div className="flex flex-col w-52 shrink-0">
+                          <span className="text-xs font-mono text-gray-700">{key}</span>
+                          {isSensitive && (
+                            <span className="text-xs text-blue-500">🔒 sensitive</span>
+                          )}
+                          {SYSTEM_VARS.has(key) && (
+                            <span className="text-xs text-amber-600">⚠ system var</span>
+                          )}
+                        </div>
+                        <div className="flex-1 space-y-1">
+                          <input
+                            type={isSensitive ? 'password' : 'text'}
+                            value={value}
+                            placeholder={isSensitive ? `Enter ${key}…` : undefined}
+                            onChange={(e) => setVars((prev) => ({ ...prev, [key]: e.target.value }))}
+                            className={`w-full px-2.5 py-1.5 text-sm border rounded-lg focus:outline-none font-mono ${
+                              isPlaceholder
+                                ? 'border-red-300 bg-red-50 focus:border-red-500'
+                                : SYSTEM_VARS.has(key)
+                                ? 'border-amber-300 bg-amber-50 focus:border-amber-500'
+                                : 'border-gray-300 focus:border-brand-600'
+                            }`}
+                          />
+                          {isPlaceholder && (
+                            <p className="text-xs text-red-600">⚠ Replace this placeholder with a real value before running</p>
+                          )}
+                        </div>
                       </div>
-                      <input
-                        type="text"
-                        value={value}
-                        onChange={(e) => setVars((prev) => ({ ...prev, [key]: e.target.value }))}
-                        className={`flex-1 px-2.5 py-1.5 text-sm border rounded-lg focus:outline-none font-mono ${
-                          SYSTEM_VARS.has(key)
-                            ? 'border-amber-300 bg-amber-50 focus:border-amber-500'
-                            : 'border-gray-300 focus:border-brand-600'
-                        }`}
-                      />
-                    </div>
-                  ))}
+                    )
+                  })}
                 </div>
               </div>
             )}

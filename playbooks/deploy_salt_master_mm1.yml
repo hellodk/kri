@@ -13,7 +13,7 @@
 #   3. Minion configs already set salt_master_address=100.102.68.75
 
 - name: Deploy salt-master natively on mm1
-  hosts: salt_master
+  hosts: all  # kri sets targets via inventory; use all to run on selected nodes
   gather_facts: false
   vars:
     # Override on CLI: -e kri_salt_api_password=<password>
