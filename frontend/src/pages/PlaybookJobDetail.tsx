@@ -21,12 +21,10 @@ function jobDuration(job: AnsibleJob): string {
 }
 
 function buildRerunVars(extravars: Record<string, unknown>): Record<string, string> {
-  const SENSITIVE = /password|secret|token|api_key|apikey|passphrase/i
+  // Pre-fill all vars including sensitive ones — they render masked (type=password).
+  // User can change any value before submitting.
   return Object.fromEntries(
-    Object.entries(extravars).map(([k, v]) => [
-      k,
-      SENSITIVE.test(k) ? '' : String(v ?? ''),
-    ])
+    Object.entries(extravars).map(([k, v]) => [k, String(v ?? '')])
   )
 }
 
