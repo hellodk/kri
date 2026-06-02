@@ -25,7 +25,8 @@ import { SshTabBar } from '../components/ssh/SshTabBar'
 import { MultiSessionTerminal } from '../components/ssh/MultiSessionTerminal'
 import type { SshTab } from '../components/ssh/SshTabBar'
 import { VNCViewer } from '../components/VNCViewer'
-import { formatDistanceToNow, format, differenceInDays, parseISO } from 'date-fns'
+import { formatDistanceToNow, differenceInDays, parseISO } from 'date-fns'
+import { formatIST, formatISTDate, formatChartDate } from '../utils/time'
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts'
 import { useToastStore } from '../stores/toastStore'
 import { api } from '../api/client'
@@ -995,7 +996,7 @@ export function NodeDetail() {
     .slice()
     .reverse()
     .map((d) => ({
-      date: d.computed_at ? format(new Date(d.computed_at), 'MM/dd') : '',
+      date: d.computed_at ? formatChartDate(d.computed_at) : '',
       score: d.drift_score,
     }))
 
@@ -1124,7 +1125,7 @@ export function NodeDetail() {
                 [
                   ['Version', node.os_version],
                   ['Build', node.os_build],
-                  ['First Seen', node.first_seen_at ? format(new Date(node.first_seen_at), 'PP') : null],
+                  ['First Seen', node.first_seen_at ? formatISTDate(node.first_seen_at) : null],
                 ] as [string, string | null][]
               ).map(([label, value]) => (
                 <div key={label} className="flex justify-between">
@@ -1581,7 +1582,7 @@ export function NodeDetail() {
                     </div>
                     <div>
                       <p className="text-xs text-gray-500 uppercase">Computed</p>
-                      <p className="text-sm">{format(new Date(latestDrift.computed_at), 'PP p')}</p>
+                      <p className="text-sm">{formatIST(latestDrift.computed_at)}</p>
                     </div>
                   </div>
                 </div>
@@ -1802,7 +1803,7 @@ export function NodeDetail() {
               >
                 {sbomScanHistory!.items.map((s, i) => (
                   <option key={s.id} value={s.id}>
-                    {format(new Date(s.scanned_at), 'PP p')}{i === 0 ? ' (latest)' : ''}
+                    {formatIST(s.scanned_at)}{i === 0 ? ' (latest)' : ''}
                   </option>
                 ))}
               </select>
@@ -1833,7 +1834,7 @@ export function NodeDetail() {
               <div className="bg-white rounded-lg border border-gray-200 p-4 flex gap-8 text-sm">
                 <div>
                   <p className="text-gray-500">Scanned</p>
-                  <p className="font-medium">{format(new Date(activeScan.scanned_at), 'PPpp')}</p>
+                  <p className="font-medium">{formatIST(activeScan.scanned_at)}</p>
                 </div>
                 <div>
                   <p className="text-gray-500">Format</p>
@@ -2307,7 +2308,7 @@ export function NodeDetail() {
                     {run.status === 'completed' ? 'completed' : run.status === 'failed' ? 'failed' : 'running'}
                   </span>
                   <span className="text-sm text-gray-700 flex-1">
-                    {format(new Date(run.started_at), 'PPpp')}
+                    {formatIST(run.started_at)}
                     {run.finished_at && (
                       <span className="text-gray-400 ml-2">
                         — {formatDistanceToNow(new Date(run.started_at), { addSuffix: false })} duration

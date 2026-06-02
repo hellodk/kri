@@ -973,6 +973,28 @@ export function FleetDashboard() {
     setShowSaltStateDropdown(false)
   }
 
+  const [sortField, sortDir] = sort.split(':') as [string, string]
+
+  function SortTh({ field, label, className }: { field: string; label: string; className?: string }) {
+    const isActive = sortField === field
+    const nextDir = isActive && sortDir === 'asc' ? 'desc' : 'asc'
+    return (
+      <th
+        className={`px-4 py-3 cursor-pointer select-none hover:bg-gray-100 group ${className ?? ''}`}
+        onClick={() => { setSort(`${field}:${isActive ? nextDir : 'desc'}`); setPage(1) }}
+      >
+        <span className="flex items-center gap-1">
+          {label}
+          {isActive ? (
+            <span className="text-amber-500 font-bold">{sortDir === 'desc' ? '↓' : '↑'}</span>
+          ) : (
+            <span className="text-gray-300 opacity-0 group-hover:opacity-100">↕</span>
+          )}
+        </span>
+      </th>
+    )
+  }
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
@@ -1013,15 +1035,40 @@ export function FleetDashboard() {
       ) : overview ? (
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
           {[
-            { label: 'Total Nodes',    value: overview.total_nodes,                    accent: 'border-l-brand-600',   num: 'text-gray-900' },
-            { label: 'Online',         value: overview.online,                         accent: 'border-l-emerald-500', num: 'text-emerald-700' },
-            { label: 'Offline / Stale',value: overview.offline + overview.stale,       accent: 'border-l-red-500',     num: 'text-red-700' },
-            { label: 'Avg Drift Score',value: overview.avg_drift_score,                accent: 'border-l-amber-500',   num: 'text-amber-700' },
-          ].map(({ label, value, accent, num }) => (
-            <div key={label} className={`bg-white rounded-xl border border-gray-200 border-l-4 ${accent} p-5 shadow-sm`}>
+            {
+              label: 'Total Nodes', value: overview.total_nodes,
+              accent: 'border-l-brand-600', num: 'text-gray-900',
+              onClick: () => { setStatusFilter(''); setSort('drift_score:desc'); setPage(1) },
+              title: 'Show all nodes',
+            },
+            {
+              label: 'Online', value: overview.online,
+              accent: 'border-l-emerald-500', num: 'text-emerald-700',
+              onClick: () => { setStatusFilter('online'); setSort('last_seen_at:desc'); setPage(1) },
+              title: 'Filter to online nodes',
+            },
+            {
+              label: 'Offline / Stale', value: overview.offline + overview.stale,
+              accent: 'border-l-red-500', num: 'text-red-700',
+              onClick: () => { setStatusFilter('offline'); setSort('last_seen_at:asc'); setPage(1) },
+              title: 'Filter to offline/stale nodes',
+            },
+            {
+              label: 'Avg Drift Score', value: overview.avg_drift_score,
+              accent: 'border-l-amber-500', num: 'text-amber-700',
+              onClick: () => { setStatusFilter(''); setSort('drift_score:desc'); setPage(1) },
+              title: 'Sort by highest drift',
+            },
+          ].map(({ label, value, accent, num, onClick, title }) => (
+            <button
+              key={label}
+              onClick={onClick}
+              title={title}
+              className={`bg-white rounded-xl border border-gray-200 border-l-4 ${accent} p-5 shadow-sm text-left w-full cursor-pointer hover:shadow-md hover:ring-2 hover:ring-brand-200 transition-all`}
+            >
               <p className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-2">{label}</p>
               <p className={`text-4xl font-bold tabular-nums ${num}`}>{value}</p>
-            </div>
+            </button>
           ))}
         </div>
       ) : null}
@@ -1243,11 +1290,11 @@ export function FleetDashboard() {
                             className="accent-brand-600 cursor-pointer" />
                         </th>
                       )}
-                      <th className="px-4 py-3">Hostname</th>
+                      <SortTh field="hostname" label="Hostname" />
                       <th className="px-4 py-3">Status</th>
                       <th className="px-4 py-3">OS</th>
-                      <th className="px-4 py-3">Drift</th>
-                      <th className="px-4 py-3">Last Seen</th>
+                      <SortTh field="drift_score" label="Drift" />
+                      <SortTh field="last_seen_at" label="Last Seen" />
                       <th className="px-4 py-3">Tags</th>
                       {macosOnly && <th className="px-4 py-3">Xcode</th>}
                       {macosOnly && <th className="px-4 py-3">Certs</th>}
