@@ -23,9 +23,13 @@
 # identity across reinstalls, so minions never need to re-accept its key. If it
 # doesn't exist on the controller (fresh install), skip these — salt-master
 # generates its own master.pem/master.pub automatically on first start.
-# Read the (root-owned) controller keys via slurp on localhost — become reads
-# them as root on the controller. `copy: src=` could NOT do this: the copy action
-# plugin reads a local src as the unprivileged ansible user, never via become.
+# Read the pre-provisioned controller keys (if any) on localhost.
+# become:false here on purpose — the controller may be a container without sudo
+# (the kri worker), and there are no keys to read there anyway. When run from a
+# host that DOES have a pre-provisioned root-owned key (e.g. cylon), invoke the
+# playbook itself as root (sudo -E ansible-playbook) so this read sees it.
+# copy:src= could not read a root-owned local file at all (its action plugin
+# reads the src as the launching user, never elevated), hence slurp→content.
 - name: Check for a pre-provisioned master keypair on the controller
   stat:
     path: "{{ playbook_dir }}/../deploy/salt-pki/master.pem"
@@ -33,19 +37,22 @@
                    # stat.exists reflects the real target (a dangling link → false,
                    # so the slurp/copy skip and salt-master self-generates instead)
   delegate_to: localhost
+  become: false
   register: _master_pem
 
-- name: Read master private key from controller (privileged)
+- name: Read master private key from controller
   slurp:
     src: "{{ playbook_dir }}/../deploy/salt-pki/master.pem"
   delegate_to: localhost
+  become: false
   register: _master_pem_content
   when: _master_pem.stat.exists
 
-- name: Read master public key from controller (privileged)
+- name: Read master public key from controller
   slurp:
     src: "{{ playbook_dir }}/../deploy/salt-pki/master.pub"
   delegate_to: localhost
+  become: false
   register: _master_pub_content
   when: _master_pem.stat.exists
 
