@@ -28,8 +28,8 @@ def test_ansible_ssh_retries_is_2():
     assert '"ANSIBLE_SSH_RETRIES": "2"' in source
 
 
-def test_ansible_connect_timeout_is_10_seconds():
-    """ANSIBLE_CONNECT_TIMEOUT must be 10s (#343)."""
+def test_ansible_connect_timeout_removed():
+    """ANSIBLE_CONNECT_TIMEOUT is not a real Ansible env var and must not be set."""
     import inspect
 
     import fleet_platform.workers.playbook_tasks as pt
