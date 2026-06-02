@@ -1,15 +1,6 @@
 ---
 # playbooks/roles/salt_master/tasks/main.yml
 
-- name: Verify target is macOS (salt-master role is macOS-only)
-  fail:
-    msg: >
-      This role installs salt-master using macOS .pkg format and launchctl.
-      Target host {{ inventory_hostname }} is running {{ ansible_system }}
-      ({{ ansible_distribution | default('unknown') }}) — not macOS.
-      Select a Mac Mini node, not a Linux machine.
-  when: ansible_system != 'Darwin'
-
 - name: Detect CPU architecture
   shell: uname -m
   args:

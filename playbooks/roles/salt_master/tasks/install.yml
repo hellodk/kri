@@ -129,7 +129,7 @@
   changed_when: false
 
 - name: Stop existing salt-master (if running) before install
-  shell: launchctl stop com.saltstack.salt.master 2>/dev/null; true
+  shell: /bin/launchctl stop com.saltstack.salt.master 2>/dev/null; true
   args:
     executable: "{{ ansible_shell_executable | default('/bin/bash') }}"
   become: true
@@ -137,7 +137,7 @@
   when: installed_salt_version.stdout | trim != salt_version
 
 - name: Install salt .pkg
-  shell: installer -pkg /tmp/{{ salt_pkg_filename }} -target /
+  shell: /usr/sbin/installer -pkg /tmp/{{ salt_pkg_filename }} -target /
   args:
     executable: "{{ ansible_shell_executable | default('/bin/bash') }}"
   become: true

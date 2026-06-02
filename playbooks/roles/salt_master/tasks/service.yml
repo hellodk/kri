@@ -23,13 +23,13 @@
 
 - name: Load salt-master launchd service
   shell: |
-    launchctl unload /Library/LaunchDaemons/com.saltstack.salt.master.plist 2>/dev/null || true
-    launchctl load -w /Library/LaunchDaemons/com.saltstack.salt.master.plist
+    /bin/launchctl unload /Library/LaunchDaemons/com.saltstack.salt.master.plist 2>/dev/null || true
+    /bin/launchctl load -w /Library/LaunchDaemons/com.saltstack.salt.master.plist
   become: true
   changed_when: false
 
 - name: Start salt-master
-  shell: launchctl start com.saltstack.salt.master 2>/dev/null || true
+  shell: /bin/launchctl start com.saltstack.salt.master 2>/dev/null || true
   become: true
   changed_when: false
 
@@ -42,13 +42,13 @@
 
 - name: Load salt-api launchd service
   shell: |
-    launchctl unload /Library/LaunchDaemons/com.saltstack.salt.api.plist 2>/dev/null || true
-    launchctl load -w /Library/LaunchDaemons/com.saltstack.salt.api.plist
+    /bin/launchctl unload /Library/LaunchDaemons/com.saltstack.salt.api.plist 2>/dev/null || true
+    /bin/launchctl load -w /Library/LaunchDaemons/com.saltstack.salt.api.plist
   become: true
   changed_when: false
 
 - name: Start salt-api
-  shell: launchctl start com.saltstack.salt.api 2>/dev/null || true
+  shell: /bin/launchctl start com.saltstack.salt.api 2>/dev/null || true
   become: true
   changed_when: false
 
