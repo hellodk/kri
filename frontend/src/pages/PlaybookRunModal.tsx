@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { playbooksApi } from '../api/playbooks'
@@ -6,12 +6,7 @@ import type { PlaybookEntry } from '../api/playbooks'
 import { fleetApi } from '../api/fleet'
 import { groupsApi } from '../api/groups'
 import { useToastStore } from '../stores/toastStore'
-
-// Strip ANSI escape codes from Ansible/Salt output
-function stripAnsi(str: string): string {
-  // eslint-disable-next-line no-control-regex
-  return str.replace(/\x1b\[[0-9;]*m/g, '')
-}
+import { AnsiText } from '../lib/AnsiText'
 
 // Running job output panel — fills available height, auto-scrolls while live
 function JobOutput({ jobData, jobId, status, label, colour }: {
@@ -25,8 +20,9 @@ function JobOutput({ jobData, jobId, status, label, colour }: {
   const isLive = status === 'pending' || status === 'running'
   const [userScrolled, setUserScrolled] = useState(false)
 
-  // Auto-scroll to bottom while running, unless user has scrolled up
-  useEffect(() => {
+  // Auto-scroll to bottom while running, unless user has scrolled up.
+  // useLayoutEffect: fire after the span re-parse mutates the DOM, before paint (#369).
+  useLayoutEffect(() => {
     if (!isLive || userScrolled) return
     const el = logRef.current
     if (el) el.scrollTop = el.scrollHeight
@@ -40,7 +36,7 @@ function JobOutput({ jobData, jobId, status, label, colour }: {
     setUserScrolled(!atBottom)
   }
 
-  const stdout = jobData?.stdout ? stripAnsi(jobData.stdout) : null
+  const stdout = jobData?.stdout || null
 
   return (
     <div className="flex flex-col h-full space-y-3">
@@ -89,10 +85,10 @@ function JobOutput({ jobData, jobId, status, label, colour }: {
         <pre
           ref={logRef}
           onScroll={handleScroll}
-          className="flex-1 text-xs font-mono bg-gray-950 text-green-300 rounded-lg p-4 overflow-auto whitespace-pre-wrap leading-relaxed min-h-0"
+          className="flex-1 text-xs font-mono bg-gray-950 text-gray-300 rounded-lg p-4 overflow-auto whitespace-pre-wrap leading-relaxed min-h-0"
           style={{ minHeight: '280px' }}
         >
-          {stdout ?? (isLive ? 'Waiting for output…' : 'No output recorded.')}
+          {stdout ? <AnsiText raw={stdout} /> : (isLive ? 'Waiting for output…' : 'No output recorded.')}
         </pre>
       </div>
 
@@ -250,7 +246,7 @@ export function PlaybookRunModal({ playbook, onClose, initialTargetType, initial
 
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-3xl flex flex-col max-h-[92vh]">
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-4xl flex flex-col max-h-[92vh]">
 
         {/* Fixed header */}
         <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200 shrink-0">
