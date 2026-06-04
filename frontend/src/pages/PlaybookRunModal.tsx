@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useRef, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { playbooksApi } from '../api/playbooks'
@@ -6,7 +6,7 @@ import type { PlaybookEntry } from '../api/playbooks'
 import { fleetApi } from '../api/fleet'
 import { groupsApi } from '../api/groups'
 import { useToastStore } from '../stores/toastStore'
-import { AnsiText } from '../lib/AnsiText'
+import { LogPane } from '../lib/LogPane'
 
 // Running job output panel — fills available height, auto-scrolls while live
 function JobOutput({ jobData, jobId, status, label, colour }: {
@@ -16,27 +16,7 @@ function JobOutput({ jobData, jobId, status, label, colour }: {
   label: string
   colour: string
 }) {
-  const logRef = useRef<HTMLPreElement>(null)
   const isLive = status === 'pending' || status === 'running'
-  const [userScrolled, setUserScrolled] = useState(false)
-
-  // Auto-scroll to bottom while running, unless user has scrolled up.
-  // useLayoutEffect: fire after the span re-parse mutates the DOM, before paint (#369).
-  useLayoutEffect(() => {
-    if (!isLive || userScrolled) return
-    const el = logRef.current
-    if (el) el.scrollTop = el.scrollHeight
-  }, [jobData?.stdout, isLive, userScrolled])
-
-  function handleScroll() {
-    const el = logRef.current
-    if (!el) return
-    // If user scrolled up more than 40px from bottom, stop auto-scroll
-    const atBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 40
-    setUserScrolled(!atBottom)
-  }
-
-  const stdout = jobData?.stdout || null
 
   return (
     <div className="flex flex-col h-full space-y-3">
@@ -68,28 +48,10 @@ function JobOutput({ jobData, jobId, status, label, colour }: {
         </div>
       )}
 
-      {/* Log output — fills available space */}
+      {/* Log output — fills available space (shared LogPane handles tail-follow) */}
       <div className="flex-1 flex flex-col min-h-0">
-        <div className="flex items-center justify-between mb-1 shrink-0">
-          <p className="text-xs font-medium text-gray-400 uppercase tracking-wide">Output</p>
-          {isLive && userScrolled && (
-            <button
-              type="button"
-              onClick={() => { setUserScrolled(false); const el = logRef.current; if (el) el.scrollTop = el.scrollHeight }}
-              className="text-xs text-brand-600 hover:underline"
-            >
-              ↓ Scroll to bottom
-            </button>
-          )}
-        </div>
-        <pre
-          ref={logRef}
-          onScroll={handleScroll}
-          className="flex-1 text-xs font-mono bg-gray-950 text-gray-300 rounded-lg p-4 overflow-auto whitespace-pre-wrap leading-relaxed min-h-0"
-          style={{ minHeight: '280px' }}
-        >
-          {stdout ? <AnsiText raw={stdout} /> : (isLive ? 'Waiting for output…' : 'No output recorded.')}
-        </pre>
+        <p className="text-xs font-medium text-gray-400 uppercase tracking-wide mb-1 shrink-0">Output</p>
+        <LogPane raw={jobData?.stdout || ''} isLive={isLive} emptyText="No output recorded." className="rounded-lg" />
       </div>
 
       {/* Exit code */}
@@ -246,7 +208,7 @@ export function PlaybookRunModal({ playbook, onClose, initialTargetType, initial
 
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-4xl flex flex-col max-h-[92vh]">
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-5xl flex flex-col max-h-[92vh]">
 
         {/* Fixed header */}
         <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200 shrink-0">
