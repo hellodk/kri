@@ -1,5 +1,5 @@
 import { useParams, Link } from 'react-router-dom'
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { playbooksApi, type AnsibleJob } from '../api/playbooks'
 import { PlaybookRunModal } from './PlaybookRunModal'
@@ -44,9 +44,19 @@ function buildRerunVars(extravars: Record<string, unknown>): Record<string, stri
 export function PlaybookJobDetail() {
   const { jobId } = useParams<{ jobId: string }>()
 
+  // Delta-accumulator for log text (#371): accumulates deltas so only new bytes transfer.
+  const acc = useRef<{ text: string; total: number }>({ text: '', total: 0 })
+  const [logText, setLogText] = useState('')
+
+  // Reset accumulator when jobId changes (navigation between jobs).
+  useEffect(() => {
+    acc.current = { text: '', total: 0 }
+    setLogText('')
+  }, [jobId])
+
   const { data: job, isLoading, isError } = useQuery({
     queryKey: ['ansible-job', jobId],
-    queryFn: () => playbooksApi.getJob(jobId!),
+    queryFn: () => playbooksApi.getJob(jobId!, acc.current.total),
     enabled: !!jobId,
     // Poll while running so logs update in real time
     refetchInterval: (q) => {
@@ -54,6 +64,25 @@ export function PlaybookJobDetail() {
       return s === 'running' || s === 'pending' ? 3000 : false
     },
   })
+
+  // Delta accumulation: append new bytes on each response (#371).
+  useEffect(() => {
+    if (!job) return
+    if (job.stdout_total_len == null) {
+      // Old server (no delta support): fall back to full replacement
+      acc.current = { text: job.stdout ?? '', total: 0 }
+      setLogText(job.stdout ?? '')
+    } else if (job.stdout_total_len < acc.current.total) {
+      // stdout was rewritten (error path resync): reset and re-poll from byte 0
+      acc.current = { text: '', total: 0 }
+      setLogText('')
+    } else {
+      // Normal delta: append new bytes
+      const appended = acc.current.text + (job.stdout ?? '')
+      acc.current = { text: appended, total: job.stdout_total_len }
+      setLogText(appended)
+    }
+  }, [job])
 
   // Log scroll/tail-follow is handled by the shared LogPane component (#373).
 
@@ -224,10 +253,11 @@ export function PlaybookJobDetail() {
         <div className="flex items-center justify-between px-4 py-2.5 border-b border-gray-100 bg-gray-50">
           <div>
             <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Output</p>
-            {job?.stdout && (() => {
-              const m = job.stdout.match(/\[running: ([^\]]+)\]\s*$/)
-              return m ? (
-                <p className="text-xs text-amber-600 mt-0.5 font-mono">▶ {m[1]}</p>
+            {(() => {
+              // Prefer server-extracted running_task; fall back to regex on accumulated logText for old servers
+              const taskName = job?.running_task ?? logText.match(/\[running: ([^\]]+)\]\s*$/)?.[1]
+              return taskName ? (
+                <p className="text-xs text-amber-600 mt-0.5 font-mono">▶ {taskName}</p>
               ) : null
             })()}
           </div>
@@ -235,7 +265,7 @@ export function PlaybookJobDetail() {
             <span className="text-xs text-blue-500">Polling every 3s…</span>
           )}
         </div>
-        <LogPane raw={job.stdout ?? ''} isLive={isLive} emptyText="No output recorded" />
+        <LogPane raw={logText} isLive={isLive} emptyText="No output recorded" />
       </div>
 
       {/* Re-run modal */}

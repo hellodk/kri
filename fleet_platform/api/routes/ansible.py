@@ -32,6 +32,7 @@ from fleet_platform.schemas.playbook import (
     PlaybookSourceValidateResponse,
 )
 from fleet_platform.services.credential_resolver import node_has_group
+from fleet_platform.services.log_delta import slice_from, split_running_marker
 from fleet_platform.services.platform_settings_svc import encrypt_secret
 from fleet_platform.services.playbook_discovery import discover_all
 from fleet_platform.services.playbook_sources import get_all_playbook_dirs, sync_all_git_sources
@@ -1095,6 +1096,7 @@ async def list_ansible_jobs(
 @router.get("/jobs/{job_id}", response_model=AnsibleJobResponse)
 async def get_ansible_job(
     job_id: uuid.UUID,
+    from_byte: int | None = Query(default=None, ge=0),
     db: AsyncSession = Depends(get_db),
     _: dict = Depends(require_role("viewer", "operator", "admin")),
 ):
@@ -1102,6 +1104,16 @@ async def get_ansible_job(
     job = result.scalar_one_or_none()
     if not job:
         raise HTTPException(status_code=404, detail="Job not found")
+
+    if from_byte is not None:
+        base, running = split_running_marker(job.stdout)
+        stdout_out = slice_from(base, from_byte)
+        total_len = len(base)
+    else:
+        stdout_out = job.stdout
+        total_len = None
+        running = None
+
     return AnsibleJobResponse(
         id=job.id,
         playbook=job.playbook,
@@ -1113,11 +1125,14 @@ async def get_ansible_job(
         triggered_by=job.triggered_by,
         started_at=job.started_at,
         completed_at=job.completed_at,
-        stdout=job.stdout,
+        stdout=stdout_out,
         rc=job.rc,
+        verbosity=job.verbosity,
         created_at=job.created_at,
         celery_task_id=job.celery_task_id,
         cancelled_at=job.cancelled_at,
+        stdout_total_len=total_len,
+        running_task=running,
     )
 
 
