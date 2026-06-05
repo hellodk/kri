@@ -15,9 +15,11 @@ from fleet_platform.services import platform_settings_svc as svc
 # Helpers
 # ---------------------------------------------------------------------------
 
+
 async def _delete_key(db: AsyncSession, key: str) -> None:
     """Remove a PlatformSetting row if it exists, so each test starts clean."""
     from sqlalchemy import delete
+
     await db.execute(delete(PlatformSetting).where(PlatformSetting.key == key))
     await db.commit()
 
@@ -25,6 +27,7 @@ async def _delete_key(db: AsyncSession, key: str) -> None:
 # ---------------------------------------------------------------------------
 # Test 1: get_setting returns None when key is absent
 # ---------------------------------------------------------------------------
+
 
 async def test_get_setting_returns_none_when_absent(db_session: AsyncSession):
     key = "integration_test_absent_key"
@@ -38,6 +41,7 @@ async def test_get_setting_returns_none_when_absent(db_session: AsyncSession):
 # ---------------------------------------------------------------------------
 # Test 2: set_setting creates a new row; get_setting retrieves it
 # ---------------------------------------------------------------------------
+
 
 async def test_set_and_get_setting_roundtrip(db_session: AsyncSession):
     key = "integration_test_plain_key"
@@ -57,6 +61,7 @@ async def test_set_and_get_setting_roundtrip(db_session: AsyncSession):
 #          returns plaintext
 # ---------------------------------------------------------------------------
 
+
 async def test_set_setting_encrypted_stores_ciphertext_returns_plaintext(
     db_session: AsyncSession,
 ):
@@ -68,9 +73,8 @@ async def test_set_setting_encrypted_stores_ciphertext_returns_plaintext(
 
     # Verify the raw DB row holds ciphertext, not plaintext
     from sqlalchemy import select
-    row_result = await db_session.execute(
-        select(PlatformSetting).where(PlatformSetting.key == key)
-    )
+
+    row_result = await db_session.execute(select(PlatformSetting).where(PlatformSetting.key == key))
     row = row_result.scalar_one_or_none()
     assert row is not None
     assert row.is_encrypted is True
@@ -88,6 +92,7 @@ async def test_set_setting_encrypted_stores_ciphertext_returns_plaintext(
 # Test 4: set_setting called twice on same key updates the row, no duplicate
 # ---------------------------------------------------------------------------
 
+
 async def test_set_setting_updates_existing_row(db_session: AsyncSession):
     key = "integration_test_upsert_key"
     await _delete_key(db_session, key)
@@ -100,9 +105,8 @@ async def test_set_setting_updates_existing_row(db_session: AsyncSession):
 
     # Confirm only one row exists
     from sqlalchemy import func, select
-    count_result = await db_session.execute(
-        select(func.count()).where(PlatformSetting.key == key)
-    )
+
+    count_result = await db_session.execute(select(func.count()).where(PlatformSetting.key == key))
     count = count_result.scalar_one()
     assert count == 1
 
@@ -113,6 +117,7 @@ async def test_set_setting_updates_existing_row(db_session: AsyncSession):
 # ---------------------------------------------------------------------------
 # Test 5: seed_settings_from_env inserts a row when env var set and row absent
 # ---------------------------------------------------------------------------
+
 
 async def test_seed_settings_from_env_inserts_when_absent(db_session: AsyncSession):
     key = svc.KRI_API_URL
@@ -132,6 +137,7 @@ async def test_seed_settings_from_env_inserts_when_absent(db_session: AsyncSessi
 # ---------------------------------------------------------------------------
 # Test 6: seed_settings_from_env does NOT overwrite an existing row
 # ---------------------------------------------------------------------------
+
 
 async def test_seed_settings_from_env_does_not_overwrite_existing(
     db_session: AsyncSession,
@@ -157,6 +163,7 @@ async def test_seed_settings_from_env_does_not_overwrite_existing(
 # ---------------------------------------------------------------------------
 # Test 7: encrypt_secret / decrypt_secret roundtrip
 # ---------------------------------------------------------------------------
+
 
 def test_encrypt_decrypt_secret_roundtrip():
     plaintext = "s3cr3t-v@lue-123!"

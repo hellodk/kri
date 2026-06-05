@@ -1,4 +1,5 @@
 """Add per-node SSH credentials."""
+
 import sqlalchemy as sa
 from alembic import op
 

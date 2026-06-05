@@ -1,6 +1,6 @@
 repos:
   - repo: https://github.com/astral-sh/ruff-pre-commit
-    rev: v0.8.0
+    rev: v0.15.16  # keep aligned with the venv's ruff so hook and CLI agree on formatting
     hooks:
       - id: ruff
         args: [--fix, --exit-non-zero-on-fix]
@@ -53,4 +53,11 @@ repos:
         entry: bash -c 'ts_staged=$(git diff --cached --name-only | grep "frontend/src/api/" || true); [ -z "$ts_staged" ] && echo "⚠ Schema changed but no frontend/src/api/*.ts staged — contract drift risk"; exit 0'
         language: system
         files: ^fleet_platform/schemas/
+        pass_filenames: false
+
+      - id: tsc
+        name: tsc type check (frontend)
+        entry: bash -c 'cd frontend && npx tsc -b --pretty false'
+        language: system
+        files: ^frontend/src/
         pass_filenames: false

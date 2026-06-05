@@ -35,6 +35,7 @@ async def test_resolve_empty_predicate_returns_empty():
 
 async def test_resolve_dynamic_group_with_valid_predicate():
     from fleet_platform.services.group_resolver import resolve_dynamic_group
+
     db = AsyncMock()
     node_id = uuid.uuid4()
     exec_result = MagicMock()
@@ -47,6 +48,7 @@ async def test_resolve_dynamic_group_with_valid_predicate():
 
 async def test_resolve_dynamic_group_multiple_conditions():
     from fleet_platform.services.group_resolver import resolve_dynamic_group
+
     db = AsyncMock()
     id1, id2 = uuid.uuid4(), uuid.uuid4()
     exec_result = MagicMock()
@@ -61,6 +63,7 @@ async def test_resolve_dynamic_group_multiple_conditions():
 
 async def test_resolve_dynamic_group_no_matches():
     from fleet_platform.services.group_resolver import resolve_dynamic_group
+
     db = AsyncMock()
     exec_result = MagicMock()
     exec_result.fetchall.return_value = []

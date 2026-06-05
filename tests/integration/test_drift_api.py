@@ -16,9 +16,12 @@ from fleet_platform.models.node import Node
 async def node_with_drift(db_session: AsyncSession):
     token = secrets.token_urlsafe(32)
     node = Node(
-        minion_id="drift-test-01.local", hostname="drift-test-01",
+        minion_id="drift-test-01.local",
+        hostname="drift-test-01",
         node_token_hash=hash_password(token),
-        first_seen_at=datetime.now(UTC), status="online", drift_score=45,
+        first_seen_at=datetime.now(UTC),
+        status="online",
+        drift_score=45,
     )
     db_session.add(node)
     await db_session.commit()

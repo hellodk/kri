@@ -14,6 +14,7 @@ from fleet_platform.services.playbook_sources import (
 # _translate_path
 # ---------------------------------------------------------------------------
 
+
 def test_translate_path_no_map(monkeypatch):
     monkeypatch.delenv("PLAYBOOK_PATH_MAP", raising=False)
     assert _translate_path("/home/dk/foo") == "/home/dk/foo"
@@ -43,6 +44,7 @@ def test_translate_path_malformed_entry_skipped(monkeypatch):
 # _default_clone_path
 # ---------------------------------------------------------------------------
 
+
 def test_default_clone_path_strips_dot_git():
     result = _default_clone_path("https://github.com/org/myrepo.git")
     assert result.endswith("/myrepo")
@@ -56,6 +58,7 @@ def test_default_clone_path_no_dot_git():
 # ---------------------------------------------------------------------------
 # _sync_git_source
 # ---------------------------------------------------------------------------
+
 
 def test_sync_git_source_pulls_if_exists(tmp_path):
     with patch("fleet_platform.services.playbook_sources.subprocess.run") as mock_run:
@@ -92,6 +95,7 @@ def test_sync_git_source_clones_if_not_exists(tmp_path):
 # ---------------------------------------------------------------------------
 # get_all_playbook_dirs
 # ---------------------------------------------------------------------------
+
 
 def test_get_all_playbook_dirs_no_settings(tmp_path):
     result = get_all_playbook_dirs(None, tmp_path)
@@ -130,10 +134,9 @@ def test_get_all_playbook_dirs_git_source(tmp_path):
     # Simulate an already-cloned repo in the cache dir
     cached_repo = tmp_path / "cached-repo"
     cached_repo.mkdir()
-    settings = json.dumps([
-        {"type": "git", "url": "https://github.com/org/repo.git", "branch": "main",
-         "local_path": str(cached_repo)}
-    ])
+    settings = json.dumps(
+        [{"type": "git", "url": "https://github.com/org/repo.git", "branch": "main", "local_path": str(cached_repo)}]
+    )
     # _sync_git_source must NOT be called — get_all_playbook_dirs should use cache as-is
     with patch(
         "fleet_platform.services.playbook_sources._sync_git_source",
@@ -147,9 +150,7 @@ def test_get_all_playbook_dirs_git_source(tmp_path):
 def test_get_all_playbook_dirs_git_error_skipped(tmp_path):
     builtin = tmp_path / "builtin"
     builtin.mkdir()
-    settings = json.dumps([
-        {"type": "git", "url": "https://github.com/org/repo.git", "branch": "main"}
-    ])
+    settings = json.dumps([{"type": "git", "url": "https://github.com/org/repo.git", "branch": "main"}])
     with patch(
         "fleet_platform.services.playbook_sources._sync_git_source",
         side_effect=Exception("network failure"),
@@ -162,6 +163,7 @@ def test_get_all_playbook_dirs_git_error_skipped(tmp_path):
 # sync_all_git_sources
 # ---------------------------------------------------------------------------
 
+
 def test_sync_all_git_sources_none():
     result = sync_all_git_sources(None)
     assert result == []
@@ -169,9 +171,7 @@ def test_sync_all_git_sources_none():
 
 def test_sync_all_git_sources_skips_local():
     settings = json.dumps([{"type": "local", "path": "/some/path"}])
-    with patch(
-        "fleet_platform.services.playbook_sources._sync_git_source"
-    ) as mock_sync:
+    with patch("fleet_platform.services.playbook_sources._sync_git_source") as mock_sync:
         result = sync_all_git_sources(settings)
     mock_sync.assert_not_called()
     assert result == []

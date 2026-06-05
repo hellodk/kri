@@ -1,8 +1,9 @@
 """Widen llm_endpoints.provider column from 20 to 50 chars to support new provider names."""
+
 from alembic import op
 
-revision = '025'
-down_revision = '024'
+revision = "025"
+down_revision = "024"
 branch_labels = None
 depends_on = None
 

@@ -4,6 +4,7 @@
 All metric names are prefixed with ``kri_`` to avoid collisions with
 other services scraping the same Prometheus instance.
 """
+
 from prometheus_client import Counter, Gauge, Histogram
 
 # ---------------------------------------------------------------------------

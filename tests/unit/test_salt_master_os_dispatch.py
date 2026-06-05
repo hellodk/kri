@@ -1,4 +1,5 @@
 """Tests for OS-aware salt_master role dispatch (#359)."""
+
 from pathlib import Path
 
 ROLE = Path("playbooks/roles/salt_master/tasks")

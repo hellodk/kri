@@ -1,4 +1,5 @@
 """Monitoring API response schemas."""
+
 from __future__ import annotations
 
 from pydantic import BaseModel
@@ -46,7 +47,7 @@ class FleetHealthSchema(BaseModel):
 class MaintenanceHeartbeatSchema(BaseModel):
     last_run_at: str | None
     age_seconds: int | None
-    beat_ok: bool | None   # None = Redis unavailable
+    beat_ok: bool | None  # None = Redis unavailable
 
 
 class MonitoringSummarySchema(BaseModel):

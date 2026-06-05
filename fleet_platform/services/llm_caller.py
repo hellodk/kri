@@ -7,7 +7,7 @@ import httpx
 # abort — only a silent/stalled stream triggers this. Connect timeout is
 # separate so fast failures (wrong URL) still surface quickly (#274).
 _CONNECT_TIMEOUT = 10.0
-_READ_TIMEOUT = 30.0   # max silence between consecutive SSE chunks
+_READ_TIMEOUT = 30.0  # max silence between consecutive SSE chunks
 _STREAM_TIMEOUT = httpx.Timeout(connect=_CONNECT_TIMEOUT, read=_READ_TIMEOUT, write=10.0, pool=5.0)
 
 
@@ -107,7 +107,7 @@ async def call_openai_compat(
                     line = raw_line.strip()
                     if not line or not line.startswith("data:"):
                         continue
-                    data_str = line[len("data:"):].strip()
+                    data_str = line[len("data:") :].strip()
                     if data_str == "[DONE]":
                         break
                     try:
@@ -127,8 +127,7 @@ async def call_openai_compat(
         raise LLMCallError(f"HTTP {exc.response.status_code} from {base_url}") from exc
     except httpx.ReadTimeout as exc:
         raise LLMCallError(
-            f"Stream stalled — no chunk received within {_READ_TIMEOUT}s. "
-            "Model may be overloaded or still loading."
+            f"Stream stalled — no chunk received within {_READ_TIMEOUT}s. Model may be overloaded or still loading."
         ) from exc
     except httpx.TimeoutException as exc:
         raise LLMCallError(f"Connection timed out after {_CONNECT_TIMEOUT}s") from exc

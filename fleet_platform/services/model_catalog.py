@@ -6,6 +6,7 @@ Used by:
 - MLX salt state pillar generator
 - Future: auto-complete in the AI assistant panel
 """
+
 from typing import TypedDict
 
 

@@ -1,4 +1,5 @@
 """Tests for #163: keyboard shortcuts."""
+
 from pathlib import Path
 
 HOOK = (Path(__file__).parent.parent.parent / "frontend/src/hooks/useKeyboardShortcuts.ts").read_text()

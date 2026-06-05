@@ -69,7 +69,8 @@ def _to_response(endpoint) -> LLMEndpointResponse:
         model_context_length=endpoint.model_context_length,
         model_capabilities=(
             [c.strip() for c in endpoint.model_capabilities.split(",") if c.strip()]
-            if endpoint.model_capabilities else []
+            if endpoint.model_capabilities
+            else []
         ),
     )
 
@@ -199,23 +200,22 @@ async def submit_query(
     api_key = llm_svc.get_decrypted_api_key(endpoint)
     model_ctx = endpoint.model_context_length
     model_caps = (
-        [c.strip() for c in endpoint.model_capabilities.split(",") if c.strip()]
-        if endpoint.model_capabilities else []
+        [c.strip() for c in endpoint.model_capabilities.split(",") if c.strip()] if endpoint.model_capabilities else []
     )
 
     # Resolve 'auto' intent via heuristic classifier before building context
     resolved_intent: str = payload.intent
     if payload.intent == "auto":
         from fleet_platform.services.llm_intent import classify_intent
+
         resolved_intent = classify_intent(payload.prompt)
     intent = resolved_intent
 
     system_prompt = await build_fleet_context(db, intent, query=payload.prompt)
 
-    history_dicts: list[dict] = [
-        {"role": m.role, "content": m.content}
-        for m in payload.history
-    ] if payload.history else []
+    history_dicts: list[dict] = (
+        [{"role": m.role, "content": m.content} for m in payload.history] if payload.history else []
+    )
 
     # Enforce a 6000-token total history budget — drop oldest turns first.
     # Rough estimate: 1 token ≈ 4 chars.

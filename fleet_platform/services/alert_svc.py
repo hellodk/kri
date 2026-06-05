@@ -85,7 +85,7 @@ async def _check_node_offline(rule: AlertRule, now: datetime, db: AsyncSession) 
     result = await db.execute(
         select(Node).where(
             Node.last_seen_at < cutoff,
-            Node.last_seen_at.is_not(None),   # skip nodes that were never seen
+            Node.last_seen_at.is_not(None),  # skip nodes that were never seen
         )
     )
     nodes = result.scalars().all()
@@ -288,14 +288,11 @@ async def _deliver_alert(rule: AlertRule, alert_event: AlertEvent, db: AsyncSess
     await _maybe_send_alert_email(rule, alert_event, db)
 
 
-async def _maybe_send_alert_email(
-    rule: "AlertRule", alert_event: "AlertEvent", db: AsyncSession
-) -> None:
+async def _maybe_send_alert_email(rule: "AlertRule", alert_event: "AlertEvent", db: AsyncSession) -> None:
     """Send a real-time alert email if SMTP is configured (non-blocking)."""
     try:
         from fleet_platform.services.digest_svc import send_alert_email  # noqa: PLC0415
-        await asyncio.get_event_loop().run_in_executor(
-            None, lambda: send_alert_email(rule, alert_event)
-        )
+
+        await asyncio.get_event_loop().run_in_executor(None, lambda: send_alert_email(rule, alert_event))
     except Exception:
         pass  # email failure must never block alert processing
