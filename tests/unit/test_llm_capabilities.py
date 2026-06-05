@@ -6,7 +6,6 @@ def test_discover_models_returns_context_length_and_capabilities():
     import asyncio
     from unittest.mock import AsyncMock, MagicMock, patch
 
-
     payload = {
         "data": [
             {"id": "m1", "name": "M1", "context_length": 131072, "capabilities": ["text"]},
@@ -24,6 +23,7 @@ def test_discover_models_returns_context_length_and_capabilities():
     mock_client.get = AsyncMock(return_value=mock_resp)
 
     from fleet_platform.services.model_discovery import discover_models
+
     with patch("httpx.AsyncClient", return_value=mock_client):
         result = asyncio.run(discover_models("http://exo:52415", "openai_compat"))
 
@@ -45,7 +45,7 @@ def test_context_budget_uses_model_context_length():
     captured: dict = {}
 
     async def _lines():
-        yield f'data: {_json.dumps({"choices": [{"delta": {"content": "ok"}}]})}'
+        yield f"data: {_json.dumps({'choices': [{'delta': {'content': 'ok'}}]})}"
         yield "data: [DONE]"
 
     mock_response = MagicMock()
@@ -67,12 +67,17 @@ def test_context_budget_uses_model_context_length():
 
     long_prompt = "x" * 3000  # 3000 chars — under the 131072 budget
     with patch("fleet_platform.services.llm_caller.httpx.AsyncClient", return_value=mock_client):
-        asyncio.run(call_openai_compat(
-            base_url="http://x:52415",
-            api_key=None, model="m", max_tokens=512,
-            system_prompt=long_prompt, user_prompt="hi",
-            model_context_length=131072,
-        ))
+        asyncio.run(
+            call_openai_compat(
+                base_url="http://x:52415",
+                api_key=None,
+                model="m",
+                max_tokens=512,
+                system_prompt=long_prompt,
+                user_prompt="hi",
+                model_context_length=131072,
+            )
+        )
     assert "[context truncated" not in captured.get("system", "")
 
 
@@ -87,7 +92,7 @@ def test_thinking_model_strips_think_blocks():
     content_with_think = "<think>internal reasoning here</think>\nThe answer is 42."
 
     async def _lines():
-        yield f'data: {_json.dumps({"choices": [{"delta": {"content": content_with_think}}]})}'
+        yield f"data: {_json.dumps({'choices': [{'delta': {'content': content_with_think}}]})}"
         yield "data: [DONE]"
 
     mock_response = MagicMock()
@@ -102,11 +107,17 @@ def test_thinking_model_strips_think_blocks():
     mock_client.stream = MagicMock(return_value=mock_stream_ctx)
 
     with patch("fleet_platform.services.llm_caller.httpx.AsyncClient", return_value=mock_client):
-        content, _, _ = asyncio.run(call_openai_compat(
-            base_url="http://x", api_key=None, model="m", max_tokens=512,
-            system_prompt="sys", user_prompt="hi",
-            model_capabilities=["text", "thinking"],
-        ))
+        content, _, _ = asyncio.run(
+            call_openai_compat(
+                base_url="http://x",
+                api_key=None,
+                model="m",
+                max_tokens=512,
+                system_prompt="sys",
+                user_prompt="hi",
+                model_capabilities=["text", "thinking"],
+            )
+        )
     assert "<think>" not in content
     assert "42" in content
 
@@ -122,7 +133,7 @@ def test_max_tokens_clamped_to_context_length():
     captured: dict = {}
 
     async def _lines():
-        yield f'data: {_json.dumps({"choices": [{"delta": {"content": "ok"}}]})}'
+        yield f"data: {_json.dumps({'choices': [{'delta': {'content': 'ok'}}]})}"
         yield "data: [DONE]"
 
     mock_response = MagicMock()
@@ -142,11 +153,17 @@ def test_max_tokens_clamped_to_context_length():
     mock_client.stream = _capture
 
     with patch("fleet_platform.services.llm_caller.httpx.AsyncClient", return_value=mock_client):
-        asyncio.run(call_openai_compat(
-            base_url="http://x", api_key=None, model="m",
-            max_tokens=99999, system_prompt="sys", user_prompt="hi",
-            model_context_length=8192,
-        ))
+        asyncio.run(
+            call_openai_compat(
+                base_url="http://x",
+                api_key=None,
+                model="m",
+                max_tokens=99999,
+                system_prompt="sys",
+                user_prompt="hi",
+                model_context_length=8192,
+            )
+        )
     assert captured["max_tokens"] <= 8192
 
 
@@ -159,7 +176,7 @@ def test_unknown_model_falls_back_to_conservative_behavior():
     from fleet_platform.services.llm_caller import call_openai_compat
 
     async def _lines():
-        yield f'data: {_json.dumps({"choices": [{"delta": {"content": "ok"}}]})}'
+        yield f"data: {_json.dumps({'choices': [{'delta': {'content': 'ok'}}]})}"
         yield "data: [DONE]"
 
     mock_response = MagicMock()
@@ -174,10 +191,16 @@ def test_unknown_model_falls_back_to_conservative_behavior():
     mock_client.stream = MagicMock(return_value=mock_stream_ctx)
 
     with patch("fleet_platform.services.llm_caller.httpx.AsyncClient", return_value=mock_client):
-        asyncio.run(call_openai_compat(
-            base_url="http://x", api_key=None, model="m",
-            max_tokens=512, system_prompt="You are helpful.", user_prompt="hi",
-            model_context_length=None,
-        ))
+        asyncio.run(
+            call_openai_compat(
+                base_url="http://x",
+                api_key=None,
+                model="m",
+                max_tokens=512,
+                system_prompt="You are helpful.",
+                user_prompt="hi",
+                model_context_length=None,
+            )
+        )
     # No crash — fallback handled gracefully
     assert True

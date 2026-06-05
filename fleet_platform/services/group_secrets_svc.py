@@ -1,5 +1,6 @@
 # fleet_platform/services/group_secrets_svc.py
 """Service layer for group-scoped Salt pillar secrets."""
+
 import fcntl
 import uuid
 from pathlib import Path
@@ -18,20 +19,14 @@ _DEFAULT_PILLAR_DIR = Path("/srv/salt/pillar")
 
 
 async def _get_pillar_dir(db: AsyncSession) -> Path:
-    row = (await db.execute(
-        select(PlatformSetting).where(PlatformSetting.key == "pillar_dir")
-    )).scalar_one_or_none()
+    row = (await db.execute(select(PlatformSetting).where(PlatformSetting.key == "pillar_dir"))).scalar_one_or_none()
     if row and row.value:
         return Path(row.value)
     return _DEFAULT_PILLAR_DIR
 
 
 async def get_secrets(db: AsyncSession, group_id: uuid.UUID) -> list[GroupSecret]:
-    result = await db.execute(
-        select(GroupSecret)
-        .where(GroupSecret.group_id == group_id)
-        .order_by(GroupSecret.key)
-    )
+    result = await db.execute(select(GroupSecret).where(GroupSecret.group_id == group_id).order_by(GroupSecret.key))
     return list(result.scalars().all())
 
 
@@ -43,9 +38,7 @@ async def upsert_secret(
     description: str | None = None,
 ) -> GroupSecret:
     encrypted = encrypt_secret(plaintext_value)
-    result = await db.execute(
-        select(GroupSecret).where(GroupSecret.group_id == group_id, GroupSecret.key == key)
-    )
+    result = await db.execute(select(GroupSecret).where(GroupSecret.group_id == group_id, GroupSecret.key == key))
     secret = result.scalar_one_or_none()
     if secret:
         secret.encrypted_value = encrypted
@@ -65,9 +58,7 @@ async def upsert_secret(
 
 
 async def delete_secret(db: AsyncSession, group_id: uuid.UUID, key: str) -> bool:
-    result = await db.execute(
-        select(GroupSecret).where(GroupSecret.group_id == group_id, GroupSecret.key == key)
-    )
+    result = await db.execute(select(GroupSecret).where(GroupSecret.group_id == group_id, GroupSecret.key == key))
     secret = result.scalar_one_or_none()
     if not secret:
         return False
@@ -143,9 +134,9 @@ async def rebuild_top_sls(db: AsyncSession) -> None:
 
     for g in groups:
         # Check if this group has any secrets at all
-        has_secrets = (await db.execute(
-            select(GroupSecret).where(GroupSecret.group_id == g.id).limit(1)
-        )).scalar_one_or_none() is not None
+        has_secrets = (
+            await db.execute(select(GroupSecret).where(GroupSecret.group_id == g.id).limit(1))
+        ).scalar_one_or_none() is not None
         if not has_secrets:
             continue
 
@@ -155,9 +146,7 @@ async def rebuild_top_sls(db: AsyncSession) -> None:
             star_entries.append(pillar_ref)
         else:
             # Fetch members of this group and add the group pillar only to them
-            members_result = await db.execute(
-                select(GroupMember).where(GroupMember.group_id == g.id)
-            )
+            members_result = await db.execute(select(GroupMember).where(GroupMember.group_id == g.id))
             member_node_ids = {str(m.node_id) for m in members_result.scalars().all()}
             for node in nodes:
                 if node.minion_id and str(node.id) in member_node_ids:
@@ -180,6 +169,7 @@ async def rebuild_top_sls(db: AsyncSession) -> None:
     content = "\n".join(lines) + "\n"
 
     import fcntl as _fcntl
+
     with open(lock_path, "w") as lock_f:
         _fcntl.flock(lock_f, _fcntl.LOCK_EX)
         try:

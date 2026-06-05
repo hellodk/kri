@@ -4,6 +4,7 @@ Revision ID: 024
 Revises: 023
 Create Date: 2026-05-28
 """
+
 from alembic import op
 
 revision = "024"
@@ -17,37 +18,29 @@ def upgrade() -> None:
     # TimescaleDB requires all unique constraints to include the partition column.
     # Drop the existing UUID-only PK and recreate as (id, collected_at).
     op.execute("ALTER TABLE node_health_snapshots DROP CONSTRAINT node_health_snapshots_pkey")
-    op.execute(
-        "ALTER TABLE node_health_snapshots ADD PRIMARY KEY (id, collected_at)"
-    )
+    op.execute("ALTER TABLE node_health_snapshots ADD PRIMARY KEY (id, collected_at)")
     op.execute(
         "SELECT create_hypertable('node_health_snapshots', by_range('collected_at', INTERVAL '1 day'), migrate_data => true)"
     )
     # Enable compression before adding compression policy (required in TimescaleDB 2.x+)
-    op.execute("ALTER TABLE node_health_snapshots SET (timescaledb.compress = true, timescaledb.compress_orderby = 'collected_at DESC')")
     op.execute(
-        "SELECT add_compression_policy('node_health_snapshots', INTERVAL '7 days')"
+        "ALTER TABLE node_health_snapshots SET (timescaledb.compress = true, timescaledb.compress_orderby = 'collected_at DESC')"
     )
-    op.execute(
-        "SELECT add_retention_policy('node_health_snapshots', INTERVAL '90 days')"
-    )
+    op.execute("SELECT add_compression_policy('node_health_snapshots', INTERVAL '7 days')")
+    op.execute("SELECT add_retention_policy('node_health_snapshots', INTERVAL '90 days')")
 
     # ── ansible_jobs ─────────────────────────────────────────────────
     op.execute("ALTER TABLE ansible_jobs DROP CONSTRAINT ansible_jobs_pkey")
-    op.execute(
-        "ALTER TABLE ansible_jobs ADD PRIMARY KEY (id, created_at)"
-    )
+    op.execute("ALTER TABLE ansible_jobs ADD PRIMARY KEY (id, created_at)")
     op.execute(
         "SELECT create_hypertable('ansible_jobs', by_range('created_at', INTERVAL '1 day'), migrate_data => true)"
     )
     # Enable compression before adding compression policy
-    op.execute("ALTER TABLE ansible_jobs SET (timescaledb.compress = true, timescaledb.compress_orderby = 'created_at DESC')")
     op.execute(
-        "SELECT add_compression_policy('ansible_jobs', INTERVAL '7 days')"
+        "ALTER TABLE ansible_jobs SET (timescaledb.compress = true, timescaledb.compress_orderby = 'created_at DESC')"
     )
-    op.execute(
-        "SELECT add_retention_policy('ansible_jobs', INTERVAL '90 days')"
-    )
+    op.execute("SELECT add_compression_policy('ansible_jobs', INTERVAL '7 days')")
+    op.execute("SELECT add_retention_policy('ansible_jobs', INTERVAL '90 days')")
 
 
 def downgrade() -> None:

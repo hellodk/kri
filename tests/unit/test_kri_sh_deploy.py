@@ -1,4 +1,5 @@
 """Tests for kri.sh deploy and test subcommands."""
+
 from pathlib import Path
 
 
@@ -23,20 +24,20 @@ def test_compose_function_exists():
 
 def test_env_file_variable_set():
     src = _kri()
-    assert 'ENV_FILE=' in src and '.env.docker' in src
+    assert "ENV_FILE=" in src and ".env.docker" in src
 
 
 def test_cmd_deploy_calls_require_env():
     src = _kri()
     deploy_idx = src.index("cmd_deploy()")
-    deploy_body = src[deploy_idx:deploy_idx + 800]
+    deploy_body = src[deploy_idx : deploy_idx + 800]
     assert "require_env" in deploy_body
 
 
 def test_cmd_deploy_uses_compose():
     src = _kri()
     deploy_idx = src.index("cmd_deploy()")
-    deploy_body = src[deploy_idx:deploy_idx + 800]
+    deploy_body = src[deploy_idx : deploy_idx + 800]
     # compose() function handles --env-file injection
     assert "compose" in deploy_body
 

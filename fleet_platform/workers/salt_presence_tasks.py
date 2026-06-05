@@ -5,6 +5,7 @@ disconnected (down) minions. Marks nodes online/offline accordingly.
 This runs every 90 seconds so nodes appear online within ~90s of their
 salt-minion connecting, without waiting for a full grain report.
 """
+
 import logging
 import os
 from datetime import UTC, datetime
@@ -86,9 +87,7 @@ def sync_minion_presence() -> dict:
     updated = 0
 
     with get_sync_db() as db:
-        result = db.execute(
-            select(Node).where(Node.minion_id.in_(up_minions))
-        )
+        result = db.execute(select(Node).where(Node.minion_id.in_(up_minions)))
         nodes = result.scalars().all()
         for node in nodes:
             node.status = "online"

@@ -1,4 +1,5 @@
 """Verify the RBAC permission matrix — every role/endpoint combination."""
+
 # ── auditor fixtures ──────────────────────────────────────────────────────────
 import pytest_asyncio
 from httpx import ASGITransport, AsyncClient
@@ -44,6 +45,7 @@ async def auditor_client(app_with_test_db, auditor_token: str):
 
 # ── RBAC matrix tests ─────────────────────────────────────────────────────────
 
+
 async def test_viewer_cannot_access_settings(viewer_client: AsyncClient):
     r = await viewer_client.get("/api/v1/settings")
     assert r.status_code == 403
@@ -75,24 +77,25 @@ async def test_auditor_can_list_nodes(auditor_client: AsyncClient):
 
 
 async def test_viewer_cannot_bootstrap(viewer_client: AsyncClient):
-    r = await viewer_client.post("/api/v1/ansible/bootstrap", json={
-        "minion_id": "x", "target_ip": "1.2.3.4"
-    })
+    r = await viewer_client.post("/api/v1/ansible/bootstrap", json={"minion_id": "x", "target_ip": "1.2.3.4"})
     assert r.status_code == 403
 
 
 async def test_auditor_cannot_bootstrap(auditor_client: AsyncClient):
-    r = await auditor_client.post("/api/v1/ansible/bootstrap", json={
-        "minion_id": "x", "target_ip": "1.2.3.4"
-    })
+    r = await auditor_client.post("/api/v1/ansible/bootstrap", json={"minion_id": "x", "target_ip": "1.2.3.4"})
     assert r.status_code == 403
 
 
 async def test_viewer_cannot_run_playbook(viewer_client: AsyncClient):
-    r = await viewer_client.post("/api/v1/ansible/playbooks/run", json={
-        "playbook": "x.yml", "target_type": "node",
-        "target_id": "00000000-0000-0000-0000-000000000001", "extravars": {}
-    })
+    r = await viewer_client.post(
+        "/api/v1/ansible/playbooks/run",
+        json={
+            "playbook": "x.yml",
+            "target_type": "node",
+            "target_id": "00000000-0000-0000-0000-000000000001",
+            "extravars": {},
+        },
+    )
     assert r.status_code == 403
 
 

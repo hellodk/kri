@@ -43,7 +43,7 @@ def _sse_from_text(text: str):
     import json as _json
 
     async def _lines():
-        yield f'data: {_json.dumps({"choices": [{"delta": {"content": text}}]})}'
+        yield f"data: {_json.dumps({'choices': [{'delta': {'content': text}}]})}"
         yield "data: [DONE]"
 
     mock_response = MagicMock()
@@ -74,8 +74,11 @@ async def test_call_openai_compat_url_with_trailing_v1():
     with patch("fleet_platform.services.llm_caller.httpx.AsyncClient", return_value=mock_client):
         await call_openai_compat(
             base_url="http://192.168.1.23:52415/v1",
-            api_key=None, model="m", max_tokens=16,
-            system_prompt="sys", user_prompt="hi",
+            api_key=None,
+            model="m",
+            max_tokens=16,
+            system_prompt="sys",
+            user_prompt="hi",
         )
     assert mock_client.stream.call_args[0][1] == "http://192.168.1.23:52415/v1/chat/completions"
 
@@ -89,8 +92,11 @@ async def test_call_openai_compat_url_without_v1():
     with patch("fleet_platform.services.llm_caller.httpx.AsyncClient", return_value=mock_client):
         await call_openai_compat(
             base_url="http://192.168.1.23:52415",
-            api_key=None, model="m", max_tokens=16,
-            system_prompt="sys", user_prompt="hi",
+            api_key=None,
+            model="m",
+            max_tokens=16,
+            system_prompt="sys",
+            user_prompt="hi",
         )
     assert mock_client.stream.call_args[0][1] == "http://192.168.1.23:52415/v1/chat/completions"
 
@@ -104,8 +110,11 @@ async def test_call_openai_compat_groq_preserves_path_prefix():
     with patch("fleet_platform.services.llm_caller.httpx.AsyncClient", return_value=mock_client):
         await call_openai_compat(
             base_url="https://api.groq.com/openai/v1",
-            api_key="k", model="m", max_tokens=16,
-            system_prompt="sys", user_prompt="hi",
+            api_key="k",
+            model="m",
+            max_tokens=16,
+            system_prompt="sys",
+            user_prompt="hi",
         )
     assert mock_client.stream.call_args[0][1] == "https://api.groq.com/openai/v1/chat/completions"
 
@@ -215,16 +224,21 @@ async def test_call_openai_compat_returns_empty_message_on_no_content_deltas():
 
     # Reuses the test_stream_empty_response_returns_error_message pattern inline
     mock_client = _sse_from_text("")  # empty text → no content in delta
+
     # Override the aiter_lines to yield only [DONE]
     async def _done_only():
         yield "data: [DONE]"
+
     mock_client.stream.return_value.__aenter__.return_value.aiter_lines = _done_only
 
     with patch("fleet_platform.services.llm_caller.httpx.AsyncClient", return_value=mock_client):
         content, _, _ = await call_openai_compat(
             base_url="http://localhost:11434/v1",
-            api_key=None, model="llama3.2", max_tokens=512,
-            system_prompt="sys", user_prompt="prompt",
+            api_key=None,
+            model="llama3.2",
+            max_tokens=512,
+            system_prompt="sys",
+            user_prompt="prompt",
         )
     assert content.startswith("[") and "empty" in content.lower()
 
@@ -232,6 +246,7 @@ async def test_call_openai_compat_returns_empty_message_on_no_content_deltas():
 def test_validate_response_returns_error_for_empty_content():
     """Too-short content (< 5 chars) returns a helpful error message."""
     from fleet_platform.services.llm_caller import _validate_response
+
     result = _validate_response("hi", "You are a fleet assistant.")
     assert result.startswith("[")
     assert "empty" in result.lower() or "model" in result.lower()
@@ -240,6 +255,7 @@ def test_validate_response_returns_error_for_empty_content():
 def test_validate_response_detects_system_prompt_echo():
     """Content that echoes the system prompt is flagged as garbled."""
     from fleet_platform.services.llm_caller import _validate_response
+
     sys_prompt = "You are an AI assistant embedded in kri fleet management."
     garbled = sys_prompt + " you are a user you are a user"
     result = _validate_response(garbled, sys_prompt)
@@ -250,6 +266,7 @@ def test_validate_response_detects_system_prompt_echo():
 def test_validate_response_strips_chat_template_artifacts():
     """Chat template tokens are stripped; good content underneath is returned."""
     from fleet_platform.services.llm_caller import _validate_response
+
     content = "<|im_start|>assistant\nHere is the salt state you need.<|im_end|>"
     result = _validate_response(content, "You are helpful.")
     assert "<|im_start|>" not in result
@@ -259,6 +276,7 @@ def test_validate_response_strips_chat_template_artifacts():
 def test_validate_response_returns_error_when_only_artifacts():
     """Content consisting only of chat template tokens gets an error message."""
     from fleet_platform.services.llm_caller import _validate_response
+
     result = _validate_response("<|im_start|><|im_end|>", "System prompt here.")
     assert result.startswith("[")
 
@@ -266,6 +284,7 @@ def test_validate_response_returns_error_when_only_artifacts():
 def test_validate_response_passes_clean_content_through():
     """Normal, useful content is returned unchanged."""
     from fleet_platform.services.llm_caller import _validate_response
+
     content = "The SaltStack state file for restarting nginx is:\n```sls\nnginx:\n  service.running\n```"
     result = _validate_response(content, "You are an assistant.")
     assert result == content
@@ -276,12 +295,14 @@ def test_validate_response_passes_clean_content_through():
 
 def _sse_lines(*chunks, usage=None):
     """Yield fake SSE lines for the given content chunks."""
+
     async def _gen():
         for text in chunks:
-            yield f'data: {json.dumps({"choices": [{"delta": {"content": text}}]})}'
+            yield f"data: {json.dumps({'choices': [{'delta': {'content': text}}]})}"
         if usage:
-            yield f'data: {json.dumps({"choices": [], "usage": usage})}'
+            yield f"data: {json.dumps({'choices': [], 'usage': usage})}"
         yield "data: [DONE]"
+
     return _gen()
 
 
@@ -304,10 +325,15 @@ async def test_stream_aggregates_deltas_into_full_content():
     mock_client.stream = MagicMock(return_value=mock_stream_ctx)
 
     from fleet_platform.services.llm_caller import call_openai_compat
+
     with patch("fleet_platform.services.llm_caller.httpx.AsyncClient", return_value=mock_client):
         content, inp, out = await call_openai_compat(
-            base_url="http://x", api_key=None, model="m",
-            max_tokens=128, system_prompt="sys", user_prompt="hi",
+            base_url="http://x",
+            api_key=None,
+            model="m",
+            max_tokens=128,
+            system_prompt="sys",
+            user_prompt="hi",
         )
 
     assert content == "Hello world!"
@@ -342,8 +368,12 @@ async def test_stream_read_timeout_raises_llm_call_error():
     with patch("fleet_platform.services.llm_caller.httpx.AsyncClient", return_value=mock_client):
         with pytest.raises(LLMCallError, match="stalled|overloaded"):
             await call_openai_compat(
-                base_url="http://x", api_key=None, model="m",
-                max_tokens=128, system_prompt="sys", user_prompt="hi",
+                base_url="http://x",
+                api_key=None,
+                model="m",
+                max_tokens=128,
+                system_prompt="sys",
+                user_prompt="hi",
             )
 
 
@@ -372,14 +402,19 @@ async def test_stream_empty_response_returns_error_message():
 
     with patch("fleet_platform.services.llm_caller.httpx.AsyncClient", return_value=mock_client):
         content, _, _ = await call_openai_compat(
-            base_url="http://x", api_key=None, model="m",
-            max_tokens=128, system_prompt="sys", user_prompt="hi",
+            base_url="http://x",
+            api_key=None,
+            model="m",
+            max_tokens=128,
+            system_prompt="sys",
+            user_prompt="hi",
         )
 
     assert content.startswith("[") and "empty" in content.lower()
 
 
 # ─── streaming edge cases (#309) ──────────────────────────────────────────────
+
 
 @pytest.mark.asyncio
 async def test_stream_skips_malformed_json_midstream_and_continues():
@@ -389,9 +424,9 @@ async def test_stream_skips_malformed_json_midstream_and_continues():
     from fleet_platform.services.llm_caller import call_openai_compat
 
     async def _lines_with_bad_chunk():
-        yield f'data: {json.dumps({"choices": [{"delta": {"content": "Hello"}}]})}'
+        yield f"data: {json.dumps({'choices': [{'delta': {'content': 'Hello'}}]})}"
         yield "data: {this is not valid json!!!"
-        yield f'data: {json.dumps({"choices": [{"delta": {"content": " world"}}]})}'
+        yield f"data: {json.dumps({'choices': [{'delta': {'content': ' world'}}]})}"
         yield "data: [DONE]"
 
     mock_response = MagicMock()
@@ -408,8 +443,12 @@ async def test_stream_skips_malformed_json_midstream_and_continues():
 
     with patch("fleet_platform.services.llm_caller.httpx.AsyncClient", return_value=mock_client):
         content, _inp, _out = await call_openai_compat(
-            base_url="http://x", api_key=None, model="m",
-            max_tokens=128, system_prompt="sys", user_prompt="hi",
+            base_url="http://x",
+            api_key=None,
+            model="m",
+            max_tokens=128,
+            system_prompt="sys",
+            user_prompt="hi",
         )
 
     assert content == "Hello world"
@@ -439,8 +478,12 @@ async def test_stream_parses_usage_tokens_from_final_chunk():
 
     with patch("fleet_platform.services.llm_caller.httpx.AsyncClient", return_value=mock_client):
         content, inp, out = await call_openai_compat(
-            base_url="http://x", api_key=None, model="m",
-            max_tokens=128, system_prompt="sys", user_prompt="hi",
+            base_url="http://x",
+            api_key=None,
+            model="m",
+            max_tokens=128,
+            system_prompt="sys",
+            user_prompt="hi",
         )
 
     assert inp == 123
@@ -469,8 +512,12 @@ async def test_stream_usage_missing_defaults_to_zero():
 
     with patch("fleet_platform.services.llm_caller.httpx.AsyncClient", return_value=mock_client):
         _content, inp, out = await call_openai_compat(
-            base_url="http://x", api_key=None, model="m",
-            max_tokens=128, system_prompt="sys", user_prompt="hi",
+            base_url="http://x",
+            api_key=None,
+            model="m",
+            max_tokens=128,
+            system_prompt="sys",
+            user_prompt="hi",
         )
 
     assert inp == 0
@@ -498,8 +545,12 @@ async def test_thinking_model_strips_think_blocks():
 
     with patch("fleet_platform.services.llm_caller.httpx.AsyncClient", return_value=mock_client):
         content, _inp, _out = await call_openai_compat(
-            base_url="http://x", api_key=None, model="m",
-            max_tokens=128, system_prompt="sys", user_prompt="hi",
+            base_url="http://x",
+            api_key=None,
+            model="m",
+            max_tokens=128,
+            system_prompt="sys",
+            user_prompt="hi",
             model_capabilities=["thinking"],
         )
 
@@ -528,8 +579,12 @@ async def test_max_tokens_clamped_to_model_context_length():
 
     with patch("fleet_platform.services.llm_caller.httpx.AsyncClient", return_value=mock_client):
         await call_openai_compat(
-            base_url="http://x", api_key=None, model="m",
-            max_tokens=99999, system_prompt="sys", user_prompt="hi",
+            base_url="http://x",
+            api_key=None,
+            model="m",
+            max_tokens=99999,
+            system_prompt="sys",
+            user_prompt="hi",
             model_context_length=4096,
         )
 

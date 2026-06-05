@@ -39,6 +39,7 @@ async def test_get_baseline(admin_client: AsyncClient):
 
 async def test_get_baseline_not_found(admin_client: AsyncClient):
     import uuid
+
     response = await admin_client.get(f"/api/v1/baselines/{uuid.uuid4()}")
     assert response.status_code == 404
 

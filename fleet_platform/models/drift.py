@@ -11,9 +11,7 @@ from fleet_platform.models.base import Base, TimestampMixin
 class DesiredStateBaseline(Base, TimestampMixin):
     __tablename__ = "desired_state_baselines"
 
-    id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
-    )
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     name: Mapped[str] = mapped_column(String(100), nullable=False)
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
     target_type: Mapped[str] = mapped_column(String(20), nullable=False)
@@ -37,9 +35,7 @@ class DriftRecord(Base):
         ForeignKey("desired_state_baselines.id", ondelete="SET NULL"),
         nullable=True,
     )
-    computed_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), nullable=False, primary_key=True
-    )
+    computed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, primary_key=True)
     drift_score: Mapped[int] = mapped_column(SmallInteger, nullable=False)
     missing_packages: Mapped[list] = mapped_column(JSONB, nullable=False, default=list)
     extra_packages: Mapped[list] = mapped_column(JSONB, nullable=False, default=list)

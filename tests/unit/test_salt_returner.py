@@ -5,9 +5,7 @@ from unittest.mock import MagicMock, patch
 
 _RETURNER_PATH = __file__  # tests/unit/test_salt_returner.py
 
-_RETURNER_FILE = (
-    _pathlib.Path(_RETURNER_PATH).parent.parent.parent / "salt" / "returners" / "fleet_platform_return.py"
-)
+_RETURNER_FILE = _pathlib.Path(_RETURNER_PATH).parent.parent.parent / "salt" / "returners" / "fleet_platform_return.py"
 
 
 def _load_returner(ingest_url="http://fleet.local/api/v1/ingest", node_token="test-token"):
@@ -58,16 +56,19 @@ def test_returner_skips_when_not_configured():
 
 def test_returner_handles_network_error_gracefully():
     import urllib.error
+
     module = _load_returner()
     with patch("urllib.request.urlopen", side_effect=urllib.error.URLError("connection refused")):
         # Should not raise — just log the error
-        module.returner({
-            "id": "mac-mini-01.local",
-            "jid": "123",
-            "return": {},
-            "retcode": 0,
-            "fun": "test.ping",
-        })
+        module.returner(
+            {
+                "id": "mac-mini-01.local",
+                "jid": "123",
+                "return": {},
+                "retcode": 0,
+                "fun": "test.ping",
+            }
+        )
 
 
 def test_required_functions_exist():

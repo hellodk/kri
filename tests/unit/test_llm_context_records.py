@@ -1,4 +1,5 @@
 """Tests for LLM context: per-node records, grounding rules, fleet_query intent (closes #281)."""
+
 from datetime import UTC, datetime, timedelta
 
 from fleet_platform.schemas.llm import LLMQueryRequest
@@ -35,15 +36,29 @@ def test_grounding_rules_in_static_context():
 
 def test_per_node_records_in_context():
     records = [
-        {"hostname": "mm1", "minion_id": "mm1", "ip": "10.0.0.1",
-         "status": "online", "last_seen": "2m ago", "group": "MacMini-LLM"},
-        {"hostname": "mm2", "minion_id": "mm2", "ip": "10.0.0.2",
-         "status": "offline", "last_seen": "3h ago", "group": "MacMiniApps"},
+        {
+            "hostname": "mm1",
+            "minion_id": "mm1",
+            "ip": "10.0.0.1",
+            "status": "online",
+            "last_seen": "2m ago",
+            "group": "MacMini-LLM",
+        },
+        {
+            "hostname": "mm2",
+            "minion_id": "mm2",
+            "ip": "10.0.0.2",
+            "status": "offline",
+            "last_seen": "3h ago",
+            "group": "MacMiniApps",
+        },
     ]
     ctx = build_static_context(
-        node_count=2, online_count=1,
+        node_count=2,
+        online_count=1,
         groups=["MacMini-LLM", "MacMiniApps"],
-        salt_master="", playbooks_dir="",
+        salt_master="",
+        playbooks_dir="",
         node_records=records,
     )
     assert "mm1" in ctx
@@ -55,11 +70,21 @@ def test_per_node_records_in_context():
 
 def test_ip_redacted_in_context():
     records = [
-        {"hostname": "mm1", "minion_id": "mm1", "ip": "[redacted]",
-         "status": "online", "last_seen": "1m ago", "group": "—"},
+        {
+            "hostname": "mm1",
+            "minion_id": "mm1",
+            "ip": "[redacted]",
+            "status": "online",
+            "last_seen": "1m ago",
+            "group": "—",
+        },
     ]
     ctx = build_static_context(
-        node_count=1, online_count=1, groups=[], salt_master="", playbooks_dir="",
+        node_count=1,
+        online_count=1,
+        groups=[],
+        salt_master="",
+        playbooks_dir="",
         node_records=records,
     )
     assert "[redacted]" in ctx
@@ -86,9 +111,7 @@ def test_format_last_seen_hours():
 
 
 def test_context_without_node_records_still_works():
-    ctx = build_static_context(
-        node_count=0, online_count=0, groups=[], salt_master="", playbooks_dir=""
-    )
+    ctx = build_static_context(node_count=0, online_count=0, groups=[], salt_master="", playbooks_dir="")
     assert "Fleet Snapshot" in ctx
     assert "## Node Records" not in ctx
 

@@ -3,6 +3,7 @@ Tests for issue #68: stale/offline thresholds read from platform settings.
 
 TDD: these tests are written before implementation — they must fail first.
 """
+
 from unittest.mock import MagicMock, patch
 
 
@@ -32,16 +33,20 @@ def test_mark_stale_nodes_uses_db_thresholds():
             NODE_OFFLINE_THRESHOLD_HOURS,
             NODE_STALE_THRESHOLD_MINUTES,
         )
+
         if key == NODE_STALE_THRESHOLD_MINUTES:
             return "30"
         if key == NODE_OFFLINE_THRESHOLD_HOURS:
             return "2"
         return None
 
-    with patch("fleet_platform.workers.maintenance.get_sync_db") as mock_db, patch(
-        "fleet_platform.workers.maintenance.get_setting_sync",
-        side_effect=setting_side_effect,
-    ) as mock_get:
+    with (
+        patch("fleet_platform.workers.maintenance.get_sync_db") as mock_db,
+        patch(
+            "fleet_platform.workers.maintenance.get_setting_sync",
+            side_effect=setting_side_effect,
+        ) as mock_get,
+    ):
         mock_db.return_value = mock_session
         mark_stale_nodes()
 
@@ -53,12 +58,10 @@ def test_mark_stale_nodes_uses_db_thresholds():
 
     called_keys = [c.args[1] for c in mock_get.call_args_list]
     assert NODE_STALE_THRESHOLD_MINUTES in called_keys, (
-        f"Expected get_setting_sync called with '{NODE_STALE_THRESHOLD_MINUTES}', "
-        f"got keys: {called_keys}"
+        f"Expected get_setting_sync called with '{NODE_STALE_THRESHOLD_MINUTES}', got keys: {called_keys}"
     )
     assert NODE_OFFLINE_THRESHOLD_HOURS in called_keys, (
-        f"Expected get_setting_sync called with '{NODE_OFFLINE_THRESHOLD_HOURS}', "
-        f"got keys: {called_keys}"
+        f"Expected get_setting_sync called with '{NODE_OFFLINE_THRESHOLD_HOURS}', got keys: {called_keys}"
     )
 
     # Verify the execute calls happened (task ran to completion)
@@ -73,9 +76,12 @@ def test_mark_stale_nodes_falls_back_to_defaults():
 
     mock_session = _make_mock_session(stale_rowcount=2, offline_rowcount=1)
 
-    with patch("fleet_platform.workers.maintenance.get_sync_db") as mock_db, patch(
-        "fleet_platform.workers.maintenance.get_setting_sync",
-        return_value=None,
+    with (
+        patch("fleet_platform.workers.maintenance.get_sync_db") as mock_db,
+        patch(
+            "fleet_platform.workers.maintenance.get_setting_sync",
+            return_value=None,
+        ),
     ):
         mock_db.return_value = mock_session
         result = mark_stale_nodes()
@@ -93,9 +99,12 @@ def test_mark_stale_nodes_falls_back_on_invalid_value():
 
     mock_session = _make_mock_session()
 
-    with patch("fleet_platform.workers.maintenance.get_sync_db") as mock_db, patch(
-        "fleet_platform.workers.maintenance.get_setting_sync",
-        return_value="not_a_number",
+    with (
+        patch("fleet_platform.workers.maintenance.get_sync_db") as mock_db,
+        patch(
+            "fleet_platform.workers.maintenance.get_setting_sync",
+            return_value="not_a_number",
+        ),
     ):
         mock_db.return_value = mock_session
         result = mark_stale_nodes()  # must not raise

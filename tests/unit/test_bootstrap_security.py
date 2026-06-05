@@ -1,4 +1,5 @@
 """Unit tests for #120 (SSH password plaintext) and #133 (DB session excess)."""
+
 from pathlib import Path
 
 SRC = Path("fleet_platform/workers/ansible_tasks.py").read_text()
@@ -10,11 +11,9 @@ def test_ssh_password_not_in_file_write():
     # Parse the source to find string literals that contain both 'write' context and ansible_ssh_pass
     # Simpler: find lines where .write_text( is called and check none contain ssh_pass
     lines = SRC.splitlines()
-    write_lines = [ln for ln in lines if '.write_text(' in ln or '.write(' in ln]
+    write_lines = [ln for ln in lines if ".write_text(" in ln or ".write(" in ln]
     for ln in write_lines:
-        assert 'ansible_ssh_pass' not in ln, (
-            f"ansible_ssh_pass must not appear in a file-write call: {ln.strip()}"
-        )
+        assert "ansible_ssh_pass" not in ln, f"ansible_ssh_pass must not appear in a file-write call: {ln.strip()}"
 
 
 def test_passwords_passed_via_extravars():
@@ -26,12 +25,8 @@ def test_passwords_passed_via_extravars():
     assert "password_extravars" in SRC, (
         "bootstrap must accumulate credentials in a password_extravars dict before passing to ansible-runner"
     )
-    assert "ansible_ssh_pass" in SRC, (
-        "bootstrap must set ansible_ssh_pass in the password_extravars dict"
-    )
-    assert "**password_extravars" in SRC, (
-        "password_extravars must be spread into the ansible-runner extravars call"
-    )
+    assert "ansible_ssh_pass" in SRC, "bootstrap must set ansible_ssh_pass in the password_extravars dict"
+    assert "**password_extravars" in SRC, "password_extravars must be spread into the ansible-runner extravars call"
 
 
 def test_time_based_log_batching_present():
@@ -48,6 +43,6 @@ def test_bootstrap_db_session_count_low():
     task_start = SRC.find("def bootstrap_node")
     # Find next top-level function after bootstrap_node
     next_fn = SRC.find("\ndef ", task_start + 20)
-    task_body = SRC[task_start:next_fn if next_fn > 0 else task_start + 8000]
+    task_body = SRC[task_start : next_fn if next_fn > 0 else task_start + 8000]
     count = task_body.count("get_sync_db()")
     assert count <= 5, f"bootstrap_node opens {count} DB sessions, expected ≤ 5"

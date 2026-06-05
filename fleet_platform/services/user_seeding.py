@@ -7,6 +7,7 @@ Reads:
   SEED_LOCAL_USER_n_PASSWORD — extra user password
   SEED_LOCAL_USER_n_ROLE     — extra user role (default: viewer)
 """
+
 import os
 
 from sqlalchemy import select
@@ -45,12 +46,14 @@ async def seed_local_users(db: AsyncSession) -> None:
         result = await db.execute(select(User).where(User.email == email))
         if result.scalar_one_or_none() is not None:
             continue
-        db.add(User(
-            email=email,
-            password_hash=hash_password(password),
-            role=role,
-            is_active=True,
-            auth_provider="local",
-        ))
+        db.add(
+            User(
+                email=email,
+                password_hash=hash_password(password),
+                role=role,
+                is_active=True,
+                auth_provider="local",
+            )
+        )
 
     await db.commit()

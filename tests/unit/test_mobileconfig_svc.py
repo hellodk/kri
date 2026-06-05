@@ -1,4 +1,5 @@
 """Unit tests for macOS configuration profile service functions."""
+
 from __future__ import annotations
 
 import uuid

@@ -1,4 +1,5 @@
 """Tests for #167: SBOM delta endpoint."""
+
 from pathlib import Path
 
 SBOM_ROUTE = (Path(__file__).parent.parent.parent / "fleet_platform/api/routes/sbom.py").read_text()

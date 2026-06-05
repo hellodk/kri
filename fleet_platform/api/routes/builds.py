@@ -87,9 +87,7 @@ async def list_recent_builds(
 ):
     """Return the most recent Jenkins build events (newest first)."""
     result = await db.execute(
-        select(JenkinsBuildEvent)
-        .order_by(JenkinsBuildEvent.started_at.desc())
-        .limit(min(limit, 200))
+        select(JenkinsBuildEvent).order_by(JenkinsBuildEvent.started_at.desc()).limit(min(limit, 200))
     )
     builds = result.scalars().all()
     return [
@@ -116,5 +114,6 @@ async def trigger_digest_now(
 ):
     """Trigger the weekly digest immediately. Dispatches as a Celery task (returns task_id)."""
     from fleet_platform.workers.digest_tasks import weekly_digest
+
     task = weekly_digest.delay()
     return {"status": "queued", "task_id": task.id}

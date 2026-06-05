@@ -4,12 +4,14 @@ Tests for #124: collect_fleet_health must close the DB session before making
 any Salt subprocess calls, so the connection pool slot is not held for the
 entire (potentially 30s+) Salt collection window.
 """
+
 import uuid
 from unittest.mock import MagicMock, patch
 
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
 
 def _make_node(minion_id: str):
     node = MagicMock()
@@ -46,6 +48,7 @@ def _fake_metrics(*minion_ids: str) -> dict:
 # ---------------------------------------------------------------------------
 # Test 1: Session 1 is CLOSED before collect_all_metrics is called
 # ---------------------------------------------------------------------------
+
 
 def test_collect_fleet_health_closes_session_before_salt_calls():
     """Session 1 must be fully closed (exited) before Salt metric collection."""
@@ -121,6 +124,7 @@ def test_collect_fleet_health_closes_session_before_salt_calls():
 # Test 2: Exactly 2 DB sessions when nodes exist
 # ---------------------------------------------------------------------------
 
+
 def test_collect_fleet_health_uses_two_sessions():
     """When online nodes are found, exactly 2 get_sync_db() calls must be made."""
     from fleet_platform.workers.health_tasks import collect_fleet_health
@@ -154,9 +158,7 @@ def test_collect_fleet_health_uses_two_sessions():
         result = collect_fleet_health()
 
     assert result == {"collected": 1}
-    assert call_count[0] == 2, (
-        f"Expected exactly 2 DB sessions (read + write), got {call_count[0]}"
-    )
+    assert call_count[0] == 2, f"Expected exactly 2 DB sessions (read + write), got {call_count[0]}"
     # Read session should NOT have db.add called on it
     read_mock.add.assert_not_called()
     # Write session should have db.add called once and db.commit once
@@ -167,6 +169,7 @@ def test_collect_fleet_health_uses_two_sessions():
 # ---------------------------------------------------------------------------
 # Test 3: Early return (no online nodes) uses exactly 1 session
 # ---------------------------------------------------------------------------
+
 
 def test_collect_fleet_health_no_nodes_uses_one_session():
     """When there are no online nodes, only 1 DB session is opened (early return)."""
@@ -187,6 +190,4 @@ def test_collect_fleet_health_no_nodes_uses_one_session():
         result = collect_fleet_health()
 
     assert result == {"collected": 0}
-    assert call_count[0] == 1, (
-        f"Expected exactly 1 DB session for no-nodes early return, got {call_count[0]}"
-    )
+    assert call_count[0] == 1, f"Expected exactly 1 DB session for no-nodes early return, got {call_count[0]}"

@@ -4,6 +4,7 @@
 POST /api/v1/fleet/nodes/import/validate
 POST /api/v1/fleet/nodes/import/commit
 """
+
 import secrets
 from datetime import UTC, datetime
 
@@ -263,8 +264,20 @@ async def test_validate_summary_counts(operator_client: AsyncClient, existing_no
 async def test_commit_creates_new_nodes(operator_client: AsyncClient, db_session: AsyncSession):
     """Commit endpoint persists rows with status='new' and returns their IDs."""
     rows = [
-        {"minion_id": "commit-test-node-1.local", "hostname": "commit-test-node-1", "ip": "10.202.0.1", "status": "new", "reason": ""},
-        {"minion_id": "commit-test-node-2.local", "hostname": "commit-test-node-2", "ip": "10.202.0.2", "status": "new", "reason": ""},
+        {
+            "minion_id": "commit-test-node-1.local",
+            "hostname": "commit-test-node-1",
+            "ip": "10.202.0.1",
+            "status": "new",
+            "reason": "",
+        },
+        {
+            "minion_id": "commit-test-node-2.local",
+            "hostname": "commit-test-node-2",
+            "ip": "10.202.0.2",
+            "status": "new",
+            "reason": "",
+        },
     ]
     resp = await operator_client.post(
         "/api/v1/fleet/nodes/import/commit",
@@ -280,9 +293,27 @@ async def test_commit_creates_new_nodes(operator_client: AsyncClient, db_session
 async def test_commit_skips_non_new_rows(operator_client: AsyncClient):
     """Commit endpoint skips rows not marked 'new' and reports them as skipped."""
     rows = [
-        {"minion_id": "commit-node-new", "hostname": "commit-node-new", "ip": "10.203.0.1", "status": "new", "reason": ""},
-        {"minion_id": "commit-node-dup", "hostname": "commit-node-dup", "ip": "10.203.0.2", "status": "duplicate", "reason": "already exists"},
-        {"minion_id": "commit-node-bad", "hostname": "commit-node-bad", "ip": "bad-ip", "status": "invalid", "reason": "invalid IP"},
+        {
+            "minion_id": "commit-node-new",
+            "hostname": "commit-node-new",
+            "ip": "10.203.0.1",
+            "status": "new",
+            "reason": "",
+        },
+        {
+            "minion_id": "commit-node-dup",
+            "hostname": "commit-node-dup",
+            "ip": "10.203.0.2",
+            "status": "duplicate",
+            "reason": "already exists",
+        },
+        {
+            "minion_id": "commit-node-bad",
+            "hostname": "commit-node-bad",
+            "ip": "bad-ip",
+            "status": "invalid",
+            "reason": "invalid IP",
+        },
     ]
     resp = await operator_client.post(
         "/api/v1/fleet/nodes/import/commit",
@@ -302,7 +333,13 @@ async def test_commit_with_group_id_adds_members(
 ):
     """Commit with group_id creates GroupMember rows for each created node."""
     rows = [
-        {"minion_id": "commit-group-node-1", "hostname": "commit-group-node-1", "ip": "10.204.0.1", "status": "new", "reason": ""},
+        {
+            "minion_id": "commit-group-node-1",
+            "hostname": "commit-group-node-1",
+            "ip": "10.204.0.1",
+            "status": "new",
+            "reason": "",
+        },
     ]
     resp = await operator_client.post(
         "/api/v1/fleet/nodes/import/commit",
@@ -320,9 +357,7 @@ async def test_commit_with_group_id_adds_members(
 
     TestSession = async_sessionmaker(test_engine, expire_on_commit=False)
     async with TestSession() as session:
-        result = await session.execute(
-            sa_select(GroupMember).where(GroupMember.group_id == test_group.id)
-        )
+        result = await session.execute(sa_select(GroupMember).where(GroupMember.group_id == test_group.id))
         members = result.scalars().all()
 
     assert len(members) >= 1

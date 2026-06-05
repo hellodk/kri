@@ -1,4 +1,5 @@
 """macOS configuration profile management API."""
+
 from __future__ import annotations
 
 import uuid
@@ -92,9 +93,7 @@ async def assign_profile_to_group(
         raise HTTPException(status_code=404, detail="Profile not found")
 
     actor = current_user.get("sub", "unknown")
-    assignment = await mobileconfig_svc.assign_to_group(
-        db, profile_id, body.group_id, actor
-    )
+    assignment = await mobileconfig_svc.assign_to_group(db, profile_id, body.group_id, actor)
     return {
         "id": str(assignment.id),
         "profile_id": str(assignment.profile_id),

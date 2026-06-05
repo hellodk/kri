@@ -1,4 +1,5 @@
 """Tests for #369: worker emits ANSI colour + caps stored stdout."""
+
 from pathlib import Path
 
 from fleet_platform.workers.playbook_tasks import (
@@ -7,9 +8,7 @@ from fleet_platform.workers.playbook_tasks import (
     _append_capped,
 )
 
-WORKER_SRC = (
-    Path(__file__).parent.parent.parent / "fleet_platform/workers/playbook_tasks.py"
-).read_text()
+WORKER_SRC = (Path(__file__).parent.parent.parent / "fleet_platform/workers/playbook_tasks.py").read_text()
 
 
 def test_force_color_env_set():
@@ -34,9 +33,9 @@ def test_append_capped_appends_normally():
 def test_append_capped_adds_sentinel_once_and_stops():
     lines, state = [], {"size": 0, "truncated": False}
     big = "x" * (_MAX_STDOUT_BYTES + 1)
-    _append_capped(lines, big, state)        # crosses the cap
-    _append_capped(lines, "more", state)     # ignored after truncation
-    _append_capped(lines, "evenmore", state) # still ignored
+    _append_capped(lines, big, state)  # crosses the cap
+    _append_capped(lines, "more", state)  # ignored after truncation
+    _append_capped(lines, "evenmore", state)  # still ignored
     assert state["truncated"] is True
     assert lines[-1] == _TRUNCATION_SENTINEL
     assert lines.count(_TRUNCATION_SENTINEL) == 1

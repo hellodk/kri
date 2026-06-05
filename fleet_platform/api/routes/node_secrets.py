@@ -1,5 +1,6 @@
 # fleet_platform/api/routes/node_secrets.py
 """Per-node Salt pillar secrets API."""
+
 import uuid
 
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -68,9 +69,7 @@ async def upsert_node_secret(
 ):
     """Create or update a node secret. After save, pillar file is regenerated."""
     node = await _get_node_or_404(node_id, db)
-    secret = await node_secrets_svc.upsert_secret(
-        db, node_id, key, payload.value, payload.description
-    )
+    secret = await node_secrets_svc.upsert_secret(db, node_id, key, payload.value, payload.description)
     # Regenerate the pillar file for this node
     try:
         await node_secrets_svc.write_node_pillar(node_id, node.minion_id, db)
