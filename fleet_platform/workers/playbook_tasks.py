@@ -264,7 +264,6 @@ def run_playbook(self, job_id: str, ssh_username: str | None = None, ssh_passwor
                     vf = playbooks_dir / "group_vars" / f"{_safe_label(job.target_label)}.yml"
                     _write_var_file(vf, job.extravars)
 
-        last_task: str | None = None
         last_db_write: float = time.time()
         job_start_time: float = time.time()
 
@@ -365,7 +364,6 @@ def run_playbook(self, job_id: str, ssh_username: str | None = None, ssh_passwor
                 time.sleep(1)
             thread.join()
 
-            last_task = _last_task_ref["task"]
             final_status = runner.status
             final_rc = runner.rc
 
