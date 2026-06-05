@@ -1,4 +1,5 @@
 """Bulk node import — parsers and validation (#360)."""
+
 import csv
 import io
 import ipaddress
@@ -36,6 +37,7 @@ def parse_csv(content: str, mapping: dict | None = None) -> list[dict]:
     reader = csv.DictReader(io.StringIO(content))
     rows = []
     for r in reader:
+
         def get(key: str, *alts: str) -> str:
             col = mapping.get(key)
             if col and col in r and r[col]:
@@ -49,13 +51,15 @@ def parse_csv(content: str, mapping: dict | None = None) -> list[dict]:
         host = get("hostname", "host", "name") or ip
         mid = get("minion_id", "minion", "id") or host
         if ip or host:
-            rows.append({
-                "minion_id": mid,
-                "hostname": host,
-                "ip": ip,
-                "group": get("group"),
-                "ssh_user": get("ssh_user", "ssh_username", "user"),
-            })
+            rows.append(
+                {
+                    "minion_id": mid,
+                    "hostname": host,
+                    "ip": ip,
+                    "group": get("group"),
+                    "ssh_user": get("ssh_user", "ssh_username", "user"),
+                }
+            )
     return rows
 
 

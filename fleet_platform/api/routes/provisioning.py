@@ -19,7 +19,7 @@ MAX_PROFILE_SIZE = 5 * 1024 * 1024  # 5 MB
 
 def _safe_filename(name: str) -> str:
     # Strip control chars, quotes, backslashes, and forward slashes (path traversal)
-    return re.sub(r'[\x00-\x1f\x7f"\\\/]', '_', name)
+    return re.sub(r'[\x00-\x1f\x7f"\\\/]', "_", name)
 
 
 def _parse_profile_metadata(content: bytes) -> dict:
@@ -99,9 +99,7 @@ async def list_profiles(
     db: AsyncSession = Depends(get_db),
     _: dict = Depends(require_role("viewer", "operator", "admin")),
 ):
-    result = await db.execute(
-        select(ProvisioningProfile).order_by(ProvisioningProfile.created_at.desc())
-    )
+    result = await db.execute(select(ProvisioningProfile).order_by(ProvisioningProfile.created_at.desc()))
     profiles = result.scalars().all()
     total = await db.scalar(select(func.count()).select_from(ProvisioningProfile))
     return ProvisioningProfileList(
@@ -118,9 +116,7 @@ async def download_profile(
 ):
     from fastapi.responses import Response
 
-    result = await db.execute(
-        select(ProvisioningProfile).where(ProvisioningProfile.id == profile_id)
-    )
+    result = await db.execute(select(ProvisioningProfile).where(ProvisioningProfile.id == profile_id))
     profile = result.scalar_one_or_none()
     if not profile:
         raise HTTPException(status_code=404, detail="Profile not found")
@@ -137,9 +133,7 @@ async def delete_profile(
     db: AsyncSession = Depends(get_db),
     _: dict = Depends(require_role("operator", "admin")),
 ):
-    result = await db.execute(
-        select(ProvisioningProfile).where(ProvisioningProfile.id == profile_id)
-    )
+    result = await db.execute(select(ProvisioningProfile).where(ProvisioningProfile.id == profile_id))
     profile = result.scalar_one_or_none()
     if not profile:
         raise HTTPException(status_code=404, detail="Profile not found")

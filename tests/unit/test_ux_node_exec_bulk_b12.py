@@ -1,4 +1,5 @@
 """Unit tests for #150 (quick actions), #152 (execution filters), #161 (bulk selection)."""
+
 import glob
 from pathlib import Path
 
@@ -12,8 +13,13 @@ def _find_file(patterns):
 
 
 def test_node_detail_has_quick_actions():
-    src = _find_file(["frontend/src/pages/NodeDetail.tsx", "frontend/src/pages/NodeDetailPage.tsx",
-                      "frontend/src/**/*NodeDetail*.tsx"])
+    src = _find_file(
+        [
+            "frontend/src/pages/NodeDetail.tsx",
+            "frontend/src/pages/NodeDetailPage.tsx",
+            "frontend/src/**/*NodeDetail*.tsx",
+        ]
+    )
     assert "Quick Actions" in src or "quickAction" in src or "test.ping" in src.lower(), (
         "NodeDetail must have a Quick Actions section"
     )
@@ -30,17 +36,15 @@ def test_execution_history_has_status_filter():
 
 def test_execution_history_has_date_filter():
     src = _find_file(["frontend/src/pages/ExecutionHistory.tsx", "frontend/src/**/*Execution*.tsx"])
-    assert 'type="date"' in src or "type='date'" in src or 'input type' in src.lower(), (
-        "ExecutionHistory must have date range inputs (input type=\"date\")"
+    assert 'type="date"' in src or "type='date'" in src or "input type" in src.lower(), (
+        'ExecutionHistory must have date range inputs (input type="date")'
     )
     assert "date" in src.lower(), "ExecutionHistory must include date filtering"
 
 
 def test_bulk_selection_shows_node_names():
     src = Path("frontend/src/pages/FleetDashboard.tsx").read_text()
-    assert "selectedNodes" in src, (
-        "BulkDeleteConfirmModal must receive selectedNodes prop"
-    )
+    assert "selectedNodes" in src, "BulkDeleteConfirmModal must receive selectedNodes prop"
     assert "selectedNodes.slice(0, 5)" in src or "selectedNodes.length - 5" in src, (
         "Bulk confirmation must show node names with '...and N more' truncation"
     )

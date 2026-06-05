@@ -5,6 +5,7 @@ Tests cover the CRUD cycle for alert rules and webhooks, plus auth gating
 and schema validation. No external HTTP calls are made — test-webhook
 tests avoid the network by using a fake webhook_id or patching.
 """
+
 import uuid
 
 import pytest

@@ -1,4 +1,5 @@
 """Tests for the backend connectivity-probe endpoint (#362)."""
+
 from fleet_platform.api.routes.platform_settings import _build_probe_url
 
 

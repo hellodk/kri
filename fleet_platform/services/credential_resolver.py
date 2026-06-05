@@ -5,6 +5,7 @@ Priority chain (first match wins):
   2. Primary group creds  (alphabetically-first group the node belongs to)
   3. Global default       (platform settings: SSH_USERNAME / SSH_PASSWORD)
 """
+
 from __future__ import annotations
 
 import logging
@@ -172,9 +173,7 @@ def resolve_node_credentials_sync(node: Node, db) -> dict:
 
 
 def _get_global_setting_sync(db, key: str, encrypted: bool = False) -> str:
-    row = db.execute(
-        select(PlatformSetting).where(PlatformSetting.key == key)
-    ).scalar_one_or_none()
+    row = db.execute(select(PlatformSetting).where(PlatformSetting.key == key)).scalar_one_or_none()
     if not row or not row.value:
         return ""
     if encrypted and row.is_encrypted:
@@ -187,9 +186,7 @@ def _get_global_setting_sync(db, key: str, encrypted: bool = False) -> str:
 
 
 async def _get_global_setting(db: AsyncSession, key: str, encrypted: bool = False) -> str:
-    result = await db.execute(
-        select(PlatformSetting).where(PlatformSetting.key == key)
-    )
+    result = await db.execute(select(PlatformSetting).where(PlatformSetting.key == key))
     row = result.scalar_one_or_none()
     if not row or not row.value:
         return ""
@@ -208,7 +205,5 @@ async def _get_global_setting(db: AsyncSession, key: str, encrypted: bool = Fals
 
 async def node_has_group(node_id, db: AsyncSession) -> bool:
     """Return True if the node belongs to at least one group."""
-    result = await db.execute(
-        select(GroupMember).where(GroupMember.node_id == node_id).limit(1)
-    )
+    result = await db.execute(select(GroupMember).where(GroupMember.node_id == node_id).limit(1))
     return result.scalar_one_or_none() is not None

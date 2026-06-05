@@ -1,4 +1,5 @@
 """Contract tests for #373: both log views use the shared LogPane; width/size applied."""
+
 from pathlib import Path
 
 ROOT = Path(__file__).parent.parent.parent

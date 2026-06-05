@@ -1,5 +1,6 @@
 # fleet_platform/workers/digest_tasks.py
 """Weekly fleet digest email task."""
+
 import logging
 
 from fleet_platform.db.session import get_sync_db

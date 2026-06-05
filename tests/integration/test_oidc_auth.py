@@ -1,4 +1,5 @@
 """Integration tests for OIDC authentication endpoints."""
+
 from httpx import AsyncClient
 
 

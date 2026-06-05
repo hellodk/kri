@@ -19,6 +19,7 @@ class LLMEndpoint(Base):
         if "id" not in kw:
             kw["id"] = uuid.uuid4()
         super().__init__(**kw)
+
     name: Mapped[str] = mapped_column(String(255), nullable=False)
     # "openai_compat" covers OpenAI, Ollama, LM Studio, vLLM, Groq, Mistral
     # "anthropic" uses the native Anthropic SDK
@@ -33,9 +34,7 @@ class LLMEndpoint(Base):
     # Populated when a model is selected from the discovery dropdown (#273)
     model_context_length: Mapped[int | None] = mapped_column(Integer, nullable=True, default=None)
     model_capabilities: Mapped[str | None] = mapped_column(Text, nullable=True, default=None)
-    created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), nullable=False, server_default=func.now()
-    )
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         nullable=False,

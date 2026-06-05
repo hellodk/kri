@@ -1,4 +1,5 @@
 """Tests for #131: TLS configuration."""
+
 from pathlib import Path
 
 TLS_CONF = (Path(__file__).parent.parent.parent / "deploy/nginx-tls.conf").read_text()

@@ -1,4 +1,5 @@
 """Unit tests for #78 (404 route), #77 (skeleton loaders), #75 (empty states)."""
+
 from pathlib import Path
 
 APP = Path("frontend/src/App.tsx").read_text()
@@ -24,9 +25,7 @@ def test_settings_uses_skeleton_not_loading_text():
 
 def test_security_uses_skeleton_not_loading_text():
     assert "<Skeleton" in SECURITY, "SecurityPage must use Skeleton component"
-    assert "Loading..." not in SECURITY, (
-        "SecurityPage must not use plain Loading... text — use Skeleton instead"
-    )
+    assert "Loading..." not in SECURITY, "SecurityPage must not use plain Loading... text — use Skeleton instead"
 
 
 def test_salt_keys_uses_skeleton_not_loading_text():
@@ -45,10 +44,7 @@ def test_drift_has_empty_state():
 def test_execution_history_has_empty_state():
     # ExecutionHistory now shows separate sections for ansible runs and salt runs
     assert (
-        "No executions" in EXEC
-        or "no executions" in EXEC.lower()
-        or "No playbook runs" in EXEC
-        or "No salt" in EXEC
+        "No executions" in EXEC or "no executions" in EXEC.lower() or "No playbook runs" in EXEC or "No salt" in EXEC
     ), "ExecutionHistory must show empty state when no executions"
 
 

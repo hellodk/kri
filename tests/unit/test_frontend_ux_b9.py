@@ -1,4 +1,5 @@
 """Unit tests for #136 (sidebar groups), #138 (icon), #140 (LLM auth guard)."""
+
 from pathlib import Path
 
 SIDEBAR = Path("frontend/src/components/Layout/Sidebar.tsx").read_text()
@@ -24,9 +25,7 @@ def test_sidebar_has_distinct_icons():
 
 def test_sidebar_has_section_labels():
     """Sidebar must render section label text for groups."""
-    assert "Compliance" in SIDEBAR or "Overview" in SIDEBAR, (
-        "Sidebar must render section header labels when expanded"
-    )
+    assert "Compliance" in SIDEBAR or "Overview" in SIDEBAR, "Sidebar must render section header labels when expanded"
 
 
 def test_llm_assistant_inside_auth_guard():

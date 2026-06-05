@@ -1,5 +1,6 @@
 # fleet_platform/services/drift_engine.py
 """Pure stateless drift computation. No DB, no Celery — fully unit-testable."""
+
 import re
 from dataclasses import dataclass, field
 
@@ -41,10 +42,7 @@ def compute_drift(grains: dict, baseline: dict) -> DriftResult:
     score = (
         len(missing) * _WEIGHTS["missing_required_package"]
         + len(extra) * _WEIGHTS["extra_forbidden_package"]
-        + sum(
-            _WEIGHTS[f"version_mismatch_{v['severity']}"]
-            for v in version_mismatches
-        )
+        + sum(_WEIGHTS[f"version_mismatch_{v['severity']}"] for v in version_mismatches)
         + len(services) * _WEIGHTS["service_drift"]
     )
 
@@ -108,12 +106,14 @@ def _check_versions(grains: dict, baseline: dict) -> list[dict]:
         required_v = _parse_version(constraint)
         if ">=" in constraint and actual_v < required_v:
             severity = "major" if (actual_v[0] if actual_v else 0) < (required_v[0] if required_v else 0) else "minor"
-            mismatches.append({
-                "name": pkg["name"],
-                "actual": installed[name],
-                "required": constraint,
-                "severity": severity,
-            })
+            mismatches.append(
+                {
+                    "name": pkg["name"],
+                    "actual": installed[name],
+                    "required": constraint,
+                    "severity": severity,
+                }
+            )
     return mismatches
 
 

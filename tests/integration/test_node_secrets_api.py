@@ -4,6 +4,7 @@
 Secrets are CRUD-managed under /api/v1/nodes/{node_id}/secrets.
 Pillar file writes are patched to avoid filesystem dependencies.
 """
+
 import uuid
 from unittest.mock import AsyncMock, patch
 
@@ -45,9 +46,7 @@ async def test_list_node_secrets_nonexistent_node_404(admin_client: AsyncClient)
     assert resp.status_code == 404
 
 
-async def test_list_node_secrets_viewer_allowed(
-    admin_client: AsyncClient, viewer_client: AsyncClient
-):
+async def test_list_node_secrets_viewer_allowed(admin_client: AsyncClient, viewer_client: AsyncClient):
     """Any authenticated user may list node secrets."""
     node_id = await _create_node(admin_client)
     resp = await viewer_client.get(f"/api/v1/nodes/{node_id}/secrets")
@@ -75,9 +74,7 @@ async def test_upsert_node_secret_requires_auth(client: AsyncClient):
     assert resp.status_code == 401
 
 
-async def test_upsert_node_secret_requires_operator(
-    admin_client: AsyncClient, viewer_client: AsyncClient
-):
+async def test_upsert_node_secret_requires_operator(admin_client: AsyncClient, viewer_client: AsyncClient):
     """Viewer role must be rejected with 403."""
     node_id = await _create_node(admin_client)
     resp = await viewer_client.put(
@@ -151,9 +148,7 @@ async def test_delete_node_secret_requires_auth(client: AsyncClient):
     assert resp.status_code == 401
 
 
-async def test_delete_node_secret_requires_operator(
-    admin_client: AsyncClient, viewer_client: AsyncClient
-):
+async def test_delete_node_secret_requires_operator(admin_client: AsyncClient, viewer_client: AsyncClient):
     node_id = await _create_node(admin_client)
     resp = await viewer_client.delete(f"/api/v1/nodes/{node_id}/secrets/KEY")
     assert resp.status_code == 403
@@ -164,9 +159,7 @@ async def test_delete_node_secret_not_found(admin_client: AsyncClient):
     """Deleting a key that does not exist returns 404."""
     node_id = await _create_node(admin_client)
     with patch(_WRITE_PILLAR, new=AsyncMock()):
-        resp = await admin_client.delete(
-            f"/api/v1/nodes/{node_id}/secrets/DOES_NOT_EXIST"
-        )
+        resp = await admin_client.delete(f"/api/v1/nodes/{node_id}/secrets/DOES_NOT_EXIST")
     assert resp.status_code == 404
     await _delete_node(admin_client, node_id)
 
@@ -180,9 +173,7 @@ async def test_delete_node_secret_happy_path(admin_client: AsyncClient):
             f"/api/v1/nodes/{node_id}/secrets/TO_DELETE",
             json={"value": "bye"},
         )
-        del_resp = await admin_client.delete(
-            f"/api/v1/nodes/{node_id}/secrets/TO_DELETE"
-        )
+        del_resp = await admin_client.delete(f"/api/v1/nodes/{node_id}/secrets/TO_DELETE")
     assert del_resp.status_code == 204
 
     list_resp = await admin_client.get(f"/api/v1/nodes/{node_id}/secrets")

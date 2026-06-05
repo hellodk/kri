@@ -94,17 +94,18 @@ async def auth_client(test_engine, auth_fake_redis: _FakeRedis):
     app.dependency_overrides[deps.get_db] = override_get_db
     app.dependency_overrides[deps.get_redis] = override_get_redis
 
-    async with AsyncClient(
-        transport=ASGITransport(app=app), base_url="http://testserver"
-    ) as ac:
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://testserver") as ac:
         yield ac
 
 
 async def test_login_success(auth_client, test_user):
-    response = await auth_client.post("/auth/login", json={
-        "email": "test@fleet.local",
-        "password": "password123",
-    })
+    response = await auth_client.post(
+        "/auth/login",
+        json={
+            "email": "test@fleet.local",
+            "password": "password123",
+        },
+    )
     assert response.status_code == 200
     data = response.json()
     assert "access_token" in data
@@ -113,26 +114,35 @@ async def test_login_success(auth_client, test_user):
 
 
 async def test_login_wrong_password(auth_client, test_user):
-    response = await auth_client.post("/auth/login", json={
-        "email": "test@fleet.local",
-        "password": "wrongpassword",
-    })
+    response = await auth_client.post(
+        "/auth/login",
+        json={
+            "email": "test@fleet.local",
+            "password": "wrongpassword",
+        },
+    )
     assert response.status_code == 401
 
 
 async def test_login_unknown_email(auth_client):
-    response = await auth_client.post("/auth/login", json={
-        "email": "nobody@fleet.local",
-        "password": "password123",
-    })
+    response = await auth_client.post(
+        "/auth/login",
+        json={
+            "email": "nobody@fleet.local",
+            "password": "password123",
+        },
+    )
     assert response.status_code == 401
 
 
 async def test_refresh_token(auth_client, test_user):
-    login = await auth_client.post("/auth/login", json={
-        "email": "test@fleet.local",
-        "password": "password123",
-    })
+    login = await auth_client.post(
+        "/auth/login",
+        json={
+            "email": "test@fleet.local",
+            "password": "password123",
+        },
+    )
     refresh_token = login.json()["refresh_token"]
     response = await auth_client.post("/auth/refresh", json={"refresh_token": refresh_token})
     assert response.status_code == 200
@@ -145,14 +155,15 @@ async def test_protected_endpoint_without_token(auth_client):
 
 
 async def test_protected_endpoint_with_valid_token(auth_client, test_user):
-    login = await auth_client.post("/auth/login", json={
-        "email": "test@fleet.local",
-        "password": "password123",
-    })
-    token = login.json()["access_token"]
-    response = await auth_client.get(
-        "/auth/me", headers={"Authorization": f"Bearer {token}"}
+    login = await auth_client.post(
+        "/auth/login",
+        json={
+            "email": "test@fleet.local",
+            "password": "password123",
+        },
     )
+    token = login.json()["access_token"]
+    response = await auth_client.get("/auth/me", headers={"Authorization": f"Bearer {token}"})
     assert response.status_code == 200
     data = response.json()
     assert data["email"] == "test@fleet.local"

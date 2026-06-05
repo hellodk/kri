@@ -14,6 +14,7 @@ def _make_mock_db(node):
 
 def test_write_pillar_file_creates_correct_content(tmp_path):
     from fleet_platform.workers.ansible_tasks import _write_pillar_file
+
     _write_pillar_file(
         pillar_dir=str(tmp_path),
         minion_id="mac-01.local",
@@ -28,6 +29,7 @@ def test_write_pillar_file_creates_correct_content(tmp_path):
 
 def test_write_pillar_file_creates_top_sls(tmp_path):
     from fleet_platform.workers.ansible_tasks import _write_pillar_file
+
     _write_pillar_file(str(tmp_path), "node-01", "http://x/ingest", "tok")
     top = (tmp_path / "top.sls").read_text()
     assert "node-01" in top
@@ -35,6 +37,7 @@ def test_write_pillar_file_creates_top_sls(tmp_path):
 
 def test_write_pillar_file_updates_existing_top_sls(tmp_path):
     from fleet_platform.workers.ansible_tasks import _write_pillar_file
+
     # Write initial top.sls
     (tmp_path / "top.sls").write_text("base:\n  'node-99':\n    - node-99\n")
     _write_pillar_file(str(tmp_path), "node-01", "http://x/ingest", "tok")
@@ -51,6 +54,7 @@ def test_bootstrap_node_missing_node_returns_error():
 
     with patch("fleet_platform.workers.ansible_tasks.get_sync_db", return_value=mock_db):
         from fleet_platform.workers.ansible_tasks import bootstrap_node
+
         result = bootstrap_node(str(uuid.uuid4()), "10.0.1.50")
 
     assert result["status"] == "error"

@@ -14,9 +14,7 @@ class AuditEvent(Base):
     __tablename__ = "audit_events"
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
-    event_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), nullable=False, primary_key=True
-    )
+    event_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, primary_key=True)
     actor: Mapped[str] = mapped_column(String(255), nullable=False)
     action: Mapped[str] = mapped_column(String(100), nullable=False)
     resource_type: Mapped[str | None] = mapped_column(String(50), nullable=True)

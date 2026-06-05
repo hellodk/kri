@@ -73,10 +73,7 @@ def index_sbom_from_grains(self, node_id: str) -> dict:
 
     with get_sync_db() as db:
         fact = db.execute(
-            select(NodeFact)
-            .where(NodeFact.node_id == node_uuid)
-            .order_by(NodeFact.collected_at.desc())
-            .limit(1)
+            select(NodeFact).where(NodeFact.node_id == node_uuid).order_by(NodeFact.collected_at.desc()).limit(1)
         ).scalar_one_or_none()
 
         if not fact:
@@ -145,21 +142,21 @@ def index_sbom_from_grains(self, node_id: str) -> dict:
 def archive_old_scans(self, node_id: str, keep_count: int = 3) -> dict:
     node_uuid = _uuid.UUID(node_id)
     with get_sync_db() as db:
-        keep_ids = db.execute(
-            select(SBOMScan.id)
-            .where(SBOMScan.node_id == node_uuid)
-            .order_by(SBOMScan.scanned_at.desc())
-            .limit(keep_count)
-        ).scalars().all()
+        keep_ids = (
+            db.execute(
+                select(SBOMScan.id)
+                .where(SBOMScan.node_id == node_uuid)
+                .order_by(SBOMScan.scanned_at.desc())
+                .limit(keep_count)
+            )
+            .scalars()
+            .all()
+        )
 
         if not keep_ids:
             return {"deleted": 0}
 
-        result = db.execute(
-            delete(SBOMScan)
-            .where(SBOMScan.node_id == node_uuid)
-            .where(SBOMScan.id.not_in(keep_ids))
-        )
+        result = db.execute(delete(SBOMScan).where(SBOMScan.node_id == node_uuid).where(SBOMScan.id.not_in(keep_ids)))
         db.commit()
     return {"deleted": result.rowcount}  # type: ignore[attr-defined]
 

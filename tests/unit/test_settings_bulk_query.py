@@ -1,4 +1,5 @@
 """Unit tests for get_settings_bulk — single DB round-trip for settings page (closes #284)."""
+
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
@@ -100,6 +101,7 @@ async def test_bulk_corrupt_ciphertext_returns_none_for_bad_key_only(caplog):
     db.execute = AsyncMock(return_value=result_mock)
 
     import logging as _logging
+
     with caplog.at_level(_logging.WARNING):
         out = await get_settings_bulk(db, ["ssh_password", "ansible_api_token"])
 

@@ -1,4 +1,5 @@
 """Tests for LLM conversation history (closes #282)."""
+
 import pytest
 
 from fleet_platform.schemas.llm import ChatHistoryMessage, LLMQueryRequest
@@ -38,7 +39,7 @@ async def test_openai_compat_includes_history_in_messages():
     captured: dict = {}
 
     async def _lines():
-        yield f'data: {_json.dumps({"choices": [{"delta": {"content": "hello"}}]})}'
+        yield f"data: {_json.dumps({'choices': [{'delta': {'content': 'hello'}}]})}"
         yield "data: [DONE]"
 
     mock_response = MagicMock()
@@ -88,7 +89,7 @@ async def test_no_history_produces_system_plus_user():
     captured: dict = {}
 
     async def _lines():
-        yield f'data: {_json.dumps({"choices": [{"delta": {"content": "hi"}}]})}'
+        yield f"data: {_json.dumps({'choices': [{'delta': {'content': 'hi'}}]})}"
         yield "data: [DONE]"
 
     mock_response = MagicMock()
@@ -126,6 +127,7 @@ async def test_no_history_produces_system_plus_user():
 def test_history_assembled_as_messages_array():
     """History entries are included as a messages array in the request (#282)."""
     from fleet_platform.schemas.llm import ChatHistoryMessage, LLMQueryRequest
+
     req = LLMQueryRequest(
         prompt="what are the node names?",
         intent="fleet_query",
@@ -162,6 +164,7 @@ def test_oldest_turns_dropped_when_over_token_budget():
 def test_empty_history_backward_compat():
     """Requests without history field are valid and produce empty history."""
     from fleet_platform.schemas.llm import LLMQueryRequest
+
     req = LLMQueryRequest(prompt="hello", intent="fleet_query")
     assert req.history == []
     assert isinstance(req.history, list)
