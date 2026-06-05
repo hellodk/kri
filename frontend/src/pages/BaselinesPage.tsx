@@ -38,20 +38,21 @@ function buildStateJson(required: PkgRow[], forbidden: PkgRow[], services: SvcRo
   }
 }
 
-function parseStateJson(stateJson: any): { required: PkgRow[], forbidden: PkgRow[], services: SvcRow[] } {
-  const pkgs = stateJson?.packages ?? {}
-  const required = (pkgs.required ?? []).map((p: any) => ({
+function parseStateJson(stateJson: Record<string, unknown>): { required: PkgRow[], forbidden: PkgRow[], services: SvcRow[] } {
+  const pkgs = (stateJson?.packages ?? {}) as Record<string, { name?: string; version?: string }[]>
+  const svc = (stateJson?.services ?? {}) as { required_running?: string[]; required_stopped?: string[] }
+  const required = (pkgs.required ?? []).map((p: { name?: string; version?: string }) => ({
     name: p.name ?? '',
     version: (p.version ?? '').replace('>=', ''),
     enforce: !!(p.version),
   }))
-  const forbidden = (pkgs.forbidden ?? []).map((p: any) => ({
+  const forbidden = (pkgs.forbidden ?? []).map((p: { name?: string }) => ({
     name: p.name ?? '',
     version: '',
     enforce: false,
   }))
-  const svcRunning = (stateJson?.services?.required_running ?? []).map((s: string) => ({ name: s, state: 'running' as const }))
-  const svcStopped = (stateJson?.services?.required_stopped ?? []).map((s: string) => ({ name: s, state: 'stopped' as const }))
+  const svcRunning = (svc.required_running ?? []).map((s: string) => ({ name: s, state: 'running' as const }))
+  const svcStopped = (svc.required_stopped ?? []).map((s: string) => ({ name: s, state: 'stopped' as const }))
   return { required, forbidden, services: [...svcRunning, ...svcStopped] }
 }
 
@@ -365,7 +366,7 @@ function CreateBaselineModal({ onClose, existing }: { onClose: () => void; exist
   const [targetId, setTargetId] = useState(existing?.target_id ?? '')
 
   // Package/service state — parse from existing state_json if editing
-  const parsedInitial = existing ? parseStateJson((existing as any).state_json ?? {}) : null
+  const parsedInitial = existing ? parseStateJson((existing as { state_json?: Record<string, unknown> }).state_json ?? {}) : null
   const [required, setRequired] = useState<PkgRow[]>(parsedInitial?.required ?? [])
   const [forbidden, setForbidden] = useState<PkgRow[]>(parsedInitial?.forbidden ?? [])
   const [services, setServices] = useState<SvcRow[]>(parsedInitial?.services ?? [])

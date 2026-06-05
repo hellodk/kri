@@ -93,6 +93,7 @@ function SingleTerminalPanel({
         // Detect kri_event OSC sequence for credential errors
         // Format: \x1b]kri_event:{"type":"credential_error","code":"...","node_id":"..."}\x07
         if (typeof data === 'string' && data.includes('kri_event:')) {
+          // eslint-disable-next-line no-control-regex -- intentional: \x07 is the BEL/OSC terminator in the kri_event OSC sequence
           const oscMatch = data.match(/kri_event:({[^}]+})\x07/)
           if (oscMatch) {
             try {

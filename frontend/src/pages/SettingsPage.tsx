@@ -83,6 +83,7 @@ export function SettingsPage() {
 
   useEffect(() => {
     if (data) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- populating form fields from saved settings on load; refactor tracked in #380 follow-up
       if (data.salt_master_address) setMaster(data.salt_master_address)
       if (data.kri_api_url) setKriApiUrl(data.kri_api_url)
       if (data.ssh_bootstrap_username) setUsername(data.ssh_bootstrap_username)
@@ -136,6 +137,7 @@ export function SettingsPage() {
   }
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- triggering connectivity check when embed URL changes; refactor tracked in #380 follow-up
     if (llmEmbedBaseUrl) checkEmbedUrl(llmEmbedBaseUrl)
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [llmEmbedBaseUrl])
@@ -978,6 +980,7 @@ function SaltAllowlistSection() {
 
   useEffect(() => {
     if (data?.salt_allowed_functions) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- loading allowlist from server settings on data change; refactor tracked in #380 follow-up
       setFunctions(data.salt_allowed_functions)
       setDirty(false)
     }
@@ -1124,6 +1127,7 @@ function SaltDenylistSection() {
 
   useEffect(() => {
     if (data) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- loading denylist from server settings on data change; refactor tracked in #380 follow-up
       setFunctions(data.salt_denied_functions ?? [])
       setDirty(false)
     }
@@ -1256,6 +1260,55 @@ function SourceTypeBadge({ type }: { type: string }) {
   )
 }
 
+type ValidateState = { status: 'idle' } | { status: 'validating' } | { status: 'valid'; result: PlaybookSourceValidateResponse } | { status: 'invalid'; error: string; logs?: string[] }
+
+function ValidationResult({ v }: { v: ValidateState }) {
+  if (v.status === 'idle') return null
+
+  const logs: string[] = v.status === 'valid' ? (v.result.logs ?? []) : (v.status === 'invalid' ? (v.logs ?? []) : [])
+
+  return (
+    <div className="space-y-2">
+      {/* Terminal log panel */}
+      <div className="bg-gray-950 rounded-lg p-3 font-mono text-xs space-y-0.5 max-h-48 overflow-y-auto">
+        {v.status === 'validating' && (
+          <p className="text-gray-400 animate-pulse">⏳ Connecting…</p>
+        )}
+        {v.status !== 'validating' && logs.map((line, i) => (
+          <p key={i} className={
+            line.includes('✓') ? 'text-green-400' :
+            line.includes('✗') || line.includes('Error') ? 'text-red-400' :
+            line.includes('⚠') ? 'text-amber-400' :
+            'text-gray-300'
+          }>{line}</p>
+        ))}
+        {v.status === 'valid' && (
+          <p className="text-green-400 font-semibold mt-1">
+            ✓ Ready to add — {v.result.playbook_count} playbooks, {v.result.role_count} roles
+          </p>
+        )}
+        {v.status === 'invalid' && (
+          <p className="text-red-400 font-semibold mt-1">✗ {v.error}</p>
+        )}
+      </div>
+      {/* Entry badges for valid state */}
+      {v.status === 'valid' && v.result.entries.length > 0 && (
+        <div className="flex flex-wrap gap-1.5">
+          {v.result.entries.map((e) => (
+            <span key={e.filename} className={`text-xs px-2 py-0.5 rounded font-mono border ${
+              e.entry_type === 'role'
+                ? 'bg-purple-50 text-purple-700 border-purple-200'
+                : 'bg-brand-50 text-brand-700 border-brand-200'
+            }`}>
+              {e.lint_errors?.length ? '⚠ ' : ''}{e.name}
+            </span>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
 function PlaybookSourcesSection() {
   const qc = useQueryClient()
   const toast = useToastStore((s) => s.add)
@@ -1276,7 +1329,6 @@ function PlaybookSourcesSection() {
   const [csvText, setCsvText] = useState('')
   const [lastAddType, setLastAddType] = useState<'local' | 'git'>('local')
 
-  type ValidateState = { status: 'idle' } | { status: 'validating' } | { status: 'valid'; result: PlaybookSourceValidateResponse } | { status: 'invalid'; error: string; logs?: string[] }
   const [localValidation, setLocalValidation] = useState<ValidateState>({ status: 'idle' })
   const [gitValidation, setGitValidation] = useState<ValidateState>({ status: 'idle' })
 
@@ -1313,8 +1365,8 @@ function PlaybookSourcesSection() {
     mutationFn: playbookSourcesApi.sync,
     onSuccess: (data) => {
       qc.invalidateQueries({ queryKey: ['playbooks'] })
-      const ok = data.results.filter((r: any) => r.status === 'ok').length
-      const err = data.results.filter((r: any) => r.status === 'error').length
+      const ok = data.results.filter((r: { status?: string }) => r.status === 'ok').length
+      const err = data.results.filter((r: { status?: string }) => r.status === 'error').length
       toast(err > 0 ? `Sync: ${ok} ok, ${err} failed` : `Synced ${ok} git source(s)`, err > 0 ? 'error' : undefined)
     },
     onError: (e: Error) => toast(e.message, 'error'),
@@ -1341,8 +1393,8 @@ function PlaybookSourcesSection() {
       } else {
         setLocalValidation({ status: 'invalid', error: result.error ?? 'Validation failed', logs: result.logs })
       }
-    } catch (e: any) {
-      setLocalValidation({ status: 'invalid', error: e.message ?? 'Validation error' })
+    } catch (e: unknown) {
+      setLocalValidation({ status: 'invalid', error: (e instanceof Error ? e.message : null) ?? 'Validation error' })
     }
   }
 
@@ -1362,61 +1414,14 @@ function PlaybookSourcesSection() {
       } else {
         setGitValidation({ status: 'invalid', error: result.error ?? 'Validation failed', logs: result.logs })
       }
-    } catch (e: any) {
-      setGitValidation({ status: 'invalid', error: e.message ?? 'Validation error' })
+    } catch (e: unknown) {
+      setGitValidation({ status: 'invalid', error: (e instanceof Error ? e.message : null) ?? 'Validation error' })
     }
   }
 
   const inputClass = 'flex-1 px-3 py-2 border border-gray-300 rounded-lg text-sm text-gray-900 focus:outline-none focus:border-brand-600 font-mono'
   const btnPrimary = 'px-4 py-2 bg-brand-600 text-white text-sm rounded-lg font-medium hover:bg-brand-700 disabled:opacity-50'
   const btnSecondary = 'px-4 py-2 bg-white border border-gray-300 text-gray-700 text-sm rounded-lg font-medium hover:bg-gray-50 disabled:opacity-50'
-
-  function ValidationResult({ v }: { v: ValidateState }) {
-    if (v.status === 'idle') return null
-
-    const logs: string[] = v.status === 'valid' ? (v.result.logs ?? []) : (v.status === 'invalid' ? (v.logs ?? []) : [])
-
-    return (
-      <div className="space-y-2">
-        {/* Terminal log panel */}
-        <div className="bg-gray-950 rounded-lg p-3 font-mono text-xs space-y-0.5 max-h-48 overflow-y-auto">
-          {v.status === 'validating' && (
-            <p className="text-gray-400 animate-pulse">⏳ Connecting…</p>
-          )}
-          {v.status !== 'validating' && logs.map((line, i) => (
-            <p key={i} className={
-              line.includes('✓') ? 'text-green-400' :
-              line.includes('✗') || line.includes('Error') ? 'text-red-400' :
-              line.includes('⚠') ? 'text-amber-400' :
-              'text-gray-300'
-            }>{line}</p>
-          ))}
-          {v.status === 'valid' && (
-            <p className="text-green-400 font-semibold mt-1">
-              ✓ Ready to add — {v.result.playbook_count} playbooks, {v.result.role_count} roles
-            </p>
-          )}
-          {v.status === 'invalid' && (
-            <p className="text-red-400 font-semibold mt-1">✗ {v.error}</p>
-          )}
-        </div>
-        {/* Entry badges for valid state */}
-        {v.status === 'valid' && v.result.entries.length > 0 && (
-          <div className="flex flex-wrap gap-1.5">
-            {v.result.entries.map((e) => (
-              <span key={e.filename} className={`text-xs px-2 py-0.5 rounded font-mono border ${
-                e.entry_type === 'role'
-                  ? 'bg-purple-50 text-purple-700 border-purple-200'
-                  : 'bg-brand-50 text-brand-700 border-brand-200'
-              }`}>
-                {e.lint_errors?.length ? '⚠ ' : ''}{e.name}
-              </span>
-            ))}
-          </div>
-        )}
-      </div>
-    )
-  }
 
   return (
     <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-6 space-y-5">
@@ -1753,8 +1758,8 @@ function LLMEndpointsSection() {
       await llmApi.update(ep.id, { is_default: true })
       qc.invalidateQueries({ queryKey: ['llm-endpoints'] })
       toast(`${ep.name} set as default`)
-    } catch (e: any) {
-      toast(e.message ?? 'Failed to set default', 'error')
+    } catch (e: unknown) {
+      toast((e instanceof Error ? e.message : null) ?? 'Failed to set default', 'error')
     } finally {
       setSettingDefaultId(null)
     }

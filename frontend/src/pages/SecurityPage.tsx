@@ -58,6 +58,13 @@ interface IntegrationStatus {
   sonarqube: { available: boolean; configured: boolean }
 }
 
+interface SecurityDashboard {
+  vulnerabilities: { critical: number; high: number; medium: number; low: number }
+  license_risks: { high: number; medium: number; unknown: number }
+  nodes_with_critical_or_high: number
+  last_scan_at: string | null
+}
+
 // ── Severity / Risk badges ───────────────────────────────────────────────────
 
 const RISK_COLORS: Record<string, string> = {
@@ -302,7 +309,7 @@ export function SecurityPage() {
 
   const { data: dashboard } = useQuery({
     queryKey: ['security-dashboard'],
-    queryFn: () => api.get<any>('/api/v1/security/dashboard'),
+    queryFn: () => api.get<SecurityDashboard>('/api/v1/security/dashboard'),
     staleTime: 60_000,
   })
 
@@ -353,7 +360,7 @@ export function SecurityPage() {
     onError: (e: Error) => toast(e.message, 'error'),
   })
 
-  const d = dashboard as any
+  const d = dashboard
 
   return (
     <div className="space-y-6">
