@@ -90,7 +90,10 @@ async def check_connectivity(
     url = _build_probe_url(payload.target, payload.port)
     t0 = time.monotonic()
     try:
-        async with httpx.AsyncClient(verify=False, timeout=5.0, follow_redirects=True) as client:
+        # verify=False is intentional: this is a reachability probe to internal
+        # services that commonly use self-signed certs; the response body is never
+        # trusted — only "did anything answer" + status code are used.
+        async with httpx.AsyncClient(verify=False, timeout=5.0, follow_redirects=True) as client:  # nosec B501
             resp = await client.get(url)
         latency = int((time.monotonic() - t0) * 1000)
         return ConnectivityCheckResponse(ok=True, latency_ms=latency, status_code=resp.status_code)
