@@ -24,6 +24,7 @@ class NodeListItem(BaseModel):
     @classmethod
     def coerce_ip(cls, v: Any) -> str | None:
         return str(v) if v is not None else None
+
     hardware_model: str | None = None
     status: str
     drift_score: int
@@ -74,11 +75,13 @@ class NodeDetailResponse(NodeListItem):
             return handler(data)
         # ORM object: compute flags from the encrypted column presence.
         result = handler(data)
-        return result.model_copy(update={
-            "has_ssh_password": bool(getattr(data, "ssh_password_enc", None)),
-            "has_ssh_key": bool(getattr(data, "ssh_key_enc", None)),
-            "has_vnc_password": bool(getattr(data, "vnc_password_enc", None)),
-        })
+        return result.model_copy(
+            update={
+                "has_ssh_password": bool(getattr(data, "ssh_password_enc", None)),
+                "has_ssh_key": bool(getattr(data, "ssh_key_enc", None)),
+                "has_vnc_password": bool(getattr(data, "vnc_password_enc", None)),
+            }
+        )
 
 
 class NodeCreateRequest(BaseModel):
@@ -96,11 +99,11 @@ class NodeUpdateRequest(BaseModel):
     os_version: str | None = None
     # SSH credential updates (plaintext in, encrypted on save)
     ssh_username: str | None = None
-    ssh_password: str | None = None   # plaintext, will be encrypted on save
+    ssh_password: str | None = None  # plaintext, will be encrypted on save
     ssh_auth_mode: str | None = None  # "password" | "key"
-    ssh_key: str | None = None        # plaintext key content, will be encrypted
+    ssh_key: str | None = None  # plaintext key content, will be encrypted
     # VNC credential update (plaintext in, encrypted on save)
-    vnc_password: str | None = None   # plaintext, will be encrypted on save
+    vnc_password: str | None = None  # plaintext, will be encrypted on save
 
 
 class FleetOverviewResponse(BaseModel):

@@ -31,9 +31,7 @@ async def _get_group_or_404(group_id: uuid.UUID, db: AsyncSession) -> Group:
 
 
 async def _member_count(group_id: uuid.UUID, db: AsyncSession) -> int:
-    result = await db.execute(
-        select(func.count()).where(GroupMember.group_id == group_id)
-    )
+    result = await db.execute(select(func.count()).where(GroupMember.group_id == group_id))
     return result.scalar_one() or 0
 
 
@@ -57,15 +55,12 @@ async def list_groups(
     _: dict = Depends(get_current_user),
 ):
     total = (await db.execute(select(func.count()).select_from(Group))).scalar_one()
-    result = await db.execute(
-        select(Group).order_by(Group.name).offset((page - 1) * per_page).limit(per_page)
-    )
+    result = await db.execute(select(Group).order_by(Group.name).offset((page - 1) * per_page).limit(per_page))
     groups = result.scalars().all()
 
     # Single aggregate query — replaces one COUNT per group (N+1 fix)
     count_result = await db.execute(
-        select(GroupMember.group_id, func.count(GroupMember.node_id).label("cnt"))
-        .group_by(GroupMember.group_id)
+        select(GroupMember.group_id, func.count(GroupMember.node_id).label("cnt")).group_by(GroupMember.group_id)
     )
     count_map = {row.group_id: row.cnt for row in count_result}
 
@@ -98,6 +93,7 @@ async def create_group(
         created_by=uuid.UUID(claims["sub"]),
     )
     from fleet_platform.core.audit import audit
+
     db.add(group)
     try:
         await db.flush()
@@ -107,9 +103,14 @@ async def create_group(
             status_code=status.HTTP_409_CONFLICT,
             detail="Group name already exists",
         )
-    await audit(db, actor=claims["email"], action="group.create",
-                resource_type="group", resource_id=group.id,
-                new_value={"name": group.name, "type": group.type})
+    await audit(
+        db,
+        actor=claims["email"],
+        action="group.create",
+        resource_type="group",
+        resource_id=group.id,
+        new_value={"name": group.name, "type": group.type},
+    )
     try:
         await db.commit()
     except IntegrityError:
@@ -141,6 +142,7 @@ async def update_group(
     claims: dict = Depends(require_role("operator", "admin")),
 ):
     from fleet_platform.core.audit import audit
+
     group = await _get_group_or_404(group_id, db)
     if payload.name is not None:
         group.name = payload.name
@@ -148,9 +150,14 @@ async def update_group(
         group.description = payload.description
     if payload.predicate is not None:
         group.predicate = payload.predicate
-    await audit(db, actor=claims["email"], action="group.update",
-                resource_type="group", resource_id=group_id,
-                new_value=payload.model_dump(exclude_none=True))
+    await audit(
+        db,
+        actor=claims["email"],
+        action="group.update",
+        resource_type="group",
+        resource_id=group_id,
+        new_value=payload.model_dump(exclude_none=True),
+    )
     await db.commit()
     await db.refresh(group)
     count = await _member_count(group_id, db)
@@ -164,10 +171,16 @@ async def delete_group(
     claims: dict = Depends(require_role("admin")),
 ):
     from fleet_platform.core.audit import audit
+
     group = await _get_group_or_404(group_id, db)
-    await audit(db, actor=claims["email"], action="group.delete",
-                resource_type="group", resource_id=group_id,
-                old_value={"name": group.name, "type": group.type})
+    await audit(
+        db,
+        actor=claims["email"],
+        action="group.delete",
+        resource_type="group",
+        resource_id=group_id,
+        old_value={"name": group.name, "type": group.type},
+    )
     await db.delete(group)
     await db.commit()
 
@@ -184,11 +197,7 @@ async def list_group_nodes(
 
     if group.type == "dynamic":
         node_ids = await resolve_dynamic_group(group.predicate or {}, db)
-        base_query = (
-            select(Node)
-            .options(selectinload(Node.tags))
-            .where(Node.id.in_(node_ids))
-        )
+        base_query = select(Node).options(selectinload(Node.tags)).where(Node.id.in_(node_ids))
     else:
         base_query = (
             select(Node)
@@ -202,7 +211,9 @@ async def list_group_nodes(
     nodes = result.scalars().all()
     return PaginatedResponse(
         items=[NodeListItem.model_validate(n) for n in nodes],
-        total=total, page=page, per_page=per_page,
+        total=total,
+        page=page,
+        per_page=per_page,
     )
 
 
@@ -220,12 +231,11 @@ async def add_group_member(
             detail="Cannot add members to a dynamic group",
         )
     existing = await db.execute(
-        select(GroupMember).where(
-            GroupMember.group_id == group_id, GroupMember.node_id == payload.node_id
-        )
+        select(GroupMember).where(GroupMember.group_id == group_id, GroupMember.node_id == payload.node_id)
     )
     if existing.scalar_one_or_none():
         from fastapi.responses import JSONResponse
+
         return JSONResponse(status_code=200, content={"status": "already_member"})
     db.add(GroupMember(group_id=group_id, node_id=payload.node_id, added_at=datetime.now(UTC)))
     await db.commit()
@@ -246,9 +256,7 @@ async def remove_group_member(
             detail="Cannot remove members from a dynamic group",
         )
     result = await db.execute(
-        select(GroupMember).where(
-            GroupMember.group_id == group_id, GroupMember.node_id == node_id
-        )
+        select(GroupMember).where(GroupMember.group_id == group_id, GroupMember.node_id == node_id)
     )
     member = result.scalar_one_or_none()
     if not member:
@@ -259,11 +267,12 @@ async def remove_group_member(
 
 # ─── Group credential endpoints ────────────────────────────────────────────────
 
+
 class GroupCredentialsUpdate(BaseModel):
     ssh_username: str | None = None
-    ssh_password: str | None = None   # plaintext, encrypted on save
+    ssh_password: str | None = None  # plaintext, encrypted on save
     ssh_auth_mode: str | None = None  # "password" | "key"
-    ssh_key: str | None = None        # plaintext key, encrypted on save
+    ssh_key: str | None = None  # plaintext key, encrypted on save
     session_max_mins: int | None = None
     session_retention_days: int | None = None
 

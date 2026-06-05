@@ -1,4 +1,5 @@
 """Unit tests for #118 (webssh blocklist), #141 (skeleton), #147 (salt JSON)."""
+
 from pathlib import Path
 
 

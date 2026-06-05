@@ -1,4 +1,5 @@
 """Pydantic schemas for macOS configuration profile management."""
+
 from __future__ import annotations
 
 import uuid

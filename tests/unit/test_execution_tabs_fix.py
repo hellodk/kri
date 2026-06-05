@@ -6,6 +6,7 @@ def test_list_ansible_jobs_route_has_group_logic():
     import inspect
 
     import fleet_platform.api.routes.ansible as ansible_mod
+
     source = inspect.getsource(ansible_mod.list_ansible_jobs)
     # Must look up group memberships when filtering by node_id
     assert "GroupMember" in source or "group_member" in source.lower(), (
@@ -18,7 +19,6 @@ def test_list_ansible_jobs_uses_or_condition():
     import inspect
 
     import fleet_platform.api.routes.ansible as ansible_mod
+
     source = inspect.getsource(ansible_mod.list_ansible_jobs)
-    assert "or_" in source or "group_ids" in source, (
-        "Query must use OR to include both direct and group-targeted jobs"
-    )
+    assert "or_" in source or "group_ids" in source, "Query must use OR to include both direct and group-targeted jobs"

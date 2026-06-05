@@ -1,4 +1,5 @@
 """Tests for #6: mutation testing infrastructure."""
+
 from pathlib import Path
 
 

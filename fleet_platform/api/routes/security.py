@@ -173,9 +173,7 @@ async def security_node_detail(
             VulnerabilityFinding.severity.in_(["CRITICAL", "HIGH"]).desc(), VulnerabilityFinding.scanned_at.desc()
         )
     )
-    total_vulns = (
-        await db.execute(select(func.count()).select_from(vuln_query.subquery()))
-    ).scalar_one()
+    total_vulns = (await db.execute(select(func.count()).select_from(vuln_query.subquery()))).scalar_one()
     result = await db.execute(vuln_query.offset((page - 1) * per_page).limit(per_page))
     vulns = result.scalars().all()
 
@@ -185,9 +183,7 @@ async def security_node_detail(
         .where(LicenseFinding.node_id == node_id)
         .order_by(LicenseFinding.risk.desc(), LicenseFinding.package_name)
     )
-    total_licenses = (
-        await db.execute(select(func.count()).select_from(lic_query.subquery()))
-    ).scalar_one()
+    total_licenses = (await db.execute(select(func.count()).select_from(lic_query.subquery()))).scalar_one()
     lic_result = await db.execute(lic_query.offset((page - 1) * per_page).limit(per_page))
     licenses = lic_result.scalars().all()
 
@@ -288,9 +284,7 @@ async def integration_status(
 
     # Trivy — use asyncio.to_thread to avoid blocking the event loop
     try:
-        result = await asyncio.to_thread(
-            subprocess.run, ["trivy", "--version"], capture_output=True, timeout=5
-        )
+        result = await asyncio.to_thread(subprocess.run, ["trivy", "--version"], capture_output=True, timeout=5)
         trivy_ok = result.returncode == 0
     except (FileNotFoundError, subprocess.TimeoutExpired):
         trivy_ok = False
@@ -301,7 +295,9 @@ async def integration_status(
     if cxone_url:
         try:
             await asyncio.to_thread(
-                urllib.request.urlopen, f"{cxone_url}/api/health", timeout=5  # nosec B310
+                urllib.request.urlopen,
+                f"{cxone_url}/api/health",
+                timeout=5,  # nosec B310
             )
             cxone_ok = True
         except Exception:
@@ -313,7 +309,9 @@ async def integration_status(
     if sonar_url:
         try:
             await asyncio.to_thread(
-                urllib.request.urlopen, f"{sonar_url}/api/system/health", timeout=5  # nosec B310
+                urllib.request.urlopen,
+                f"{sonar_url}/api/system/health",
+                timeout=5,  # nosec B310
             )
             sonar_ok = True
         except Exception:

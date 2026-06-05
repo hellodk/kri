@@ -1,4 +1,5 @@
 """Tests for salt-master deploy playbook and node_exporter salt state."""
+
 from pathlib import Path
 
 import yaml

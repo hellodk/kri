@@ -129,11 +129,7 @@ def _extract_node_updates(grains: dict) -> dict:
     if ip is None:
         fqdn_ips = grains.get("fqdn_ip4", [])
         ip = next(
-            (
-                a
-                for a in fqdn_ips
-                if _is_valid_ip(a) and not any(a.startswith(p) for p in _skip_prefixes)
-            ),
+            (a for a in fqdn_ips if _is_valid_ip(a) and not any(a.startswith(p) for p in _skip_prefixes)),
             None,
         )
 
@@ -181,9 +177,7 @@ _SYSTEM_TAG_GRAINS: list[tuple[str, str | None]] = [
 ]
 
 
-async def _upsert_system_tags(
-    db: AsyncSession, node: Node, grains: dict, now: datetime
-) -> None:
+async def _upsert_system_tags(db: AsyncSession, node: Node, grains: dict, now: datetime) -> None:
     """Write auto-populated tags from Salt grains. Existing user tags with same key are skipped."""
     tag_values: dict[str, str] = {}
 
@@ -202,9 +196,7 @@ async def _upsert_system_tags(
         return
 
     # Batch fetch existing tags for this node
-    existing_result = await db.execute(
-        select(Tag).where(Tag.node_id == node.id, Tag.key.in_(list(tag_values)))
-    )
+    existing_result = await db.execute(select(Tag).where(Tag.node_id == node.id, Tag.key.in_(list(tag_values))))
     existing_tags = {t.key: t for t in existing_result.scalars()}
 
     for key, value in tag_values.items():
@@ -227,9 +219,7 @@ async def ingest_grains(
     db: AsyncSession = Depends(get_db),
 ):
     if not x_node_token:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED, detail="Missing X-Node-Token"
-        )
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Missing X-Node-Token")
 
     node = await _resolve_node(payload.minion_id, x_node_token, db)
     if not _check_ingest_rate_limit(str(node.id)):
@@ -275,9 +265,7 @@ async def ingest_grains(
 
     # Auto-trigger SBOM indexing when grains contain package data
     grains = payload.grains
-    has_packages = bool(
-        grains.get("pkgs") or grains.get("brew_pkgs") or grains.get("pip_pkgs")
-    )
+    has_packages = bool(grains.get("pkgs") or grains.get("brew_pkgs") or grains.get("pip_pkgs"))
     if has_packages:
         index_sbom_from_grains.delay(str(node.id))
 
@@ -293,9 +281,7 @@ async def ingest_executions(
     db: AsyncSession = Depends(get_db),
 ):
     if not x_node_token:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED, detail="Missing X-Node-Token"
-        )
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Missing X-Node-Token")
 
     node = await _resolve_node(payload.minion_id, x_node_token, db)
     now = datetime.now(UTC)
@@ -361,9 +347,7 @@ async def ingest_sbom(
     db: AsyncSession = Depends(get_db),
 ):
     if not x_node_token:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED, detail="Missing X-Node-Token"
-        )
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Missing X-Node-Token")
 
     node = await _resolve_node(minion_id, x_node_token, db)
 

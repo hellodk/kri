@@ -11,9 +11,7 @@ from fleet_platform.models.base import Base
 class ExecutionJob(Base):
     __tablename__ = "execution_jobs"
 
-    id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
-    )
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     salt_jid: Mapped[str | None] = mapped_column(String(100), nullable=True, index=True)
     type: Mapped[str] = mapped_column(String(50), nullable=False)
     target_type: Mapped[str] = mapped_column(String(20), nullable=False)
@@ -24,17 +22,13 @@ class ExecutionJob(Base):
     completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     metadata_: Mapped[dict] = mapped_column("metadata", JSONB, nullable=False, default=dict)
 
-    __table_args__ = (
-        Index("idx_exec_jobs_status", "status", "started_at"),
-    )
+    __table_args__ = (Index("idx_exec_jobs_status", "status", "started_at"),)
 
 
 class ExecutionResult(Base):
     __tablename__ = "execution_results"
 
-    id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
-    )
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     job_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True),
         ForeignKey("execution_jobs.id", ondelete="CASCADE"),

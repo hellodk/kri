@@ -1,4 +1,5 @@
 """Tests for node_exporter deploy playbook (#292)."""
+
 from pathlib import Path
 
 import yaml

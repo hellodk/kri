@@ -1,4 +1,5 @@
 """HTTP endpoints for destructive node action approval gate (#291)."""
+
 import uuid
 from datetime import UTC, datetime
 
@@ -116,11 +117,13 @@ async def list_processes(
 ):
     """List running processes on a node via Salt ps.list_processes."""
     from sqlalchemy import select as _sel
+
     node_result = await db.execute(_sel(Node).where(Node.id == node_id))
     node = node_result.scalar_one_or_none()
     if not node:
         raise HTTPException(status_code=404, detail="Node not found")
     from fleet_platform.workers.salt_tasks import run_salt_cmd
+
     task = run_salt_cmd.delay(
         function="ps.list_processes",
         target_minions=[node.minion_id],
@@ -137,11 +140,13 @@ async def list_services(
 ):
     """List services on a node via Salt service.get_all + service.status."""
     from sqlalchemy import select as _sel
+
     node_result = await db.execute(_sel(Node).where(Node.id == node_id))
     node = node_result.scalar_one_or_none()
     if not node:
         raise HTTPException(status_code=404, detail="Node not found")
     from fleet_platform.workers.salt_tasks import run_salt_cmd
+
     task = run_salt_cmd.delay(
         function="service.get_all",
         target_minions=[node.minion_id],
@@ -188,28 +193,20 @@ async def ask_ai_about_node(
 
     # Fetch latest health snapshot for richer metrics
     snapshot_result = await db.execute(
-        _sel(_Snapshot)
-        .where(_Snapshot.node_id == node_id)
-        .order_by(desc(_Snapshot.collected_at))
-        .limit(1)
+        _sel(_Snapshot).where(_Snapshot.node_id == node_id).order_by(desc(_Snapshot.collected_at)).limit(1)
     )
     snapshot = snapshot_result.scalar_one_or_none()
 
     # Fetch latest drift record for detail on what drifted
     drift_result = await db.execute(
-        _sel(_DriftRecord)
-        .where(_DriftRecord.node_id == node_id)
-        .order_by(desc(_DriftRecord.computed_at))
-        .limit(1)
+        _sel(_DriftRecord).where(_DriftRecord.node_id == node_id).order_by(desc(_DriftRecord.computed_at)).limit(1)
     )
     latest_drift = drift_result.scalar_one_or_none()
 
     # Count recent alert events (last 24 h)
     since = datetime.now(UTC) - timedelta(hours=24)
     alert_count_result = await db.execute(
-        _sel(sqlfunc.count(_AlertEvent.id))
-        .where(_AlertEvent.node_id == node_id)
-        .where(_AlertEvent.fired_at >= since)
+        _sel(sqlfunc.count(_AlertEvent.id)).where(_AlertEvent.node_id == node_id).where(_AlertEvent.fired_at >= since)
     )
     recent_alert_count: int = alert_count_result.scalar_one() or 0
 
@@ -269,8 +266,7 @@ async def ask_ai_about_node(
     system_prompt = await build_fleet_context(db, "fleet_query")
     api_key = get_decrypted_api_key(endpoint)
     model_caps = (
-        [c.strip() for c in endpoint.model_capabilities.split(",") if c.strip()]
-        if endpoint.model_capabilities else []
+        [c.strip() for c in endpoint.model_capabilities.split(",") if c.strip()] if endpoint.model_capabilities else []
     )
 
     try:

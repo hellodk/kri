@@ -13,9 +13,7 @@ from fleet_platform.models.base import Base
 class NodeHealthSnapshot(Base):
     __tablename__ = "node_health_snapshots"
 
-    id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
-    )
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
 
     def __init__(self, **kw: object) -> None:
         if "id" not in kw:
@@ -28,9 +26,7 @@ class NodeHealthSnapshot(Base):
         nullable=False,
     )
     minion_id: Mapped[str] = mapped_column(String(255), nullable=False)
-    collected_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), nullable=False, server_default=func.now()
-    )
+    collected_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=func.now())
 
     # Disk
     disk_root_used_gb: Mapped[Decimal | None] = mapped_column(Numeric(10, 2), nullable=True)
@@ -63,6 +59,4 @@ class NodeHealthSnapshot(Base):
     # Collection error (set when any command fails)
     error: Mapped[str | None] = mapped_column(Text, nullable=True)
 
-    __table_args__ = (
-        Index("idx_node_health_node_collected", "node_id", "collected_at"),
-    )
+    __table_args__ = (Index("idx_node_health_node_collected", "node_id", "collected_at"),)

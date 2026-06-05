@@ -11,7 +11,7 @@ class ExecutionJobResponse(BaseModel):
     type: str
     target_type: str
     target_id: uuid.UUID | None = None
-    target_label: str | None = None   # resolved node hostname or group name
+    target_label: str | None = None  # resolved node hostname or group name
     triggered_by: str
     status: str
     started_at: datetime | None = None

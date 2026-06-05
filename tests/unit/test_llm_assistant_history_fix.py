@@ -48,10 +48,8 @@ def test_mutation_receives_text_and_history():
         content = f.read()
 
     # Check that mutationFn accepts { text, history }
-    mutation_sig = content[content.find("mutationFn:"):content.find("onSuccess")]
-    assert "{ text, history }" in mutation_sig, (
-        "mutationFn must accept { text, history } destructured object"
-    )
+    mutation_sig = content[content.find("mutationFn:") : content.find("onSuccess")]
+    assert "{ text, history }" in mutation_sig, "mutationFn must accept { text, history } destructured object"
 
     # Check that mutation.mutate is called with { text, history }
     submit_fn_start = content.index("const handleSubmit = ()")

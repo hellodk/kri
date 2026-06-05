@@ -1,11 +1,14 @@
 """Unit tests for API code quality fixes (issues #107, #111, #113, #134, #135)."""
+
 import pytest
 
 # ── Fix #113: BaselineUpdate Pydantic model ───────────────────────────────────
 
+
 def test_baseline_update_rejects_extra_fields():
     """BaselineUpdate Pydantic model ignores extra fields (default model_config)."""
     from fleet_platform.api.routes.baselines import BaselineUpdate
+
     b = BaselineUpdate(name="x", unknown_field="y")  # type: ignore[call-arg]
     assert not hasattr(b, "unknown_field") or b.model_extra == {} or True  # extra ignored
 
@@ -13,6 +16,7 @@ def test_baseline_update_rejects_extra_fields():
 def test_baseline_update_all_optional():
     """BaselineUpdate allows empty updates — all fields are Optional."""
     from fleet_platform.api.routes.baselines import BaselineUpdate
+
     b = BaselineUpdate()
     assert b.name is None
     assert b.state_json is None
@@ -22,6 +26,7 @@ def test_baseline_update_all_optional():
 def test_baseline_update_name_only():
     """BaselineUpdate accepts a partial update with only name set."""
     from fleet_platform.api.routes.baselines import BaselineUpdate
+
     b = BaselineUpdate(name="new-name")
     assert b.name == "new-name"
     assert b.state_json is None
@@ -31,6 +36,7 @@ def test_baseline_update_name_only():
 def test_baseline_update_state_json_only():
     """BaselineUpdate accepts a partial update with only state_json set."""
     from fleet_platform.api.routes.baselines import BaselineUpdate
+
     b = BaselineUpdate(state_json={"packages": ["git", "vim"]})
     assert b.state_json == {"packages": ["git", "vim"]}
     assert b.name is None
@@ -39,6 +45,7 @@ def test_baseline_update_state_json_only():
 def test_baseline_update_all_fields():
     """BaselineUpdate accepts all fields together."""
     from fleet_platform.api.routes.baselines import BaselineUpdate
+
     b = BaselineUpdate(
         name="prod-baseline",
         state_json={"services": ["sshd"]},
@@ -50,6 +57,7 @@ def test_baseline_update_all_fields():
 
 
 # ── Fix #134: SBOM ilike metacharacter escaping ───────────────────────────────
+
 
 def test_sbom_search_escapes_percent():
     """SBOM ilike search escapes % metacharacter so it is treated as a literal."""
@@ -90,6 +98,7 @@ def test_sbom_search_percent_only_pattern():
 
 # ── Fix #111: limit query parameter bounds ────────────────────────────────────
 
+
 def _get_query_bounds(query_obj):
     """Extract ge and le values from a FastAPI Query metadata list."""
     ge_val = le_val = None
@@ -107,6 +116,7 @@ def test_webssh_sessions_limit_default_and_bounds():
     import inspect
 
     from fleet_platform.api.routes.webssh import list_sessions
+
     sig = inspect.signature(list_sessions)
     param = sig.parameters["limit"]
     default = param.default
@@ -121,6 +131,7 @@ def test_webssh_events_limit_default_and_bounds():
     import inspect
 
     from fleet_platform.api.routes.webssh import list_security_events
+
     sig = inspect.signature(list_security_events)
     param = sig.parameters["limit"]
     default = param.default
@@ -135,6 +146,7 @@ def test_alerts_events_limit_default_and_bounds():
     import inspect
 
     from fleet_platform.api.routes.alerts import list_events
+
     sig = inspect.signature(list_events)
     param = sig.parameters["limit"]
     default = param.default
@@ -146,9 +158,11 @@ def test_alerts_events_limit_default_and_bounds():
 
 # ── Fix #135: GroupMember model index ─────────────────────────────────────────
 
+
 def test_group_member_has_node_id_index():
     """GroupMember.__table_args__ includes the idx_group_members_node_id index."""
     from fleet_platform.models.group import GroupMember
+
     assert hasattr(GroupMember, "__table_args__"), "GroupMember must define __table_args__"
     table_args = GroupMember.__table_args__
     index_names = [arg.name for arg in table_args if hasattr(arg, "name")]
@@ -162,6 +176,7 @@ def test_group_member_node_id_index_covers_correct_column():
     from sqlalchemy import Index
 
     from fleet_platform.models.group import GroupMember
+
     for arg in GroupMember.__table_args__:
         if isinstance(arg, Index) and arg.name == "idx_group_members_node_id":
             col_names = [col.key for col in arg.expressions]

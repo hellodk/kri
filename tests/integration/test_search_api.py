@@ -14,15 +14,16 @@ from fleet_platform.models.node import Node, Tag
 async def searchable_node(db_session: AsyncSession):
     token = secrets.token_urlsafe(32)
     node = Node(
-        minion_id="searchme-01.local", hostname="searchme-01",
+        minion_id="searchme-01.local",
+        hostname="searchme-01",
         node_token_hash=hash_password(token),
-        first_seen_at=datetime.now(UTC), status="online",
+        first_seen_at=datetime.now(UTC),
+        status="online",
     )
     db_session.add(node)
     await db_session.commit()
     await db_session.refresh(node)
-    tag = Tag(node_id=node.id, key="role", value="searchable",
-              created_at=datetime.now(UTC))
+    tag = Tag(node_id=node.id, key="role", value="searchable", created_at=datetime.now(UTC))
     db_session.add(tag)
     await db_session.commit()
     yield node

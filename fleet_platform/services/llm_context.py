@@ -157,13 +157,14 @@ async def build_fleet_context(db: AsyncSession, intent: str, query: str = "") ->
             Node.ip_address,
             Node.status,
             Node.last_seen_at,
-        ).order_by(Node.hostname).limit(50)
+        )
+        .order_by(Node.hostname)
+        .limit(50)
     )
     node_rows = nodes_result.all()
 
     membership_result = await db.execute(
-        select(GroupMember.node_id, Group.name)
-        .join(Group, Group.id == GroupMember.group_id)
+        select(GroupMember.node_id, Group.name).join(Group, Group.id == GroupMember.group_id)
     )
     node_group_map: dict = {str(row.node_id): row.name for row in membership_result.all()}
 
@@ -178,14 +179,16 @@ async def build_fleet_context(db: AsyncSession, intent: str, query: str = "") ->
 
     node_records = []
     for row in node_rows:
-        node_records.append({
-            "hostname": row.hostname or row.minion_id or "unknown",
-            "minion_id": row.minion_id or "—",
-            "ip": row.ip_address if include_ips else "[redacted]",
-            "status": row.status or "unknown",
-            "last_seen": _format_last_seen(row.last_seen_at),
-            "group": node_group_map.get(str(row.minion_id), "—"),
-        })
+        node_records.append(
+            {
+                "hostname": row.hostname or row.minion_id or "unknown",
+                "minion_id": row.minion_id or "—",
+                "ip": row.ip_address if include_ips else "[redacted]",
+                "status": row.status or "unknown",
+                "last_seen": _format_last_seen(row.last_seen_at),
+                "group": node_group_map.get(str(row.minion_id), "—"),
+            }
+        )
 
     # RAG retrieval — non-fatal; degrades gracefully if embed_url is not configured
     retrieved_chunks_text: str | None = None
@@ -195,6 +198,7 @@ async def build_fleet_context(db: AsyncSession, intent: str, query: str = "") ->
                 format_retrieved_chunks,
                 retrieve,
             )
+
             chunks = await retrieve(db, query, embed_url, top_k=6)
             retrieved_chunks_text = format_retrieved_chunks(chunks) or None
         except Exception:

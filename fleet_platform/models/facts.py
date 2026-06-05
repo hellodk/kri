@@ -17,11 +17,7 @@ class NodeFact(Base):
     node_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True), ForeignKey("nodes.id", ondelete="CASCADE"), nullable=False
     )
-    collected_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), nullable=False, primary_key=True
-    )
+    collected_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, primary_key=True)
     grains: Mapped[dict] = mapped_column(JSONB, nullable=False)
 
-    __table_args__ = (
-        Index("idx_node_facts_node_id", "node_id", "collected_at"),
-    )
+    __table_args__ = (Index("idx_node_facts_node_id", "node_id", "collected_at"),)

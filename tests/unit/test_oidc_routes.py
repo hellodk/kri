@@ -1,5 +1,6 @@
 # tests/unit/test_oidc_routes.py
 """Unit tests for OIDC route security fixes: one-time exchange code endpoint."""
+
 import json
 from unittest.mock import AsyncMock
 
@@ -63,6 +64,7 @@ async def test_oidc_exchange_code_is_consumed_on_first_use():
 
     # Second call raises 400 (code consumed)
     from fastapi import HTTPException
+
     with pytest.raises(HTTPException) as exc_info:
         await oidc_exchange(exchange_code="one-time", redis=mock_redis)
     assert exc_info.value.status_code == 400

@@ -14,8 +14,7 @@ _CYCLONEDX_DOC = {
         "tools": [{"name": "syft", "version": "1.2.3"}],
     },
     "components": [
-        {"type": "library", "name": "openssl", "version": "3.0.2",
-         "purl": "pkg:brew/openssl@3.0.2", "licenses": []},
+        {"type": "library", "name": "openssl", "version": "3.0.2", "purl": "pkg:brew/openssl@3.0.2", "licenses": []},
     ],
 }
 
@@ -37,11 +36,14 @@ def test_index_sbom_deletes_temp_file():
     mock_db.__enter__ = MagicMock(return_value=mock_db)
     mock_db.__exit__ = MagicMock(return_value=False)
 
-    with patch("fleet_platform.workers.sbom_tasks.get_sync_db", return_value=mock_db), \
-         patch("fleet_platform.workers.sbom_tasks.SBOMParser") as MockParser, \
-         patch("fleet_platform.workers.sbom_tasks.archive_old_scans") as mock_archive:
+    with (
+        patch("fleet_platform.workers.sbom_tasks.get_sync_db", return_value=mock_db),
+        patch("fleet_platform.workers.sbom_tasks.SBOMParser") as MockParser,
+        patch("fleet_platform.workers.sbom_tasks.archive_old_scans") as mock_archive,
+    ):
         MockParser.return_value.parse_cyclonedx.return_value = (mock_scan, [{"name": "openssl"}])
         from fleet_platform.workers.sbom_tasks import index_sbom
+
         result = index_sbom(_NODE_ID, path)
 
     assert not os.path.exists(path)
@@ -53,6 +55,7 @@ def test_index_sbom_deletes_temp_file():
 def test_index_sbom_missing_file_returns_error():
     with patch("fleet_platform.workers.sbom_tasks.get_sync_db"):
         from fleet_platform.workers.sbom_tasks import index_sbom
+
         result = index_sbom(_NODE_ID, "/tmp/nonexistent-sbom-file.json")
     assert result["status"] == "error"
     assert result["reason"] == "file_not_found"
@@ -66,6 +69,7 @@ def test_cleanup_old_sbom_scans_calls_db():
 
     with patch("fleet_platform.workers.sbom_tasks.get_sync_db", return_value=mock_db):
         from fleet_platform.workers.sbom_tasks import cleanup_old_sbom_scans
+
         result = cleanup_old_sbom_scans(keep_count=3)
 
     assert result["deleted"] == 5

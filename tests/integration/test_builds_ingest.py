@@ -13,6 +13,7 @@ async def _clean_setting(db_session: AsyncSession, key: str) -> None:
     from sqlalchemy import delete
 
     from fleet_platform.models.platform_setting import PlatformSetting
+
     await db_session.execute(delete(PlatformSetting).where(PlatformSetting.key == key))
     await db_session.commit()
 
@@ -22,6 +23,7 @@ async def _clean_build(db_session: AsyncSession, job_name: str, build_number: in
     from sqlalchemy import delete
 
     from fleet_platform.models.jenkins_build_event import JenkinsBuildEvent
+
     await db_session.execute(
         delete(JenkinsBuildEvent).where(
             JenkinsBuildEvent.job_name == job_name,
@@ -46,9 +48,8 @@ async def test_ingest_build_wrong_secret(client: AsyncClient, db_session: AsyncS
     await _clean_setting(db_session, "jenkins_ingest_secret")
 
     from fleet_platform.models.platform_setting import PlatformSetting
-    db_session.add(PlatformSetting(
-        key="jenkins_ingest_secret", value="correct-secret-t2", is_encrypted=False
-    ))
+
+    db_session.add(PlatformSetting(key="jenkins_ingest_secret", value="correct-secret-t2", is_encrypted=False))
     await db_session.commit()
 
     payload = {
@@ -78,9 +79,7 @@ async def test_ingest_build_success(client: AsyncClient, db_session: AsyncSessio
     await _clean_build(db_session, "deploy-prod", 42)
 
     secret = "test-secret-abc123"
-    db_session.add(PlatformSetting(
-        key="jenkins_ingest_secret", value=secret, is_encrypted=False
-    ))
+    db_session.add(PlatformSetting(key="jenkins_ingest_secret", value=secret, is_encrypted=False))
     await db_session.commit()
 
     payload = {
@@ -126,9 +125,7 @@ async def test_ingest_build_idempotent(client: AsyncClient, db_session: AsyncSes
     await _clean_build(db_session, "ci-test", 9001)
 
     secret = "idempotent-secret"
-    db_session.add(PlatformSetting(
-        key="jenkins_ingest_secret", value=secret, is_encrypted=False
-    ))
+    db_session.add(PlatformSetting(key="jenkins_ingest_secret", value=secret, is_encrypted=False))
     await db_session.commit()
 
     payload = {
