@@ -173,6 +173,29 @@ async def delete_group(
     from fleet_platform.core.audit import audit
 
     group = await _get_group_or_404(group_id, db)
+
+    # Invariant (#508): a node must always belong to ≥1 group.
+    # Find members of this group whose ONLY group membership is this one.
+    members_result = await db.execute(select(GroupMember).where(GroupMember.group_id == group_id))
+    members = members_result.scalars().all()
+
+    orphaned_node_ids: list[uuid.UUID] = []
+    for m in members:
+        count_result = await db.execute(select(func.count()).where(GroupMember.node_id == m.node_id))
+        if count_result.scalar_one() <= 1:
+            orphaned_node_ids.append(m.node_id)
+
+    if orphaned_node_ids:
+        n = len(orphaned_node_ids)
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=(
+                f"Cannot delete group: {n} node(s) would be orphaned (left with no group). "
+                f"Assign them to another group first. "
+                f"Affected node IDs: {[str(nid) for nid in orphaned_node_ids]}"
+            ),
+        )
+
     await audit(
         db,
         actor=claims["email"],
@@ -255,6 +278,20 @@ async def remove_group_member(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Cannot remove members from a dynamic group",
         )
+
+    # Invariant (#508): a node must always belong to ≥1 group.
+    # Count the node's total group memberships before allowing removal.
+    count_result = await db.execute(select(func.count()).where(GroupMember.node_id == node_id))
+    membership_count = count_result.scalar_one()
+    if membership_count <= 1:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=(
+                "Node must belong to at least one group; "
+                "assign it to another group first before removing it from this one."
+            ),
+        )
+
     result = await db.execute(
         select(GroupMember).where(GroupMember.group_id == group_id, GroupMember.node_id == node_id)
     )
