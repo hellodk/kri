@@ -19,6 +19,7 @@ class AnsibleJob(Base):
     target_label: Mapped[str] = mapped_column(String(255), nullable=False)
     extravars: Mapped[dict] = mapped_column(JSONB, nullable=False, default=dict)
     verbosity: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    timeout_seconds: Mapped[int] = mapped_column(Integer, nullable=False, default=1800, server_default="1800")
     status: Mapped[str] = mapped_column(String(20), nullable=False, default="pending")
     triggered_by: Mapped[str] = mapped_column(String(255), nullable=False)
     started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
