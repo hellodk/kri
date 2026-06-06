@@ -7,14 +7,23 @@ interface VNCViewerProps {
   onClose: () => void
 }
 
+/** Minimal shape of the @novnc/novnc RFB object (no bundled type declarations). */
+interface RFBInstance {
+  addEventListener(event: string, listener: (e: { detail?: { reason?: string } }) => void): void
+  sendCredentials(creds: { password: string }): void
+  disconnect(): void
+  scaleViewport: boolean
+  resizeSession: boolean
+}
+
 export function VNCViewer({ nodeId, nodeName, onClose }: VNCViewerProps) {
   const canvasRef = useRef<HTMLDivElement>(null)
-  const rfbRef = useRef<any>(null)
+  const rfbRef = useRef<RFBInstance | null>(null)
   const [status, setStatus] = useState<'connecting' | 'connected' | 'disconnected' | 'error'>('connecting')
   const [errorMsg, setErrorMsg] = useState('')
 
   useEffect(() => {
-    let rfb: any
+    let rfb: RFBInstance
 
     async function init() {
       // eslint-disable-next-line @typescript-eslint/ban-ts-comment
@@ -28,7 +37,7 @@ export function VNCViewer({ nodeId, nodeName, onClose }: VNCViewerProps) {
       rfbRef.current = rfb
 
       rfb.addEventListener('connect', () => setStatus('connected'))
-      rfb.addEventListener('disconnect', (e: any) => {
+      rfb.addEventListener('disconnect', (e: { detail?: { reason?: string } }) => {
         setStatus('disconnected')
         if (e.detail?.reason) setErrorMsg(e.detail.reason)
       })

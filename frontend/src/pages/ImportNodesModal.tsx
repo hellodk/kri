@@ -170,8 +170,8 @@ export function ImportNodesModal({ onClose }: { onClose: () => void }) {
     try {
       const result = await fleetApi.importValidate(body)
       setValidateResult(result)
-    } catch (e: any) {
-      setValidateError(e.message ?? 'Validation failed')
+    } catch (e: unknown) {
+      setValidateError((e instanceof Error ? e.message : null) ?? 'Validation failed')
       setValidateResult(null)
     } finally {
       setValidating(false)
@@ -208,6 +208,7 @@ export function ImportNodesModal({ onClose }: { onClose: () => void }) {
   // ── Salt tab: validate on tab open ────────────────────────────────────────
   useEffect(() => {
     if (tab === 'salt') {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- resetting validation result when switching to the salt tab; refactor tracked in #380 follow-up
       setValidateResult(null)
       runValidate({ source: 'salt' })
     }
@@ -235,8 +236,8 @@ export function ImportNodesModal({ onClose }: { onClose: () => void }) {
       setShowNewGroup(false)
       setNewGroupName('')
       setGroupId(created.id)
-    } catch (e: any) {
-      toast(e.message ?? 'Failed to create group', 'error')
+    } catch (e: unknown) {
+      toast((e instanceof Error ? e.message : null) ?? 'Failed to create group', 'error')
     } finally {
       setCreatingGroup(false)
     }

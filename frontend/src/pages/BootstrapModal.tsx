@@ -90,6 +90,7 @@ function SingleMode({ onClose }: { onClose: () => void }) {
 
   useEffect(() => {
     if (settingsData) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- pre-populating SSH username from saved settings on mount; refactor tracked in #380 follow-up
       if (!sshUsername) setSshUsername(settingsData.ssh_bootstrap_username || '')
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -138,6 +139,7 @@ function SingleMode({ onClose }: { onClose: () => void }) {
   // Auto-populate from found node (new mode search result)
   useEffect(() => {
     if (subMode === 'new' && existingNode) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- syncing node fields from search result on prop change; refactor tracked in #380 follow-up
       setExistingNodeDbId(existingNode.id)
       if (existingNode.ip_address) setTargetIp(existingNode.ip_address)
       if (existingNode.ssh_username) setSshUsername(existingNode.ssh_username)
@@ -160,6 +162,7 @@ function SingleMode({ onClose }: { onClose: () => void }) {
   // Refine after detail loads (existing mode)
   useEffect(() => {
     if (subMode === 'existing' && existingNode && selectedNodeId) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- populating form fields from loaded node detail; refactor tracked in #380 follow-up
       setTargetIp(existingNode.ip_address ?? targetIp)
       if (existingNode.ssh_username) setSshUsername(existingNode.ssh_username)
       setSelectedNodeHasSavedPassword(existingNode.has_ssh_password)
@@ -216,6 +219,7 @@ function SingleMode({ onClose }: { onClose: () => void }) {
   // Keep localLogs in sync: once the query returns real data, promote it so clearing works
   useEffect(() => {
     if (logsData?.ansible_stdout !== undefined) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- syncing local log buffer from query data so user can clear logs independently; refactor tracked in #380 follow-up
       setLocalLogs(logsData.ansible_stdout)
     }
   }, [logsData?.ansible_stdout])
@@ -722,6 +726,7 @@ function BulkMode({ onClose }: { onClose: () => void }) {
           return !bs || bs === 'failed' || bs === 'unknown' || bs === 'unregistered'
         })
         .map((n) => n.id)
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- auto-checking eligible nodes when group page loads; refactor tracked in #380 follow-up
       setCheckedIds(new Set(toPrecheck))
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -892,7 +897,7 @@ function BulkMode({ onClose }: { onClose: () => void }) {
                       <input type="checkbox" checked={checkedIds.has(n.id)}
                         onChange={(e) => {
                           const next = new Set(checkedIds)
-                          e.target.checked ? next.add(n.id) : next.delete(n.id)
+                          if (e.target.checked) { next.add(n.id) } else { next.delete(n.id) }
                           setCheckedIds(next)
                         }} />
                       <span className="flex-1 text-sm font-medium text-gray-900">{n.hostname ?? n.minion_id}</span>

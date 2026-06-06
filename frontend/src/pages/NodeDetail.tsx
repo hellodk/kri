@@ -604,16 +604,18 @@ export function NodeDetail() {
 
   useEffect(() => {
     if (!processTaskResult || processTaskResult.state !== 'SUCCESS') return
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- updating process list from polled task result; refactor tracked in #380 follow-up
     setProcessPolling(false)
     try {
-      const ret = (processTaskResult.result as any)?.return?.[0]
+      type ProcessData = { name?: string; cmdline?: string[]; cpu_percent?: number; memory_percent?: number; mem_percent?: number; username?: string; status?: string }
+      const ret = (processTaskResult.result as { return?: [Record<string, Record<string, ProcessData>>] })?.return?.[0]
       if (!ret) return
       // Prefer the known minion_id key; fall back to first value for resilience
       const minionData = (node?.minion_id && ret[node.minion_id])
-        ? ret[node.minion_id] as Record<string, any>
-        : Object.values(ret)[0] as Record<string, any>
+        ? ret[node.minion_id] as Record<string, ProcessData>
+        : Object.values(ret)[0] as Record<string, ProcessData>
       if (!minionData) return
-      const list = Object.entries(minionData).map(([pid, p]: [string, any]) => ({
+      const list = Object.entries(minionData).map(([pid, p]: [string, ProcessData]) => ({
         pid,
         name: p.name ?? p.cmdline?.[0]?.split('/').pop() ?? pid,
         cpu_percent: Number(p.cpu_percent ?? 0),
@@ -639,9 +641,10 @@ export function NodeDetail() {
 
   useEffect(() => {
     if (!serviceTaskResult || serviceTaskResult.state !== 'SUCCESS') return
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- updating service list from polled task result; refactor tracked in #380 follow-up
     setServicesPolling(false)
     try {
-      const ret = (serviceTaskResult.result as any)?.return?.[0]
+      const ret = (serviceTaskResult.result as { return?: [Record<string, unknown>] })?.return?.[0]
       if (!ret) return
       // Prefer the known minion_id key; fall back to first value for resilience
       const minionData = (node?.minion_id && ret[node.minion_id])

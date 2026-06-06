@@ -251,7 +251,7 @@ export function PlaybookDrawer({
                         </p>
                         <code className="text-xs text-gray-400 font-mono block">{selectedNode?.path}</code>
                         <p className="text-xs text-gray-400">
-                          {(fileErrorObj as any)?.message ?? 'Could not load file content'}
+                          {(fileErrorObj as Error)?.message ?? 'Could not load file content'}
                         </p>
                       </div>
                     </div>

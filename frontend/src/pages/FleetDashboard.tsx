@@ -142,8 +142,8 @@ function AddNodeModal({ onClose }: { onClose: () => void }) {
       setShowNewGroup(false)
       setNewGroupName('')
       await onGroupChange(created.id)
-    } catch (e: any) {
-      toast(e.message ?? 'Failed to create group', 'error')
+    } catch (e: unknown) {
+      toast((e instanceof Error ? e.message : null) ?? 'Failed to create group', 'error')
     } finally {
       setCreatingGroup(false)
     }
@@ -902,7 +902,7 @@ export function FleetDashboard() {
 
   function toggleOne(id: string) {
     const next = new Set(selected)
-    next.has(id) ? next.delete(id) : next.add(id)
+    if (next.has(id)) { next.delete(id) } else { next.add(id) }
     setSelected(next)
   }
 
