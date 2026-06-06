@@ -22,13 +22,14 @@ def _sync_db(*scalar_returns):
     return db
 
 
-def _node(ssh_username=None, ssh_password_enc=None, ssh_key_enc=None, ssh_auth_mode=None):
+def _node(ssh_username=None, ssh_password_enc=None, ssh_key_enc=None, ssh_auth_mode=None, ssh_host_key=None):
     node = MagicMock()
     node.id = uuid.uuid4()
     node.ssh_username = ssh_username
     node.ssh_password_enc = ssh_password_enc
     node.ssh_key_enc = ssh_key_enc
     node.ssh_auth_mode = ssh_auth_mode
+    node.ssh_host_key = ssh_host_key  # None = not bootstrapped; explicit to avoid MagicMock truthy default
     return node
 
 

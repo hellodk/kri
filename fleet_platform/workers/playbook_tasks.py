@@ -1,6 +1,7 @@
 # fleet_platform/workers/playbook_tasks.py
 """Celery tasks for running arbitrary Ansible playbooks."""
 
+import json
 import logging
 import re
 import tempfile
@@ -100,26 +101,45 @@ def _write_static_inventory(tmpdir: str, hosts: list[dict]) -> str:
     Credentials differ per host (node override vs group vs global), so they go
     inline per host rather than via a single global env var. Private keys are
     written to 0600 files in *tmpdir* and referenced, never inlined (#279).
+
+    Passwords are written to host_vars/{alias}.yml (mode 0600) instead of
+    being inlined into inventory.ini (#349). Inlining ansible_ssh_pass leaks
+    the password into ansible -vvv output and artifact files even at 0600.
+    The alias and the host_vars filename use the same value: the raw hostname
+    when it is safe (passes _SAFE_PATH_RE), otherwise the _safe_label() form,
+    preventing path-traversal attacks in both the inventory alias and the file
+    system path.
     """
     # [targets] is the kri-managed group (referenced by kri-synthesized wrappers).
     # [all:children] makes all hosts visible to playbooks using `hosts: all`.
     lines = ["[targets]"]
     for h in hosts:
-        parts = [h["hostname"], f"ansible_host={h['ip']}", f"ansible_user={h['ssh_user']}"]
+        raw_hostname = h["hostname"]
+        # Use safe label for both the inventory alias and the host_vars filename
+        # so they always match. If the raw hostname is already safe, keep it as-is
+        # to preserve the alias ansible expects; otherwise sanitise both.
+        alias = raw_hostname if _SAFE_PATH_RE.match(raw_hostname) else _safe_label(raw_hostname)
+        parts = [alias, f"ansible_host={h['ip']}", f"ansible_user={h['ssh_user']}"]
         if h.get("auth_mode") == "key" and h.get("ssh_key"):
-            key_path = Path(tmpdir) / f"{_safe_label(h['hostname'])}.key"
+            key_path = Path(tmpdir) / f"{_safe_label(raw_hostname)}.key"
             key_path.write_text(h["ssh_key"] if h["ssh_key"].endswith("\n") else h["ssh_key"] + "\n")
             key_path.chmod(0o600)
             parts.append(f"ansible_ssh_private_key_file={key_path}")
         elif h.get("ssh_password"):
-            parts.append(f"ansible_ssh_pass={h['ssh_password']}")
+            # Write password to host_vars/{alias}.yml (mode 0600) — never inline (#349).
+            # A JSON-quoted string is a valid YAML scalar; avoids importing yaml (#346).
+            hv_dir = Path(tmpdir) / "host_vars"
+            hv_dir.mkdir(parents=True, exist_ok=True)
+            hv_file = hv_dir / f"{alias}.yml"
+            hv_file.write_text(f"ansible_ssh_pass: {json.dumps(h['ssh_password'])}\n")
+            hv_file.chmod(0o600)
         lines.append(" ".join(parts))
     # Add [all:children] so playbooks using `hosts: all` see the selected nodes.
     # This fixes playbooks that use `hosts: all` instead of `hosts: targets`.
     lines += ["", "[all:children]", "targets"]
     inv_path = Path(tmpdir) / "inventory.ini"
     inv_path.write_text("\n".join(lines))
-    inv_path.chmod(0o600)  # holds SSH passwords + IPs — never world/group readable
+    inv_path.chmod(0o600)  # holds SSH IPs — never world/group readable
     return str(inv_path)
 
 

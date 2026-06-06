@@ -3,7 +3,14 @@
 Priority chain (first match wins):
   1. Node-level override  (node.ssh_username / node.ssh_password_enc)
   2. Primary group creds  (alphabetically-first group the node belongs to)
-  3. Global default       (platform settings: SSH_USERNAME / SSH_PASSWORD)
+  3. Controller key       (node was bootstrapped — ssh_host_key set — and ~/.kri/id_rsa exists)
+  4. Global default       (platform settings: SSH_USERNAME / SSH_PASSWORD)
+
+Design intent: tiers 1 and 2 are explicit operator-set credentials and always
+win.  Tier 3 applies only to nodes that have been bootstrapped (TOFU host-key
+recorded) and have no explicit override; the controller private key was
+installed on the node during bootstrap.  Tier 4 is the legacy password
+fallback for nodes that have never been bootstrapped.
 """
 
 from __future__ import annotations
@@ -22,8 +29,17 @@ from fleet_platform.services.platform_settings_svc import (
     _fernet,
     decrypt_secret,
 )
+from fleet_platform.services.ssh_keypair import _DEFAULT_PRIV
 
 logger = logging.getLogger(__name__)
+
+
+def _read_controller_key() -> str:
+    """Return the controller private key (~/.kri/id_rsa) or '' if absent/unreadable."""
+    try:
+        return _DEFAULT_PRIV.read_text()
+    except OSError:
+        return ""
 
 
 async def resolve_node_credentials(node: Node, db: AsyncSession) -> dict:
@@ -103,7 +119,20 @@ async def resolve_node_credentials(node: Node, db: AsyncSession) -> dict:
             "credential_source": f"group:{group.name}",
         }
 
-    # 3. Global fallback from platform settings
+    # 3. Controller key — node was bootstrapped (ssh_host_key set) and key file exists
+    if node.ssh_host_key:
+        controller_key = _read_controller_key()
+        if controller_key:
+            ssh_user = await _get_global_setting(db, SSH_USERNAME) or "admin"
+            return {
+                "ssh_user": ssh_user,
+                "ssh_password": "",
+                "ssh_key": controller_key,
+                "auth_mode": "key",
+                "credential_source": "controller",
+            }
+
+    # 4. Global fallback from platform settings
     ssh_user = await _get_global_setting(db, SSH_USERNAME) or "admin"
     ssh_password = await _get_global_setting(db, SSH_PASSWORD, encrypted=True)
 
@@ -131,8 +160,8 @@ def resolve_node_credentials_sync(node: Node, db) -> dict:
 
     The playbook worker runs on a sync SQLAlchemy ``Session`` (``get_sync_db``),
     so it cannot await the async resolver. This mirrors the same
-    node → primary-group → global priority chain and returns the identical
-    dict shape, including ``credential_source`` (#279).
+    node → primary-group → controller → global priority chain and returns the
+    identical dict shape, including ``credential_source`` (#279, #349).
     """
     # 1. Node-level override
     if node.ssh_username:
@@ -162,7 +191,19 @@ def resolve_node_credentials_sync(node: Node, db) -> dict:
             "credential_source": f"group:{group.name}",
         }
 
-    # 3. Global fallback from platform settings
+    # 3. Controller key — node was bootstrapped (ssh_host_key set) and key file exists
+    if node.ssh_host_key:
+        controller_key = _read_controller_key()
+        if controller_key:
+            return {
+                "ssh_user": _get_global_setting_sync(db, SSH_USERNAME) or "admin",
+                "ssh_password": "",
+                "ssh_key": controller_key,
+                "auth_mode": "key",
+                "credential_source": "controller",
+            }
+
+    # 4. Global fallback from platform settings
     return {
         "ssh_user": _get_global_setting_sync(db, SSH_USERNAME) or "admin",
         "ssh_password": _get_global_setting_sync(db, SSH_PASSWORD, encrypted=True),
