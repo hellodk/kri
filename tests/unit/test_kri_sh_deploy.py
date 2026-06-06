@@ -4,11 +4,11 @@ from pathlib import Path
 
 
 def _kri() -> str:
-    return Path("scripts/kri.sh").read_text()
+    return Path("scripts/kri").read_text()
 
 
 def test_kri_sh_exists():
-    assert Path("scripts/kri.sh").exists()
+    assert Path("scripts/kri").exists()
 
 
 def test_require_env_function_exists():

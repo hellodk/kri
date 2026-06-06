@@ -1,7 +1,7 @@
 """Unit tests for playbook_catalog_svc — all DB calls mocked."""
 
 import uuid
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
@@ -24,43 +24,39 @@ def mock_db():
 
 @pytest.mark.asyncio
 async def test_enable_playbook_creates_row(mock_db):
-    """enable_playbook upserts a catalog row when none exists."""
+    """enable_playbook uses pg_insert ON CONFLICT and returns the upserted row."""
+    fake_id = uuid.uuid4()
+    fake_row = MagicMock()
+    fake_row.id = fake_id
+    fake_row.enabled = True
+
     mock_result = MagicMock()
-    mock_result.scalar_one_or_none.return_value = None
+    mock_result.scalar_one.return_value = fake_row
     mock_db.execute.return_value = mock_result
 
-    fake_id = uuid.uuid4()
-    instance = MagicMock()
-    instance.id = fake_id
-    instance.enabled = True
-
-    with (
-        patch("fleet_platform.services.playbook_catalog_svc.PlaybookCatalog") as MockCatalog,
-        patch("fleet_platform.services.playbook_catalog_svc.select"),
-    ):
-        MockCatalog.return_value = instance
-
-        result = await enable_playbook(
-            mock_db,
-            source_key="https://git.example.com/pulse.git",
-            source_label="pulse",
-            filename="bootstrap_mac.yml",
-            entry_type="playbook",
-            actor="admin@kri.local",
-        )
+    result = await enable_playbook(
+        mock_db,
+        source_key="https://git.example.com/pulse.git",
+        source_label="pulse",
+        filename="bootstrap_mac.yml",
+        entry_type="playbook",
+        actor="admin@kri.local",
+    )
 
     assert result.enabled is True
-    mock_db.add.assert_called_once()
-    mock_db.commit.assert_called_once()
+    # Service must NOT commit — the caller commits
+    mock_db.commit.assert_not_called()
+    # execute() was called (the INSERT ... ON CONFLICT ... RETURNING statement)
+    mock_db.execute.assert_called_once()
 
 
 @pytest.mark.asyncio
 async def test_enable_playbook_updates_existing(mock_db):
-    """enable_playbook sets enabled=True on an already-known row."""
+    """enable_playbook ON CONFLICT DO UPDATE handles an already-known row via upsert."""
     existing = MagicMock()
-    existing.enabled = False
+    existing.enabled = True  # simulate row returned after upsert
     mock_result = MagicMock()
-    mock_result.scalar_one_or_none.return_value = existing
+    mock_result.scalar_one.return_value = existing
     mock_db.execute.return_value = mock_result
 
     result = await enable_playbook(
@@ -73,13 +69,14 @@ async def test_enable_playbook_updates_existing(mock_db):
     )
 
     assert result.enabled is True
+    # ON CONFLICT path — still a single execute(), no separate add()
     mock_db.add.assert_not_called()
-    mock_db.commit.assert_called_once()
+    mock_db.commit.assert_not_called()
 
 
 @pytest.mark.asyncio
 async def test_disable_playbook_sets_enabled_false(mock_db):
-    """disable_playbook sets enabled=False on an existing row."""
+    """disable_playbook sets enabled=False and clears audit fields without committing."""
     catalog_id = uuid.uuid4()
     mock_row = MagicMock()
     mock_row.id = catalog_id
@@ -92,7 +89,10 @@ async def test_disable_playbook_sets_enabled_false(mock_db):
     await disable_playbook(mock_db, catalog_id=catalog_id, actor="admin@kri.local")
 
     assert mock_row.enabled is False
-    mock_db.commit.assert_called_once()
+    assert mock_row.enabled_by is None
+    assert mock_row.enabled_at is None
+    # Service must NOT commit — the caller commits
+    mock_db.commit.assert_not_called()
 
 
 @pytest.mark.asyncio
@@ -130,7 +130,8 @@ async def test_auto_disable_missing_marks_gone_rows(mock_db):
     assert mock_row.enabled is False
     assert mock_row.auto_disabled_at is not None
     assert len(disabled) == 1
-    mock_db.commit.assert_called_once()
+    # Service must NOT commit — the caller commits
+    mock_db.commit.assert_not_called()
 
 
 @pytest.mark.asyncio

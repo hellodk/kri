@@ -431,7 +431,7 @@ cmd_test() {
 
     if [[ -z "$sub" ]]; then
         _prompt_select "What would you like to test?" \
-            "unit" "integration" "all" "e2e"
+            "unit" "integration" "all" "e2e" "report"
         sub="$PROMPT_RESULT"
     fi
 
@@ -440,6 +440,7 @@ cmd_test() {
         integration) cmd_test_integration "$@" ;;
         all)         cmd_test_all "$@" ;;
         e2e)         cmd_test_e2e "$@" ;;
+        report)      cmd_test_report ;;
         *)           error "Unknown test type: $sub" ;;
     esac
 }
@@ -489,6 +490,40 @@ cmd_test_e2e() {
         "$PW" test --grep "$filter" --reporter=line 2>&1
     else
         "$PW" test --reporter=line 2>&1
+    fi
+}
+
+cmd_test_report() {
+    header "Test Report"
+    local xml="$REPO_DIR/test-reports/unit/results.xml"
+    local int_xml="$REPO_DIR/test-reports/integration/results.xml"
+    local e2e_json="$REPO_DIR/test-reports/e2e/results.json"
+    echo "=== Test Report ==="
+    for f in "$xml" "$int_xml"; do
+        if [ -f "$f" ]; then
+            local label; label=$(basename "$(dirname "$f")")
+            local tests errors failures skipped
+            tests=$(grep -o 'tests="[0-9]*"' "$f" | head -1 | tr -d 'tests="')
+            errors=$(grep -o 'errors="[0-9]*"' "$f" | head -1 | tr -d 'errors="')
+            failures=$(grep -o 'failures="[0-9]*"' "$f" | head -1 | tr -d 'failures="')
+            skipped=$(grep -o 'skipped="[0-9]*"' "$f" | head -1 | tr -d 'skipped="')
+            echo "[$label] tests=$tests errors=$errors failures=$failures skipped=$skipped"
+        else
+            echo "[$(basename "$(dirname "$f")")] no report found ($f)"
+        fi
+    done
+    if [ -f "$e2e_json" ]; then
+        python3 -c "
+import json, sys
+try:
+    d = json.load(open('$e2e_json'))
+    stats = d.get('stats', {})
+    print(f\"[e2e] tests={stats.get('expected',0)} passed={stats.get('expected',0)-stats.get('unexpected',0)} failed={stats.get('unexpected',0)} skipped={stats.get('skipped',0)}\")
+except Exception as e:
+    print(f'[e2e] could not parse results.json: ' + str(e))
+" 2>/dev/null || echo "[e2e] could not parse results.json"
+    else
+        echo "[e2e] no report found ($e2e_json)"
     fi
 }
 
@@ -896,7 +931,8 @@ ${BOLD}Infrastructure:${NC}
   ${CYAN}infra prune${NC}      Remove unused Docker resources
 
 ${BOLD}Testing:${NC}
-  ${CYAN}test${NC}             Run tests (interactive or kri test [unit|integration|all|e2e])
+  ${CYAN}test${NC}             Run tests (interactive or kri test [unit|integration|all|e2e|report])
+  ${CYAN}test report${NC}      Print summary table from test-reports/
 
 ${BOLD}PKI:${NC}
   ${CYAN}pki init${NC}         Generate salt-master keys (first deploy)
