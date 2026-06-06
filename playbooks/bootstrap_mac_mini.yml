@@ -294,14 +294,19 @@
       failed_when: false
 
     - name: Collect hardware model
-      shell: sysctl -n hw.model 2>/dev/null || system_profiler SPHardwareDataType 2>/dev/null | awk -F': ' '/Model Identifier/{print $2}' || echo ''
+      shell: |
+        sysctl -n hw.model 2>/dev/null ||
+        system_profiler SPHardwareDataType 2>/dev/null | awk -F': ' '/Model Identifier/{print $2}' ||
+        echo ''
       register: hw_model_result
       changed_when: false
       become: false
       failed_when: false
 
     - name: Collect serial number
-      shell: system_profiler SPHardwareDataType 2>/dev/null | awk -F': ' '/Serial Number/{print $2}' | tr -d ' \n\r' || echo ''
+      shell: |
+        system_profiler SPHardwareDataType 2>/dev/null | awk -F': ' '/Serial Number/{print $2}' | tr -d ' \n\r' ||
+        echo ''
       register: serial_result
       changed_when: false
       become: false

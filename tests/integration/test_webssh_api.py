@@ -24,10 +24,9 @@ async def test_webssh_without_token_closes_4001(app_with_test_db):
     """WS connection without a token must be closed with code 4001."""
     node_id = uuid.uuid4()
     with TestClient(app_with_test_db) as tc:
-        with tc.websocket_connect(
-            f"/api/v1/ssh/session/{node_id}",
-            raise_on_disconnect=False,
-        ) as ws:
+        # raise_on_disconnect is not supported in starlette 1.x — omit it.
+        # The server sends a close frame normally; no exception is raised.
+        with tc.websocket_connect(f"/api/v1/ssh/session/{node_id}") as ws:
             data = ws.receive()
             assert data.get("type") == "websocket.close"
             assert data.get("code") == 4001
@@ -37,10 +36,7 @@ async def test_webssh_with_invalid_token_closes_4001(app_with_test_db):
     """WS connection with an invalid JWT must be closed with code 4001."""
     node_id = uuid.uuid4()
     with TestClient(app_with_test_db) as tc:
-        with tc.websocket_connect(
-            f"/api/v1/ssh/session/{node_id}?token=garbage",
-            raise_on_disconnect=False,
-        ) as ws:
+        with tc.websocket_connect(f"/api/v1/ssh/session/{node_id}?token=garbage") as ws:
             data = ws.receive()
             assert data.get("type") == "websocket.close"
             assert data.get("code") == 4001
@@ -50,10 +46,7 @@ async def test_webssh_valid_token_unknown_node_closes_4004(app_with_test_db, adm
     """Valid JWT but non-existent node must close with 4004."""
     node_id = uuid.uuid4()
     with TestClient(app_with_test_db) as tc:
-        with tc.websocket_connect(
-            f"/api/v1/ssh/session/{node_id}?token={admin_token}",
-            raise_on_disconnect=False,
-        ) as ws:
+        with tc.websocket_connect(f"/api/v1/ssh/session/{node_id}?token={admin_token}") as ws:
             data = ws.receive()
             assert data.get("type") == "websocket.close"
             assert data.get("code") == 4004

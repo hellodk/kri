@@ -163,20 +163,44 @@ async def test_query_creates_log_entry(admin_client: AsyncClient, operator_clien
         },
     )
 
-    mock_response_data = {
-        "choices": [{"message": {"content": "# generated state"}}],
-        "usage": {"prompt_tokens": 50, "completion_tokens": 30},
-    }
+    # The llm_caller uses httpx streaming (client.stream / response.aiter_lines).
+    # Mock the full async context-manager chain so the service sees valid SSE lines.
+    import json as _json
 
-    with patch("fleet_platform.services.llm_caller.httpx.AsyncClient") as mock_cls:
-        mock_instance = AsyncMock()
-        mock_cls.return_value.__aenter__ = AsyncMock(return_value=mock_instance)
-        mock_cls.return_value.__aexit__ = AsyncMock(return_value=None)
-        mock_resp = MagicMock()
-        mock_resp.json.return_value = mock_response_data
-        mock_resp.raise_for_status = MagicMock()
-        mock_instance.post = AsyncMock(return_value=mock_resp)
+    # Two SSE chunks: one with content delta, one with usage (final chunk)
+    sse_lines = [
+        "data: "
+        + _json.dumps(
+            {
+                "choices": [{"delta": {"content": "# generated state"}}],
+            }
+        ),
+        "data: "
+        + _json.dumps(
+            {
+                "choices": [],
+                "usage": {"prompt_tokens": 50, "completion_tokens": 30},
+            }
+        ),
+        "data: [DONE]",
+    ]
 
+    async def _fake_aiter_lines():
+        for line in sse_lines:
+            yield line
+
+    mock_stream_resp = MagicMock()
+    mock_stream_resp.raise_for_status = MagicMock()
+    mock_stream_resp.aiter_lines = _fake_aiter_lines
+    mock_stream_resp.__aenter__ = AsyncMock(return_value=mock_stream_resp)
+    mock_stream_resp.__aexit__ = AsyncMock(return_value=None)
+
+    mock_http_client = MagicMock()
+    mock_http_client.stream = MagicMock(return_value=mock_stream_resp)
+    mock_http_client.__aenter__ = AsyncMock(return_value=mock_http_client)
+    mock_http_client.__aexit__ = AsyncMock(return_value=None)
+
+    with patch("fleet_platform.services.llm_caller.httpx.AsyncClient", return_value=mock_http_client):
         response = await operator_client.post(
             "/api/v1/llm/query",
             json={"prompt": "ensure nginx is installed", "intent": "salt_state"},

@@ -1,21 +1,46 @@
 # tests/integration/conftest.py
 import pytest_asyncio
 from httpx import ASGITransport, AsyncClient
+from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
 from fleet_platform.core.auth import create_access_token, hash_password
 from fleet_platform.core.config import settings
 from fleet_platform.models import Base, User
 
+# Import models that are NOT in fleet_platform/models/__init__.py so that
+# Base.metadata.create_all creates the tables they define.  These are real
+# application models whose omission from __init__.py is a pre-existing bug
+# (tracked as REAL-BUG in chore/integration-triage); we import them here so
+# the test DB schema is complete without touching app code.
+from fleet_platform.models.alert import AlertEvent, AlertRule, WebhookConfig  # noqa: F401
+from fleet_platform.models.ssh_session import SSHSession  # noqa: F401
+
 
 @pytest_asyncio.fixture(scope="module", loop_scope="module")
 async def test_engine():
     engine = create_async_engine(settings.test_database_url, echo=False)
     async with engine.begin() as conn:
+        # Ensure required extensions are present (pg_trgm for search, vector,
+        # timescaledb).  CREATE EXTENSION IF NOT EXISTS is idempotent.
+        await conn.execute(text("CREATE EXTENSION IF NOT EXISTS pg_trgm"))
+        await conn.execute(text("CREATE EXTENSION IF NOT EXISTS vector"))
         await conn.run_sync(Base.metadata.create_all)
     yield engine
     async with engine.begin() as conn:
-        await conn.run_sync(Base.metadata.drop_all)
+        # Use CASCADE to handle FK dependencies between tables that were
+        # created by alembic migrations (e.g. ssh_sessions → groups) but are
+        # not represented in Base.metadata.  Without CASCADE the drop_all
+        # call fails when the DB was previously initialised by migrations.
+        await conn.execute(
+            text(
+                "DO $$ DECLARE r RECORD; BEGIN "
+                "FOR r IN SELECT tablename FROM pg_tables "
+                "WHERE schemaname = 'public' LOOP "
+                "EXECUTE 'DROP TABLE IF EXISTS public.' || quote_ident(r.tablename) || ' CASCADE'; "
+                "END LOOP; END $$"
+            )
+        )
     await engine.dispose()
 
 
