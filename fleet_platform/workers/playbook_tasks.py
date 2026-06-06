@@ -10,7 +10,6 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 import ansible_runner
-import yaml as _yaml
 from celery.exceptions import SoftTimeLimitExceeded
 from sqlalchemy import select
 
@@ -132,11 +131,6 @@ def _credential_source_banner(hosts: list[dict]) -> str:
     return "\n".join(lines)
 
 
-def _write_var_file(path: Path, vars_dict: dict) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(_yaml.dump(vars_dict, default_flow_style=False, allow_unicode=True))
-
-
 def _host_entry(node: Node, db, override: dict | None) -> dict:
     """Build a host inventory entry, resolving credentials per node (#279).
 
@@ -250,16 +244,8 @@ def run_playbook(
             job.stdout = "\n".join(stdout_lines)
             db.commit()
 
-        with get_sync_db() as db:
-            job = db.execute(select(AnsibleJob).where(AnsibleJob.id == job_uuid)).scalar_one()
-            if job.extravars:
-                if job.target_type == "node" and hosts:
-                    hostname = _safe_label(hosts[0]["hostname"])
-                    vf = playbooks_dir / "host_vars" / f"{hostname}.yml"
-                    _write_var_file(vf, job.extravars)
-                elif job.target_type == "group":
-                    vf = playbooks_dir / "group_vars" / f"{_safe_label(job.target_label)}.yml"
-                    _write_var_file(vf, job.extravars)
+        # Extravars are passed exclusively via run_async(extravars=...) — never written
+        # to persistent host_vars/group_vars (#346: secrets leaked across runs + concurrency clobber)
 
         last_db_write: float = time.time()
         job_start_time: float = time.time()

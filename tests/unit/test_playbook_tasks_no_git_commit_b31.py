@@ -23,8 +23,17 @@ def test_no_repo_root_constant():
     assert "_REPO_ROOT" not in MODULE, "_REPO_ROOT was only used for git operations and should be removed"
 
 
-def test_write_var_file_still_present():
-    assert "_write_var_file" in MODULE, "_write_var_file must stay — Ansible still reads var files from disk"
+def test_extravars_never_written_to_persistent_var_files():
+    """#346: extravars must not be written to persistent host_vars/group_vars.
+
+    The _write_var_file helper was removed because:
+    1. Secrets leaked across runs — each run inherited previous extravars
+    2. Concurrency collisions — two concurrent runs clobber the same file
+    3. Redundancy — ansible_runner.run_async(extravars=...) already delivers at highest precedence
+    """
+    assert "_write_var_file" not in MODULE, "_write_var_file was removed — extravars via run_async only"
+    assert 'playbooks_dir / "host_vars' not in MODULE, "host_vars must not be composed with playbooks_dir"
+    assert 'playbooks_dir / "group_vars' not in MODULE, "group_vars must not be composed with playbooks_dir"
 
 
 def test_no_git_repo_instantiation():
