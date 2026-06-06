@@ -128,6 +128,7 @@ async def enable_library_entry(
         old_value=old_value,
         new_value={"enabled": True, "filename": payload.filename, "source": payload.source_label},
     )
+    await db.commit()
     return {"id": str(row.id), "enabled": True}
 
 
@@ -153,6 +154,7 @@ async def disable_library_entry(
         old_value={"enabled": True},
         new_value={"enabled": False},
     )
+    await db.commit()
     return {"id": str(payload.catalog_id), "enabled": False}
 
 
@@ -200,6 +202,7 @@ async def enable_source_entries(
         old_value=None,
         new_value={"source_key": payload.source_key, "count": count},
     )
+    await db.commit()
     return {"source_key": payload.source_key, "enabled_count": count}
 
 
