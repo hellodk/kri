@@ -6,9 +6,8 @@ Verifies that:
 - LogPane UI renders the indicator bar and toggle
 - Scroll logic (isAtBottom, Jump to bottom) remains untouched
 """
-from pathlib import Path
 
-import pytest
+from pathlib import Path
 
 ROOT = Path(__file__).parent.parent.parent
 TAIL_LINES_FILE = ROOT / "frontend/src/lib/tailLines.ts"

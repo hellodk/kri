@@ -3,6 +3,7 @@
 Runs the real TS via node --experimental-strip-types — the tail-cap logic
 is the core fix, so it is tested behaviorally with real output boundaries.
 """
+
 import json
 import shutil
 import subprocess
@@ -20,7 +21,11 @@ CASES = [
     ("three_lines_max_five", ["l0\nl1\nl2", 5], {"text": "l0\nl1\nl2", "hiddenLines": 0}),
     ("exact_five_lines", ["l0\nl1\nl2\nl3\nl4", 5], {"text": "l0\nl1\nl2\nl3\nl4", "hiddenLines": 0}),
     ("eight_lines_max_five", ["l0\nl1\nl2\nl3\nl4\nl5\nl6\nl7", 5], {"text": "l3\nl4\nl5\nl6\nl7", "hiddenLines": 3}),
-    ("default_max_500", ["\n".join(f"l{i}" for i in range(501)), None], {"text": "\n".join(f"l{i}" for i in range(1, 501)), "hiddenLines": 1}),
+    (
+        "default_max_500",
+        ["\n".join(f"l{i}" for i in range(501)), None],
+        {"text": "\n".join(f"l{i}" for i in range(1, 501)), "hiddenLines": 1},
+    ),
     ("ansi_codes_preserved", ["a\n\x1b[32mok\x1b[0m\nb", 2], {"text": "\x1b[32mok\x1b[0m\nb", "hiddenLines": 1}),
 ]
 
@@ -39,7 +44,10 @@ def results():
 
     proc = subprocess.run(
         ["node", "--experimental-strip-types", "--no-warnings", str(HARNESS), json.dumps(args)],
-        capture_output=True, text=True, cwd=str(ROOT), timeout=30,
+        capture_output=True,
+        text=True,
+        cwd=str(ROOT),
+        timeout=30,
     )
     if proc.returncode != 0:
         pytest.fail(f"harness failed (rc={proc.returncode}):\n{proc.stderr}")
