@@ -257,7 +257,10 @@ async def add_favorite_entry(
     if result.scalar_one_or_none() is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Catalog entry not found")
 
-    user_id = uuid.UUID(claims["sub"])
+    try:
+        user_id = uuid.UUID(claims.get("sub", ""))
+    except ValueError:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token claims")
     await add_favorite(db, user_id=user_id, catalog_id=catalog_id)
     await db.commit()
     return {"catalog_id": str(catalog_id), "favorited": True}
@@ -270,7 +273,10 @@ async def remove_favorite_entry(
     claims: dict = Depends(get_current_user),
 ):
     """Remove a personal favorite."""
-    user_id = uuid.UUID(claims["sub"])
+    try:
+        user_id = uuid.UUID(claims.get("sub", ""))
+    except ValueError:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token claims")
     await remove_favorite(db, user_id=user_id, catalog_id=catalog_id)
     await db.commit()
     return {"catalog_id": str(catalog_id), "favorited": False}

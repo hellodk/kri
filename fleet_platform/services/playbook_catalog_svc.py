@@ -81,15 +81,9 @@ async def enable_source(
     count = 0
     now = datetime.now(UTC)
     for entry in discovered:
-        result = await db.execute(
-            select(PlaybookCatalog).where(
-                PlaybookCatalog.source_key == source_key,
-                PlaybookCatalog.filename == entry["filename"],
-            )
-        )
-        row = result.scalar_one_or_none()
-        if row is None:
-            row = PlaybookCatalog(
+        stmt = (
+            pg_insert(PlaybookCatalog)
+            .values(
                 source_key=source_key,
                 source_label=source_label,
                 filename=entry["filename"],
@@ -98,13 +92,20 @@ async def enable_source(
                 enabled_by=actor,
                 enabled_at=now,
             )
-            db.add(row)
-            count += 1
-        elif not row.enabled:
-            row.enabled = True
-            row.enabled_by = actor
-            row.enabled_at = now
-            row.auto_disabled_at = None
+            .on_conflict_do_update(
+                index_elements=["source_key", "filename"],
+                set_={
+                    "enabled": True,
+                    "source_label": source_label,
+                    "enabled_by": actor,
+                    "enabled_at": now,
+                    "auto_disabled_at": None,
+                },
+                where=PlaybookCatalog.enabled.is_(False),
+            )
+        )
+        result = await db.execute(stmt)
+        if result.rowcount:  # type: ignore[attr-defined]
             count += 1
     return count
 
