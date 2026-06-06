@@ -323,9 +323,7 @@ def _flush_stdout(job_uuid: _uuid.UUID, lines: list[str], last_task: str | None)
     # and re-executed against the node (#350). Lost-on-crash jobs are
     # marked failed by the orphan reaper instead.
 )
-def run_playbook(
-    self, job_id: str, ssh_username: str | None = None, ssh_password: str | None = None, verbosity: int = 0
-) -> dict:
+def run_playbook(self, job_id: str, ssh_username: str | None = None, verbosity: int = 0) -> dict:
     job_uuid = _uuid.UUID(job_id)
     stdout_lines: list[str] = []
     lock = None  # per-target advisory lock (#351); initialised here so finally never NameErrors
@@ -386,7 +384,7 @@ def run_playbook(
             db.commit()
             # Explicit per-call override (optional, e.g. via API). When absent,
             # credentials are auto-resolved per host (node → group → global).
-            override = {"ssh_user": ssh_username, "ssh_password": ssh_password} if ssh_username else None
+            override = {"ssh_user": ssh_username} if ssh_username else None
 
             # Resolve playbook path across all configured sources (not just builtin)
             playbook_path, playbooks_dir = _resolve_playbook_path(job.playbook, db)

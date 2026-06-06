@@ -50,6 +50,9 @@ _SENSITIVE_EV_KEYS = frozenset(
         "ansible_ssh_pass",
         "ansible_become_password",
         "ansible_become_pass",
+        "ansible_password",
+        "ansible_sudo_pass",
+        "vault_password",
         "password",
         "secret",
         "token",
@@ -58,10 +61,13 @@ _SENSITIVE_EV_KEYS = frozenset(
 )
 
 
-def _scrub_extravars(ev: dict) -> dict:
-    if not ev:
-        return {}
-    return {k: ("***" if k.lower() in _SENSITIVE_EV_KEYS else v) for k, v in ev.items()}
+def _scrub_extravars(ev: dict | list | None) -> dict | list | None:
+    """Recursively scrub sensitive keys from extravars (flat dict, nested dict, or list)."""
+    if isinstance(ev, dict):
+        return {k: "***" if k.lower() in _SENSITIVE_EV_KEYS else _scrub_extravars(v) for k, v in ev.items()}
+    if isinstance(ev, list):
+        return [_scrub_extravars(item) for item in ev]
+    return ev
 
 
 @router.post("/bootstrap", response_model=BootstrapResponse, status_code=202)
@@ -1195,7 +1201,7 @@ async def run_playbook_endpoint(
         target_type=payload.target_type,
         target_id=payload.target_id,
         target_label=target_label,
-        extravars=payload.extravars,
+        extravars=_scrub_extravars(payload.extravars) if payload.extravars else payload.extravars,
         verbosity=max(0, min(4, payload.verbosity or 0)),
         timeout_seconds=max(60, min(21600, payload.timeout_seconds)),
         status="pending",
@@ -1217,7 +1223,6 @@ async def run_playbook_endpoint(
     task = run_playbook.delay(
         str(job.id),
         ssh_username=payload.ssh_username,
-        ssh_password=payload.ssh_password,
         verbosity=job.verbosity,
     )
     job.celery_task_id = task.id
@@ -1298,7 +1303,7 @@ async def list_ansible_jobs(
             target_type=j.target_type,
             target_label=j.target_label,
             target_id=str(j.target_id) if j.target_id else None,
-            extravars=_scrub_extravars(j.extravars or {}),
+            extravars=_scrub_extravars(j.extravars or {}) or {},  # type: ignore[arg-type]
             status=j.status,
             triggered_by=j.triggered_by,
             started_at=j.started_at,
@@ -1344,7 +1349,7 @@ async def get_ansible_job(
         target_type=job.target_type,
         target_label=job.target_label,
         target_id=str(job.target_id) if job.target_id else None,
-        extravars=_scrub_extravars(job.extravars or {}),
+        extravars=_scrub_extravars(job.extravars or {}) or {},  # type: ignore[arg-type]
         status=job.status,
         triggered_by=job.triggered_by,
         started_at=job.started_at,
