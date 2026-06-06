@@ -21,6 +21,33 @@ from fleet_platform.services.platform_settings_svc import (
 )
 
 
+def _smtp_send(
+    host: str,
+    port: int | str,
+    user: str | None,
+    password: str | None,
+    from_addr: str,
+    recipients: list[str],
+    msg: MIMEMultipart,
+) -> None:
+    """Send a MIME message. Port 465 = implicit SSL (SMTP_SSL); else STARTTLS (#418)."""
+    if int(port) == 465:
+        import ssl
+
+        ctx = ssl.create_default_context()
+        with smtplib.SMTP_SSL(host, int(port), context=ctx) as s:
+            if user and password:
+                s.login(user, password)
+            s.sendmail(from_addr, recipients, msg.as_string())
+    else:
+        with smtplib.SMTP(host, int(port)) as s:
+            s.ehlo()
+            s.starttls()
+            if user and password:
+                s.login(user, password)
+            s.sendmail(from_addr, recipients, msg.as_string())
+
+
 def get_week_stats(db: Session) -> dict:
     since = datetime.now(UTC) - timedelta(days=7)
     builds = db.execute(select(JenkinsBuildEvent).where(JenkinsBuildEvent.started_at >= since)).scalars().all()
@@ -184,12 +211,7 @@ def send_digest(db: Session) -> dict:
     msg["To"] = ", ".join(recipients)
     msg.attach(MIMEText(html, "html"))
 
-    with smtplib.SMTP(smtp_host, smtp_port) as server:
-        server.ehlo()
-        server.starttls()
-        if smtp_user and smtp_password:
-            server.login(smtp_user, smtp_password)
-        server.sendmail(from_addr, recipients, msg.as_string())
+    _smtp_send(smtp_host, smtp_port, smtp_user, smtp_password, from_addr, recipients, msg)
 
     return {"status": "sent", "recipients": len(recipients), **stats}
 
@@ -248,11 +270,66 @@ def send_alert_email(rule: object, alert_event: object) -> None:
     msg.attach(MIMEText(body_html, "html"))
 
     try:
-        with smtplib.SMTP(smtp_host, smtp_port) as server:
-            server.ehlo()
-            server.starttls()
-            if smtp_user and smtp_password:
-                server.login(smtp_user, smtp_password)
-            server.sendmail(from_addr, recipients, msg.as_string())
+        _smtp_send(smtp_host, smtp_port, smtp_user, smtp_password, from_addr, recipients, msg)
     except Exception:
         pass  # non-fatal — alert was already stored in DB
+
+
+def send_test_email(db: Session, to_addr: str | None = None) -> dict:
+    """Send a test email to verify SMTP configuration (#417).
+
+    Reads SMTP settings from the DB.  If to_addr is provided it overrides the
+    configured digest_recipients list.  Raises ValueError for missing config;
+    lets smtplib exceptions propagate so the caller can surface them as HTTP 400.
+    """
+    smtp_host = get_setting_sync(db, SMTP_HOST)
+    if not smtp_host:
+        raise ValueError("SMTP host not configured")
+
+    smtp_port = int(get_setting_sync(db, SMTP_PORT) or "587")
+    smtp_user = get_setting_sync(db, SMTP_USERNAME)
+    smtp_password_raw = get_setting_sync(db, SMTP_PASSWORD)
+    smtp_password = decrypt_secret(smtp_password_raw) if smtp_password_raw else ""
+    from_addr = get_setting_sync(db, SMTP_FROM) or smtp_user or ""
+
+    if to_addr:
+        recipients = [to_addr.strip()]
+    else:
+        recipients_raw = get_setting_sync(db, DIGEST_RECIPIENTS) or ""
+        recipients = [r.strip() for r in recipients_raw.split(",") if r.strip()]
+
+    if not recipients:
+        raise ValueError("No recipient — set digest recipients or pass an address")
+
+    body_html = f"""<!DOCTYPE html>
+<html lang="en">
+<head><meta charset="UTF-8"><title>kri SMTP test</title></head>
+<body style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;color:#111827;padding:32px">
+  <div style="max-width:480px;margin:0 auto;background:#fff;border:1px solid #E5E7EB;border-radius:12px;padding:32px">
+    <p style="margin:0 0 8px;font-size:12px;font-weight:600;color:#6B7280;text-transform:uppercase;letter-spacing:0.05em">kri Fleet Platform</p>
+    <h1 style="margin:0 0 16px;font-size:20px;font-weight:700;color:#111827">SMTP test — it works!</h1>
+    <p style="margin:0 0 16px;font-size:14px;color:#4B5563">
+      This email confirms your SMTP configuration is working correctly.
+    </p>
+    <table style="font-size:13px;color:#4B5563;border-collapse:collapse;width:100%">
+      <tr>
+        <td style="padding:6px 0;font-weight:600;width:100px">Host</td>
+        <td style="padding:6px 0;font-family:monospace">{smtp_host}:{smtp_port}</td>
+      </tr>
+      <tr>
+        <td style="padding:6px 0;font-weight:600">From</td>
+        <td style="padding:6px 0;font-family:monospace">{from_addr}</td>
+      </tr>
+    </table>
+  </div>
+</body>
+</html>"""
+
+    msg = MIMEMultipart("alternative")
+    msg["Subject"] = "kri SMTP test"
+    msg["From"] = from_addr
+    msg["To"] = ", ".join(recipients)
+    msg.attach(MIMEText(body_html, "html"))
+
+    _smtp_send(smtp_host, smtp_port, smtp_user, smtp_password, from_addr, recipients, msg)
+    return {"status": "sent", "recipients": len(recipients)}
