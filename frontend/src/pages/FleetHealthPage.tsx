@@ -9,6 +9,7 @@ import {
   fleetHealthApi, type NodeHealthSnapshot, formatUptime, formatPower, thermalColor,
 } from '../api/fleetHealth'
 import { useToastStore } from '../stores/toastStore'
+import { SaltMasterStatus } from '../components/SaltMasterStatus'
 
 function MetricBar({ value, alert }: { value: number | null; alert: boolean }) {
   const pct = value ?? 0
@@ -235,6 +236,10 @@ export default function FleetHealthPage() {
         >
           {collectMut.isPending ? 'Queuing…' : 'Collect Now'}
         </button>
+      </div>
+
+      <div className="mb-6">
+        <SaltMasterStatus />
       </div>
 
       {alertCount > 0 && (
