@@ -100,8 +100,8 @@ def test_duplicate_delivery_stale_running_job_proceeds():
 
     mock_job = MagicMock()
     mock_job.status = "running"
-    # started_at is 7200s ago — well beyond the guard window
-    mock_job.started_at = datetime.now(UTC) - timedelta(seconds=7200)
+    # started_at is 7261s ago — well beyond the guard window (updated for #348: _DUPLICATE_GUARD_SECONDS=7260)
+    mock_job.started_at = datetime.now(UTC) - timedelta(seconds=7261)
     mock_job.playbook = "test.yml"
     mock_job.target_type = "node"
     mock_job.target_id = str(uuid.uuid4())
