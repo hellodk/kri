@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import { Skeleton } from '../components/Skeleton'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { ansibleApi } from '../api/ansible'
@@ -32,6 +33,7 @@ function UrlStatusPill({ status, checking }: { status?: { ok: boolean; latency_m
 export function SettingsPage() {
   const qc = useQueryClient()
   const toast = useToastStore((s) => s.add)
+  const [searchParams, setSearchParams] = useSearchParams()
   const [master, setMaster] = useState('')
   const [kriApiUrl, setKriApiUrl] = useState('')
   const [username, setUsername] = useState('')
@@ -260,7 +262,14 @@ export function SettingsPage() {
     return 'General'
   }
 
-  const [activeTab, setActiveTab] = useState<Tab>(() => normaliseLegacyTab('General'))
+  const [activeTab, setActiveTab] = useState<Tab>(() =>
+    normaliseLegacyTab(searchParams.get('tab') ?? 'General')
+  )
+
+  const handleTabChange = (tab: Tab) => {
+    setActiveTab(tab)
+    setSearchParams({ tab }, { replace: true })
+  }
 
   if (isLoading) return <div className="p-6"><Skeleton rows={8} /></div>
 
@@ -277,7 +286,7 @@ export function SettingsPage() {
       {/* Tab bar */}
       <div className="flex border-b border-gray-200">
         {TABS.map(tab => (
-          <button key={tab} onClick={() => setActiveTab(tab)}
+          <button key={tab} onClick={() => handleTabChange(tab)}
             className={`px-4 py-2.5 text-sm font-medium border-b-2 -mb-px transition-colors ${
               activeTab === tab
                 ? 'border-brand-600 text-brand-700'
@@ -1018,8 +1027,8 @@ export function SettingsPage() {
         </div>
       )}
 
-      {/* Save button — visible for all tabs except LLM and Notifications (which manages its own save button) */}
-      {activeTab !== 'LLM' && activeTab !== 'Notifications' && (
+      {/* Save button — visible for all tabs except LLM, Notifications, and Playbook Library (which manages its own save button) */}
+      {activeTab !== 'LLM' && activeTab !== 'Notifications' && activeTab !== 'Playbook Library' && (
         <div className="flex justify-end pt-2">
           <button
             onClick={() => saveMutation.mutate()}
