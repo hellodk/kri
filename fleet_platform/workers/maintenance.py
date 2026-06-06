@@ -1,3 +1,4 @@
+import asyncio
 from datetime import UTC, datetime, timedelta
 
 import redis as sync_redis
@@ -9,11 +10,13 @@ from fleet_platform.models.ansible_job import AnsibleJob
 from fleet_platform.models.bootstrap_run import BootstrapRun
 from fleet_platform.models.node import Node
 from fleet_platform.models.platform_setting import PlatformSetting
+from fleet_platform.models.salt_master import SaltMaster
 from fleet_platform.services.platform_settings_svc import (
     NODE_OFFLINE_THRESHOLD_HOURS,
     NODE_STALE_THRESHOLD_MINUTES,
     get_setting_sync,
 )
+from fleet_platform.services.salt_master_probe import run_probe
 from fleet_platform.workers.celery_app import celery_app
 
 # H-4 fix (SRE audit): dead-man's-switch key. Updated every time mark_stale_nodes
@@ -168,6 +171,16 @@ def reap_orphaned_jobs() -> dict:
     return {"reaped": result.rowcount}  # type: ignore[attr-defined]
 
 
+# #519: backoff for unreachable masters — probe at most once every 5 minutes
+# rather than every 30 s (the beat interval).  This avoids hammering a downed
+# master on every tick while still recovering quickly once it comes back.
+_SALT_UNREACHABLE_BACKOFF_SECONDS = 300
+
+# Dead-man's-switch key for salt-master polling.  Expires after 120 s;
+# monitoring alerts if this key disappears (beat stuck / worker down).
+_SALT_POLL_HEARTBEAT_KEY = "kri:salt:poll:last_run"
+_SALT_POLL_HEARTBEAT_TTL = 120
+
 _BOOTSTRAP_ORPHAN_MINUTES = 90  # bootstraps taking longer than 90 min are orphaned
 
 
@@ -211,3 +224,65 @@ def reap_orphaned_bootstraps() -> dict:
 
         db.commit()
     return {"reaped": result.rowcount}  # type: ignore[attr-defined]
+
+
+@celery_app.task(
+    name="fleet_platform.workers.maintenance.poll_salt_masters",
+    queue="maintenance",
+)
+def poll_salt_masters() -> dict:
+    """Poll every enabled SaltMaster and cache the probe result in the DB row.
+
+    Runs every 30 s via beat.  The web app reads the cached ``status`` /
+    ``checks`` / ``last_checked_at`` fields instead of ever making a live
+    salt-api call during request handling.
+
+    Backoff: if a master is currently ``unreachable`` and was checked within
+    the last ``_SALT_UNREACHABLE_BACKOFF_SECONDS`` seconds, it is skipped this
+    tick.  This avoids hammering a down master every 30 s while still recovering
+    quickly once the master comes back (it will be retried within
+    ``_SALT_UNREACHABLE_BACKOFF_SECONDS`` seconds of the last check).
+
+    A master with ``last_checked_at=None`` (never probed) is always polled,
+    regardless of its current ``status``.
+
+    A dead-man's-switch key (``kri:salt:poll:last_run``) is refreshed in Redis
+    at the end of every successful run.  Monitoring alerts if the key expires.
+    Redis failures are swallowed so they never abort the task.
+    """
+    now = datetime.now(UTC)
+    polled = 0
+    skipped = 0
+
+    with get_sync_db() as db:
+        masters = db.execute(select(SaltMaster).where(SaltMaster.enabled.is_(True))).scalars().all()
+
+        for master in masters:
+            # Backoff: skip recently-checked unreachable masters
+            if master.status == "unreachable" and master.last_checked_at is not None:
+                age = (now - master.last_checked_at).total_seconds()
+                if age < _SALT_UNREACHABLE_BACKOFF_SECONDS:
+                    skipped += 1
+                    continue
+
+            result = asyncio.run(run_probe(master))
+
+            master.status = result["status"]
+            master.checks = result["checks"]  # type: ignore[assignment]
+            master.last_checked_at = datetime.now(UTC)
+
+            failed_checks = [c for c in result["checks"] if c.get("status") == "fail"]
+            master.last_error = failed_checks[0]["detail"] if failed_checks else None
+
+            polled += 1
+
+        db.commit()
+
+    # Dead-man's-switch — Redis down must never fail this task
+    try:
+        r = sync_redis.Redis.from_url(settings.redis_url)
+        r.setex(_SALT_POLL_HEARTBEAT_KEY, _SALT_POLL_HEARTBEAT_TTL, datetime.now(UTC).isoformat())
+    except Exception:
+        pass
+
+    return {"polled": polled, "skipped": skipped}

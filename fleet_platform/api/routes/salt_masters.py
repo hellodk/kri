@@ -1,7 +1,8 @@
-"""Routes for SaltMaster management — issue #517, epic #523.
+"""Routes for SaltMaster management — issue #517, #519, epic #523.
 
-Currently exposes a single endpoint:
-    POST /api/v1/salt/masters/{master_id}/test  — probe a master's prerequisites.
+Endpoints:
+    POST /api/v1/salt/masters/{master_id}/test    — live probe (admin only).
+    GET  /api/v1/salt/masters/{master_id}/health  — cached health (viewer+).
 """
 
 import asyncio
@@ -13,7 +14,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from fleet_platform.api.deps import get_db
-from fleet_platform.core.auth import require_role
+from fleet_platform.core.auth import get_current_user, require_role
 from fleet_platform.models.salt_master import SaltMaster
 from fleet_platform.services.salt_master_probe import run_probe
 
@@ -73,3 +74,35 @@ async def test_salt_master(
     await db.commit()
 
     return probe_result
+
+
+@router.get("/masters/{master_id}/health")
+async def get_salt_master_health(
+    master_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+    claims: dict = Depends(get_current_user),
+):
+    """Return the cached health status for a SaltMaster row.
+
+    Reads the persisted ``status``, ``last_checked_at``, ``last_error``,
+    and ``checks`` fields written by the ``poll_salt_masters`` beat task
+    (#519).  Never makes a live salt-api or probe call — the response is
+    always served from the DB cache so the request cannot block on an
+    unreachable master.
+
+    Returns 404 if the master does not exist.
+    Accessible by any authenticated user (viewer role or above).
+    """
+    result = await db.execute(select(SaltMaster).where(SaltMaster.id == master_id))
+    master = result.scalar_one_or_none()
+    if master is None:
+        raise HTTPException(status_code=404, detail=f"SaltMaster {master_id} not found")
+
+    return {
+        "id": str(master.id),
+        "name": master.name,
+        "status": master.status,
+        "last_checked_at": master.last_checked_at.isoformat() if master.last_checked_at else None,
+        "last_error": master.last_error,
+        "checks": master.checks,
+    }

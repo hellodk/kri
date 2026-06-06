@@ -112,5 +112,10 @@ celery_app.conf.update(
             "schedule": 900,  # every 15 minutes — proactive SSH reachability sweep (#356)
             "options": {"queue": "maintenance"},
         },
+        "poll-salt-masters": {
+            "task": "fleet_platform.workers.maintenance.poll_salt_masters",
+            "schedule": 30,  # every 30 s — keeps UI health cache fresh (#519)
+            "options": {"queue": "maintenance"},
+        },
     },
 )
