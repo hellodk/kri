@@ -97,5 +97,5 @@ class TestMigration038:
     def test_migration_038_revision(self):
         migration_path = pathlib.Path("fleet_platform/db/migrations/versions/038_credentials.py")
         src = migration_path.read_text()
-        assert "revision = '038'" in src, "Migration must declare revision = '038'"
-        assert "down_revision = '037'" in src, "Migration must declare down_revision = '037'"
+        assert 'revision = "038"' in src, 'Migration must declare revision = "038"'
+        assert 'down_revision = "037"' in src, 'Migration must declare down_revision = "037"'
