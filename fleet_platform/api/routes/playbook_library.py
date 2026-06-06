@@ -30,7 +30,6 @@ from fleet_platform.services.playbook_catalog_svc import (
     remove_favorite,
 )
 from fleet_platform.services.playbook_discovery import discover_all
-from fleet_platform.services.playbook_sources import get_all_playbook_dirs
 
 _PLAYBOOKS_DIR = Path("/app/playbooks")
 
@@ -52,6 +51,66 @@ def _parse_sources(sources_json: str | None) -> list[dict]:
         return []
 
 
+def _dir_source_pairs(sources_json: str | None) -> list[tuple[Path, str, str]]:
+    """Return list of (directory, source_key, source_label) for all present sources.
+
+    Built-in dir is always first. Each configured source is paired with its
+    key/label directly from the source config — no index arithmetic so absent
+    directories never shift mappings (Fix #446).
+    """
+    from fleet_platform.services.playbook_sources import get_all_playbook_dirs  # local import to avoid circularity
+
+    sources = _parse_sources(sources_json)
+    all_dirs = get_all_playbook_dirs(sources_json, _PLAYBOOKS_DIR)
+
+    pairs: list[tuple[Path, str, str]] = []
+    # The built-in dir (index 0 from get_all_playbook_dirs) is always _PLAYBOOKS_DIR if it exists.
+    # We track which dirs came from which source by matching against source configs.
+    builtin_claimed = False
+    remaining_dirs = list(all_dirs)
+
+    # First dir is always builtin when _PLAYBOOKS_DIR is present in the list.
+    if remaining_dirs and remaining_dirs[0] == _PLAYBOOKS_DIR:
+        pairs.append((_PLAYBOOKS_DIR, str(_PLAYBOOKS_DIR), "built-in"))
+        remaining_dirs = remaining_dirs[1:]
+        builtin_claimed = True
+    elif remaining_dirs and not builtin_claimed:
+        # _PLAYBOOKS_DIR was not present (absent dir skipped) — first dir might still be builtin
+        # but since get_all_playbook_dirs always starts with builtin_dir regardless, the first
+        # element is always builtin. Handle that case too.
+        pass
+
+    # Match remaining dirs to sources in order — sources whose dirs are absent were already
+    # skipped by get_all_playbook_dirs, so there is a 1-1 correspondence between remaining_dirs
+    # and sources that had present directories.
+    dir_iter = iter(remaining_dirs)
+    for src in sources:
+        src_type = src.get("type", "local")
+        if src_type == "local":
+            raw = src.get("path", "")
+            from fleet_platform.services.playbook_sources import _translate_path
+
+            translated_path = Path(_translate_path(raw))
+            if translated_path.is_dir():
+                d = next(dir_iter, None)
+                if d is not None:
+                    sk = src.get("path") or str(d)
+                    sl = src.get("label") or sk.split("/")[-1]
+                    pairs.append((d, sk, sl))
+        elif src_type == "git":
+            from fleet_platform.services.playbook_sources import _default_clone_path
+
+            local = src.get("local_path") or _default_clone_path(src["url"])
+            if Path(local).is_dir():
+                d = next(dir_iter, None)
+                if d is not None:
+                    sk = src.get("url") or str(d)
+                    sl = src.get("label") or sk.rstrip("/").split("/")[-1].replace(".git", "")
+                    pairs.append((d, sk, sl))
+
+    return pairs
+
+
 @router.get("", response_model=list[PlaybookLibraryEntryResponse])
 async def list_library(
     db: AsyncSession = Depends(get_db),
@@ -59,20 +118,10 @@ async def list_library(
 ):
     """Return all discovered playbooks annotated with their catalog state."""
     sources_json = await _get_sources_json(db)
-    sources = _parse_sources(sources_json)
-    all_dirs = get_all_playbook_dirs(sources_json, _PLAYBOOKS_DIR)
     catalog_map = await get_library(db)
 
     results: list[PlaybookLibraryEntryResponse] = []
-    for i, d in enumerate(all_dirs):
-        if i == 0:
-            source_key = str(d)
-            source_label = "built-in"
-        else:
-            src = sources[i - 1]
-            source_key = src.get("url") or src.get("path") or str(d)
-            source_label = src.get("label") or source_key.split("/")[-1].replace(".git", "")
-
+    for d, source_key, source_label in _dir_source_pairs(sources_json):
         for entry in discover_all(d):
             catalog_info = catalog_map.get((source_key, entry.filename), {})
             results.append(
@@ -166,20 +215,11 @@ async def enable_source_entries(
 ):
     """Bulk-enable all discovered playbooks from a source."""
     sources_json = await _get_sources_json(db)
-    sources = _parse_sources(sources_json)
-    all_dirs = get_all_playbook_dirs(sources_json, _PLAYBOOKS_DIR)
 
     discovered: list[dict] = []
     source_label = payload.source_key.split("/")[-1].replace(".git", "")
 
-    for i, d in enumerate(all_dirs):
-        if i == 0:
-            sk = str(d)
-            sl = "built-in"
-        else:
-            src = sources[i - 1]
-            sk = src.get("url") or src.get("path") or str(d)
-            sl = src.get("label") or sk.split("/")[-1].replace(".git", "")
+    for d, sk, sl in _dir_source_pairs(sources_json):
         if sk == payload.source_key:
             source_label = sl
             for entry in discover_all(d):
@@ -219,6 +259,7 @@ async def add_favorite_entry(
 
     user_id = uuid.UUID(claims["sub"])
     await add_favorite(db, user_id=user_id, catalog_id=catalog_id)
+    await db.commit()
     return {"catalog_id": str(catalog_id), "favorited": True}
 
 
@@ -231,4 +272,5 @@ async def remove_favorite_entry(
     """Remove a personal favorite."""
     user_id = uuid.UUID(claims["sub"])
     await remove_favorite(db, user_id=user_id, catalog_id=catalog_id)
+    await db.commit()
     return {"catalog_id": str(catalog_id), "favorited": False}

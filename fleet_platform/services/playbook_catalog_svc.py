@@ -6,6 +6,7 @@ import uuid
 from datetime import UTC, datetime
 
 from sqlalchemy import select
+from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from fleet_platform.models.playbook_catalog import PlaybookCatalog, PlaybookFavorite
@@ -20,17 +21,11 @@ async def enable_playbook(
     entry_type: str,
     actor: str,
 ) -> PlaybookCatalog:
-    """Upsert a catalog row with enabled=True. Returns the row."""
-    result = await db.execute(
-        select(PlaybookCatalog).where(
-            PlaybookCatalog.source_key == source_key,
-            PlaybookCatalog.filename == filename,
-        )
-    )
-    row = result.scalar_one_or_none()
+    """Upsert a catalog row with enabled=True using ON CONFLICT to prevent TOCTOU races."""
     now = datetime.now(UTC)
-    if row is None:
-        row = PlaybookCatalog(
+    stmt = (
+        pg_insert(PlaybookCatalog)
+        .values(
             source_key=source_key,
             source_label=source_label,
             filename=filename,
@@ -38,15 +33,22 @@ async def enable_playbook(
             enabled=True,
             enabled_by=actor,
             enabled_at=now,
+            auto_disabled_at=None,
         )
-        db.add(row)
-    else:
-        row.enabled = True
-        row.source_label = source_label
-        row.enabled_by = actor
-        row.enabled_at = now
-        row.auto_disabled_at = None
-    await db.commit()
+        .on_conflict_do_update(
+            index_elements=["source_key", "filename"],
+            set_={
+                "enabled": True,
+                "source_label": source_label,
+                "enabled_by": actor,
+                "enabled_at": now,
+                "auto_disabled_at": None,
+            },
+        )
+        .returning(PlaybookCatalog)
+    )
+    result = await db.execute(stmt)
+    row = result.scalar_one()
     return row
 
 
@@ -62,7 +64,8 @@ async def disable_playbook(
     if row is None:
         return None
     row.enabled = False
-    await db.commit()
+    row.enabled_by = None
+    row.enabled_at = None
     return row
 
 
@@ -103,7 +106,6 @@ async def enable_source(
             row.enabled_at = now
             row.auto_disabled_at = None
             count += 1
-    await db.commit()
     return count
 
 
@@ -128,8 +130,6 @@ async def auto_disable_missing(
             row.enabled = False
             row.auto_disabled_at = now
             disabled.append(row)
-    if disabled:
-        await db.commit()
     return disabled
 
 
@@ -189,7 +189,6 @@ async def add_favorite(
     )
     if result.scalar_one_or_none() is None:
         db.add(PlaybookFavorite(user_id=user_id, catalog_id=catalog_id))
-        await db.commit()
 
 
 async def remove_favorite(
@@ -208,4 +207,3 @@ async def remove_favorite(
     row = result.scalar_one_or_none()
     if row is not None:
         await db.delete(row)
-        await db.commit()
