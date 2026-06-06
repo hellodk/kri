@@ -60,6 +60,9 @@ _SENSITIVE_EV_KEYS = frozenset(
     }
 )
 
+# Playbooks that must only run via the dedicated bootstrap endpoint — not the generic run API
+_BOOTSTRAP_ONLY_PLAYBOOKS: frozenset[str] = frozenset({"bootstrap_mac_mini.yml"})
+
 
 def _scrub_extravars(ev: dict | list | None) -> dict | list | None:
     """Recursively scrub sensitive keys from extravars (flat dict, nested dict, or list)."""
@@ -1251,6 +1254,12 @@ async def run_playbook_endpoint(
     if not entry:
         raise HTTPException(status_code=404, detail="Playbook not found")
     safe_name = entry.filename  # trusted — came from filesystem scan, not user input
+
+    if safe_name in _BOOTSTRAP_ONLY_PLAYBOOKS:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Bootstrap playbooks must be run via the dedicated bootstrap endpoint",
+        )
 
     target_label = payload.target_id
     if payload.target_type == "node":
