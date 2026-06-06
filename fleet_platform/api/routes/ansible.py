@@ -32,7 +32,8 @@ from fleet_platform.schemas.playbook import (
     PlaybookSourceValidateResponse,
 )
 from fleet_platform.services.credential_resolver import node_has_group
-from fleet_platform.services.platform_settings_svc import encrypt_secret
+from fleet_platform.services.git_auth import classify_git_error, git_auth_env, redact_secrets
+from fleet_platform.services.platform_settings_svc import decrypt_secret, encrypt_secret
 from fleet_platform.services.playbook_discovery import discover_all
 from fleet_platform.services.playbook_sources import get_all_playbook_dirs, sync_all_git_sources
 from fleet_platform.workers.ansible_tasks import bootstrap_node
@@ -40,7 +41,7 @@ from fleet_platform.workers.playbook_tasks import run_playbook
 
 router = APIRouter(prefix="/api/v1/ansible")
 
-_MINION_ID_RE = re.compile(r'^[a-zA-Z0-9._-]{1,128}$')
+_MINION_ID_RE = re.compile(r"^[a-zA-Z0-9._-]{1,128}$")
 _PLAYBOOKS_DIR = Path(__file__).parent.parent.parent.parent / "playbooks"
 
 
@@ -58,9 +59,7 @@ async def bootstrap(
             detail=f"Invalid minion_id '{payload.minion_id}': only [a-zA-Z0-9._-] allowed",
         )
 
-    result = await db.execute(
-        select(Node).where(Node.minion_id == payload.minion_id)
-    )
+    result = await db.execute(select(Node).where(Node.minion_id == payload.minion_id))
     node = result.scalar_one_or_none()
 
     if node and node.bootstrap_status == "bootstrapping":
@@ -89,15 +88,15 @@ async def bootstrap(
     else:
         node.bootstrap_status = "pending"
         node.bootstrap_ip = payload.target_ip
-        node.bootstrap_logs = ""        # clear previous run's logs
-        node.bootstrap_error = None     # clear previous error
+        node.bootstrap_logs = ""  # clear previous run's logs
+        node.bootstrap_error = None  # clear previous error
 
     # Enforce: node must belong to at least one group before bootstrapping
     if not await node_has_group(node.id, db):
         raise HTTPException(
             status_code=400,
             detail="Node must belong to at least one group before bootstrapping. "
-                   "Add the node to a group first, then configure group SSH credentials."
+            "Add the node to a group first, then configure group SSH credentials.",
         )
 
     # Save SSH credentials to the node for future reuse
@@ -137,6 +136,7 @@ async def bootstrap_status(
     from datetime import UTC, datetime, timedelta  # noqa: PLC0415
 
     from fleet_platform.models.bootstrap_run import BootstrapRun  # noqa: PLC0415
+
     result = await db.execute(select(Node).where(Node.id == node_id))
     node = result.scalar_one_or_none()
     if not node:
@@ -249,9 +249,7 @@ async def bootstrap_history(
     runs = result.scalars().all()
 
     total = await db.scalar(
-        select(func.count()).select_from(
-            select(BootstrapRun).where(BootstrapRun.node_id == node_id).subquery()
-        )
+        select(func.count()).select_from(select(BootstrapRun).where(BootstrapRun.node_id == node_id).subquery())
     )
 
     return {
@@ -310,9 +308,7 @@ async def list_playbooks(
     db: AsyncSession = Depends(get_db),
     _: dict = Depends(require_role("viewer", "operator", "admin")),
 ):
-    result = await db.execute(
-        select(PlatformSetting).where(PlatformSetting.key == "playbook_sources")
-    )
+    result = await db.execute(select(PlatformSetting).where(PlatformSetting.key == "playbook_sources"))
     setting = result.scalar_one_or_none()
     sources_json = setting.value if setting else None
 
@@ -327,7 +323,7 @@ async def list_playbooks(
                 entry_type=e.entry_type,
                 default_vars=e.default_vars,
                 lint_errors=e.lint_errors,
-                source_dir=str(d),   # absolute path of the source directory
+                source_dir=str(d),  # absolute path of the source directory
             )
             for e in discover_all(d)
         )
@@ -341,9 +337,8 @@ async def list_sources(
 ):
     """List configured extra playbook sources."""
     import json as _json
-    result = await db.execute(
-        select(PlatformSetting).where(PlatformSetting.key == "playbook_sources")
-    )
+
+    result = await db.execute(select(PlatformSetting).where(PlatformSetting.key == "playbook_sources"))
     setting = result.scalar_one_or_none()
     if not setting or not setting.value:
         return []
@@ -351,10 +346,7 @@ async def list_sources(
         sources = _json.loads(setting.value)
     except (ValueError, TypeError):
         return []
-    return [
-        PlaybookSourceResponse(index=i, **{k: v for k, v in src.items()})
-        for i, src in enumerate(sources)
-    ]
+    return [PlaybookSourceResponse(index=i, **{k: v for k, v in src.items()}) for i, src in enumerate(sources)]
 
 
 @router.post("/sources/validate", response_model=PlaybookSourceValidateResponse)
@@ -364,7 +356,6 @@ async def validate_source(
 ):
     """Validate a playbook source without saving it. Returns scan results."""
     import os
-    import tempfile
 
     warnings: list[str] = []
     logs: list[str] = []
@@ -427,70 +418,124 @@ async def validate_source(
         if not payload.url:
             return PlaybookSourceValidateResponse(valid=False, error="url is required for git source", logs=logs)
 
+        import logging as _logging
+
+        _log = _logging.getLogger(__name__)
+
         raw_url = payload.url.strip()
         branch = payload.branch or "main"
 
-        # Build authenticated URL if token provided
-        url = raw_url
-        if payload.token:
-            # Strip existing scheme and prepend token
-            import re as _re
-            scheme_match = _re.match(r'^(https?://)(.+)$', raw_url)
-            if scheme_match:
-                url = f"{scheme_match.group(1)}{payload.token}@{scheme_match.group(2)}"
-            else:
-                url = raw_url  # SSH or unknown scheme — leave as-is
+        # Resolve credentials: stored Credential row > inline token/ssh_key (back-compat)
+        token: str | None = None
+        ssh_key: str | None = None
 
-        # Build SSH env if ssh_key provided
-        ssh_env: dict | None = None
-        _ssh_key_file = None
-        if payload.ssh_key:
-            _ssh_key_file = tempfile.NamedTemporaryFile(mode='w', suffix='.pem', delete=False, prefix='kri-ssh-')
-            _ssh_key_file.write(payload.ssh_key)
-            _ssh_key_file.flush()
-            os.chmod(_ssh_key_file.name, 0o600)
-            _ssh_key_file.close()
-            ssh_env = {
-                **os.environ,
-                "GIT_SSH_COMMAND": f"ssh -i {_ssh_key_file.name} -o StrictHostKeyChecking=no",
-            }
+        if payload.credential_id:
+            import uuid as _uuid
 
-        try:
+            from fleet_platform.models.credential import Credential as _Credential
+
+            try:
+                _cred_uuid = _uuid.UUID(payload.credential_id)
+            except ValueError:
+                return PlaybookSourceValidateResponse(valid=False, error="Invalid credential_id format.", logs=logs)
+            # Resolve via async DB session — inject via a separate dependency would
+            # require signature change; we rely on the outer async session from the
+            # route that owns this request.  Use a fresh session to keep it simple.
+            from fleet_platform.db.session import AsyncSessionLocal as _ASL
+
+            async with _ASL() as _cred_db:
+                _res = await _cred_db.execute(select(_Credential).where(_Credential.id == _cred_uuid))
+                _cred = _res.scalar_one_or_none()
+            if _cred is None:
+                return PlaybookSourceValidateResponse(
+                    valid=False, error=f"Credential {payload.credential_id!r} not found.", logs=logs
+                )
+            if _cred.kind in ("token", "username_password"):
+                token = decrypt_secret(_cred.secret_enc)
+            elif _cred.kind == "ssh_key":
+                ssh_key = decrypt_secret(_cred.secret_enc)
+            # Update last_used_at asynchronously (fire and forget)
+            from datetime import UTC as _UTC
+            from datetime import datetime as _datetime
+
+            from fleet_platform.db.session import AsyncSessionLocal as _ASL2
+
+            async def _touch_cred() -> None:
+                async with _ASL2() as _db2:
+                    _r = await _db2.execute(select(_Credential).where(_Credential.id == _cred_uuid))
+                    _c = _r.scalar_one_or_none()
+                    if _c:
+                        _c.last_used_at = _datetime.now(_UTC)
+                        await _db2.commit()
+
+            asyncio.create_task(_touch_cred())
+        else:
+            token = payload.token
+            ssh_key = payload.ssh_key
+
+        import tempfile as _tmpfile
+
+        with git_auth_env(token=token, ssh_key=ssh_key) as _git_env:
             # Step 1: ls-remote — fast, non-destructive connectivity check
             logs.append("[1/3] Testing connectivity to repository...")
-            if payload.token:
+            if token:
                 logs.append("[1/3] Authenticating with personal access token...")
-            elif payload.ssh_key:
+            elif ssh_key:
                 logs.append("[1/3] Authenticating with SSH key...")
 
             try:
                 ls_result = await asyncio.to_thread(
                     lambda: subprocess.run(
-                        ["git", "ls-remote", "--exit-code", "--heads", url, f"refs/heads/{branch}"],
+                        ["git", "ls-remote", "--exit-code", "--heads", raw_url, f"refs/heads/{branch}"],
                         capture_output=True,
                         timeout=20,
-                        env=ssh_env,
+                        env=_git_env,
                     )
                 )
                 if ls_result.returncode != 0:
                     # Branch might exist but ls-remote filtering missed it — try without filter
                     ls_result2 = await asyncio.to_thread(
                         lambda: subprocess.run(
-                            ["git", "ls-remote", "--exit-code", url],
+                            ["git", "ls-remote", "--exit-code", raw_url],
                             capture_output=True,
                             timeout=20,
-                            env=ssh_env,
+                            env=_git_env,
                         )
                     )
                     if ls_result2.returncode != 0:
-                        err = ls_result2.stderr.decode(errors="replace").strip()
-                        msg = err or "connection refused or repo not found"
-                        logs.append(f"[1/3] ✗ Cannot access repository: {msg}")
-                        return PlaybookSourceValidateResponse(
-                            valid=False,
-                            error=f"Cannot access git repository: {err or 'connection refused or repo not found'}",
-                            logs=logs,
-                        )
+                        raw_err = ls_result2.stderr.decode(errors="replace").strip()
+                        err = redact_secrets(raw_err, [token, ssh_key])
+                        kind = classify_git_error(raw_err)
+                        if kind == "auth_required":
+                            logs.append("[1/3] ✗ Repository requires authentication (private, or not found)")
+                            _log.warning("[validate] auth_required for %s", raw_url)
+                            return PlaybookSourceValidateResponse(
+                                valid=False,
+                                error=(
+                                    "Repository requires authentication"
+                                    " — it is private or does not exist anonymously"
+                                ),
+                                auth_required=True,
+                                error_kind=kind,
+                                logs=logs,
+                            )
+                        elif kind == "unreachable":
+                            logs.append(f"[1/3] ✗ Host unreachable: {err}")
+                            return PlaybookSourceValidateResponse(
+                                valid=False,
+                                error="Host unreachable — check the URL/network",
+                                error_kind=kind,
+                                logs=logs,
+                            )
+                        else:
+                            msg = err or "connection refused or repo not found"
+                            logs.append(f"[1/3] ✗ Cannot access repository: {msg}")
+                            return PlaybookSourceValidateResponse(
+                                valid=False,
+                                error=f"Cannot access git repository: {msg}",
+                                error_kind=kind,
+                                logs=logs,
+                            )
                     warnings.append(f"Branch '{branch}' not found — will use default branch.")
                     logs.append(f"[1/3] ⚠ Branch '{branch}' not found — will use default branch")
                     branch = "HEAD"
@@ -502,22 +547,25 @@ async def validate_source(
 
             # Step 2: shallow clone to temp dir and scan
             logs.append("[2/3] Shallow clone (depth=1)...")
-            with tempfile.TemporaryDirectory(prefix="kri-validate-") as tmpdir:
+            with _tmpfile.TemporaryDirectory(prefix="kri-validate-") as tmpdir:
                 clone_cmd = ["git", "clone", "--depth=1", "--single-branch"]
                 if branch != "HEAD":
                     clone_cmd += ["--branch", branch]
-                clone_cmd += [url, tmpdir]
+                clone_cmd += [raw_url, tmpdir]
 
                 try:
                     clone_result = await asyncio.to_thread(
-                        lambda: subprocess.run(clone_cmd, capture_output=True, timeout=60, env=ssh_env)
+                        lambda: subprocess.run(clone_cmd, capture_output=True, timeout=60, env=_git_env)
                     )
                     if clone_result.returncode != 0:
-                        err = clone_result.stderr.decode(errors="replace").strip()
+                        raw_err = clone_result.stderr.decode(errors="replace").strip()
+                        err = redact_secrets(raw_err, [token, ssh_key])
+                        kind = classify_git_error(raw_err)
                         logs.append(f"[2/3] ✗ Clone failed: {err[:200]}")
                         return PlaybookSourceValidateResponse(
                             valid=False,
                             error=f"Clone failed: {err[:300]}",
+                            error_kind=kind,
                             logs=logs,
                         )
                     logs.append("[2/3] ✓ Clone complete")
@@ -559,13 +607,6 @@ async def validate_source(
                     for e in entries
                 ],
             )
-        finally:
-            # Clean up temp SSH key file if created
-            if _ssh_key_file is not None:
-                try:
-                    os.unlink(_ssh_key_file.name)
-                except OSError:
-                    pass
 
     return PlaybookSourceValidateResponse(valid=False, error=f"Unknown source type: {payload.type}", logs=logs)
 
@@ -593,21 +634,48 @@ async def add_source(
     elif payload.type == "git":
         if not payload.url:
             raise HTTPException(status_code=422, detail="url is required for git source")
-        url = payload.url.strip()
-        ls = await asyncio.to_thread(
-            lambda: subprocess.run(
-                ["git", "ls-remote", "--exit-code", url],
-                capture_output=True, timeout=20,
+        raw_url = payload.url.strip()
+
+        # Resolve credentials for the ls-remote access check
+        _add_token: str | None = None
+        _add_ssh_key: str | None = None
+        if payload.credential_id:
+            import uuid as _uuid_mod
+
+            from fleet_platform.models.credential import Credential as _Cred
+
+            try:
+                _cred_uuid = _uuid_mod.UUID(payload.credential_id)
+            except ValueError:
+                raise HTTPException(status_code=422, detail="Invalid credential_id format.")
+            _cr = await db.execute(select(_Cred).where(_Cred.id == _cred_uuid))
+            _c = _cr.scalar_one_or_none()
+            if _c is None:
+                raise HTTPException(status_code=404, detail=f"Credential {payload.credential_id!r} not found.")
+            if _c.kind in ("token", "username_password"):
+                _add_token = decrypt_secret(_c.secret_enc)
+            elif _c.kind == "ssh_key":
+                _add_ssh_key = decrypt_secret(_c.secret_enc)
+        else:
+            _add_token = payload.token
+            _add_ssh_key = payload.ssh_key
+
+        with git_auth_env(token=_add_token, ssh_key=_add_ssh_key) as _git_env:
+            ls = await asyncio.to_thread(
+                lambda: subprocess.run(
+                    ["git", "ls-remote", "--exit-code", raw_url],
+                    capture_output=True,
+                    timeout=20,
+                    env=_git_env,
+                )
             )
-        )
         if ls.returncode != 0:
-            err = ls.stderr.decode(errors="replace").strip()
+            raw_err = ls.stderr.decode(errors="replace").strip()
+            err = redact_secrets(raw_err, [_add_token, _add_ssh_key])
             detail = f"Cannot access git repository: {err[:200] or 'connection refused'}"
             raise HTTPException(status_code=422, detail=detail)
 
-    result = await db.execute(
-        select(PlatformSetting).where(PlatformSetting.key == "playbook_sources")
-    )
+    result = await db.execute(select(PlatformSetting).where(PlatformSetting.key == "playbook_sources"))
     setting = result.scalar_one_or_none()
     sources = []
     if setting and setting.value:
@@ -624,10 +692,14 @@ async def add_source(
         new_src["branch"] = payload.branch
         if payload.local_path:
             new_src["local_path"] = payload.local_path
-        if payload.token:
-            new_src["token_enc"] = encrypt_secret(payload.token)
-        if payload.ssh_key:
-            new_src["ssh_key_enc"] = encrypt_secret(payload.ssh_key)
+        if payload.credential_id:
+            # Prefer credential reference over inline secrets
+            new_src["credential_id"] = payload.credential_id
+        else:
+            if payload.token:
+                new_src["token_enc"] = encrypt_secret(payload.token)
+            if payload.ssh_key:
+                new_src["ssh_key_enc"] = encrypt_secret(payload.ssh_key)
     if payload.label:
         new_src["label"] = payload.label
 
@@ -645,6 +717,7 @@ async def add_source(
     # in the Playbooks tab without requiring a manual Sync click.
     if payload.type == "git":
         from fleet_platform.services.playbook_sources import _clone_git_source, _default_clone_path
+
         assert payload.url is not None, "git source requires a URL"  # noqa: S101
         local_path: str = payload.local_path or _default_clone_path(payload.url)
         asyncio.create_task(
@@ -653,6 +726,8 @@ async def add_source(
                 payload.url,
                 payload.branch or "main",
                 local_path,
+                token=_add_token if payload.type == "git" else None,
+                ssh_key=_add_ssh_key if payload.type == "git" else None,
             )
         )
 
@@ -667,9 +742,8 @@ async def remove_source(
 ):
     """Remove a playbook source by its index."""
     import json as _json
-    result = await db.execute(
-        select(PlatformSetting).where(PlatformSetting.key == "playbook_sources")
-    )
+
+    result = await db.execute(select(PlatformSetting).where(PlatformSetting.key == "playbook_sources"))
     setting = result.scalar_one_or_none()
     if not setting or not setting.value:
         raise HTTPException(status_code=404, detail="No sources configured")
@@ -691,9 +765,8 @@ async def sync_sources(
 ):
     """Force-sync all configured git playbook sources (runs git pull in a thread)."""
     import asyncio as _asyncio
-    result = await db.execute(
-        select(PlatformSetting).where(PlatformSetting.key == "playbook_sources")
-    )
+
+    result = await db.execute(select(PlatformSetting).where(PlatformSetting.key == "playbook_sources"))
     setting = result.scalar_one_or_none()
     sources_json = setting.value if setting else None
     # Run blocking git pull in a thread so we don't stall the async event loop
@@ -714,9 +787,8 @@ async def import_sources_csv(
     Lines starting with '#' are treated as comments and ignored.
     """
     import json as _json
-    result = await db.execute(
-        select(PlatformSetting).where(PlatformSetting.key == "playbook_sources")
-    )
+
+    result = await db.execute(select(PlatformSetting).where(PlatformSetting.key == "playbook_sources"))
     setting = result.scalar_one_or_none()
     sources: list[dict] = []
     if setting and setting.value:
@@ -797,9 +869,7 @@ async def get_playbook_tree(
     """Return the dependency tree of a playbook/role in execution order."""
     import yaml as _yaml
 
-    result = await db.execute(
-        select(PlatformSetting).where(PlatformSetting.key == "playbook_sources")
-    )
+    result = await db.execute(select(PlatformSetting).where(PlatformSetting.key == "playbook_sources"))
     setting = result.scalar_one_or_none()
     sources_json = setting.value if setting else None
 
@@ -882,8 +952,10 @@ async def get_playbook_tree(
                             nodes.append(_file_node(f"templates/{src}", src, "template", task_name))
             # include_tasks / import_tasks
             _task_include_keys = (
-                "include_tasks", "import_tasks",
-                "ansible.builtin.include_tasks", "ansible.builtin.import_tasks",
+                "include_tasks",
+                "import_tasks",
+                "ansible.builtin.include_tasks",
+                "ansible.builtin.import_tasks",
             )
             for key in _task_include_keys:
                 inc = task.get(key)
@@ -908,7 +980,7 @@ async def get_playbook_tree(
 
         seen_paths: set[str] = {filename}
 
-        for play in (plays if isinstance(plays, list) else []):
+        for play in plays if isinstance(plays, list) else []:
             if not isinstance(play, dict):
                 continue
 
@@ -972,6 +1044,7 @@ async def run_playbook_endpoint(
         target_label = node.hostname or node.minion_id
     elif payload.target_type == "group":
         from fleet_platform.models.group import Group
+
         grp_result = await db.execute(select(Group).where(Group.id == uuid.UUID(payload.target_id)))
         grp = grp_result.scalar_one_or_none()
         if not grp:
@@ -1018,6 +1091,7 @@ async def collect_grains(
 ):
     """Trigger an Ansible run to collect grains from a live node and push to ingest."""
     from sqlalchemy import select as _sel
+
     result = await db.execute(_sel(Node).where(Node.id == node_id))
     node = result.scalar_one_or_none()
     if not node:
@@ -1026,6 +1100,7 @@ async def collect_grains(
         raise HTTPException(status_code=400, detail="Node has no bootstrap_ip — run bootstrap first")
 
     from fleet_platform.workers.celery_app import celery_app
+
     task = celery_app.send_task(
         "fleet_platform.workers.ansible_tasks.collect_node_grains",
         args=[str(node_id)],
@@ -1056,11 +1131,8 @@ async def list_ansible_jobs(
         from sqlalchemy import or_
 
         from fleet_platform.models.group import GroupMember
-        group_ids_result = await db.execute(
-            select(GroupMember.group_id).where(
-                GroupMember.node_id == node_uuid
-            )
-        )
+
+        group_ids_result = await db.execute(select(GroupMember.group_id).where(GroupMember.node_id == node_uuid))
         group_ids = [str(gid) for gid in group_ids_result.scalars().all()]
         # Match: target_id == node_id (direct) OR target_id in group_ids (group run)
         conditions = [AnsibleJob.target_id == node_id]
@@ -1154,8 +1226,7 @@ async def cancel_playbook_job(
     job.cancelled_at = now
     existing_stdout = job.stdout or ""
     job.stdout = (
-        existing_stdout
-        + f"\n\n[CANCELLED] Job manually cancelled by {claims['sub']} at {now.isoformat()}"
+        existing_stdout + f"\n\n[CANCELLED] Job manually cancelled by {claims['sub']} at {now.isoformat()}"
     ).lstrip()
     await db.commit()
 
@@ -1178,6 +1249,7 @@ async def list_playbook_files(
 ):
     """Return the full recursive file tree of the playbooks directory."""
     from fleet_platform.services.platform_settings_svc import get_playbooks_dir
+
     playbooks_dir = await get_playbooks_dir(db)
 
     def _walk(path: Path, rel: str = "") -> list[dict]:
@@ -1191,20 +1263,24 @@ async def list_playbook_files(
             if entry.name.startswith(".") or entry.name == "__pycache__":
                 continue
             if entry.is_dir():
-                items.append({
-                    "name": entry.name,
-                    "path": entry_rel,
-                    "type": "dir",
-                    "children": _walk(entry, entry_rel),
-                })
+                items.append(
+                    {
+                        "name": entry.name,
+                        "path": entry_rel,
+                        "type": "dir",
+                        "children": _walk(entry, entry_rel),
+                    }
+                )
             else:
-                items.append({
-                    "name": entry.name,
-                    "path": entry_rel,
-                    "type": "file",
-                    "size": entry.stat().st_size,
-                    "ext": entry.suffix.lstrip("."),
-                })
+                items.append(
+                    {
+                        "name": entry.name,
+                        "path": entry_rel,
+                        "type": "file",
+                        "size": entry.stat().st_size,
+                        "ext": entry.suffix.lstrip("."),
+                    }
+                )
         return items
 
     return {"root": str(playbooks_dir), "tree": _walk(playbooks_dir)}
@@ -1218,9 +1294,7 @@ async def get_playbook_file(
     _: dict = Depends(require_role("viewer", "operator", "admin")),
 ):
     """Return the content of a file in any configured playbooks directory."""
-    result = await db.execute(
-        select(PlatformSetting).where(PlatformSetting.key == "playbook_sources")
-    )
+    result = await db.execute(select(PlatformSetting).where(PlatformSetting.key == "playbook_sources"))
     setting = result.scalar_one_or_none()
     sources_json = setting.value if setting else None
 
@@ -1255,9 +1329,7 @@ async def update_playbook_file(
     claims: dict = Depends(require_role("admin")),
 ):
     """Write content to a file in any configured playbooks directory. Admin only."""
-    result = await db.execute(
-        select(PlatformSetting).where(PlatformSetting.key == "playbook_sources")
-    )
+    result = await db.execute(select(PlatformSetting).where(PlatformSetting.key == "playbook_sources"))
     setting = result.scalar_one_or_none()
     sources_json = setting.value if setting else None
 
@@ -1329,6 +1401,7 @@ async def get_task_status(
     from celery.result import AsyncResult
 
     from fleet_platform.workers.celery_app import celery_app
+
     result = AsyncResult(task_id, app=celery_app)
     payload: dict = {"task_id": task_id, "state": result.state}
     if result.ready():

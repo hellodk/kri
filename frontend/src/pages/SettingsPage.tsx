@@ -3,6 +3,7 @@ import { Skeleton } from '../components/Skeleton'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { ansibleApi } from '../api/ansible'
 import { playbookSourcesApi, type PlaybookSource, type PlaybookSourceValidateResponse } from '../api/playbookSources'
+import { credentialsApi, type Credential } from '../api/credentials'
 import { llmApi, type LLMEndpoint } from '../api/llm'
 import { LLMEndpointForm } from '../components/LLMEndpointForm'
 import { useToastStore } from '../stores/toastStore'
@@ -695,6 +696,7 @@ export function SettingsPage() {
       {/* Advanced tab */}
       {activeTab === 'Advanced' && (
         <div className="space-y-6">
+          <CredentialsSection />
           <SaltAllowlistSection />
           <SaltDenylistSection />
           <PlaybookSourcesSection />
@@ -1238,6 +1240,243 @@ function SaltDenylistSection() {
 }
 
 // ---------------------------------------------------------------------------
+// Credentials sub-section (self-contained, uses its own queries)
+// ---------------------------------------------------------------------------
+
+function KindBadge({ kind }: { kind: string }) {
+  if (kind === 'token') {
+    return (
+      <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-700">
+        token
+      </span>
+    )
+  }
+  if (kind === 'ssh_key') {
+    return (
+      <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-purple-100 text-purple-700">
+        ssh key
+      </span>
+    )
+  }
+  return (
+    <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-gray-100 text-gray-600">
+      {kind}
+    </span>
+  )
+}
+
+function CredentialsSection() {
+  const qc = useQueryClient()
+  const toast = useToastStore((s) => s.add)
+
+  const [showAddForm, setShowAddForm] = useState(false)
+  const [credName, setCredName] = useState('')
+  const [credKind, setCredKind] = useState<'token' | 'ssh_key'>('token')
+  const [credSecret, setCredSecret] = useState('')
+  const [credDescription, setCredDescription] = useState('')
+
+  const { data: credentials = [], isLoading } = useQuery({
+    queryKey: ['credentials'],
+    queryFn: credentialsApi.list,
+  })
+
+  const createMutation = useMutation({
+    mutationFn: credentialsApi.create,
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['credentials'] })
+      toast('Credential saved')
+      setCredName('')
+      setCredKind('token')
+      setCredSecret('')
+      setCredDescription('')
+      setShowAddForm(false)
+    },
+    onError: (e: Error) => toast(e.message, 'error'),
+  })
+
+  const removeMutation = useMutation({
+    mutationFn: credentialsApi.remove,
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['credentials'] })
+      toast('Credential deleted')
+    },
+    onError: (e: Error) => toast(e.message, 'error'),
+  })
+
+  const inputClass = 'w-full px-3 py-2 border border-gray-300 rounded-lg text-sm text-gray-900 focus:outline-none focus:border-brand-600'
+  const btnPrimary = 'px-4 py-2 bg-brand-600 text-white text-sm rounded-lg font-medium hover:bg-brand-700 disabled:opacity-50'
+  const btnSecondary = 'px-4 py-2 bg-white border border-gray-300 text-gray-700 text-sm rounded-lg font-medium hover:bg-gray-50 disabled:opacity-50'
+
+  return (
+    <div id="credentials-section" className="bg-white rounded-xl border border-gray-200 shadow-sm p-6 space-y-5">
+      <div>
+        <h2 className="text-base font-semibold text-gray-900">Credentials</h2>
+        <p className="text-sm text-gray-500 mt-0.5">
+          Reusable credentials for private git repositories — referenced by name, secrets never leave the server.
+        </p>
+      </div>
+
+      {/* Existing credentials list */}
+      {isLoading ? (
+        <Skeleton rows={2} />
+      ) : (credentials as Credential[]).length === 0 ? (
+        <p className="text-sm text-gray-400">No credentials configured.</p>
+      ) : (
+        <div className="space-y-2">
+          {(credentials as Credential[]).map((cred) => (
+            <div key={cred.id} className="flex items-center gap-3 px-3 py-2.5 border border-gray-200 rounded-lg">
+              <KindBadge kind={cred.kind} />
+              <div className="flex-1 min-w-0">
+                <span className="text-sm font-medium text-gray-900">{cred.name}</span>
+                {cred.description && (
+                  <span className="ml-2 text-xs text-gray-500">{cred.description}</span>
+                )}
+              </div>
+              {cred.last_used_at ? (
+                <span className="text-xs text-gray-400 shrink-0">
+                  last used {new Date(cred.last_used_at).toLocaleString('en-IN', {
+                    timeZone: 'Asia/Kolkata',
+                    day: '2-digit', month: 'short', year: 'numeric',
+                  })} IST
+                </span>
+              ) : (
+                <span className="text-xs text-gray-300 shrink-0">never used</span>
+              )}
+              <button
+                onClick={() => removeMutation.mutate(cred.id)}
+                disabled={removeMutation.isPending}
+                title="Delete credential"
+                className="text-gray-400 hover:text-red-500 transition-colors text-lg leading-none shrink-0"
+              >×</button>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Add credential inline form */}
+      {!showAddForm ? (
+        <button
+          onClick={() => setShowAddForm(true)}
+          className="text-sm text-brand-600 hover:text-brand-700 font-medium"
+        >
+          + Add credential
+        </button>
+      ) : (
+        <div className="border border-gray-200 rounded-xl p-4 space-y-3">
+          <p className="text-sm font-semibold text-gray-700">New credential</p>
+
+          {/* Name */}
+          <div>
+            <label className="block text-xs font-medium text-gray-600 mb-1">Name</label>
+            <input
+              type="text"
+              value={credName}
+              onChange={(e) => setCredName(e.target.value)}
+              placeholder="e.g. GitHub (personal)"
+              className={inputClass}
+            />
+          </div>
+
+          {/* Kind toggle */}
+          <div>
+            <label className="block text-xs font-medium text-gray-600 mb-1">Type</label>
+            <div className="flex gap-2">
+              <button
+                type="button"
+                onClick={() => setCredKind('token')}
+                className={`px-3 py-1.5 rounded-lg text-sm font-medium border transition-colors ${
+                  credKind === 'token'
+                    ? 'bg-brand-600 text-white border-brand-600'
+                    : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'
+                }`}
+              >
+                Personal access token
+              </button>
+              <button
+                type="button"
+                onClick={() => setCredKind('ssh_key')}
+                className={`px-3 py-1.5 rounded-lg text-sm font-medium border transition-colors ${
+                  credKind === 'ssh_key'
+                    ? 'bg-brand-600 text-white border-brand-600'
+                    : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'
+                }`}
+              >
+                SSH private key
+              </button>
+            </div>
+          </div>
+
+          {/* Secret input */}
+          <div>
+            <label className="block text-xs font-medium text-gray-600 mb-1">
+              {credKind === 'token' ? 'Token' : 'Private key'}
+            </label>
+            {credKind === 'token' ? (
+              <input
+                type="password"
+                autoComplete="new-password"
+                name="kri_cred_secret"
+                value={credSecret}
+                onChange={(e) => setCredSecret(e.target.value)}
+                placeholder="ghp_xxxxxxxxxxxxxxxxxxxx"
+                className={inputClass + ' font-mono'}
+              />
+            ) : (
+              <textarea
+                value={credSecret}
+                onChange={(e) => setCredSecret(e.target.value)}
+                placeholder={"-----BEGIN OPENSSH PRIVATE KEY-----\n(paste SSH private key)"}
+                rows={5}
+                className={inputClass + ' font-mono'}
+              />
+            )}
+          </div>
+
+          {/* Optional description */}
+          <div>
+            <label className="block text-xs font-medium text-gray-600 mb-1">Description (optional)</label>
+            <input
+              type="text"
+              value={credDescription}
+              onChange={(e) => setCredDescription(e.target.value)}
+              placeholder="e.g. Read-only access to org/ansible-playbooks"
+              className={inputClass}
+            />
+          </div>
+
+          <div className="flex gap-2 justify-end">
+            <button
+              onClick={() => {
+                setShowAddForm(false)
+                setCredName('')
+                setCredKind('token')
+                setCredSecret('')
+                setCredDescription('')
+              }}
+              className={btnSecondary}
+            >
+              Cancel
+            </button>
+            <button
+              onClick={() => createMutation.mutate({
+                name: credName.trim(),
+                kind: credKind,
+                secret: credSecret.trim(),
+                description: credDescription.trim() || undefined,
+              })}
+              disabled={!credName.trim() || !credSecret.trim() || createMutation.isPending}
+              className={btnPrimary}
+            >
+              {createMutation.isPending ? 'Saving…' : 'Save Credential'}
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ---------------------------------------------------------------------------
 // Playbook Sources sub-section (self-contained, uses its own queries)
 // ---------------------------------------------------------------------------
 
@@ -1268,21 +1507,24 @@ function PlaybookSourcesSection() {
   const [gitUrl, setGitUrl] = useState('')
   const [gitBranch, setGitBranch] = useState('main')
   const [gitLabel, setGitLabel] = useState('')
-  const [showCreds, setShowCreds] = useState(false)
-  const [gitToken, setGitToken] = useState('')
-  const [gitSshKey, setGitSshKey] = useState('')
+  const [gitCredentialId, setGitCredentialId] = useState<string>('')
 
   const [showCsv, setShowCsv] = useState(false)
   const [csvText, setCsvText] = useState('')
   const [lastAddType, setLastAddType] = useState<'local' | 'git'>('local')
 
-  type ValidateState = { status: 'idle' } | { status: 'validating' } | { status: 'valid'; result: PlaybookSourceValidateResponse } | { status: 'invalid'; error: string; logs?: string[] }
+  type ValidateState = { status: 'idle' } | { status: 'validating' } | { status: 'valid'; result: PlaybookSourceValidateResponse } | { status: 'invalid'; error: string; logs?: string[]; authRequired?: boolean }
   const [localValidation, setLocalValidation] = useState<ValidateState>({ status: 'idle' })
   const [gitValidation, setGitValidation] = useState<ValidateState>({ status: 'idle' })
 
   const { data: sources = [], isLoading } = useQuery({
     queryKey: ['playbook-sources'],
     queryFn: playbookSourcesApi.list,
+  })
+
+  const { data: credentials = [] } = useQuery({
+    queryKey: ['credentials'],
+    queryFn: credentialsApi.list,
   })
 
   const addMutation = useMutation({
@@ -1294,7 +1536,7 @@ function PlaybookSourcesSection() {
         ? 'Git source added — click Sync to clone the repository and load playbooks'
         : 'Source added — playbooks refreshed')
       setLocalPath(''); setLocalLabel(''); setShowAddLocal(false); setLocalValidation({ status: 'idle' })
-      setGitUrl(''); setGitBranch('main'); setGitLabel(''); setShowAddGit(false); setGitValidation({ status: 'idle' })
+      setGitUrl(''); setGitBranch('main'); setGitLabel(''); setGitCredentialId(''); setShowAddGit(false); setGitValidation({ status: 'idle' })
     },
     onError: (e: Error) => toast(e.message, 'error'),
   })
@@ -1354,13 +1596,12 @@ function PlaybookSourcesSection() {
         type: 'git',
         url: gitUrl.trim(),
         branch: gitBranch || 'main',
-        token: gitToken.trim() || undefined,
-        ssh_key: gitSshKey.trim() || undefined,
+        credential_id: gitCredentialId || undefined,
       })
       if (result.valid) {
         setGitValidation({ status: 'valid', result })
       } else {
-        setGitValidation({ status: 'invalid', error: result.error ?? 'Validation failed', logs: result.logs })
+        setGitValidation({ status: 'invalid', error: result.error ?? 'Validation failed', logs: result.logs, authRequired: !!result.auth_required })
       }
     } catch (e: any) {
       setGitValidation({ status: 'invalid', error: e.message ?? 'Validation error' })
@@ -1378,28 +1619,38 @@ function PlaybookSourcesSection() {
 
     return (
       <div className="space-y-2">
-        {/* Terminal log panel */}
-        <div className="bg-gray-950 rounded-lg p-3 font-mono text-xs space-y-0.5 max-h-48 overflow-y-auto">
-          {v.status === 'validating' && (
-            <p className="text-gray-400 animate-pulse">⏳ Connecting…</p>
-          )}
-          {v.status !== 'validating' && logs.map((line, i) => (
-            <p key={i} className={
-              line.includes('✓') ? 'text-green-400' :
-              line.includes('✗') || line.includes('Error') ? 'text-red-400' :
-              line.includes('⚠') ? 'text-amber-400' :
-              'text-gray-300'
-            }>{line}</p>
-          ))}
-          {v.status === 'valid' && (
-            <p className="text-green-400 font-semibold mt-1">
-              ✓ Ready to add — {v.result.playbook_count} playbooks, {v.result.role_count} roles
+        {/* Auth required amber callout — shown instead of terminal log when auth is the problem */}
+        {v.status === 'invalid' && v.authRequired ? (
+          <div className="flex items-start gap-2 bg-amber-50 border border-amber-200 rounded-lg p-3">
+            <span className="text-base leading-none shrink-0">🔐</span>
+            <p className="text-sm text-amber-800">
+              This repository is private or requires authentication — select or create a credential above, then validate again.
             </p>
-          )}
-          {v.status === 'invalid' && (
-            <p className="text-red-400 font-semibold mt-1">✗ {v.error}</p>
-          )}
-        </div>
+          </div>
+        ) : (
+          /* Terminal log panel */
+          <div className="bg-gray-950 rounded-lg p-3 font-mono text-xs space-y-0.5 max-h-48 overflow-y-auto">
+            {v.status === 'validating' && (
+              <p className="text-gray-400 animate-pulse">⏳ Connecting…</p>
+            )}
+            {v.status !== 'validating' && logs.map((line, i) => (
+              <p key={i} className={
+                line.includes('✓') ? 'text-green-400' :
+                line.includes('✗') || line.includes('Error') ? 'text-red-400' :
+                line.includes('⚠') ? 'text-amber-400' :
+                'text-gray-300'
+              }>{line}</p>
+            ))}
+            {v.status === 'valid' && (
+              <p className="text-green-400 font-semibold mt-1">
+                ✓ Ready to add — {v.result.playbook_count} playbooks, {v.result.role_count} roles
+              </p>
+            )}
+            {v.status === 'invalid' && (
+              <p className="text-red-400 font-semibold mt-1">✗ {v.error}</p>
+            )}
+          </div>
+        )}
         {/* Entry badges for valid state */}
         {v.status === 'valid' && v.result.entries.length > 0 && (
           <div className="flex flex-wrap gap-1.5">
@@ -1556,44 +1807,47 @@ function PlaybookSourcesSection() {
               placeholder="Label (optional)"
               className={inputClass}
             />
-            {/* Private repo credentials toggle */}
-            <button
-              type="button"
-              onClick={() => setShowCreds(!showCreds)}
-              className="text-xs text-gray-500 hover:text-gray-700"
-            >
-              🔐 {showCreds ? 'Hide credentials' : 'Private repository? Add credentials'}
-            </button>
-            {showCreds && (
-              <div className="border border-gray-200 rounded-lg p-3 space-y-2 bg-gray-50">
-                <p className="text-xs text-gray-500 font-medium">One of: token OR SSH key (not both)</p>
-                <input
-                  type="password"
-                  value={gitToken}
-                  onChange={(e) => { setGitToken(e.target.value); setGitValidation({ status: 'idle' }) }}
-                  placeholder="Personal access token (GitHub/GitLab/etc.)"
-                  className="w-full px-3 py-1.5 border border-gray-300 rounded text-xs font-mono focus:outline-none"
-                />
-                <textarea
-                  value={gitSshKey}
-                  onChange={(e) => { setGitSshKey(e.target.value); setGitValidation({ status: 'idle' }) }}
-                  placeholder={"-----BEGIN OPENSSH PRIVATE KEY-----\n(paste SSH private key)"}
-                  rows={4}
-                  className="w-full px-3 py-1.5 border border-gray-300 rounded text-xs font-mono focus:outline-none"
-                />
-              </div>
-            )}
+            {/* Credential dropdown */}
+            <div>
+              <label className="block text-xs font-medium text-gray-600 mb-1">Credential (for private repositories)</label>
+              <select
+                value={gitCredentialId}
+                onChange={(e) => {
+                  const val = e.target.value
+                  if (val === '__create_new__') {
+                    // Scroll to CredentialsSection and open its form
+                    const el = document.getElementById('credentials-section')
+                    if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' })
+                    return
+                  }
+                  setGitCredentialId(val)
+                  setGitValidation({ status: 'idle' })
+                }}
+                className={`w-full px-3 py-2 border rounded-lg text-sm text-gray-900 focus:outline-none focus:border-brand-600 ${
+                  gitValidation.status === 'invalid' && (gitValidation as any).authRequired && !gitCredentialId
+                    ? 'border-amber-400 ring-2 ring-amber-200'
+                    : 'border-gray-300'
+                }`}
+              >
+                <option value="">— none (public repo) —</option>
+                {(credentials as Credential[]).map((cred) => (
+                  <option key={cred.id} value={cred.id}>
+                    {cred.name} ({cred.kind === 'token' ? 'token' : 'ssh key'})
+                  </option>
+                ))}
+                <option value="__create_new__">+ Create new credential…</option>
+              </select>
+            </div>
             <ValidationResult v={gitValidation} />
             <div className="flex gap-2 justify-end">
-              <button onClick={() => { setShowAddGit(false); setGitUrl(''); setGitBranch('main'); setGitLabel(''); setGitValidation({ status: 'idle' }); setShowCreds(false); setGitToken(''); setGitSshKey('') }} className={btnSecondary}>Cancel</button>
+              <button onClick={() => { setShowAddGit(false); setGitUrl(''); setGitBranch('main'); setGitLabel(''); setGitCredentialId(''); setGitValidation({ status: 'idle' }) }} className={btnSecondary}>Cancel</button>
               <button
                 onClick={() => { setLastAddType('git'); addMutation.mutate({
                   type: 'git',
                   url: gitUrl.trim(),
                   branch: gitBranch || 'main',
                   label: gitLabel.trim() || undefined,
-                  token: gitToken.trim() || undefined,
-                  ssh_key: gitSshKey.trim() || undefined,
+                  credential_id: gitCredentialId || undefined,
                 }) }}
                 disabled={gitValidation.status !== 'valid' || addMutation.isPending}
                 className={btnPrimary}

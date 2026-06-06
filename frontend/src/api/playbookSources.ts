@@ -27,6 +27,7 @@ export interface PlaybookSourceValidateRequest {
   branch?: string
   ssh_key?: string
   token?: string
+  credential_id?: string
 }
 
 export interface PlaybookSourceValidateResponse {
@@ -37,6 +38,8 @@ export interface PlaybookSourceValidateResponse {
   role_count: number
   entries: PlaybookEntry[]
   logs: string[]
+  auth_required?: boolean
+  error_kind?: string
 }
 
 export const playbookSourcesApi = {
@@ -50,6 +53,7 @@ export const playbookSourcesApi = {
     local_path?: string
     ssh_key?: string
     token?: string
+    credential_id?: string
   }) => api.post<PlaybookSource>('/api/v1/ansible/sources', source),
   remove: (index: number) => api.delete(`/api/v1/ansible/sources/${index}`),
   sync: () => api.post<SyncResult>('/api/v1/ansible/sources/sync', {}),

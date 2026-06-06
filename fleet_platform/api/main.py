@@ -29,6 +29,7 @@ from fleet_platform.api.routes import (
 from fleet_platform.api.routes.alerts import router as alerts_router
 from fleet_platform.api.routes.audit import router as audit_router
 from fleet_platform.api.routes.builds import router as builds_router
+from fleet_platform.api.routes.credentials import router as credentials_router
 from fleet_platform.api.routes.group_secrets import router as group_secrets_router
 from fleet_platform.api.routes.ios_tracking import router as ios_tracking_router
 from fleet_platform.api.routes.llm import router as llm_router
@@ -56,11 +57,13 @@ _log = get_logger(__name__)
 async def lifespan(app: FastAPI):
     configure_logging()
     from fleet_platform.api.deps import close_redis, init_redis
+
     await init_redis()
     # Seed non-secret platform settings from env vars (fills gaps after DB wipe)
     from fleet_platform.db.session import AsyncSessionLocal
     from fleet_platform.services.platform_settings_svc import seed_settings_from_env
     from fleet_platform.services.user_seeding import seed_local_users
+
     async with AsyncSessionLocal() as db:
         await seed_settings_from_env(db)
         await seed_local_users(db)
@@ -68,10 +71,12 @@ async def lifespan(app: FastAPI):
     # nodes do not stay offline after a kri deploy (salt minions reconnect but
     # do not re-push grains automatically; this queues a one-shot refresh).
     from fleet_platform.workers.ansible_tasks import refresh_all_node_grains
+
     refresh_all_node_grains.delay()
     # Ensure controller SSH keypair exists once at startup — not on every request.
     # Running here avoids blocking the settings GET endpoint with RSA keygen.
     from fleet_platform.services.ssh_keypair import ensure_controller_keypair
+
     try:
         ensure_controller_keypair()
     except PermissionError as exc:
@@ -152,6 +157,7 @@ def create_app() -> FastAPI:
     app.include_router(monitoring_router, tags=["monitoring"])
     app.include_router(node_actions_router)
     app.include_router(actions_router)
+    app.include_router(credentials_router, tags=["credentials"])
 
     @app.get("/metrics", include_in_schema=False)
     async def metrics_endpoint():
