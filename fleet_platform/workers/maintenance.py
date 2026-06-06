@@ -95,7 +95,11 @@ def cleanup_old_bootstrap_runs() -> dict:
     return {"deleted": count, "cutoff_days": days}
 
 
-_ORPHAN_TIMEOUT_MINUTES = 40  # hard kill limit is 35 min; give 5 min buffer
+# #352: per-job orphan buffer — a running job is considered orphaned when
+# started_at < now() - (job.timeout_seconds + _ORPHAN_BUFFER_SECONDS).
+# The static _ORPHAN_TIMEOUT_MINUTES was removed; #348 introduced per-job
+# timeout_seconds so a single global cutoff was always wrong.
+_ORPHAN_BUFFER_SECONDS = 300  # 5-min grace period on top of job's own timeout
 
 _ORPHAN_MESSAGE = (
     "\n\n[ERROR] Task orphaned — the Celery worker was restarted while this job "
@@ -111,13 +115,17 @@ _ORPHAN_MESSAGE = (
 def reap_orphaned_jobs() -> dict:
     """Mark ansible_jobs stuck in 'running' as failed if the worker was restarted.
 
+    Cutoff is per-job: a job is orphaned when
+        started_at < now() - (job.timeout_seconds + _ORPHAN_BUFFER_SECONDS)
+    so a short job (timeout=120s) is reaped after 420s while a long job
+    (timeout=3600s) is only reaped after 3900s. (#348/#352)
+
     Guards:
     - completed_at IS NULL: skip jobs that finished legitimately (race guard, closes #305)
     - started_at IS NULL fallback via created_at: catches permanent orphans
     - func.coalesce: append to existing stdout instead of overwriting evidence
     """
     now = datetime.now(UTC)
-    cutoff = now - timedelta(minutes=_ORPHAN_TIMEOUT_MINUTES)
     with get_sync_db() as db:
         result = db.execute(
             update(AnsibleJob)
@@ -125,8 +133,15 @@ def reap_orphaned_jobs() -> dict:
             .where(AnsibleJob.completed_at.is_(None))
             .where(
                 or_(
-                    AnsibleJob.started_at < cutoff,
-                    AnsibleJob.started_at.is_(None) & (AnsibleJob.created_at < cutoff),
+                    AnsibleJob.started_at
+                    < func.now()
+                    - func.make_interval(0, 0, 0, 0, 0, 0, AnsibleJob.timeout_seconds + _ORPHAN_BUFFER_SECONDS),
+                    AnsibleJob.started_at.is_(None)
+                    & (
+                        AnsibleJob.created_at
+                        < func.now()
+                        - func.make_interval(0, 0, 0, 0, 0, 0, AnsibleJob.timeout_seconds + _ORPHAN_BUFFER_SECONDS)
+                    ),
                 )
             )
             .values(
