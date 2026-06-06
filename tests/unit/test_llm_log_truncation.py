@@ -1,4 +1,5 @@
 """Unit tests for #137 — LLM query log system_prompt truncation."""
+
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
@@ -30,9 +31,7 @@ async def test_system_prompt_truncated_in_log():
 
     db.add.assert_called_once()
     logged_obj = db.add.call_args[0][0]
-    assert len(logged_obj.system_prompt) < len(long_prompt), (
-        "system_prompt must be truncated before storage"
-    )
+    assert len(logged_obj.system_prompt) < len(long_prompt), "system_prompt must be truncated before storage"
     assert "[truncated]" in logged_obj.system_prompt
 
 

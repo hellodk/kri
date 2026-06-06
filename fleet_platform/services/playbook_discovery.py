@@ -10,6 +10,7 @@ Scans:
 Skips 'roles' subdirectories when scanning for playbooks (handled separately).
 Skips files that are not valid Ansible play lists (e.g. vars files, handlers).
 """
+
 from __future__ import annotations
 
 import logging
@@ -21,11 +22,22 @@ import yaml
 _log = logging.getLogger(__name__)
 
 # Subdirectory names to skip when scanning for playbooks
-_SKIP_SUBDIRS = frozenset({
-    "roles", "tasks", "handlers", "vars", "defaults", "meta",
-    "templates", "files", "group_vars", "host_vars", ".git",
-    "collections",  # Ansible collections contain thousands of test YAMLs — skip entirely
-})
+_SKIP_SUBDIRS = frozenset(
+    {
+        "roles",
+        "tasks",
+        "handlers",
+        "vars",
+        "defaults",
+        "meta",
+        "templates",
+        "files",
+        "group_vars",
+        "host_vars",
+        ".git",
+        "collections",  # Ansible collections contain thousands of test YAMLs — skip entirely
+    }
+)
 
 
 _VAR_DESCRIPTIONS_KEY = "_kri_var_descriptions"
@@ -33,10 +45,10 @@ _VAR_DESCRIPTIONS_KEY = "_kri_var_descriptions"
 
 @dataclass
 class PlaybookEntry:
-    filename: str        # "deploy_config.yml", "playbooks/deploy.yml", "roles/salt_minion"
-    name: str            # human-readable name
+    filename: str  # "deploy_config.yml", "playbooks/deploy.yml", "roles/salt_minion"
+    name: str  # human-readable name
     description: str | None
-    entry_type: str      # "playbook" | "role"
+    entry_type: str  # "playbook" | "role"
     default_vars: dict = field(default_factory=dict)
     var_descriptions: dict = field(default_factory=dict)  # {var_name: help_text}
     lint_errors: list[str] = field(default_factory=list)
@@ -68,7 +80,7 @@ def _parse_description(text: str) -> str | None:
     for line in text.splitlines():
         stripped = line.strip()
         if stripped.startswith("# Description:"):
-            return stripped[len("# Description:"):].strip()
+            return stripped[len("# Description:") :].strip()
     return None
 
 
@@ -103,15 +115,17 @@ def _discover_playbooks_in_dir(scan_dir: Path, prefix: str = "") -> list[Playboo
         try:
             raw = path.read_text()
             clean_vars, var_descs = _extract_var_descriptions(default_vars)
-            results.append(PlaybookEntry(
-                filename=filename,
-                name=play_name,
-                description=_parse_description(raw),
-                entry_type="playbook",
-                default_vars=clean_vars,
-                var_descriptions=var_descs,
-                lint_errors=lint_errors,
-            ))
+            results.append(
+                PlaybookEntry(
+                    filename=filename,
+                    name=play_name,
+                    description=_parse_description(raw),
+                    entry_type="playbook",
+                    default_vars=clean_vars,
+                    var_descriptions=var_descs,
+                    lint_errors=lint_errors,
+                )
+            )
         except Exception:
             continue
     return results
@@ -140,15 +154,17 @@ def _discover_roles_in_dir(roles_dir: Path, prefix: str = "roles/") -> list[Play
             except Exception:
                 pass
         clean_vars, var_descs = _extract_var_descriptions(default_vars)
-        results.append(PlaybookEntry(
-            filename=f"{prefix}{role_path.name}",
-            name=role_path.name.replace("_", " ").title(),
-            description=description,
-            entry_type="role",
-            default_vars=clean_vars,
-            var_descriptions=var_descs,
-            lint_errors=lint_errors,
-        ))
+        results.append(
+            PlaybookEntry(
+                filename=f"{prefix}{role_path.name}",
+                name=role_path.name.replace("_", " ").title(),
+                description=description,
+                entry_type="role",
+                default_vars=clean_vars,
+                var_descriptions=var_descs,
+                lint_errors=lint_errors,
+            )
+        )
     return results
 
 

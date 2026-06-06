@@ -6,6 +6,7 @@ API container is redeployed and gets a new IP, nginx keeps trying the old one
 and returns 502. The fix uses `resolver 127.0.0.11` + `set $api_upstream` so
 nginx re-resolves on every request cycle (valid=5s TTL).
 """
+
 from pathlib import Path
 
 
@@ -44,7 +45,7 @@ def test_nginx_websocket_location_exists():
 
 def test_nginx_websocket_upgrade_headers():
     src = _nginx()
-    assert 'proxy_set_header Upgrade $http_upgrade' in src
+    assert "proxy_set_header Upgrade $http_upgrade" in src
     assert 'proxy_set_header Connection "upgrade"' in src
 
 

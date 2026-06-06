@@ -10,9 +10,18 @@ from fleet_platform.schemas.tag import TagCreate
 
 def test_fleet_overview_response():
     r = FleetOverviewResponse(
-        total_nodes=10, online=8, stale=1, offline=1, unknown=0,
-        avg_drift_score=12, nodes_clean=6, nodes_low=2, nodes_medium=1,
-        nodes_high=1, nodes_critical=0, last_updated=datetime.now(UTC),
+        total_nodes=10,
+        online=8,
+        stale=1,
+        offline=1,
+        unknown=0,
+        avg_drift_score=12,
+        nodes_clean=6,
+        nodes_low=2,
+        nodes_medium=1,
+        nodes_high=1,
+        nodes_critical=0,
+        last_updated=datetime.now(UTC),
     )
     assert r.total_nodes == 10
     assert r.online == 8
@@ -20,8 +29,12 @@ def test_fleet_overview_response():
 
 def test_node_list_item_has_required_fields():
     item = NodeListItem(
-        id=uuid.uuid4(), minion_id="mac-01.local", hostname="mac-01",
-        status="online", drift_score=5, last_seen_at=datetime.now(UTC),
+        id=uuid.uuid4(),
+        minion_id="mac-01.local",
+        hostname="mac-01",
+        status="online",
+        drift_score=5,
+        last_seen_at=datetime.now(UTC),
         tags=[],
     )
     assert item.status == "online"

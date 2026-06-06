@@ -9,7 +9,8 @@ from fleet_platform.services.playbook_discovery import discover_all
 @pytest.fixture
 def playbooks_dir(tmp_path):
     # Top-level playbook
-    (tmp_path / "deploy_config.yml").write_text(textwrap.dedent("""\
+    (tmp_path / "deploy_config.yml").write_text(
+        textwrap.dedent("""\
         # Description: Push config files to all nodes
         - name: Deploy configuration
           hosts: targets
@@ -17,17 +18,20 @@ def playbooks_dir(tmp_path):
             config_version: "1.0"
             restart_services: true
           tasks: []
-    """))
+    """)
+    )
     # Role with defaults
     role_dir = tmp_path / "roles" / "salt_minion"
     (role_dir / "defaults").mkdir(parents=True)
     (role_dir / "tasks").mkdir()
-    (role_dir / "defaults" / "main.yml").write_text(textwrap.dedent("""\
+    (role_dir / "defaults" / "main.yml").write_text(
+        textwrap.dedent("""\
         # Default variables for salt_minion role
         salt_master: "10.0.0.1"
         log_level: info
         grains_refresh_interval: 300
-    """))
+    """)
+    )
     (role_dir / "tasks" / "main.yml").write_text("---\n- name: Configure Salt\n  debug:\n    msg: ok\n")
     # Role without defaults
     role2 = tmp_path / "roles" / "basic_setup"

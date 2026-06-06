@@ -75,9 +75,7 @@ def test_ios_tasks_uses_sync_db():
             func = node.func
             if isinstance(func, ast.Attribute) and func.attr == "run":
                 if isinstance(func.value, ast.Name) and func.value.id == "asyncio":
-                    raise AssertionError(
-                        "ios_tasks must not call asyncio.run() — use get_sync_db() instead"
-                    )
+                    raise AssertionError("ios_tasks must not call asyncio.run() — use get_sync_db() instead")
 
 
 def test_alert_tasks_no_asyncio_run_at_top_level():
@@ -113,6 +111,7 @@ def test_playbook_task_uses_run_async():
     import inspect
 
     from fleet_platform.workers import playbook_tasks
+
     source = inspect.getsource(playbook_tasks)
     assert "run_async" in source, (
         "run_playbook must use ansible_runner.run_async() not ansible_runner.run() "
@@ -125,10 +124,9 @@ def test_playbook_task_flushes_logs_periodically():
     import inspect
 
     from fleet_platform.workers import playbook_tasks
+
     source = inspect.getsource(playbook_tasks)
-    assert "_LOG_BATCH_INTERVAL" in source, (
-        "run_playbook must define _LOG_BATCH_INTERVAL and flush stdout periodically"
-    )
+    assert "_LOG_BATCH_INTERVAL" in source, "run_playbook must define _LOG_BATCH_INTERVAL and flush stdout periodically"
     assert "_flush_stdout" in source or "flush_stdout" in source, (
         "run_playbook must call a flush function to write partial logs to DB"
     )
@@ -139,6 +137,7 @@ def test_playbook_task_handles_soft_time_limit():
     import inspect
 
     from fleet_platform.workers import playbook_tasks
+
     source = inspect.getsource(playbook_tasks)
     assert "SoftTimeLimitExceeded" in source, (
         "run_playbook must catch SoftTimeLimitExceeded so jobs don't get stuck in 'running'"

@@ -1,4 +1,5 @@
 """Add provisioning_profiles table."""
+
 import sqlalchemy as sa
 from alembic import op
 

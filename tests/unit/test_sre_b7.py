@@ -5,6 +5,7 @@ def test_docker_compose_no_insecure_postgres_default():
     from pathlib import Path
 
     import yaml
+
     compose = yaml.safe_load((Path(__file__).parent.parent.parent / "deploy/docker-compose.yml").read_text())
     # The POSTGRES_PASSWORD value must not contain ':-fleet' (insecure default)
     pg_pass = compose["services"]["db"]["environment"].get("POSTGRES_PASSWORD", "")
@@ -14,5 +15,6 @@ def test_docker_compose_no_insecure_postgres_default():
 
 def test_docker_compose_no_insecure_redis_default():
     from pathlib import Path
+
     content = (Path(__file__).parent.parent.parent / "deploy/docker-compose.yml").read_text()
     assert ":-redispass" not in content, "docker-compose must not contain insecure :-redispass default"

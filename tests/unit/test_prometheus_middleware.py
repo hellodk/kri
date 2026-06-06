@@ -1,5 +1,6 @@
 # tests/unit/test_prometheus_middleware.py
 """Unit tests for the Prometheus middleware."""
+
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
@@ -107,6 +108,7 @@ def test_normalize_path_leaves_metrics_path_alone():
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
 
 def _sample_counter(counter, **labels):
     """Return current value of a labeled Counter."""

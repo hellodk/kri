@@ -5,6 +5,7 @@ Uses PostgreSQL pg_trgm for fuzzy matching — handles typos, partial IDs, and
 substring matches. Results are grouped by entity type and ranked by similarity score.
 UUID prefix search allows finding any execution by its first 8 characters.
 """
+
 from datetime import UTC, datetime, timedelta
 
 from fastapi import APIRouter, Depends, Query
@@ -16,19 +17,16 @@ from fleet_platform.core.auth import get_current_user
 
 router = APIRouter(prefix="/api/v1")
 
-_TRGM_THRESHOLD = 0.15   # minimum similarity score (0–1). Lower = fuzzier.
-_MAX_PER_TYPE = 5         # results per entity type
-_UUID_PREFIX_LEN = 8      # search by first N chars of a UUID
+_TRGM_THRESHOLD = 0.15  # minimum similarity score (0–1). Lower = fuzzier.
+_MAX_PER_TYPE = 5  # results per entity type
+_UUID_PREFIX_LEN = 8  # search by first N chars of a UUID
 
 
 def _is_uuid_prefix(q: str) -> bool:
     """True only if q looks like a UUID prefix — requires 8+ hex chars or contains a hyphen."""
     cleaned = q.replace("-", "")
     has_hyphen = "-" in q
-    return (
-        all(c in "0123456789abcdefABCDEF" for c in cleaned)
-        and (has_hyphen or len(cleaned) >= _UUID_PREFIX_LEN)
-    )
+    return all(c in "0123456789abcdefABCDEF" for c in cleaned) and (has_hyphen or len(cleaned) >= _UUID_PREFIX_LEN)
 
 
 def _uuid_like(q: str) -> str:
@@ -223,7 +221,7 @@ async def _search_llm_queries(db: AsyncSession, q: str, pattern: str, is_uuid: b
             "id": str(r.id),
             "title": f"AI Query — {r.intent}",
             "subtitle": f"{r.prompt[:60]}{'…' if len(r.prompt) > 60 else ''} · {str(r.id)[:8]}",
-            "url": "/overview",   # LLM queries go to overview/history
+            "url": "/overview",  # LLM queries go to overview/history
             "score": float(r.score),
         }
         for r in rows.all()
@@ -246,8 +244,14 @@ async def search(
     q = q.strip()
     if len(q) < 2:
         return {
-            "query": "", "is_uuid_search": False, "results": [],
-            "items": [], "nodes": [], "total": 0, "page": 1, "per_page": 0,
+            "query": "",
+            "is_uuid_search": False,
+            "results": [],
+            "items": [],
+            "nodes": [],
+            "total": 0,
+            "page": 1,
+            "per_page": 0,
         }
     pattern = f"%{q}%"
     is_uuid = _is_uuid_prefix(q)
@@ -276,7 +280,7 @@ async def search(
             {
                 **r,
                 "hostname": r.get("hostname", r.get("title")),
-                "minion_id": r.get("minion_id", ""),   # now real minion_id
+                "minion_id": r.get("minion_id", ""),  # now real minion_id
                 "ip_address": r.get("ip_address"),
             }
             for r in nodes

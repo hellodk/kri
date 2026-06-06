@@ -8,6 +8,7 @@ Security:
   - RFB authentication is handled entirely client-side by noVNC — the proxy bridges
     raw TCP bytes without performing any server-side RFB handshake (#247).
 """
+
 import asyncio
 import struct
 import uuid
@@ -120,6 +121,7 @@ async def _rfb_auth(
 
     # No supported security type — log a diagnostic to help operators
     import logging
+
     _log = logging.getLogger(__name__)
     _log.warning(
         "_rfb_auth: server offered security types %s — none supported. "
@@ -169,6 +171,7 @@ async def vnc_session(
     # Auth
     try:
         from fleet_platform.api.routes.webssh import get_current_user_ws
+
         token = websocket.query_params.get("token", "")
         if not token:
             await websocket.close(code=4001, reason="Missing auth token")

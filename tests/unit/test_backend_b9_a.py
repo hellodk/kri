@@ -1,4 +1,5 @@
 """Unit tests for #119 (dev secret warning) and #127 (Redis lifecycle management)."""
+
 import logging
 from pathlib import Path
 
@@ -12,10 +13,9 @@ def test_config_warns_in_dev_for_insecure_secret(caplog):
     with caplog.at_level(logging.WARNING, logger="fleet_platform.core.config"):
         Settings(jwt_secret="short", environment="development")
 
-    assert any(
-        "insecure" in r.message.lower() or "JWT_SECRET" in r.message
-        for r in caplog.records
-    ), "Expected a warning about insecure JWT_SECRET in dev mode"
+    assert any("insecure" in r.message.lower() or "JWT_SECRET" in r.message for r in caplog.records), (
+        "Expected a warning about insecure JWT_SECRET in dev mode"
+    )
 
 
 def test_config_still_raises_in_production():

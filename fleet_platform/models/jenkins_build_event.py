@@ -11,9 +11,7 @@ from fleet_platform.models.base import Base
 class JenkinsBuildEvent(Base):
     __tablename__ = "jenkins_build_events"
 
-    id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
-    )
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
 
     def __init__(self, **kw: object) -> None:
         if "id" not in kw:
@@ -24,12 +22,8 @@ class JenkinsBuildEvent(Base):
     build_number: Mapped[int] = mapped_column(Integer, nullable=False)
     result: Mapped[str] = mapped_column(String(20), nullable=False)  # SUCCESS, FAILURE, UNSTABLE, ABORTED
     duration_ms: Mapped[int | None] = mapped_column(Integer, nullable=True)
-    started_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), nullable=False
-    )
-    ingested_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), nullable=False, server_default=func.now()
-    )
+    started_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    ingested_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=func.now())
     test_pass: Mapped[int | None] = mapped_column(Integer, nullable=True)
     test_fail: Mapped[int | None] = mapped_column(Integer, nullable=True)
     test_total: Mapped[int | None] = mapped_column(Integer, nullable=True)

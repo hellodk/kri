@@ -1,4 +1,5 @@
 """Tests for #265: bootstrap timeout reduced to 10 minutes."""
+
 from pathlib import Path
 
 
@@ -12,9 +13,7 @@ def _ansible_route_src() -> str:
 
 def test_bootstrap_timeout_constant_exists():
     src = _ansible_tasks_src()
-    assert "_BOOTSTRAP_TIMEOUT_SECONDS" in src, (
-        "Must define _BOOTSTRAP_TIMEOUT_SECONDS constant"
-    )
+    assert "_BOOTSTRAP_TIMEOUT_SECONDS" in src, "Must define _BOOTSTRAP_TIMEOUT_SECONDS constant"
 
 
 def test_bootstrap_timeout_is_600():
@@ -23,9 +22,7 @@ def test_bootstrap_timeout_is_600():
     for line in src.splitlines():
         if "_BOOTSTRAP_TIMEOUT_SECONDS" in line and "=" in line and "#" not in line.split("=")[0]:
             value = line.split("=")[1].strip().split()[0].rstrip(",")
-            assert value == "600", (
-                f"_BOOTSTRAP_TIMEOUT_SECONDS must be 600 (10 min), got {value}"
-            )
+            assert value == "600", f"_BOOTSTRAP_TIMEOUT_SECONDS must be 600 (10 min), got {value}"
             return
     raise AssertionError("_BOOTSTRAP_TIMEOUT_SECONDS constant not found with assignment")
 
@@ -39,12 +36,8 @@ def test_ansible_runner_uses_timeout_constant():
 
 def test_timeout_error_message_says_10_minutes():
     src = _ansible_tasks_src()
-    assert "10 minutes" in src, (
-        "Timeout error message must say '10 minutes'"
-    )
-    assert "20 minutes" not in src, (
-        "Old '20 minutes' message must be replaced"
-    )
+    assert "10 minutes" in src, "Timeout error message must say '10 minutes'"
+    assert "20 minutes" not in src, "Old '20 minutes' message must be replaced"
 
 
 def test_stale_cutoff_is_at_most_15_minutes():
@@ -54,11 +47,10 @@ def test_stale_cutoff_is_at_most_15_minutes():
         if "stale_cutoff" in line and "timedelta" in line and "minutes" in line:
             # Extract the minutes value
             import re
+
             m = re.search(r"minutes\s*=\s*(\d+)", line)
             if m:
                 minutes = int(m.group(1))
-                assert minutes <= 15, (
-                    f"Stale cutoff must be ≤ 15 minutes (bootstrap timeout is 10 min), got {minutes}"
-                )
+                assert minutes <= 15, f"Stale cutoff must be ≤ 15 minutes (bootstrap timeout is 10 min), got {minutes}"
                 return
     raise AssertionError("stale_cutoff timedelta not found in bootstrap_status route")

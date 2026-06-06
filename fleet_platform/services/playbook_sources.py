@@ -1,4 +1,5 @@
 """Manage external playbook sources (extra dirs + git repos)."""
+
 import json
 import logging
 import os
@@ -35,12 +36,15 @@ def _translate_path(host_path: str) -> str:
         # Split on the *first* colon only so Windows-style paths survive
         colon_idx = entry.index(":")
         host_prefix = entry[:colon_idx]
-        container_prefix = entry[colon_idx + 1:]
+        container_prefix = entry[colon_idx + 1 :]
         if host_path.startswith(host_prefix):
-            translated = container_prefix + host_path[len(host_prefix):]
+            translated = container_prefix + host_path[len(host_prefix) :]
             logger.debug(
                 "playbook path translated: %s → %s (map entry: %s:%s)",
-                host_path, translated, host_prefix, container_prefix,
+                host_path,
+                translated,
+                host_prefix,
+                container_prefix,
             )
             return translated
 
@@ -110,7 +114,8 @@ def get_all_playbook_dirs(settings_value: str | None, builtin_dir: Path) -> list
                 if raw != translated:
                     logger.warning(
                         "playbook source path does not exist: %s (translated from host path: %s)",
-                        p, raw,
+                        p,
+                        raw,
                     )
                 else:
                     logger.warning("playbook source path does not exist: %s", p)
@@ -132,7 +137,8 @@ def get_all_playbook_dirs(settings_value: str | None, builtin_dir: Path) -> list
                 except Exception as e:
                     logger.error(
                         "failed to clone git source %s: %s — run Sync to retry",
-                        src.get("url"), e,
+                        src.get("url"),
+                        e,
                     )
     return dirs
 

@@ -1,5 +1,6 @@
 # fleet_platform/api/routes/group_secrets.py
 """Group-scoped Salt pillar secrets API."""
+
 import uuid
 
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -66,9 +67,7 @@ async def upsert_group_secret(
     _: dict = Depends(require_role("operator", "admin")),
 ):
     await _get_group_or_404(group_id, db)
-    secret = await group_secrets_svc.upsert_secret(
-        db, group_id, key, payload.value, payload.description
-    )
+    secret = await group_secrets_svc.upsert_secret(db, group_id, key, payload.value, payload.description)
     try:
         await group_secrets_svc.write_group_pillar(group_id, db)
         await group_secrets_svc.rebuild_top_sls(db)

@@ -12,6 +12,4 @@ class PlatformSetting(Base):
     key: Mapped[str] = mapped_column(String(100), primary_key=True)
     value: Mapped[str | None] = mapped_column(Text, nullable=True)
     is_encrypted: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
-    updated_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), server_default="now()"
-    )
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default="now()")

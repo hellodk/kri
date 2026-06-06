@@ -1,4 +1,5 @@
 """Structured error codes and exception types for API responses."""
+
 from enum import StrEnum
 
 from fastapi import HTTPException

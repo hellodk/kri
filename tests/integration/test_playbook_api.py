@@ -28,22 +28,28 @@ async def test_list_playbooks_includes_default_vars(viewer_client: AsyncClient):
 
 
 async def test_run_playbook_requires_operator(viewer_client: AsyncClient):
-    r = await viewer_client.post("/api/v1/ansible/playbooks/run", json={
-        "playbook": "bootstrap_mac_mini.yml",
-        "target_type": "node",
-        "target_id": "00000000-0000-0000-0000-000000000001",
-        "extravars": {},
-    })
+    r = await viewer_client.post(
+        "/api/v1/ansible/playbooks/run",
+        json={
+            "playbook": "bootstrap_mac_mini.yml",
+            "target_type": "node",
+            "target_id": "00000000-0000-0000-0000-000000000001",
+            "extravars": {},
+        },
+    )
     assert r.status_code == 403
 
 
 async def test_run_playbook_rejects_path_traversal(operator_client: AsyncClient):
-    r = await operator_client.post("/api/v1/ansible/playbooks/run", json={
-        "playbook": "../../etc/passwd",
-        "target_type": "node",
-        "target_id": "00000000-0000-0000-0000-000000000001",
-        "extravars": {},
-    })
+    r = await operator_client.post(
+        "/api/v1/ansible/playbooks/run",
+        json={
+            "playbook": "../../etc/passwd",
+            "target_type": "node",
+            "target_id": "00000000-0000-0000-0000-000000000001",
+            "extravars": {},
+        },
+    )
     assert r.status_code == 404
 
 

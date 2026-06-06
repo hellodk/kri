@@ -1,4 +1,5 @@
 """Add auth_provider to users table."""
+
 import sqlalchemy as sa
 from alembic import op
 

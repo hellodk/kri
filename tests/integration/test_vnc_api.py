@@ -11,6 +11,7 @@ TestClient or httpx. Because httpx AsyncClient does not natively support
 WebSocket upgrades, we assert on the HTTP 401/403 behaviour at the upgrade
 layer and test the WS auth path via the same conftest app.
 """
+
 import uuid
 from unittest.mock import AsyncMock, patch
 
@@ -65,9 +66,7 @@ async def test_vnc_upgrade_with_invalid_token_closes_4001(app_with_test_db):
                 assert data.get("code") == 4001
 
 
-async def test_vnc_upgrade_valid_token_unknown_node_closes_4004(
-    app_with_test_db, admin_token
-):
+async def test_vnc_upgrade_valid_token_unknown_node_closes_4004(app_with_test_db, admin_token):
     """Valid JWT but non-existent node must be closed with code 4004."""
     node_id = uuid.uuid4()
     # VNC checks the feature flag first — mock it as enabled

@@ -4,6 +4,7 @@
 def test_log_flush_interval_is_5_seconds():
     """_LOG_BATCH_INTERVAL must be 5 seconds for responsive log updates."""
     from fleet_platform.workers.playbook_tasks import _LOG_BATCH_INTERVAL
+
     assert _LOG_BATCH_INTERVAL == 5, (
         f"_LOG_BATCH_INTERVAL is {_LOG_BATCH_INTERVAL}s — must be 5s for operators "
         "to see progress during long tasks. Was 30s which caused 30s+ blind spots."

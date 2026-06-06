@@ -5,6 +5,7 @@ import pytest
 
 def test_ensure_creates_keypair_when_missing(tmp_path):
     from fleet_platform.services.ssh_keypair import ensure_controller_keypair
+
     priv = tmp_path / "id_rsa"
     pub = tmp_path / "id_rsa.pub"
     ensure_controller_keypair(priv_path=priv, pub_path=pub)
@@ -20,6 +21,7 @@ def test_ensure_creates_keypair_when_missing(tmp_path):
 def test_ensure_is_idempotent_does_not_rotate_key(tmp_path):
     """Calling ensure twice must not regenerate the key — rotation would break authorized_keys."""
     from fleet_platform.services.ssh_keypair import ensure_controller_keypair
+
     priv = tmp_path / "id_rsa"
     pub = tmp_path / "id_rsa.pub"
     ensure_controller_keypair(priv_path=priv, pub_path=pub)
@@ -30,6 +32,7 @@ def test_ensure_is_idempotent_does_not_rotate_key(tmp_path):
 
 def test_get_pubkey_returns_none_when_missing(tmp_path):
     from fleet_platform.services.ssh_keypair import get_controller_pubkey
+
     pub = tmp_path / "id_rsa.pub"
     result = get_controller_pubkey(pub_path=pub)
     assert result is None
@@ -37,6 +40,7 @@ def test_get_pubkey_returns_none_when_missing(tmp_path):
 
 def test_get_pubkey_returns_value_after_ensure(tmp_path):
     from fleet_platform.services.ssh_keypair import ensure_controller_keypair, get_controller_pubkey
+
     priv = tmp_path / "id_rsa"
     pub = tmp_path / "id_rsa.pub"
     ensure_controller_keypair(priv_path=priv, pub_path=pub)
@@ -48,6 +52,7 @@ def test_get_pubkey_returns_value_after_ensure(tmp_path):
 def test_ensure_raises_on_unwritable_dir(tmp_path):
     """Proves the PermissionError caught in main.py lifespan is the correct type."""
     from fleet_platform.services.ssh_keypair import ensure_controller_keypair
+
     locked = tmp_path / "locked"
     locked.mkdir(mode=0o444)  # read-only directory
     priv = locked / "id_rsa"

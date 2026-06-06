@@ -1,4 +1,5 @@
 """Tests for #104: alert webhook dispatch on event fire."""
+
 from pathlib import Path
 
 ALERT_SVC = (Path(__file__).parent.parent.parent / "fleet_platform/services/alert_svc.py").read_text()

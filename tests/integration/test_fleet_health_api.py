@@ -3,6 +3,7 @@
 Requires: DATABASE_URL pointing to a test PostgreSQL instance.
 Run: pytest tests/integration/test_fleet_health_api.py -v
 """
+
 from unittest.mock import patch
 
 import pytest

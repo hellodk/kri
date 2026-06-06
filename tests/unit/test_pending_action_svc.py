@@ -1,4 +1,5 @@
 """Tests for destructive action approval gate (#291)."""
+
 import uuid
 from unittest.mock import AsyncMock, MagicMock
 
@@ -151,6 +152,7 @@ async def test_expire_old_returns_count():
 async def test_reject_noop_when_already_approved():
     """reject() must not overwrite an already-approved action (audit integrity)."""
     from fleet_platform.services.pending_action_svc import reject
+
     db = AsyncMock()
     action = MagicMock()
     action.status = "approved"
@@ -163,6 +165,7 @@ async def test_reject_noop_when_already_approved():
 async def test_reject_noop_when_already_rejected():
     """Idempotent: rejecting an already-rejected action is a no-op."""
     from fleet_platform.services.pending_action_svc import reject
+
     db = AsyncMock()
     action = MagicMock()
     action.status = "rejected"
