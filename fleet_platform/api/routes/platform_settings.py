@@ -1,9 +1,10 @@
 # fleet_platform/api/routes/platform_settings.py
 import asyncio
+import smtplib
 import time
 
 import httpx
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -66,6 +67,10 @@ class ConnectivityCheckResponse(BaseModel):
     error: str | None = None
 
 
+class TestEmailRequest(BaseModel):
+    to: str | None = None
+
+
 def _build_probe_url(target: str, port: int | None) -> str:
     """Normalise a target into an http(s) URL the server can probe."""
     t = target.strip()
@@ -104,6 +109,36 @@ async def check_connectivity(
         return ConnectivityCheckResponse(ok=False, error="Timed out")
     except (httpx.HTTPError, asyncio.TimeoutError, OSError) as exc:
         return ConnectivityCheckResponse(ok=False, error=type(exc).__name__)
+
+
+@router.post("/test-email")
+async def test_email(
+    payload: TestEmailRequest,
+    db: AsyncSession = Depends(get_db),
+    _: dict = Depends(require_role("admin")),
+):
+    """Send a test email using the configured SMTP settings (#417).
+
+    Returns {status: 'sent', detail: '...'} on success.
+    Returns HTTP 400 with the exception message on configuration or SMTP errors.
+    """
+    import asyncio as _asyncio
+
+    from fleet_platform.db.session import get_sync_db
+    from fleet_platform.services.digest_svc import send_test_email
+
+    def _send() -> dict:
+        with get_sync_db() as sync_db:
+            return send_test_email(sync_db, to_addr=payload.to)
+
+    try:
+        result = await _asyncio.get_event_loop().run_in_executor(None, _send)
+        return {
+            "status": result["status"],
+            "detail": f"Test email sent to {result['recipients']} recipient(s)",
+        }
+    except (ValueError, OSError, smtplib.SMTPException) as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
 def _parse_salt_allowlist(raw: str | None) -> list[str]:

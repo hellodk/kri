@@ -61,6 +61,9 @@ export function SettingsPage() {
   const [digestRecipients, setDigestRecipients] = useState('')
   const [jenkinsSecret, setJenkinsSecret] = useState('')
   const [digestSending, setDigestSending] = useState(false)
+  const [testEmailSending, setTestEmailSending] = useState(false)
+  const [testEmailTo, setTestEmailTo] = useState('')
+  const [testEmailResult, setTestEmailResult] = useState<{ ok: boolean; message: string } | null>(null)
   const [llmEmbedBaseUrl, setLlmEmbedBaseUrl] = useState('')
   const [embedUrlStatus, setEmbedUrlStatus] = useState<{ ok: boolean; latency_ms: number | null; error?: string } | null>(null)
   const [embedUrlChecking, setEmbedUrlChecking] = useState(false)
@@ -922,7 +925,7 @@ export function SettingsPage() {
           </div>
 
           {/* Save + Test */}
-          <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-6">
+          <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-6 space-y-4">
             <div className="flex items-center gap-3">
               <button
                 onClick={() => saveMutation.mutate()}
@@ -948,6 +951,53 @@ export function SettingsPage() {
               >
                 {digestSending ? 'Sending…' : 'Send Test Digest Now'}
               </button>
+            </div>
+
+            {/* Send test email — #417 */}
+            <div className="border-t border-gray-100 pt-4 space-y-3">
+              <div>
+                <p className="text-sm font-medium text-gray-900">Send test email</p>
+                <p className="text-xs text-gray-500 mt-0.5">
+                  Sends a small confirmation email through the SMTP settings above.
+                  Leave the recipient blank to send to the configured digest recipients.
+                </p>
+              </div>
+              <div className="flex items-center gap-2">
+                <input
+                  type="text"
+                  value={testEmailTo}
+                  onChange={(e) => { setTestEmailTo(e.target.value); setTestEmailResult(null) }}
+                  placeholder="Override recipient (optional)"
+                  className={`${monoInputClass} flex-1`}
+                />
+                <button
+                  onClick={async () => {
+                    setTestEmailSending(true)
+                    setTestEmailResult(null)
+                    try {
+                      const res = await api.post<{ status: string; detail: string }>(
+                        '/api/v1/settings/test-email',
+                        { to: testEmailTo.trim() || null },
+                      )
+                      setTestEmailResult({ ok: true, message: res.detail ?? 'Test email sent' })
+                    } catch (e: unknown) {
+                      const msg = e instanceof Error ? e.message : 'Failed to send test email'
+                      setTestEmailResult({ ok: false, message: msg })
+                    } finally {
+                      setTestEmailSending(false)
+                    }
+                  }}
+                  disabled={testEmailSending}
+                  className="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg text-sm font-medium hover:bg-gray-200 disabled:opacity-50 border border-gray-200 whitespace-nowrap"
+                >
+                  {testEmailSending ? 'Sending…' : 'Send test email'}
+                </button>
+              </div>
+              {testEmailResult && (
+                <p className={`text-xs font-medium ${testEmailResult.ok ? 'text-emerald-700' : 'text-red-700'}`}>
+                  {testEmailResult.ok ? '✓' : '✗'} {testEmailResult.message}
+                </p>
+              )}
             </div>
           </div>
 
