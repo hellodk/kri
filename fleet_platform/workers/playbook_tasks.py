@@ -28,6 +28,9 @@ _LOG_BATCH_INTERVAL = 5  # seconds between intermediate stdout DB flushes
 # Cap stored stdout so a runaway/verbose run can't grow the TEXT column unbounded (#369).
 _MAX_STDOUT_BYTES = 2 * 1024 * 1024
 _TRUNCATION_SENTINEL = "\n\n[output truncated at 2 MB — full log not retained]"
+# Window (seconds) used by the entry idempotency guard (#350).  Matches the task
+# hard time_limit so any live delivery of this job falls inside the window.
+_DUPLICATE_GUARD_SECONDS = 1860  # == time_limit on the @celery_app.task decorator
 
 
 def _append_capped(lines: list[str], msg: str, state: dict) -> None:
@@ -220,6 +223,9 @@ def _flush_stdout(job_uuid: _uuid.UUID, lines: list[str], last_task: str | None)
     queue="maintenance",
     soft_time_limit=1800,  # 30 min — real salt-master deploys can take 15-20 min
     time_limit=1860,  # 31 min hard kill
+    acks_late=False,  # ack BEFORE execution — a SIGKILLed run must NOT be redelivered
+    # and re-executed against the node (#350). Lost-on-crash jobs are
+    # marked failed by the orphan reaper instead.
 )
 def run_playbook(
     self, job_id: str, ssh_username: str | None = None, ssh_password: str | None = None, verbosity: int = 0
@@ -232,6 +238,26 @@ def run_playbook(
             job = db.execute(select(AnsibleJob).where(AnsibleJob.id == job_uuid)).scalar_one_or_none()
             if not job:
                 return {"status": "error", "reason": "job_not_found"}
+            # Defense-in-depth idempotency guard (#350): if the job is already
+            # 'running' and was started recently, this is a duplicate delivery of the
+            # same Celery message (e.g. SIGKILL redelivery despite acks_late=False
+            # on an older broker snapshot, or a manual re-queue).  Skip without
+            # mutating the record — mutating would clobber the live run's stdout/status.
+            # Truly-dead stale rows (status=running, old started_at) are reaped by
+            # maintenance.reap_orphaned_jobs (#352), not here.
+            # DESIGN NOTE: the issue's test sketch said 'mark failed immediately', but
+            # that clobbers a live run when the duplicate arrives while the original is
+            # alive — skipping without mutation is strictly safer.
+            if job.status == "running" and job.started_at is not None:
+                started = job.started_at if job.started_at.tzinfo else job.started_at.replace(tzinfo=UTC)
+                age = (datetime.now(UTC) - started).total_seconds()
+                if age < _DUPLICATE_GUARD_SECONDS:
+                    _log.warning(
+                        "playbook_tasks: job %s already running (started %ds ago) — duplicate delivery skipped (#350)",
+                        job_uuid,
+                        int(age),
+                    )
+                    return {"status": "duplicate-skipped", "job_id": job_id}
             job.status = "running"
             job.started_at = datetime.now(UTC)
             db.commit()
