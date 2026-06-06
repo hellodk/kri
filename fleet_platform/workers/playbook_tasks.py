@@ -11,9 +11,11 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 import ansible_runner
+import redis as sync_redis
 from celery.exceptions import SoftTimeLimitExceeded
 from sqlalchemy import select
 
+from fleet_platform.core.config import settings
 from fleet_platform.db.session import get_sync_db
 from fleet_platform.models.ansible_job import AnsibleJob
 from fleet_platform.models.node import Node
@@ -31,6 +33,10 @@ _TRUNCATION_SENTINEL = "\n\n[output truncated at 2 MB — full log not retained]
 # Window (seconds) used by the entry idempotency guard (#350).  Matches the task
 # hard time_limit so any live delivery of this job falls inside the window.
 _DUPLICATE_GUARD_SECONDS = 1860  # == time_limit on the @celery_app.task decorator
+# Per-target Redis advisory lock (#351): prevents two concurrent playbook runs against
+# the same node/group causing package-manager races or conflicting state mutations.
+_TARGET_LOCK_PREFIX = "kri:playbook-target-lock:"
+_TARGET_LOCK_TTL = 1920  # hard time_limit (1860) + buffer — self-expires if worker SIGKILLed
 
 
 def _append_capped(lines: list[str], msg: str, state: dict) -> None:
@@ -232,6 +238,7 @@ def run_playbook(
 ) -> dict:
     job_uuid = _uuid.UUID(job_id)
     stdout_lines: list[str] = []
+    lock = None  # per-target advisory lock (#351); initialised here so finally never NameErrors
 
     try:
         with get_sync_db() as db:
@@ -258,6 +265,29 @@ def run_playbook(
                         int(age),
                     )
                     return {"status": "duplicate-skipped", "job_id": job_id}
+            # Per-target advisory lock (#351): prevent two concurrent runs against the
+            # same node/group (package-manager races, conflicting state mutations).
+            # The lock is non-blocking — if it is already held, mark the job failed and
+            # return immediately rather than blocking the entire Celery worker queue.
+            # Advisory only: if Redis is unreachable we degrade open with a warning
+            # rather than blocking all playbook runs (the broker is likely also down).
+            try:
+                r = sync_redis.Redis.from_url(settings.redis_url)
+                lock = r.lock(
+                    f"{_TARGET_LOCK_PREFIX}{job.target_type}:{job.target_id}",
+                    timeout=_TARGET_LOCK_TTL,
+                    blocking=False,
+                )
+                if not lock.acquire(blocking=False):
+                    job.status = "failed"
+                    job.stdout = "Another run is in progress against this target — try again when it completes."
+                    job.completed_at = datetime.now(UTC)
+                    db.commit()
+                    return {"status": "target-locked", "job_id": job_id}
+            except sync_redis.RedisError as exc:
+                # Advisory lock only — degrade open if Redis is unreachable (#351)
+                _log.warning("playbook_tasks: target-lock unavailable (%s) — proceeding without lock", exc)
+                lock = None
             job.status = "running"
             job.started_at = datetime.now(UTC)
             db.commit()
@@ -434,3 +464,14 @@ def run_playbook(
                 job.completed_at = datetime.now(UTC)
                 db.commit()
         raise
+
+    finally:
+        # Release the per-target advisory lock (#351) regardless of outcome —
+        # success, failure, soft-timeout, hard-kill, or exception.
+        # TTL is the backstop: the lock self-expires if the worker is SIGKILLed
+        # before this finally block executes.
+        if lock is not None:
+            try:
+                lock.release()
+            except Exception:
+                pass  # already expired or not owned — TTL handles cleanup
