@@ -1,7 +1,7 @@
 from datetime import UTC, datetime, timedelta
 
 import redis as sync_redis
-from sqlalchemy import and_, delete, func, or_, select, update
+from sqlalchemy import String, and_, cast, delete, func, or_, select, update
 
 from fleet_platform.core.config import settings
 from fleet_platform.db.session import get_sync_db
@@ -161,7 +161,7 @@ def reap_orphaned_jobs() -> dict:
             .values(
                 status="failed",
                 completed_at=now,
-                stdout=func.coalesce(AnsibleJob.stdout, "") + _ORPHAN_MESSAGE,
+                stdout=func.concat(func.coalesce(cast(AnsibleJob.stdout, String), ""), _ORPHAN_MESSAGE),
             )
         )
         db.commit()

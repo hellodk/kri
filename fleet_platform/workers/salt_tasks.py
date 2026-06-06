@@ -24,10 +24,22 @@ from fleet_platform.workers.celery_app import celery_app
 
 logger = logging.getLogger(__name__)
 
-_SALT_API_URL = os.environ.get("SALT_API_URL", "").rstrip("/")
-_SALT_API_USER = os.environ.get("SALT_API_USER", "")
-_SALT_API_PASSWORD = os.environ.get("SALT_API_PASSWORD", "")
-_SALT_API_EAUTH = os.environ.get("SALT_API_EAUTH", "pam")
+
+def _get_salt_api_url() -> str:
+    """Read SALT_API_URL at call time so env changes after import are reflected (#469)."""
+    return os.environ.get("SALT_API_URL", "").rstrip("/")
+
+
+def _get_salt_api_user() -> str:
+    return os.environ.get("SALT_API_USER", "")
+
+
+def _get_salt_api_password() -> str:
+    return os.environ.get("SALT_API_PASSWORD", "")
+
+
+def _get_salt_api_eauth() -> str:
+    return os.environ.get("SALT_API_EAUTH", "pam")
 
 
 def _salt_api_not_configured_error() -> dict:
@@ -55,7 +67,8 @@ def _run_salt_api(
     Dispatches a single command using the salt-api /run endpoint (no session
     persistence needed — credentials are passed inline for simplicity).
     """
-    if not _SALT_API_URL:
+    _url = _get_salt_api_url()
+    if not _url:
         return _salt_api_not_configured_error()
 
     payload: dict[str, Any] = {
@@ -63,9 +76,9 @@ def _run_salt_api(
         "tgt": target,
         "tgt_type": "list",
         "fun": function,
-        "username": _SALT_API_USER,
-        "password": _SALT_API_PASSWORD,
-        "eauth": _SALT_API_EAUTH,
+        "username": _get_salt_api_user(),
+        "password": _get_salt_api_password(),
+        "eauth": _get_salt_api_eauth(),
     }
     if args:
         payload["arg"] = args
@@ -74,7 +87,7 @@ def _run_salt_api(
 
     try:
         resp = requests.post(
-            f"{_SALT_API_URL}/run",
+            f"{_url}/run",
             json=payload,
             timeout=timeout,
         )
@@ -85,6 +98,11 @@ def _run_salt_api(
             "result": result,
         }
     except requests.HTTPError as exc:
+        logger.error(
+            "salt_tasks: salt-api HTTP error for function %r: %s",
+            function,
+            exc.response.text[:500] if exc.response is not None else "(no response body)",
+        )
         return {
             "status": "error",
             "reason": (
@@ -93,15 +111,17 @@ def _run_salt_api(
             ),
         }
     except requests.ConnectionError as exc:
+        logger.error("salt_tasks: cannot reach salt-api at %s: %s", _url, exc)
         return {
             "status": "error",
             "reason": (
-                f"Cannot reach salt-api at {_SALT_API_URL}: {exc}. "
+                f"Cannot reach salt-api at {_url}: {exc}. "
                 "Check that SALT_API_URL is correct and the salt-master container "
                 "is running the rest_cherrypy or rest_tornado netapi module."
             ),
         }
     except Exception as exc:
+        logger.warning("salt_tasks: unexpected error calling salt-api function %r: %s", function, exc)
         return {"status": "error", "reason": str(exc)[:500]}
 
 
@@ -121,7 +141,7 @@ def apply_salt_state(
     Dispatches via Salt HTTP API (salt-api).  Requires SALT_API_URL,
     SALT_API_USER, and SALT_API_PASSWORD to be set on the worker.
     """
-    if not _SALT_API_URL:
+    if not _get_salt_api_url():
         return _salt_api_not_configured_error()
 
     target = ",".join(target_minions)
@@ -167,7 +187,7 @@ def run_salt_cmd(
             "reason": f"Function '{function}' is not in the allowlist. Allowed functions: {sorted(allowed)}",
         }
 
-    if not _SALT_API_URL:
+    if not _get_salt_api_url():
         return _salt_api_not_configured_error()
 
     target = ",".join(target_minions)
