@@ -1,5 +1,6 @@
 # fleet_platform/api/routes/salt_ops.py
 """Salt state runner API — browse states, apply them, run ad-hoc commands."""
+
 import os
 from pathlib import Path
 
@@ -29,11 +30,13 @@ def _scan_states(base: Path) -> list[dict]:
         dot_name = ".".join(parts)
         # Human display: drop trailing .init  (jenkins_slave.init → jenkins_slave)
         display = dot_name.removesuffix(".init")
-        states.append({
-            "name": dot_name,
-            "display": display,
-            "path": str(rel),
-        })
+        states.append(
+            {
+                "name": dot_name,
+                "display": display,
+                "path": str(rel),
+            }
+        )
     return states
 
 
@@ -68,6 +71,7 @@ async def apply_state(
             detail="minion_ids must not be empty",
         )
     from fleet_platform.workers.salt_tasks import apply_salt_state
+
     task = apply_salt_state.delay(
         state_name=payload.state,
         target_minions=payload.minion_ids,
@@ -139,10 +143,7 @@ async def run_cmd(
     if payload.function not in allowed:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail=(
-                f"Function '{payload.function}' is not in the allowlist. "
-                f"Allowed functions: {sorted(allowed)}"
-            ),
+            detail=(f"Function '{payload.function}' is not in the allowlist. Allowed functions: {sorted(allowed)}"),
         )
     task = run_salt_cmd.delay(
         function=payload.function,

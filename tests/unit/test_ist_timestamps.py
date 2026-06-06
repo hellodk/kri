@@ -3,6 +3,7 @@
 
 def test_ist_utils_file_exists():
     from pathlib import Path
+
     assert Path("frontend/src/utils/time.ts").exists()
 
 
@@ -18,10 +19,9 @@ def test_node_detail_uses_formatist():
     assert "formatIST" in content or "formatISTDate" in content
     # Should NOT have bare format(new Date()) for absolute dates anymore
     import re
+
     bare_format_calls = re.findall(r"format\(new Date\([^)]+\),\s*['\"]PP", content)
-    assert len(bare_format_calls) == 0, (
-        f"NodeDetail still has non-IST absolute date formats: {bare_format_calls}"
-    )
+    assert len(bare_format_calls) == 0, f"NodeDetail still has non-IST absolute date formats: {bare_format_calls}"
 
 
 def test_ist_suffix_in_utility():

@@ -5,7 +5,7 @@ _GRAINS_FULL = {
     "pkgs": {
         "git": "2.43.0",
         "python3": "3.12.2",
-        "teamviewer": "15.51.0",   # forbidden package
+        "teamviewer": "15.51.0",  # forbidden package
     },
     "services": ["com.apple.screensharing"],  # should be stopped
 }
@@ -122,6 +122,6 @@ def test_case_insensitive_package_matching():
 def test_full_baseline_composite_score():
     result = compute_drift(_GRAINS_FULL, _BASELINE_FULL)
     assert result.drift_score > 0
-    assert len(result.missing_packages) == 1   # node missing
-    assert len(result.extra_packages) == 1     # teamviewer present
-    assert len(result.service_drift) == 1      # screensharing running
+    assert len(result.missing_packages) == 1  # node missing
+    assert len(result.extra_packages) == 1  # teamviewer present
+    assert len(result.service_drift) == 1  # screensharing running

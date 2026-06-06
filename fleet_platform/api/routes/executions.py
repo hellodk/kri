@@ -87,9 +87,7 @@ async def get_execution_results(
     db: AsyncSession = Depends(get_db),
     _: dict = Depends(get_current_user),
 ):
-    total = (await db.execute(
-        select(func.count()).where(ExecutionResult.job_id == job_id)
-    )).scalar_one()
+    total = (await db.execute(select(func.count()).where(ExecutionResult.job_id == job_id))).scalar_one()
 
     result = await db.execute(
         select(ExecutionResult)
@@ -102,5 +100,7 @@ async def get_execution_results(
 
     return PaginatedResponse(
         items=[ExecutionResultResponse.model_validate(r) for r in results],
-        total=total, page=page, per_page=per_page,
+        total=total,
+        page=page,
+        per_page=per_page,
     )

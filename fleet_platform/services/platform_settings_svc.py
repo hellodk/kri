@@ -234,6 +234,7 @@ async def get_settings_bulk(db: AsyncSession, keys: list[str]) -> dict[str, str 
             except Exception:
                 out[row.key] = None
                 import logging as _logging
+
                 _logging.getLogger(__name__).warning(
                     "get_settings_bulk: failed to decrypt key %r — returning None", row.key
                 )

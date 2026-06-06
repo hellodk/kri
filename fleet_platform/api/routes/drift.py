@@ -21,22 +21,19 @@ from fleet_platform.workers.drift_tasks import compute_drift
 # helpers
 # ---------------------------------------------------------------------------
 
+
 def _pkg_name(pkg: dict) -> str:
     """Normalise package dict to a name string."""
-    return (
-        pkg.get("name")
-        or pkg.get("package")
-        or pkg.get("pkg")
-        or ""
-    )
+    return pkg.get("name") or pkg.get("package") or pkg.get("pkg") or ""
+
 
 router = APIRouter(prefix="/api/v1/drift")
 
 _SEVERITY_RANGES = {
-    "clean":    (0, 5),
-    "low":      (6, 20),
-    "medium":   (21, 50),
-    "high":     (51, 80),
+    "clean": (0, 5),
+    "low": (6, 20),
+    "medium": (21, 50),
+    "high": (51, 80),
     "critical": (81, 100),
 }
 
@@ -96,14 +93,16 @@ async def list_drift(
     items = []
     for node in nodes:
         computed_at, baseline_name = latest_dr_map.get(node.id, (None, None))
-        items.append(DriftSummaryResponse(
-            node_id=node.id,
-            hostname=node.hostname,
-            drift_score=node.drift_score,
-            severity=drift_severity(node.drift_score),
-            computed_at=computed_at,
-            baseline_name=baseline_name,
-        ))
+        items.append(
+            DriftSummaryResponse(
+                node_id=node.id,
+                hostname=node.hostname,
+                drift_score=node.drift_score,
+                severity=drift_severity(node.drift_score),
+                computed_at=computed_at,
+                baseline_name=baseline_name,
+            )
+        )
 
     return PaginatedResponse(items=items, total=total, page=page, per_page=per_page)
 
@@ -173,11 +172,7 @@ async def compare_drift(
             required = pkgs
         else:
             required = []
-        return {
-            _pkg_name(p): p.get("version") or p.get("required_version")
-            for p in required
-            if _pkg_name(p)
-        }
+        return {_pkg_name(p): p.get("version") or p.get("required_version") for p in required if _pkg_name(p)}
 
     def _installed_pkgs(dr: DriftRecord | None) -> dict[str, str | None]:
         """Build {name: installed_version} from the extra_packages list (everything installed)."""
@@ -185,17 +180,17 @@ async def compare_drift(
             return {}
         installed: dict[str, str | None] = {}
         # extra_packages contains packages that ARE installed
-        for p in (dr.extra_packages or []):
+        for p in dr.extra_packages or []:
             name = _pkg_name(p)
             if name:
                 installed[name] = p.get("installed_version") or p.get("version")
         # version_mismatches also have an installed version (actual)
-        for p in (dr.version_mismatches or []):
+        for p in dr.version_mismatches or []:
             name = _pkg_name(p)
             if name and name not in installed:
                 installed[name] = p.get("actual") or p.get("installed_version")
         # packages NOT in missing_packages and NOT in extra_packages ARE installed at expected version
-        for p in (dr.missing_packages or []):
+        for p in dr.missing_packages or []:
             name = _pkg_name(p)
             if name:
                 installed.pop(name, None)  # definitely not installed
@@ -207,11 +202,11 @@ async def compare_drift(
         dr, baseline = node_data[nid]
         all_pkg_names.update(_baseline_pkgs(baseline).keys())
         all_pkg_names.update(_installed_pkgs(dr).keys())
-        for p in (dr.missing_packages if dr else []):
+        for p in dr.missing_packages if dr else []:
             name = _pkg_name(p)
             if name:
                 all_pkg_names.add(name)
-        for p in (dr.version_mismatches if dr else []):
+        for p in dr.version_mismatches if dr else []:
             name = _pkg_name(p)
             if name:
                 all_pkg_names.add(name)
@@ -345,9 +340,7 @@ async def get_node_drift_history(
     _: dict = Depends(get_current_user),
 ):
     """Return paginated drift score history for a node (newest first)."""
-    total = (await db.execute(
-        select(func.count()).where(DriftRecord.node_id == node_id)
-    )).scalar_one()
+    total = (await db.execute(select(func.count()).where(DriftRecord.node_id == node_id))).scalar_one()
 
     result = await db.execute(
         select(DriftRecord)
@@ -380,8 +373,8 @@ async def trigger_drift_compute(
 ):
     """Enqueue a drift recomputation for a node."""
     from fleet_platform.core.audit import audit
-    await audit(db, actor=claims["email"], action="drift.compute.triggered",
-                resource_type="node", resource_id=node_id)
+
+    await audit(db, actor=claims["email"], action="drift.compute.triggered", resource_type="node", resource_id=node_id)
     await db.commit()
     compute_drift.delay(str(node_id))
     return {"status": "queued", "node_id": str(node_id)}

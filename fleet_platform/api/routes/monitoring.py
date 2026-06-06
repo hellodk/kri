@@ -1,4 +1,5 @@
 """Monitoring summary endpoint — aggregates metrics for the built-in monitoring page."""
+
 from __future__ import annotations
 
 from fastapi import APIRouter, Depends

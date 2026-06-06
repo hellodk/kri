@@ -4,6 +4,7 @@
 Salt state application and ad-hoc commands enqueue Celery tasks, so
 we patch the task objects to avoid needing a live Salt master or broker.
 """
+
 from unittest.mock import MagicMock, patch
 
 import pytest

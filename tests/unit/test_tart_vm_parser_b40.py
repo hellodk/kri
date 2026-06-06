@@ -1,14 +1,17 @@
 """Tests for #47: tart VM output parser."""
+
 from pathlib import Path
 
 
 def test_parse_empty_output():
     from fleet_platform.api.routes.nodes import _parse_tart_output
+
     assert _parse_tart_output("") == []
 
 
 def test_parse_tart_not_found():
     from fleet_platform.api.routes.nodes import _parse_tart_output
+
     assert _parse_tart_output("tart_not_found") == []
 
 
@@ -16,6 +19,7 @@ def test_parse_json_output():
     import json
 
     from fleet_platform.api.routes.nodes import _parse_tart_output
+
     data = [{"name": "test-vm", "state": "Running", "cpu": 4, "memory": 8192, "source": "ghcr.io/test"}]
     result = _parse_tart_output(json.dumps(data))
     assert len(result) == 1
@@ -28,6 +32,7 @@ def test_parse_json_multiple_vms():
     import json
 
     from fleet_platform.api.routes.nodes import _parse_tart_output
+
     data = [
         {"name": "vm1", "state": "Running", "cpu": 2, "memory": 4096, "source": "local"},
         {"name": "vm2", "state": "Stopped", "cpu": 4, "memory": 8192, "source": "local"},
@@ -39,6 +44,7 @@ def test_parse_json_multiple_vms():
 
 def test_parse_plain_text_fallback():
     from fleet_platform.api.routes.nodes import _parse_tart_output
+
     output = "Name    Source    State\ntest-vm    local    Running"
     result = _parse_tart_output(output)
     assert len(result) == 1
@@ -47,6 +53,7 @@ def test_parse_plain_text_fallback():
 
 def test_parse_invalid_json_falls_back():
     from fleet_platform.api.routes.nodes import _parse_tart_output
+
     result = _parse_tart_output("{not valid json")
     # Should not raise — falls back to plain text parsing
     assert isinstance(result, list)

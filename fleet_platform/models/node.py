@@ -22,9 +22,7 @@ from fleet_platform.models.base import Base, TimestampMixin
 class Node(Base, TimestampMixin):
     __tablename__ = "nodes"
 
-    id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
-    )
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     minion_id: Mapped[str] = mapped_column(String(255), unique=True, nullable=False)
     hostname: Mapped[str | None] = mapped_column(String(255), nullable=True)
     ip_address: Mapped[str | None] = mapped_column(INET, nullable=True)
@@ -44,9 +42,7 @@ class Node(Base, TimestampMixin):
     node_token_hash: Mapped[str] = mapped_column(String(72), nullable=False)
     first_seen_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     last_seen_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
-    bootstrap_status: Mapped[str] = mapped_column(
-        String(20), nullable=False, default="unregistered"
-    )
+    bootstrap_status: Mapped[str] = mapped_column(String(20), nullable=False, default="unregistered")
     bootstrap_ip: Mapped[str | None] = mapped_column(String(45), nullable=True)
     bootstrap_error: Mapped[str | None] = mapped_column(Text, nullable=True)
     bootstrap_logs: Mapped[str | None] = mapped_column(Text, nullable=True)
@@ -69,9 +65,7 @@ class Node(Base, TimestampMixin):
     xcode_version: Mapped[str | None] = mapped_column(String(32), nullable=True)
     macos_version: Mapped[str | None] = mapped_column(String(32), nullable=True)
 
-    tags: Mapped[list["Tag"]] = relationship(
-        "Tag", back_populates="node", cascade="all, delete-orphan"
-    )
+    tags: Mapped[list["Tag"]] = relationship("Tag", back_populates="node", cascade="all, delete-orphan")
 
     __table_args__ = (
         Index("idx_nodes_status", "status"),
@@ -83,9 +77,7 @@ class Node(Base, TimestampMixin):
 class Tag(Base):
     __tablename__ = "tags"
 
-    id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
-    )
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     node_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True),
         ForeignKey("nodes.id", ondelete="CASCADE"),

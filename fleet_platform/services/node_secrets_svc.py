@@ -1,5 +1,6 @@
 # fleet_platform/services/node_secrets_svc.py
 """Service layer for per-node Salt pillar secrets."""
+
 import fcntl
 import uuid
 from pathlib import Path
@@ -17,9 +18,7 @@ _DEFAULT_PILLAR_DIR = Path("/srv/salt/pillar")
 
 async def _get_pillar_dir(db: AsyncSession) -> Path:
     """Return the configured pillar directory, falling back to /srv/salt/pillar."""
-    row = (await db.execute(
-        select(PlatformSetting).where(PlatformSetting.key == "pillar_dir")
-    )).scalar_one_or_none()
+    row = (await db.execute(select(PlatformSetting).where(PlatformSetting.key == "pillar_dir"))).scalar_one_or_none()
     if row and row.value:
         return Path(row.value)
     return _DEFAULT_PILLAR_DIR
@@ -27,11 +26,7 @@ async def _get_pillar_dir(db: AsyncSession) -> Path:
 
 async def get_secrets(db: AsyncSession, node_id: uuid.UUID) -> list[NodeSecret]:
     """Return all NodeSecret rows for the given node (values are still encrypted)."""
-    result = await db.execute(
-        select(NodeSecret)
-        .where(NodeSecret.node_id == node_id)
-        .order_by(NodeSecret.key)
-    )
+    result = await db.execute(select(NodeSecret).where(NodeSecret.node_id == node_id).order_by(NodeSecret.key))
     return list(result.scalars().all())
 
 
@@ -44,9 +39,7 @@ async def upsert_secret(
 ) -> NodeSecret:
     """Create or update a secret for the given node. Value is encrypted at rest."""
     encrypted = encrypt_secret(plaintext_value)
-    result = await db.execute(
-        select(NodeSecret).where(NodeSecret.node_id == node_id, NodeSecret.key == key)
-    )
+    result = await db.execute(select(NodeSecret).where(NodeSecret.node_id == node_id, NodeSecret.key == key))
     secret = result.scalar_one_or_none()
     if secret:
         secret.encrypted_value = encrypted
@@ -67,9 +60,7 @@ async def upsert_secret(
 
 async def delete_secret(db: AsyncSession, node_id: uuid.UUID, key: str) -> bool:
     """Delete a secret. Returns True if it existed."""
-    result = await db.execute(
-        select(NodeSecret).where(NodeSecret.node_id == node_id, NodeSecret.key == key)
-    )
+    result = await db.execute(select(NodeSecret).where(NodeSecret.node_id == node_id, NodeSecret.key == key))
     secret = result.scalar_one_or_none()
     if not secret:
         return False

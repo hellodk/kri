@@ -64,9 +64,7 @@ def test_catalog_provider_values_valid():
 
 def test_catalog_context_lengths_positive():
     for entry in CATALOG:
-        assert entry["context_length"] > 0, (
-            f"context_length must be positive for model '{entry['id']}'"
-        )
+        assert entry["context_length"] > 0, f"context_length must be positive for model '{entry['id']}'"
 
 
 def test_anthropic_models_have_large_context():

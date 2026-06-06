@@ -1,4 +1,5 @@
 """Unit tests for GET /api/v1/fleet/nodes/check-minion-id"""
+
 import secrets
 from datetime import UTC, datetime
 from unittest.mock import AsyncMock
@@ -170,9 +171,7 @@ async def test_invalid_format_rejected(admin_client: AsyncClient):
             "/api/v1/fleet/nodes/check-minion-id",
             params={"id": bad_id},
         )
-        assert response.status_code == 422, (
-            f"Expected 422 for {bad_id!r}, got {response.status_code}"
-        )
+        assert response.status_code == 422, f"Expected 422 for {bad_id!r}, got {response.status_code}"
         detail = response.json()["detail"]
         assert "minion_id" in detail.lower() or "invalid" in detail.lower()
 
@@ -207,7 +206,5 @@ async def test_valid_id_formats_accepted(admin_client: AsyncClient):
             "/api/v1/fleet/nodes/check-minion-id",
             params={"id": mid},
         )
-        assert response.status_code == 200, (
-            f"Expected 200 for {mid!r}, got {response.status_code}: {response.text}"
-        )
+        assert response.status_code == 200, f"Expected 200 for {mid!r}, got {response.status_code}: {response.text}"
         assert response.json()["available"] is True

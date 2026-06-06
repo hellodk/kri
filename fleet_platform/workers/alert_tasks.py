@@ -1,4 +1,5 @@
 """Celery tasks for alert evaluation."""
+
 import asyncio
 
 from fleet_platform.workers.celery_app import celery_app
@@ -20,6 +21,7 @@ def run_alert_evaluation():
 
     loop = asyncio.new_event_loop()
     try:
+
         async def _run():
             async with AsyncSessionLocal() as db:
                 await evaluate_alerts(db)

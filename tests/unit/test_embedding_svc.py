@@ -2,19 +2,24 @@
 
 All tests run without a real embedding endpoint — embed_texts is mocked.
 """
+
 import hashlib
 
 # --- Task 1: DB model ---------------------------------------------------------
 
+
 def test_fleet_embedding_model_importable():
     from fleet_platform.models.fleet_embedding import FleetEmbedding
+
     assert FleetEmbedding.__tablename__ == "fleet_embeddings"
 
 
 # --- Task 2: Chunking + RRF + hash --------------------------------------------
 
+
 def test_chunk_node_returns_one_chunk():
     from fleet_platform.services.embedding_svc import chunk_node
+
     chunks = chunk_node(
         node_id="uuid-123",
         hostname="mm1",
@@ -32,6 +37,7 @@ def test_chunk_node_returns_one_chunk():
 
 def test_chunk_playbook_splits_per_play():
     from fleet_platform.services.embedding_svc import chunk_playbook
+
     yaml_content = """
 - name: Bootstrap Mac Mini
   hosts: all
@@ -53,6 +59,7 @@ def test_chunk_playbook_splits_per_play():
 
 def test_chunk_salt_state_splits_per_state_key():
     from fleet_platform.services.embedding_svc import chunk_salt_state
+
     sls_content = """
 install_homebrew:
   cmd.run:
@@ -72,6 +79,7 @@ enable_salt_minion:
 
 def test_rrf_fusion_deduplicates_and_ranks():
     from fleet_platform.services.embedding_svc import reciprocal_rank_fusion
+
     bm25_ids = ["a", "b", "c", "d"]
     vector_ids = ["b", "a", "e", "f"]
     fused = reciprocal_rank_fusion(bm25_ids, vector_ids, k=60)
@@ -83,6 +91,7 @@ def test_rrf_fusion_deduplicates_and_ranks():
 
 def test_rrf_fusion_returns_all_unique_ids():
     from fleet_platform.services.embedding_svc import reciprocal_rank_fusion
+
     fused = reciprocal_rank_fusion(["a", "b"], ["c", "d"])
     assert set(fused) == {"a", "b", "c", "d"}
     assert len(fused) == 4
@@ -90,6 +99,7 @@ def test_rrf_fusion_returns_all_unique_ids():
 
 def test_content_hash_skips_unchanged_chunk():
     from fleet_platform.services.embedding_svc import compute_content_hash
+
     text = "mm1 online 2m ago build group"
     h = compute_content_hash(text)
     assert len(h) == 64  # sha256 hex
@@ -98,6 +108,7 @@ def test_content_hash_skips_unchanged_chunk():
 
 def test_chunk_node_source_id_is_node_id():
     from fleet_platform.services.embedding_svc import chunk_node
+
     chunks = chunk_node(
         node_id="node-abc",
         hostname="mm2",
@@ -113,18 +124,21 @@ def test_chunk_node_source_id_is_node_id():
 
 def test_chunk_playbook_invalid_yaml_returns_empty():
     from fleet_platform.services.embedding_svc import chunk_playbook
+
     chunks = chunk_playbook("path/to/bad.yml", "{{{{ invalid yaml ::::")
     assert chunks == []
 
 
 def test_chunk_salt_state_non_dict_returns_empty():
     from fleet_platform.services.embedding_svc import chunk_salt_state
+
     # A list is valid YAML but not a valid SLS state dict
     chunks = chunk_salt_state("path/to/bad.sls", "- item1\n- item2\n")
     assert chunks == []
 
 
 # --- Task 7: Golden eval gate — regression prevention -------------------------
+
 
 def test_grounding_rules_never_truncated():
     """Grounding rules must appear in final context regardless of chunk size."""
@@ -167,8 +181,10 @@ def test_intent_classifier_generates_salt_state():
 
 # --- Task 5: Celery task imports -----------------------------------------------
 
+
 def test_embedding_tasks_importable():
     from fleet_platform.workers import embedding_tasks
+
     assert hasattr(embedding_tasks, "reindex_nodes")
     assert hasattr(embedding_tasks, "reindex_playbooks")
     assert hasattr(embedding_tasks, "reindex_drift_history")
@@ -176,8 +192,10 @@ def test_embedding_tasks_importable():
 
 # --- Chunker coverage additions ------------------------------------------------
 
+
 def test_chunk_playbook_parses_plays():
     from fleet_platform.services.embedding_svc import chunk_playbook
+
     yaml_content = "- name: Deploy app\n  hosts: all\n  tasks:\n    - name: Install\n    - name: Start\n"
     chunks = chunk_playbook("deploy.yml", yaml_content)
     assert len(chunks) == 1
@@ -187,16 +205,19 @@ def test_chunk_playbook_parses_plays():
 
 def test_chunk_playbook_invalid_yaml_returns_empty_v2():
     from fleet_platform.services.embedding_svc import chunk_playbook
+
     assert chunk_playbook("bad.yml", ": {invalid:") == []
 
 
 def test_chunk_playbook_non_list_returns_empty():
     from fleet_platform.services.embedding_svc import chunk_playbook
+
     assert chunk_playbook("vars.yml", "key: value") == []
 
 
 def test_chunk_salt_state_parses_state_ids():
     from fleet_platform.services.embedding_svc import chunk_salt_state
+
     chunks = chunk_salt_state("nginx.sls", "nginx:\n  service.running:\n    - enable: true\n")
     assert len(chunks) == 1
     assert chunks[0]["source_type"] == "salt_state"
@@ -205,14 +226,20 @@ def test_chunk_salt_state_parses_state_ids():
 
 def test_chunk_salt_state_invalid_yaml_returns_empty():
     from fleet_platform.services.embedding_svc import chunk_salt_state
+
     assert chunk_salt_state("bad.sls", ": {broken:") == []
 
 
 def test_chunk_drift_record_produces_single_chunk():
     from fleet_platform.services.embedding_svc import chunk_drift_record
+
     chunks = chunk_drift_record(
-        drift_id="abc", node_hostname="mm1", computed_at="2026-06-01",
-        drift_score=42, missing_packages=["nginx"], extra_packages=[],
+        drift_id="abc",
+        node_hostname="mm1",
+        computed_at="2026-06-01",
+        drift_score=42,
+        missing_packages=["nginx"],
+        extra_packages=[],
         version_mismatches=[],
     )
     assert len(chunks) == 1

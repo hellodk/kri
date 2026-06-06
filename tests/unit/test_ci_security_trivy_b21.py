@@ -28,9 +28,7 @@ def test_dockerfile_api_no_trivy_in_runtime() -> None:
 def test_dockerfile_api_is_multistage() -> None:
     """Dockerfile.api must use a multi-stage build (at least 2 FROM directives)."""
     src = (REPO_ROOT / "deploy" / "Dockerfile.api").read_text()
-    assert src.count("FROM ") >= 2, (
-        f"Expected at least 2 FROM stages in Dockerfile.api, found {src.count('FROM ')}"
-    )
+    assert src.count("FROM ") >= 2, f"Expected at least 2 FROM stages in Dockerfile.api, found {src.count('FROM ')}"
 
 
 def test_ci_has_dependency_audit() -> None:
@@ -56,6 +54,4 @@ def test_dockerfile_api_runtime_has_venv_copy() -> None:
 def test_dockerfile_api_runtime_has_venv_path() -> None:
     """Runtime stage must set PATH to include .venv/bin (otherwise python/uvicorn not found)."""
     src = (REPO_ROOT / "deploy" / "Dockerfile.api").read_text()
-    assert 'PATH="/app/.venv/bin:$PATH"' in src, (
-        "Dockerfile.api runtime stage must set PATH to /app/.venv/bin"
-    )
+    assert 'PATH="/app/.venv/bin:$PATH"' in src, "Dockerfile.api runtime stage must set PATH to /app/.venv/bin"

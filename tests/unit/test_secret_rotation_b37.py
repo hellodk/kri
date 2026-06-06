@@ -1,4 +1,5 @@
 """Tests for #145: secret rotation script and procedure."""
+
 from pathlib import Path
 
 SCRIPT_PATH = Path(__file__).parent.parent.parent / "scripts/rotate_secrets.py"

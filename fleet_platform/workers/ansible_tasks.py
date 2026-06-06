@@ -330,28 +330,20 @@ def bootstrap_node(
                 f"ansible_ssh_private_key_file={key_file_path}\n"
             )
         else:
-            inv_path.write_text(
-                f"[targets]\n"
-                f"{target_ip} ansible_host={target_ip} "
-                f"ansible_user={ssh_user}\n"
-            )
+            inv_path.write_text(f"[targets]\n{target_ip} ansible_host={target_ip} ansible_user={ssh_user}\n")
         inv_path.chmod(0o600)
 
         # TOFU: use node's stored host key for strict verification if available,
         # otherwise accept on first connection.
         import os as _os
+
         known_hosts_file: str | None = None
         if node.ssh_host_key:
-            tmp_kh = tempfile.NamedTemporaryFile(
-                mode="w", suffix=".known_hosts", delete=False
-            )
+            tmp_kh = tempfile.NamedTemporaryFile(mode="w", suffix=".known_hosts", delete=False)
             tmp_kh.write(f"{target_ip} {node.ssh_host_key}\n")
             tmp_kh.close()
             known_hosts_file = tmp_kh.name
-            strict_check = (
-                f"-o StrictHostKeyChecking=yes "
-                f"-o UserKnownHostsFile={known_hosts_file}"
-            )
+            strict_check = f"-o StrictHostKeyChecking=yes -o UserKnownHostsFile={known_hosts_file}"
         else:
             strict_check = "-o StrictHostKeyChecking=accept-new"
 
@@ -546,17 +538,18 @@ def collect_node_grains(self, node_id: str) -> dict:
         # TOFU: use node's stored host key for strict verification if available,
         # otherwise accept on first connection.
         import os as _os2
+
         grains_known_hosts_file: str | None = None
         if node.ssh_host_key:
-            tmp_kh2 = tempfile.NamedTemporaryFile(
-                mode="w", suffix=".known_hosts", delete=False
-            )
+            tmp_kh2 = tempfile.NamedTemporaryFile(mode="w", suffix=".known_hosts", delete=False)
             tmp_kh2.write(f"{target_ip} {node.ssh_host_key}\n")
             tmp_kh2.close()
             grains_known_hosts_file = tmp_kh2.name
             grains_strict_opts = [
-                "-o", "StrictHostKeyChecking=yes",
-                "-o", f"UserKnownHostsFile={grains_known_hosts_file}",
+                "-o",
+                "StrictHostKeyChecking=yes",
+                "-o",
+                f"UserKnownHostsFile={grains_known_hosts_file}",
             ]
         else:
             grains_strict_opts = ["-o", "StrictHostKeyChecking=accept-new"]
