@@ -279,6 +279,7 @@ export function PlaybookJobDetail() {
           initialTargetType={job.target_type as 'node' | 'group'}
           initialTargetId={job.target_id ?? undefined}
           initialVars={buildRerunVars(job.extravars ?? {})}
+          initialTimeout={job.timeout_seconds}
         />
       )}
       {showRerun && !rerunEntry && (
