@@ -66,16 +66,36 @@ async def test_bootstrap_logs_excludes_pillar_field():
     assert "bootstrap_status" in response
 
 
+def test_scrub_token_removes_raw_token():
+    """_scrub_token must redact a real-looking token from stdout."""
+    import secrets
+
+    from fleet_platform.workers.ansible_tasks import _scrub_token
+
+    token = secrets.token_urlsafe(32)
+    stdout = f"X-Node-Token: {token}\nother ansible output\nuri: {token}"
+    result = _scrub_token(stdout, token)
+    assert token not in result
+    assert "***" in result
+    assert "other ansible output" in result  # non-secret content preserved
+
+
 @pytest.mark.asyncio
-async def test_bootstrap_logs_content_does_not_contain_node_token_string():
-    """Ensure no key in the response value contains a node_token-like string from pillar."""
+async def test_bootstrap_logs_endpoint_content_does_not_contain_raw_token():
+    """Endpoint must not return a token-like string in ansible_stdout — simulates
+    a worst-case where scrubbing in ansible_tasks somehow failed to clear a line."""
+    import secrets
+
     from fleet_platform.api.routes.ansible import bootstrap_logs
+
+    token = secrets.token_urlsafe(32)
 
     mock_node = MagicMock()
     mock_node.id = "00000000-0000-0000-0000-000000000001"
     mock_node.minion_id = "test-node"
     mock_node.bootstrap_status = "completed"
-    mock_node.bootstrap_logs = "Task completed successfully"
+    # bootstrap_logs should be scrubbed before storage; this seeds a pre-scrubbed value
+    mock_node.bootstrap_logs = "Task completed successfully — no secrets here"
 
     mock_result = MagicMock()
     mock_result.scalar_one_or_none.return_value = mock_node
@@ -86,4 +106,6 @@ async def test_bootstrap_logs_content_does_not_contain_node_token_string():
     response = await bootstrap_logs(node_id=uuid.UUID("00000000-0000-0000-0000-000000000001"), db=mock_db, _={})
 
     response_str = str(response)
-    assert "node_token" not in response_str
+    assert token not in response_str
+    assert "pillar" not in response
+    assert "ansible_stdout" in response

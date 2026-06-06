@@ -34,6 +34,13 @@ _BOOTSTRAP_TIMEOUT_SECONDS = 600  # 10 minutes
 _MINION_ID_RE = re.compile(r"^[a-zA-Z0-9._-]{1,128}$")
 
 
+def _scrub_token(text: str, token: str) -> str:
+    """Replace raw node token with *** in stdout to prevent accidental log exposure."""
+    if not token or not text:
+        return text
+    return text.replace(token, "***")
+
+
 def _validate_minion_id(minion_id: str) -> str:
     """Validate minion ID to prevent path traversal and YAML injection."""
     if not _MINION_ID_RE.match(minion_id):
@@ -421,7 +428,7 @@ def bootstrap_node(self, node_id: str, target_ip: str, ssh_username: str | None 
                 # (Issue #133: replaces per-task and per-10-lines session opens).
                 now = time.time()
                 if now - last_db_write >= _LOG_BATCH_INTERVAL:
-                    joined = "\n".join(stdout_lines)
+                    joined = _scrub_token("\n".join(stdout_lines), raw_token)
                     with get_sync_db() as _db:
                         _n = _db.execute(select(Node).where(Node.id == node_uuid)).scalar_one_or_none()
                         _run = _db.execute(select(BootstrapRun).where(BootstrapRun.id == run_id)).scalar_one_or_none()
@@ -472,7 +479,7 @@ def bootstrap_node(self, node_id: str, target_ip: str, ssh_username: str | None 
             else:
                 node.bootstrap_status = "failed"
                 node.bootstrap_error = bootstrap_error
-            node.bootstrap_logs = full_stdout or f"rc={rc_display} status={result.status}"
+            node.bootstrap_logs = _scrub_token(full_stdout, raw_token) or f"rc={rc_display} status={result.status}"
 
             run_record: BootstrapRun | None = db.execute(
                 select(BootstrapRun).where(BootstrapRun.id == run_id)
