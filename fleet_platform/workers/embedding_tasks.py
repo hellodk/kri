@@ -5,6 +5,7 @@ Schedule:
   reindex_playbooks      — every 15 min (playbook file changes)
   reindex_drift_history  — every 5 min (new drift records)
 """
+
 from pathlib import Path
 
 from fleet_platform.workers.celery_app import celery_app
@@ -36,11 +37,7 @@ def reindex_nodes() -> dict:
 
             nodes = (await db.execute(select(Node))).scalars().all()
             membership = (
-                await db.execute(
-                    select(GroupMember.node_id, Group.name).join(
-                        Group, Group.id == GroupMember.group_id
-                    )
-                )
+                await db.execute(select(GroupMember.node_id, Group.name).join(Group, Group.id == GroupMember.group_id))
             ).all()
             node_group = {str(r.node_id): r.name for r in membership}
 

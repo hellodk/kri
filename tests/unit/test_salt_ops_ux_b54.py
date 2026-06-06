@@ -1,4 +1,5 @@
 """Tests for #54: Salt Ops UX improvements."""
+
 from pathlib import Path
 
 

@@ -85,6 +85,7 @@ def test_default_allowlist_contains_expected_safe_functions():
 
 # ── SALT_API_URL not configured error ─────────────────────────────────────────
 
+
 def test_run_salt_cmd_returns_error_when_api_not_configured():
     """Without SALT_API_URL set, run_salt_cmd returns a clear error."""
     from fleet_platform.workers import salt_tasks
@@ -120,6 +121,7 @@ def test_apply_salt_state_returns_error_when_api_not_configured():
 
 
 # ── HTTP API dispatch ─────────────────────────────────────────────────────────
+
 
 def test_run_salt_cmd_dispatches_via_http_api():
     """An allowlisted function triggers a POST to the salt-api /run endpoint."""
@@ -213,21 +215,15 @@ def test_run_salt_api_handles_connection_error():
 
 # ── No docker exec remnants ───────────────────────────────────────────────────
 
+
 def test_salt_tasks_does_not_import_subprocess():
     """salt_tasks.py must not import subprocess — docker exec is removed (issue #82)."""
     import ast
     from pathlib import Path
 
-    src = (
-        Path(__file__).parent.parent.parent
-        / "fleet_platform" / "workers" / "salt_tasks.py"
-    ).read_text()
+    src = (Path(__file__).parent.parent.parent / "fleet_platform" / "workers" / "salt_tasks.py").read_text()
     tree = ast.parse(src)
-    imports = [
-        node
-        for node in ast.walk(tree)
-        if isinstance(node, (ast.Import, ast.ImportFrom))
-    ]
+    imports = [node for node in ast.walk(tree) if isinstance(node, (ast.Import, ast.ImportFrom))]
     imported_names = []
     for node in imports:
         if isinstance(node, ast.Import):
@@ -235,6 +231,5 @@ def test_salt_tasks_does_not_import_subprocess():
         elif isinstance(node, ast.ImportFrom):
             imported_names.append(node.module or "")
     assert "subprocess" not in imported_names, (
-        "salt_tasks.py must not import subprocess — docker exec was removed in issue #82. "
-        "Use Salt HTTP API instead."
+        "salt_tasks.py must not import subprocess — docker exec was removed in issue #82. Use Salt HTTP API instead."
     )

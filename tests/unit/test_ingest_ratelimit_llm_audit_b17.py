@@ -1,4 +1,5 @@
 """Unit tests for #168 (ingest rate limit) and #170 (LLM audit trail)."""
+
 from pathlib import Path
 
 INGEST = Path("fleet_platform/api/routes/ingest.py").read_text()
@@ -10,9 +11,7 @@ def test_ingest_has_rate_limit():
         "ingest endpoint must implement per-node rate limiting"
     )
     assert "429" in INGEST, "ingest must return HTTP 429 when rate limit exceeded"
-    assert "incr" in INGEST or "INCR" in INGEST, (
-        "rate limit must use Redis INCR for atomic counting"
-    )
+    assert "incr" in INGEST or "INCR" in INGEST, "rate limit must use Redis INCR for atomic counting"
 
 
 def test_ingest_rate_limit_fails_open():
@@ -23,9 +22,5 @@ def test_ingest_rate_limit_fails_open():
 
 
 def test_llm_queries_logged_to_audit():
-    assert "audit" in LLM.lower() or "AuditLog" in LLM, (
-        "LLM route must write to the audit log"
-    )
-    assert "llm_query" in LLM or "llm" in LLM.lower(), (
-        "audit entry must identify the LLM query action"
-    )
+    assert "audit" in LLM.lower() or "AuditLog" in LLM, "LLM route must write to the audit log"
+    assert "llm_query" in LLM or "llm" in LLM.lower(), "audit entry must identify the LLM query action"

@@ -7,8 +7,7 @@ converted to TimescaleDB hypertables with correct policies.
 from pathlib import Path
 
 MIGRATION_PATH = (
-    Path(__file__).parent.parent.parent
-    / "fleet_platform/db/migrations/versions/024_timescale_hypertables.py"
+    Path(__file__).parent.parent.parent / "fleet_platform/db/migrations/versions/024_timescale_hypertables.py"
 )
 
 

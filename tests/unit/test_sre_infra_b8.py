@@ -8,6 +8,7 @@ Covers:
   - celery-redbeat dependency present
   - beat command uses RedBeatScheduler
 """
+
 from pathlib import Path
 
 import yaml
@@ -30,9 +31,7 @@ def test_docker_compose_images_pinned():
     for svc_name, svc_cfg in services.items():
         image = svc_cfg.get("image")
         if image is not None:
-            assert ":latest" not in image, (
-                f"Service '{svc_name}' uses unpinned image: {image}"
-            )
+            assert ":latest" not in image, f"Service '{svc_name}' uses unpinned image: {image}"
 
 
 def test_dockerfiles_no_latest_tags():
@@ -41,9 +40,7 @@ def test_dockerfiles_no_latest_tags():
         text = dockerfile.read_text()
         for line in text.splitlines():
             if line.strip().upper().startswith("FROM"):
-                assert ":latest" not in line, (
-                    f"{dockerfile.name}: unpinned FROM line: {line.strip()}"
-                )
+                assert ":latest" not in line, f"{dockerfile.name}: unpinned FROM line: {line.strip()}"
 
 
 def test_docker_compose_resource_limits():
@@ -54,15 +51,8 @@ def test_docker_compose_resource_limits():
     expected = ("db", "pg_backup", "redis", "api", "worker", "beat", "frontend")
     for svc_name in expected:
         svc = services[svc_name]
-        memory = (
-            svc.get("deploy", {})
-            .get("resources", {})
-            .get("limits", {})
-            .get("memory")
-        )
-        assert memory is not None, (
-            f"Service '{svc_name}' missing deploy.resources.limits.memory"
-        )
+        memory = svc.get("deploy", {}).get("resources", {}).get("limits", {}).get("memory")
+        assert memory is not None, f"Service '{svc_name}' missing deploy.resources.limits.memory"
 
 
 def test_docker_compose_api_healthcheck():
@@ -99,9 +89,7 @@ def test_docker_compose_frontend_healthcheck():
 def test_pyproject_has_celery_redbeat():
     """celery-redbeat must be listed in pyproject.toml dependencies."""
     text = PYPROJECT.read_text()
-    assert "celery-redbeat" in text, (
-        "celery-redbeat not found in pyproject.toml dependencies"
-    )
+    assert "celery-redbeat" in text, "celery-redbeat not found in pyproject.toml dependencies"
 
 
 def test_celery_beat_command_uses_redbeat_scheduler():

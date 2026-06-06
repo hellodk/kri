@@ -15,22 +15,27 @@ async def two_nodes(db_session: AsyncSession):
     token_a = secrets.token_urlsafe(32)
     token_b = secrets.token_urlsafe(32)
     node_a = Node(
-        minion_id="api-node-a.local", hostname="api-node-a",
+        minion_id="api-node-a.local",
+        hostname="api-node-a",
         node_token_hash=hash_password(token_a),
-        first_seen_at=datetime.now(UTC), status="online", drift_score=10,
+        first_seen_at=datetime.now(UTC),
+        status="online",
+        drift_score=10,
     )
     node_b = Node(
-        minion_id="api-node-b.local", hostname="api-node-b",
+        minion_id="api-node-b.local",
+        hostname="api-node-b",
         node_token_hash=hash_password(token_b),
-        first_seen_at=datetime.now(UTC), status="offline", drift_score=55,
+        first_seen_at=datetime.now(UTC),
+        status="offline",
+        drift_score=55,
     )
     db_session.add_all([node_a, node_b])
     await db_session.commit()
     await db_session.refresh(node_a)
     await db_session.refresh(node_b)
 
-    tag = Tag(node_id=node_a.id, key="env", value="prod",
-              created_at=datetime.now(UTC))
+    tag = Tag(node_id=node_a.id, key="env", value="prod", created_at=datetime.now(UTC))
     db_session.add(tag)
     await db_session.commit()
 
@@ -85,6 +90,7 @@ async def test_get_node_detail(admin_client: AsyncClient, two_nodes):
 
 async def test_get_node_not_found(admin_client: AsyncClient):
     import uuid
+
     response = await admin_client.get(f"/api/v1/nodes/{uuid.uuid4()}")
     assert response.status_code == 404
 

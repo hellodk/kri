@@ -1,5 +1,6 @@
 # tests/unit/test_group_secrets_svc.py
 """Unit tests for fleet_platform.services.group_secrets_svc."""
+
 import uuid
 from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
@@ -22,6 +23,7 @@ from fleet_platform.services.platform_settings_svc import encrypt_secret
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
 
 def _exec_result(scalar_one_or_none=None, scalars_all=None):
     result = MagicMock()
@@ -80,6 +82,7 @@ def _member(node_id):
 # Test 1: get_secrets returns list in order
 # ---------------------------------------------------------------------------
 
+
 async def test_get_secrets_ordered():
     s1 = _group_secret("alpha", "enc1")
     s2 = _group_secret("zeta", "enc2")
@@ -96,6 +99,7 @@ async def test_get_secrets_ordered():
 # Test 2: upsert creates new GroupSecret when none found
 # ---------------------------------------------------------------------------
 
+
 async def test_upsert_creates_new_secret():
     db = AsyncMock(spec=AsyncSession)
     db.execute.return_value = _exec_result(scalar_one_or_none=None)
@@ -111,6 +115,7 @@ async def test_upsert_creates_new_secret():
 # ---------------------------------------------------------------------------
 # Test 3: upsert updates encrypted_value and leaves description alone when None
 # ---------------------------------------------------------------------------
+
 
 async def test_upsert_updates_existing():
     existing = MagicMock()
@@ -132,6 +137,7 @@ async def test_upsert_updates_existing():
 # Test 4: upsert updates description when provided
 # ---------------------------------------------------------------------------
 
+
 async def test_upsert_updates_description_when_provided():
     existing = MagicMock()
     existing.encrypted_value = "old"
@@ -150,6 +156,7 @@ async def test_upsert_updates_description_when_provided():
 # Test 5: delete_secret returns False when not found
 # ---------------------------------------------------------------------------
 
+
 async def test_delete_not_found():
     db = _make_db_single(scalar_one_or_none_val=None)
 
@@ -163,6 +170,7 @@ async def test_delete_not_found():
 # ---------------------------------------------------------------------------
 # Test 6: delete_secret returns True and calls db.delete
 # ---------------------------------------------------------------------------
+
 
 async def test_delete_found():
     secret = MagicMock()
@@ -179,6 +187,7 @@ async def test_delete_found():
 # Test 7: get_decrypted_secrets real encrypt/decrypt roundtrip
 # ---------------------------------------------------------------------------
 
+
 async def test_get_decrypted_secrets_success():
     group_id = uuid.uuid4()
     encrypted = encrypt_secret("groupsecret")
@@ -193,6 +202,7 @@ async def test_get_decrypted_secrets_success():
 # ---------------------------------------------------------------------------
 # Test 8: get_decrypted_secrets skips bad encrypted_value silently
 # ---------------------------------------------------------------------------
+
 
 async def test_get_decrypted_secrets_bad_value_skipped():
     group_id = uuid.uuid4()
@@ -211,6 +221,7 @@ async def test_get_decrypted_secrets_bad_value_skipped():
 # ---------------------------------------------------------------------------
 # Test 9: write_group_pillar creates sls file with correct content
 # ---------------------------------------------------------------------------
+
 
 async def test_write_group_pillar_creates_file(tmp_path):
     group_id = uuid.uuid4()
@@ -237,6 +248,7 @@ async def test_write_group_pillar_creates_file(tmp_path):
 # ---------------------------------------------------------------------------
 # Test 10: rebuild_top_sls with no nodes and no groups → minimal top.sls
 # ---------------------------------------------------------------------------
+
 
 async def test_rebuild_top_sls_empty(tmp_path):
     db = AsyncMock(spec=AsyncSession)
@@ -266,6 +278,7 @@ async def test_rebuild_top_sls_empty(tmp_path):
 # ---------------------------------------------------------------------------
 # Test 11: rebuild_top_sls with one node and one non-global group with secrets
 # ---------------------------------------------------------------------------
+
 
 async def test_rebuild_top_sls_with_node_and_group(tmp_path):
     db = AsyncMock(spec=AsyncSession)
@@ -309,6 +322,7 @@ async def test_rebuild_top_sls_with_node_and_group(tmp_path):
 # Test 12: rebuild_top_sls — global group ("all") goes to '*' entry
 # ---------------------------------------------------------------------------
 
+
 async def test_rebuild_top_sls_global_group_goes_to_star(tmp_path):
     db = AsyncMock(spec=AsyncSession)
 
@@ -333,6 +347,7 @@ async def test_rebuild_top_sls_global_group_goes_to_star(tmp_path):
 # ---------------------------------------------------------------------------
 # Test 13: rebuild_top_sls — group with no secrets is skipped
 # ---------------------------------------------------------------------------
+
 
 async def test_rebuild_top_sls_group_without_secrets_skipped(tmp_path):
     db = AsyncMock(spec=AsyncSession)
@@ -362,6 +377,7 @@ async def test_rebuild_top_sls_group_without_secrets_skipped(tmp_path):
 # Test 14: get_secrets returns empty list when db has nothing
 # ---------------------------------------------------------------------------
 
+
 async def test_get_secrets_empty_list():
     db = _make_db_single(scalars_all_val=[])
 
@@ -373,6 +389,7 @@ async def test_get_secrets_empty_list():
 # ---------------------------------------------------------------------------
 # Test 15: get_decrypted_secrets returns empty dict when no secrets
 # ---------------------------------------------------------------------------
+
 
 async def test_get_decrypted_secrets_empty():
     db = _make_db_single(scalars_all_val=[])
@@ -386,8 +403,10 @@ async def test_get_decrypted_secrets_empty():
 # Test 16: _get_pillar_dir returns setting value when found
 # ---------------------------------------------------------------------------
 
+
 async def test_get_pillar_dir_from_setting_group():
     from sqlalchemy.ext.asyncio import AsyncSession
+
     db = AsyncMock(spec=AsyncSession)
     row = MagicMock()
     row.value = "/opt/pillar"
@@ -402,8 +421,10 @@ async def test_get_pillar_dir_from_setting_group():
 # Test 17: _get_pillar_dir returns default when setting not found
 # ---------------------------------------------------------------------------
 
+
 async def test_get_pillar_dir_default_group():
     from sqlalchemy.ext.asyncio import AsyncSession
+
     db = AsyncMock(spec=AsyncSession)
     result = MagicMock()
     result.scalar_one_or_none.return_value = None

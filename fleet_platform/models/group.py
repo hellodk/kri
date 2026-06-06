@@ -11,9 +11,7 @@ from fleet_platform.models.base import Base, TimestampMixin
 class Group(Base, TimestampMixin):
     __tablename__ = "groups"
 
-    id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
-    )
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     name: Mapped[str] = mapped_column(String(100), unique=True, nullable=False)
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
     type: Mapped[str] = mapped_column(String(20), nullable=False)
@@ -48,6 +46,4 @@ class GroupMember(Base):
     )
     added_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
 
-    __table_args__ = (
-        Index("idx_group_members_node_id", "node_id"),
-    )
+    __table_args__ = (Index("idx_group_members_node_id", "node_id"),)

@@ -1,10 +1,12 @@
 """Tests for #166: SSH connection cache."""
+
 import asyncio
 import time
 from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
 
 # ── Behavioural tests (mock asyncssh.connect) ─────────────────────────────────
+
 
 def _make_conn(closed: bool = False) -> MagicMock:
     conn = MagicMock()
@@ -15,6 +17,7 @@ def _make_conn(closed: bool = False) -> MagicMock:
 
 def test_cached_conn_is_alive():
     from fleet_platform.services.ssh_connection_cache import _CachedConn
+
     conn = _make_conn(closed=False)
     c = _CachedConn(conn=conn)
     assert c.is_alive() is True
@@ -22,6 +25,7 @@ def test_cached_conn_is_alive():
 
 def test_cached_conn_not_alive_when_closed():
     from fleet_platform.services.ssh_connection_cache import _CachedConn
+
     conn = _make_conn(closed=True)
     c = _CachedConn(conn=conn)
     assert c.is_alive() is False
@@ -29,6 +33,7 @@ def test_cached_conn_not_alive_when_closed():
 
 def test_cached_conn_idle_expired():
     from fleet_platform.services.ssh_connection_cache import _CachedConn
+
     conn = _make_conn()
     c = _CachedConn(conn=conn, last_used=time.monotonic() - 400)
     assert c.is_idle_expired() is True
@@ -36,6 +41,7 @@ def test_cached_conn_idle_expired():
 
 def test_cached_conn_not_idle_expired():
     from fleet_platform.services.ssh_connection_cache import _CachedConn
+
     conn = _make_conn()
     c = _CachedConn(conn=conn)
     assert c.is_idle_expired() is False
@@ -43,6 +49,7 @@ def test_cached_conn_not_idle_expired():
 
 def test_cache_stats_returns_dict():
     from fleet_platform.services import ssh_connection_cache
+
     ssh_connection_cache._cache.clear()
     stats = ssh_connection_cache.cache_stats()
     assert "total" in stats
@@ -53,6 +60,7 @@ def test_cache_stats_returns_dict():
 
 def test_cache_stats_counts_entries():
     from fleet_platform.services import ssh_connection_cache
+
     ssh_connection_cache._cache.clear()
     ssh_connection_cache._cache[("h1", 22, "u")] = ssh_connection_cache._CachedConn(conn=_make_conn())
     ssh_connection_cache._cache[("h2", 22, "u")] = ssh_connection_cache._CachedConn(conn=_make_conn())
@@ -63,6 +71,7 @@ def test_cache_stats_counts_entries():
 
 def test_evict_node_removes_matching():
     from fleet_platform.services import ssh_connection_cache
+
     ssh_connection_cache._cache.clear()
     conn1 = _make_conn()
     conn2 = _make_conn()
@@ -78,6 +87,7 @@ def test_evict_node_removes_matching():
 
 def test_get_connection_creates_and_caches():
     from fleet_platform.services import ssh_connection_cache
+
     ssh_connection_cache._cache.clear()
     fake_conn = _make_conn()
 
@@ -94,6 +104,7 @@ def test_get_connection_creates_and_caches():
 
 def test_get_connection_reuses_cached():
     from fleet_platform.services import ssh_connection_cache
+
     ssh_connection_cache._cache.clear()
     fake_conn = _make_conn()
     ssh_connection_cache._cache[("h", 22, "u")] = ssh_connection_cache._CachedConn(conn=fake_conn)
@@ -110,6 +121,7 @@ def test_get_connection_reuses_cached():
 
 def test_get_connection_evicts_dead_before_reuse():
     from fleet_platform.services import ssh_connection_cache
+
     ssh_connection_cache._cache.clear()
     dead_conn = _make_conn(closed=True)
     new_conn = _make_conn()
@@ -125,6 +137,7 @@ def test_get_connection_evicts_dead_before_reuse():
 
 
 # ── Structural tests ────────────────────────────────────────────────────────────
+
 
 def test_cache_module_exists():
     module = Path(__file__).parent.parent.parent / "fleet_platform/services/ssh_connection_cache.py"

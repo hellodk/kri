@@ -1,4 +1,5 @@
 """Add source column to tags table."""
+
 import sqlalchemy as sa
 from alembic import op
 

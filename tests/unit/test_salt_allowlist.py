@@ -90,10 +90,7 @@ def test_get_allowed_merges_minimum_functions_even_if_removed():
     result = get_allowed_salt_functions_sync(db)
 
     for fn in _SALT_MINIMUM_FUNCTIONS:
-        assert fn in result, (
-            f"Minimum function {fn!r} should always be present but is missing. "
-            f"Got: {sorted(result)}"
-        )
+        assert fn in result, f"Minimum function {fn!r} should always be present but is missing. Got: {sorted(result)}"
 
 
 def test_get_allowed_falls_back_on_invalid_json():

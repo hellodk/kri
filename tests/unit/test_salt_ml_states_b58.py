@@ -1,4 +1,5 @@
 """Tests for #58: Salt ML state library."""
+
 from pathlib import Path
 
 

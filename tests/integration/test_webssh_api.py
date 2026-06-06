@@ -7,6 +7,7 @@ auth layer using Starlette's synchronous TestClient (which supports WS).
 The REST endpoints (session list, recording, events) are tested normally
 via the AsyncClient fixtures from conftest.
 """
+
 import uuid
 
 import pytest

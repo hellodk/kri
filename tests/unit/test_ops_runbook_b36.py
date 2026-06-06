@@ -1,4 +1,5 @@
 """Tests for #122: OPS_RUNBOOK completeness."""
+
 from pathlib import Path
 
 RUNBOOK = (Path(__file__).parent.parent.parent / "docs/OPS_RUNBOOK.md").read_text()
