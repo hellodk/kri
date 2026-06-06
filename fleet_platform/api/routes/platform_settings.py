@@ -8,6 +8,7 @@ from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from fleet_platform.api.deps import get_db
+from fleet_platform.core.audit import audit
 from fleet_platform.core.auth import require_role
 from fleet_platform.schemas.ansible import PlatformSettingsResponse, PlatformSettingsUpdate
 from fleet_platform.services.platform_settings_svc import (
@@ -193,7 +194,7 @@ async def get_settings(
 async def update_settings(
     payload: PlatformSettingsUpdate,
     db: AsyncSession = Depends(get_db),
-    _: dict = Depends(require_role("admin")),
+    claims: dict = Depends(require_role("admin")),
 ):
     if payload.salt_master_address is not None:
         await set_setting(db, SALT_MASTER, payload.salt_master_address)
@@ -262,6 +263,14 @@ async def update_settings(
         invalidate_salt_deny_cache()
         # Invalidate allowlist cache too — deny list affects effective allowlist
         invalidate_salt_allowlist_cache()
+    await audit(
+        db,
+        actor=claims["email"],
+        action="platform_settings.update",
+        resource_type="platform_settings",
+        new_value={"fields_updated": [k for k, v in payload.model_dump(exclude_none=True).items()]},
+    )
+    await db.commit()
     vnc_enabled_raw = await get_setting(db, VNC_ENABLED)
     vnc_enabled = vnc_enabled_raw == "true"
     oidc_enabled_raw = await get_setting(db, OIDC_ENABLED)

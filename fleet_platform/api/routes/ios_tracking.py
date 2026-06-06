@@ -11,6 +11,7 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from fleet_platform.api.deps import get_db
+from fleet_platform.core.audit import audit
 from fleet_platform.core.auth import get_current_user, require_role
 from fleet_platform.models.ios_tracking import Certificate, JenkinsAgent
 from fleet_platform.models.node import Node
@@ -146,7 +147,7 @@ async def add_certificate(
     node_id: uuid.UUID,
     body: AddCertBody,
     db: AsyncSession = Depends(get_db),
-    _: dict = Depends(require_role("operator", "admin")),
+    claims: dict = Depends(require_role("operator", "admin")),
 ):
     result = await db.execute(select(Node).where(Node.id == node_id))
     if not result.scalar_one_or_none():
@@ -164,6 +165,15 @@ async def add_certificate(
         updated_at=now,
     )
     db.add(cert)
+    await db.flush()
+    await audit(
+        db,
+        actor=claims["email"],
+        action="ios_cert.create",
+        resource_type="ios_cert",
+        resource_id=cert.id,
+        new_value={"name": body.name, "cert_type": body.cert_type, "node_id": str(node_id)},
+    )
     await db.commit()
     return _cert_out(cert)
 
@@ -172,12 +182,20 @@ async def add_certificate(
 async def delete_certificate(
     cert_id: uuid.UUID,
     db: AsyncSession = Depends(get_db),
-    _: dict = Depends(require_role("operator", "admin")),
+    claims: dict = Depends(require_role("operator", "admin")),
 ):
     result = await db.execute(select(Certificate).where(Certificate.id == cert_id))
     cert = result.scalar_one_or_none()
     if not cert:
         raise HTTPException(status_code=404, detail="Certificate not found")
+    await audit(
+        db,
+        actor=claims["email"],
+        action="ios_cert.delete",
+        resource_type="ios_cert",
+        resource_id=cert_id,
+        new_value={"name": cert.name, "cert_type": cert.cert_type},
+    )
     await db.delete(cert)
     await db.commit()
 
@@ -203,7 +221,7 @@ async def upsert_jenkins_agent(
     node_id: uuid.UUID,
     body: UpsertJenkinsBody,
     db: AsyncSession = Depends(get_db),
-    _: dict = Depends(require_role("operator", "admin")),
+    claims: dict = Depends(require_role("operator", "admin")),
 ):
     node_result = await db.execute(select(Node).where(Node.id == node_id))
     if not node_result.scalar_one_or_none():
@@ -225,6 +243,13 @@ async def upsert_jenkins_agent(
         )
         db.add(agent)
 
+    await audit(
+        db,
+        actor=claims["email"],
+        action="ios_jenkins_agent.upsert",
+        resource_type="ios_jenkins_agent",
+        new_value={"node_id": str(node_id), "agent_name": body.agent_name, "jenkins_url": body.jenkins_url},
+    )
     await db.commit()
     return _agent_out(agent)
 

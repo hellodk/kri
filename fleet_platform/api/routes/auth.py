@@ -114,9 +114,12 @@ async def refresh(
 @router.post("/logout", status_code=204)
 async def logout(
     payload: LogoutRequest | None = None,
+    db: AsyncSession = Depends(get_db),
     claims: dict = Depends(get_current_user),
     redis=Depends(get_redis),
 ):
+    from fleet_platform.core.audit import audit as _audit
+
     if payload and payload.refresh_token:
         try:
             rt_claims = decode_token(payload.refresh_token)
@@ -127,6 +130,13 @@ async def logout(
                 await revoke_token(redis, jti, remaining_ttl)
         except (TokenExpiredError, TokenInvalidError):
             pass
+    await _audit(
+        db,
+        actor=claims["email"],
+        action="auth.logout",
+        resource_type="user",
+    )
+    await db.commit()
     return None
 
 

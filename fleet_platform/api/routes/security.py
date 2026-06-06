@@ -6,6 +6,7 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from fleet_platform.api.deps import get_db
+from fleet_platform.core.audit import audit
 from fleet_platform.core.auth import require_role
 from fleet_platform.models.node import Node
 from fleet_platform.models.sbom import SBOMScan
@@ -232,7 +233,7 @@ async def trigger_node_scan(
     node_id: uuid.UUID,
     scanner: str = "trivy",
     db: AsyncSession = Depends(get_db),
-    _: dict = Depends(require_role("operator", "admin")),
+    claims: dict = Depends(require_role("operator", "admin")),
 ):
     """Trigger a vulnerability/license scan for a specific node."""
     if scanner not in _VALID_SCANNERS:
@@ -247,13 +248,23 @@ async def trigger_node_scan(
         raise HTTPException(status_code=404, detail="Node not found")
 
     task = scan_node_security.delay(str(node_id), scanner=scanner)
+    await audit(
+        db,
+        actor=claims["email"],
+        action="security_scan.trigger",
+        resource_type="node",
+        resource_id=node_id,
+        new_value={"scanner": scanner, "task_id": task.id},
+    )
+    await db.commit()
     return {"task_id": task.id, "node_id": str(node_id), "scanner": scanner, "status": "queued"}
 
 
 @router.post("/scan-all", status_code=202)
 async def trigger_fleet_scan(
     scanner: str = "trivy",
-    _: dict = Depends(require_role("operator", "admin")),
+    db: AsyncSession = Depends(get_db),
+    claims: dict = Depends(require_role("operator", "admin")),
 ):
     """Trigger vulnerability/license scans for all nodes."""
     if scanner not in _VALID_SCANNERS:
@@ -263,6 +274,14 @@ async def trigger_fleet_scan(
     from fleet_platform.workers.security_tasks import scan_all_nodes
 
     task = scan_all_nodes.delay(scanner=scanner)
+    await audit(
+        db,
+        actor=claims["email"],
+        action="security_scan.trigger_fleet",
+        resource_type="fleet",
+        new_value={"scanner": scanner, "task_id": task.id},
+    )
+    await db.commit()
     return {"task_id": task.id, "scanner": scanner, "status": "queued"}
 
 
