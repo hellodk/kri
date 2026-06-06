@@ -184,11 +184,30 @@ def reap_orphaned_bootstraps() -> dict:
     now = datetime.now(UTC)
     cutoff = now - timedelta(minutes=_BOOTSTRAP_ORPHAN_MINUTES)
     with get_sync_db() as db:
+        stuck_node_ids = (
+            db.execute(
+                select(BootstrapRun.node_id)
+                .where(BootstrapRun.status == "running")
+                .where(BootstrapRun.started_at < cutoff)
+            )
+            .scalars()
+            .all()
+        )
+
         result = db.execute(
             update(BootstrapRun)
             .where(BootstrapRun.status == "running")
             .where(BootstrapRun.started_at < cutoff)
             .values(status="failed", finished_at=now)
         )
+
+        if stuck_node_ids:
+            db.execute(
+                update(Node)
+                .where(Node.id.in_(stuck_node_ids))
+                .where(Node.bootstrap_status == "bootstrapping")
+                .values(bootstrap_status="failed")
+            )
+
         db.commit()
     return {"reaped": result.rowcount}  # type: ignore[attr-defined]
