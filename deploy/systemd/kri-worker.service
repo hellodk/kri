@@ -1,0 +1,18 @@
+[Unit]
+Description=kri Fleet Platform — Celery Worker
+After=network-online.target postgresql.service redis-server.service
+Wants=network-online.target
+
+[Service]
+User=kri
+Group=kri
+WorkingDirectory=/opt/kri
+EnvironmentFile=/etc/kri/kri.env
+ExecStart=/usr/bin/uv run celery -A fleet_platform.workers.celery_app worker --queues default,maintenance,drift,sbom --concurrency 4 --loglevel info
+Restart=on-failure
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target

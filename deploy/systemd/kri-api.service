@@ -1,0 +1,19 @@
+[Unit]
+Description=kri Fleet Platform — API (uvicorn)
+After=network-online.target postgresql.service redis-server.service
+Wants=network-online.target
+
+[Service]
+User=kri
+Group=kri
+WorkingDirectory=/opt/kri
+EnvironmentFile=/etc/kri/kri.env
+ExecStartPre=/bin/bash /opt/kri/deploy/migrate.sh
+ExecStart=/usr/bin/uv run uvicorn fleet_platform.api.main:app --host 0.0.0.0 --port 8000 --log-level info
+Restart=on-failure
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target
