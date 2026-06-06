@@ -1,0 +1,449 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>ARCH-001 — kri / pulse / hydra split</title>
+<style>
+  :root {
+    --bg:#f6f8fa; --fg:#1f2328; --muted:#57606a;
+    --good:#1f883d; --bad:#cf222e; --warn:#9a6700;
+    --line:#d0d7de; --card:#ffffff;
+    --kri:#0969da; --pulse:#bc4c00; --hydra:#8250df;
+    --diagram-bg:#fbfcfd;
+    --node-fill:#f3f4f6; --node-stroke:#cbd2db;
+  }
+  html { color-scheme: light; }
+  body { margin:0 auto; max-width:1400px; padding:32px 40px; background:var(--bg); color:var(--fg);
+         font:15px/1.55 -apple-system,BlinkMacSystemFont,"Segoe UI",Helvetica,sans-serif; }
+  h1 { font-size:30px; margin:0 0 8px; letter-spacing:-0.01em; }
+  h2 { font-size:22px; margin:36px 0 14px; padding-bottom:8px; border-bottom:1px solid var(--line); }
+  h3 { font-size:17px; margin:22px 0 10px; }
+  p, li { color:var(--fg); }
+  small { color:var(--muted); }
+  .lead { background:#ddf4ff; border-left:4px solid var(--kri);
+          padding:14px 18px; border-radius:6px; margin:18px 0; }
+  .lead strong { color:#0550ae; }
+  .grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(440px,1fr)); gap:18px; margin:18px 0; }
+  .card { background:var(--card); border:1px solid var(--line); border-radius:10px; padding:18px;
+          box-shadow:0 1px 2px rgba(31,35,40,0.04); }
+  .card h3 { margin-top:0; }
+  table { width:100%; border-collapse:collapse; margin:8px 0 18px;
+          background:var(--card); border:1px solid var(--line); border-radius:8px; overflow:hidden; }
+  th, td { text-align:left; padding:10px 12px; border-bottom:1px solid var(--line); vertical-align:top; }
+  tr:last-child td { border-bottom:none; }
+  th { font-size:12px; text-transform:uppercase; letter-spacing:.04em;
+       color:var(--muted); background:#f6f8fa; font-weight:600; }
+  svg.diagram { width:100%; height:340px; display:block; background:var(--diagram-bg);
+                border:1px solid var(--line); border-radius:6px; }
+  .node-bg { fill:var(--node-fill); stroke:var(--node-stroke); stroke-width:1; }
+  .node-kri { fill:#ddf4ff; stroke:var(--kri); stroke-width:1.5; }
+  .node-pulse { fill:#fff1e5; stroke:var(--pulse); stroke-width:1.5; }
+  .node-hydra { fill:#f2e9ff; stroke:var(--hydra); stroke-width:1.5; }
+  .node-label { fill:var(--fg); font:600 12px sans-serif; }
+  .node-sub { fill:var(--muted); font:10.5px sans-serif; }
+  .path-line { fill:none; stroke-width:2; opacity:.7; stroke-dasharray:5 3; }
+  .legend { display:flex; gap:18px; margin:8px 0; font-size:13px; color:var(--muted); flex-wrap:wrap; }
+  .swatch { display:inline-block; width:12px; height:12px; border-radius:50%; margin-right:6px; vertical-align:middle; }
+  code { background:#eaeef2; padding:2px 6px; border-radius:4px; font-size:13px;
+         font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace; color:#24292f; }
+  .badge { display:inline-block; padding:3px 9px; border-radius:11px; font-size:11px; font-weight:600; }
+  .b-bad  { background:#ffebe9; color:#a40e26; border:1px solid rgba(207,34,46,.25); }
+  .b-good { background:#dafbe1; color:#0f5828; border:1px solid rgba(31,136,61,.25); }
+  details { margin:14px 0; background:var(--card); border:1px solid var(--line);
+            border-radius:8px; padding:8px 14px; }
+  summary { cursor:pointer; font-weight:600; padding:6px 0; }
+</style>
+</head>
+<body>
+
+<small>ARCH-001 · DRAFT · 2026-06-05</small>
+<h1>Three repos, one platform — kri / pulse / hydra</h1>
+
+<div class="lead">
+  <strong>The thesis:</strong> kri is the platform. pulse and hydra are tenants. Today each tenant carries its own platform pieces. Move the platform pieces to kri, leave the workload logic where it lives.
+</div>
+
+<div class="legend">
+  <span><span class="swatch" style="background:var(--kri)"></span>kri — platform plane</span>
+  <span><span class="swatch" style="background:var(--pulse)"></span>pulse — CI/CD workload</span>
+  <span><span class="swatch" style="background:var(--hydra)"></span>hydra — LLM workload</span>
+  <span><span class="swatch" style="background:var(--bad)"></span>duplicated</span>
+  <span><span class="swatch" style="background:var(--good)"></span>shared</span>
+</div>
+
+<h2>Today — three islands, each with its own kitchen</h2>
+
+<div class="card">
+<svg class="diagram" viewBox="0 0 1000 340">
+  <defs>
+    <!-- duplication-pulse arrows -->
+    <path id="dup-a" d="M 200 250 Q 320 280, 440 250"/>
+    <path id="dup-b" d="M 440 250 Q 560 280, 680 250"/>
+    <path id="dup-c" d="M 200 250 Q 440 320, 680 250"/>
+    <!-- self-loops showing internal duplication -->
+    <path id="loop-a" d="M 160 80 C 110 60, 110 130, 160 110"/>
+    <path id="loop-b" d="M 400 80 C 350 60, 350 130, 400 110"/>
+    <path id="loop-c" d="M 640 80 C 590 60, 590 130, 640 110"/>
+  </defs>
+
+  <text x="500" y="22" text-anchor="middle" class="node-label" fill="var(--bad)">
+    each repo reinvents bootstrap · monitoring · ansible · secrets · CI
+  </text>
+
+  <!-- kri -->
+  <rect x="60" y="60" width="200" height="220" rx="10" class="node-kri" opacity=".45"/>
+  <text x="160" y="84" text-anchor="middle" class="node-label">kri</text>
+  <text x="160" y="100" text-anchor="middle" class="node-sub">fleet ops + drift</text>
+  <text x="160" y="130" text-anchor="middle" class="node-sub">bootstrap UI</text>
+  <text x="160" y="148" text-anchor="middle" class="node-sub">salt + ansible runner</text>
+  <text x="160" y="166" text-anchor="middle" class="node-sub">prom + grafana + otel</text>
+  <text x="160" y="184" text-anchor="middle" class="node-sub">secrets store</text>
+  <text x="160" y="202" text-anchor="middle" class="node-sub">tailscale / network</text>
+  <text x="160" y="220" text-anchor="middle" class="node-sub">CI workflow</text>
+
+  <!-- pulse -->
+  <rect x="300" y="60" width="200" height="220" rx="10" class="node-pulse" opacity=".45"/>
+  <text x="400" y="84" text-anchor="middle" class="node-label">pulse</text>
+  <text x="400" y="100" text-anchor="middle" class="node-sub">Jenkins-on-k8s</text>
+  <text x="400" y="130" text-anchor="middle" class="node-sub" fill="var(--bad)">own bootstrap (iOS agent)</text>
+  <text x="400" y="148" text-anchor="middle" class="node-sub" fill="var(--bad)">own ansible runner</text>
+  <text x="400" y="166" text-anchor="middle" class="node-sub" fill="var(--bad)">own jenkins metrics</text>
+  <text x="400" y="184" text-anchor="middle" class="node-sub" fill="var(--bad)">own secret store</text>
+  <text x="400" y="202" text-anchor="middle" class="node-sub" fill="var(--bad)">tailscale ACL</text>
+  <text x="400" y="220" text-anchor="middle" class="node-sub" fill="var(--bad)">own CI workflow</text>
+
+  <!-- hydra -->
+  <rect x="540" y="60" width="200" height="220" rx="10" class="node-hydra" opacity=".45"/>
+  <text x="640" y="84" text-anchor="middle" class="node-label">hydra</text>
+  <text x="640" y="100" text-anchor="middle" class="node-sub">LLM inference farm</text>
+  <text x="640" y="130" text-anchor="middle" class="node-sub" fill="var(--bad)">own add-cluster-node.py</text>
+  <text x="640" y="148" text-anchor="middle" class="node-sub" fill="var(--bad)">own ansible roles</text>
+  <text x="640" y="166" text-anchor="middle" class="node-sub" fill="var(--bad)">own prom/grafana/otel</text>
+  <text x="640" y="184" text-anchor="middle" class="node-sub" fill="var(--bad)">own hosts.yml</text>
+  <text x="640" y="202" text-anchor="middle" class="node-sub" fill="var(--bad)">own apple-exporter</text>
+  <text x="640" y="220" text-anchor="middle" class="node-sub" fill="var(--bad)">own CI workflow</text>
+
+  <!-- redundancy lanes (animated particles flowing back-and-forth showing the duplication tax) -->
+  <use href="#dup-a" class="path-line" stroke="var(--bad)"/>
+  <use href="#dup-b" class="path-line" stroke="var(--bad)"/>
+  <use href="#dup-c" class="path-line" stroke="var(--bad)" opacity=".4"/>
+  <circle r="5" fill="var(--bad)">
+    <animateMotion dur="2s" repeatCount="indefinite"><mpath href="#dup-a"/></animateMotion>
+  </circle>
+  <circle r="5" fill="var(--bad)" opacity=".75">
+    <animateMotion dur="2s" begin="0.8s" repeatCount="indefinite"><mpath href="#dup-b"/></animateMotion>
+  </circle>
+  <circle r="5" fill="var(--bad)" opacity=".5">
+    <animateMotion dur="2s" begin="1.6s" repeatCount="indefinite"><mpath href="#dup-c"/></animateMotion>
+  </circle>
+
+  <text x="500" y="312" text-anchor="middle" class="node-sub">
+    Same patterns implemented three times — three places to update, three sources of drift
+  </text>
+</svg>
+</div>
+
+<h2>Target — kri as the platform; pulse and hydra as tenants</h2>
+
+<div class="card">
+<svg class="diagram" viewBox="0 0 1000 340">
+  <defs>
+    <!-- tenant→kri flows (push observability + role content) -->
+    <path id="t1" d="M 200 90 Q 300 90, 400 170"/>
+    <path id="t2" d="M 800 90 Q 700 90, 600 170"/>
+    <!-- kri→tenant flows (provisioned nodes, secrets) -->
+    <path id="b1" d="M 400 200 Q 300 220, 200 130"/>
+    <path id="b2" d="M 600 200 Q 700 220, 800 130"/>
+    <!-- kri→fleet -->
+    <path id="fleet1" d="M 470 240 C 400 290, 250 300, 200 290"/>
+    <path id="fleet2" d="M 530 240 C 600 290, 750 300, 800 290"/>
+    <path id="fleet3" d="M 500 245 Q 500 295, 500 290"/>
+  </defs>
+
+  <text x="500" y="22" text-anchor="middle" class="node-label">
+    one platform, two workloads, many Macs
+  </text>
+
+  <!-- pulse tenant -->
+  <rect x="110" y="50" width="180" height="100" rx="10" class="node-pulse"/>
+  <text x="200" y="74" text-anchor="middle" class="node-label">pulse</text>
+  <text x="200" y="92" text-anchor="middle" class="node-sub">build pipelines</text>
+  <text x="200" y="108" text-anchor="middle" class="node-sub">Jenkinsfile + jobs</text>
+  <text x="200" y="124" text-anchor="middle" class="node-sub">iOS agent role spec</text>
+  <text x="200" y="140" text-anchor="middle" class="node-sub">dashboards (Jenkins)</text>
+
+  <!-- hydra tenant -->
+  <rect x="710" y="50" width="180" height="100" rx="10" class="node-hydra"/>
+  <text x="800" y="74" text-anchor="middle" class="node-label">hydra</text>
+  <text x="800" y="92" text-anchor="middle" class="node-sub">LLM engines + LiteLLM</text>
+  <text x="800" y="108" text-anchor="middle" class="node-sub">Modelfiles + benchmarks</text>
+  <text x="800" y="124" text-anchor="middle" class="node-sub">LLM role specs</text>
+  <text x="800" y="140" text-anchor="middle" class="node-sub">dashboards (LLM)</text>
+
+  <!-- kri platform -->
+  <rect x="350" y="170" width="300" height="80" rx="12" class="node-kri"/>
+  <text x="500" y="194" text-anchor="middle" class="node-label" font-size="14">kri — platform plane</text>
+  <text x="500" y="212" text-anchor="middle" class="node-sub">bootstrap · drift · secrets · RBAC</text>
+  <text x="500" y="228" text-anchor="middle" class="node-sub">runner (salt + ansible) · monitoring stack · OTel gateway</text>
+
+  <!-- Macs (fleet) -->
+  <rect x="140" y="270" width="120" height="40" rx="8" class="node-bg"/>
+  <text x="200" y="290" text-anchor="middle" class="node-sub">Mac (build agent)</text>
+  <text x="200" y="304" text-anchor="middle" class="node-sub">apple-exporter</text>
+
+  <rect x="440" y="270" width="120" height="40" rx="8" class="node-bg"/>
+  <text x="500" y="290" text-anchor="middle" class="node-sub">Mac (mlx engine)</text>
+  <text x="500" y="304" text-anchor="middle" class="node-sub">apple-exporter</text>
+
+  <rect x="740" y="270" width="120" height="40" rx="8" class="node-bg"/>
+  <text x="800" y="290" text-anchor="middle" class="node-sub">Mac (mlx engine)</text>
+  <text x="800" y="304" text-anchor="middle" class="node-sub">apple-exporter</text>
+
+  <!-- arrows + flows -->
+  <use href="#t1" class="path-line" stroke="var(--pulse)"/>
+  <use href="#t2" class="path-line" stroke="var(--hydra)"/>
+  <use href="#b1" class="path-line" stroke="var(--kri)" opacity=".6"/>
+  <use href="#b2" class="path-line" stroke="var(--kri)" opacity=".6"/>
+  <use href="#fleet1" class="path-line" stroke="var(--good)"/>
+  <use href="#fleet2" class="path-line" stroke="var(--good)"/>
+  <use href="#fleet3" class="path-line" stroke="var(--good)"/>
+
+  <!-- particles: tenant → kri (publishing dashboards + roles + scrape configs) -->
+  <circle r="4.5" fill="var(--pulse)">
+    <animateMotion dur="2s" repeatCount="indefinite"><mpath href="#t1"/></animateMotion>
+  </circle>
+  <circle r="4.5" fill="var(--hydra)">
+    <animateMotion dur="2s" repeatCount="indefinite"><mpath href="#t2"/></animateMotion>
+  </circle>
+  <circle r="4.5" fill="var(--pulse)" opacity=".6">
+    <animateMotion dur="2s" begin="1s" repeatCount="indefinite"><mpath href="#t1"/></animateMotion>
+  </circle>
+  <circle r="4.5" fill="var(--hydra)" opacity=".6">
+    <animateMotion dur="2s" begin="1s" repeatCount="indefinite"><mpath href="#t2"/></animateMotion>
+  </circle>
+
+  <!-- particles: kri → tenant (provisioned nodes, secrets) -->
+  <circle r="4.5" fill="var(--kri)">
+    <animateMotion dur="2.6s" repeatCount="indefinite"><mpath href="#b1"/></animateMotion>
+  </circle>
+  <circle r="4.5" fill="var(--kri)">
+    <animateMotion dur="2.6s" repeatCount="indefinite"><mpath href="#b2"/></animateMotion>
+  </circle>
+
+  <!-- particles: kri → fleet (operates Macs) -->
+  <circle r="4.5" fill="var(--good)">
+    <animateMotion dur="1.8s" repeatCount="indefinite"><mpath href="#fleet1"/></animateMotion>
+  </circle>
+  <circle r="4.5" fill="var(--good)">
+    <animateMotion dur="1.8s" begin="0.6s" repeatCount="indefinite"><mpath href="#fleet2"/></animateMotion>
+  </circle>
+  <circle r="4.5" fill="var(--good)">
+    <animateMotion dur="1.8s" begin="1.2s" repeatCount="indefinite"><mpath href="#fleet3"/></animateMotion>
+  </circle>
+</svg>
+</div>
+
+<h2>The architectural rule</h2>
+
+<div class="card" style="text-align:center; padding:24px;">
+  <p style="font-size:18px; margin:0 0 8px;">
+    <strong style="color:var(--kri)">Touches the Mac?</strong> → kri.
+  </p>
+  <p style="font-size:18px; margin:0 0 8px;">
+    <strong style="color:var(--pulse)">Touches the build?</strong> → pulse.
+  </p>
+  <p style="font-size:18px; margin:0;">
+    <strong style="color:var(--hydra)">Touches the LLM?</strong> → hydra.
+  </p>
+</div>
+
+<h2>The four flows that justify the split</h2>
+
+<div class="grid">
+
+<!-- Flow 1: Bootstrap -->
+<div class="card">
+<h3>① Node onboarding — one path, two tenants</h3>
+<svg class="diagram" viewBox="0 0 400 200" style="height:200px;">
+  <defs>
+    <path id="f1-p" d="M 80 100 Q 150 60, 220 100"/>
+    <path id="f1-h" d="M 80 100 Q 150 140, 220 100"/>
+    <path id="f1-k" d="M 220 100 Q 290 100, 350 100"/>
+  </defs>
+  <rect x="20" y="80" width="60" height="40" rx="8" class="node-pulse"/>
+  <text x="50" y="103" text-anchor="middle" class="node-label">pulse</text>
+  <rect x="20" y="80" width="60" height="40" rx="8" fill="none"/>
+  <text x="160" y="68" text-anchor="middle" class="node-sub">"register iOS build agent"</text>
+  <text x="160" y="148" text-anchor="middle" class="node-sub">"register MLX inference node"</text>
+  <rect x="190" y="80" width="60" height="40" rx="8" class="node-kri"/>
+  <text x="220" y="103" text-anchor="middle" class="node-label">kri</text>
+  <rect x="320" y="80" width="60" height="40" rx="8" class="node-bg"/>
+  <text x="350" y="103" text-anchor="middle" class="node-sub">new Mac</text>
+  <use href="#f1-p" class="path-line" stroke="var(--pulse)"/>
+  <use href="#f1-h" class="path-line" stroke="var(--hydra)"/>
+  <use href="#f1-k" class="path-line" stroke="var(--good)"/>
+  <circle r="4" fill="var(--pulse)"><animateMotion dur="1.8s" repeatCount="indefinite"><mpath href="#f1-p"/></animateMotion></circle>
+  <circle r="4" fill="var(--hydra)"><animateMotion dur="1.8s" begin="0.4s" repeatCount="indefinite"><mpath href="#f1-h"/></animateMotion></circle>
+  <circle r="4" fill="var(--good)"><animateMotion dur="1.4s" begin="1.8s" repeatCount="indefinite"><mpath href="#f1-k"/></animateMotion></circle>
+</svg>
+<p>Both tenants register a node profile with kri. kri's UI runs the SSH bootstrap, installs the Salt minion, applies the base role. Today both have separate scripts; replace both with kri's API call.</p>
+</div>
+
+<!-- Flow 2: Monitoring -->
+<div class="card">
+<h3>② Metrics — many publishers, one stack</h3>
+<svg class="diagram" viewBox="0 0 400 200" style="height:200px;">
+  <defs>
+    <path id="f2-a" d="M 60 60 Q 150 60, 220 100"/>
+    <path id="f2-b" d="M 60 100 Q 150 100, 220 100"/>
+    <path id="f2-c" d="M 60 140 Q 150 140, 220 100"/>
+    <path id="f2-x" d="M 220 100 Q 290 100, 360 100"/>
+  </defs>
+  <rect x="10" y="40" width="50" height="40" rx="6" fill="none" stroke="var(--node-stroke)"/>
+  <text x="35" y="55" text-anchor="middle" class="node-sub">apple-</text>
+  <text x="35" y="68" text-anchor="middle" class="node-sub">exporter</text>
+  <rect x="10" y="80" width="50" height="40" rx="6" fill="none" stroke="var(--node-stroke)"/>
+  <text x="35" y="95" text-anchor="middle" class="node-sub">mlx-</text>
+  <text x="35" y="108" text-anchor="middle" class="node-sub">runtime</text>
+  <rect x="10" y="120" width="50" height="40" rx="6" fill="none" stroke="var(--node-stroke)"/>
+  <text x="35" y="135" text-anchor="middle" class="node-sub">jenkins-</text>
+  <text x="35" y="148" text-anchor="middle" class="node-sub">metrics</text>
+  <rect x="190" y="80" width="80" height="40" rx="8" class="node-bg" stroke="var(--good)" stroke-width="1.5"/>
+  <text x="230" y="103" text-anchor="middle" class="node-sub">OTel gateway</text>
+  <rect x="320" y="80" width="60" height="40" rx="8" class="node-kri"/>
+  <text x="350" y="103" text-anchor="middle" class="node-label">kri</text>
+  <text x="350" y="118" text-anchor="middle" class="node-sub">Prom</text>
+  <use href="#f2-a" class="path-line" stroke="var(--kri)"/>
+  <use href="#f2-b" class="path-line" stroke="var(--hydra)"/>
+  <use href="#f2-c" class="path-line" stroke="var(--pulse)"/>
+  <use href="#f2-x" class="path-line" stroke="var(--good)"/>
+  <circle r="4" fill="var(--kri)"><animateMotion dur="1.8s" repeatCount="indefinite"><mpath href="#f2-a"/></animateMotion></circle>
+  <circle r="4" fill="var(--hydra)"><animateMotion dur="1.8s" begin="0.3s" repeatCount="indefinite"><mpath href="#f2-b"/></animateMotion></circle>
+  <circle r="4" fill="var(--pulse)"><animateMotion dur="1.8s" begin="0.6s" repeatCount="indefinite"><mpath href="#f2-c"/></animateMotion></circle>
+  <circle r="4" fill="var(--good)"><animateMotion dur="1.4s" begin="1.8s" repeatCount="indefinite"><mpath href="#f2-x"/></animateMotion></circle>
+</svg>
+<p>One OTel gateway, one Prometheus. Each exporter (kri's apple-exporter, hydra's mlx-runtime, pulse's Jenkins metrics) pushes via OTLP. Same pattern that cylon already proves works.</p>
+</div>
+
+<!-- Flow 3: Secrets -->
+<div class="card">
+<h3>③ Secrets — one store, scoped reads</h3>
+<svg class="diagram" viewBox="0 0 400 200" style="height:200px;">
+  <defs>
+    <path id="f3-p" d="M 80 60 Q 150 60, 220 60"/>
+    <path id="f3-h" d="M 80 140 Q 150 140, 220 140"/>
+    <path id="f3-vp" d="M 220 60 Q 280 80, 340 100"/>
+    <path id="f3-vh" d="M 220 140 Q 280 120, 340 100"/>
+  </defs>
+  <rect x="20" y="40" width="60" height="40" rx="6" class="node-pulse"/>
+  <text x="50" y="63" text-anchor="middle" class="node-label">pulse</text>
+  <rect x="20" y="120" width="60" height="40" rx="6" class="node-hydra"/>
+  <text x="50" y="143" text-anchor="middle" class="node-label">hydra</text>
+  <text x="150" y="50" text-anchor="middle" class="node-sub">scope: ios-signing</text>
+  <text x="150" y="150" text-anchor="middle" class="node-sub">scope: hosts.yml</text>
+  <rect x="220" y="40" width="80" height="40" rx="6" fill="none" stroke="var(--node-stroke)"/>
+  <text x="260" y="63" text-anchor="middle" class="node-sub">RBAC check</text>
+  <rect x="220" y="120" width="80" height="40" rx="6" fill="none" stroke="var(--node-stroke)"/>
+  <text x="260" y="143" text-anchor="middle" class="node-sub">RBAC check</text>
+  <rect x="310" y="80" width="80" height="40" rx="8" class="node-kri"/>
+  <text x="350" y="103" text-anchor="middle" class="node-label">kri</text>
+  <text x="350" y="118" text-anchor="middle" class="node-sub">secret store</text>
+  <use href="#f3-p" class="path-line" stroke="var(--pulse)"/>
+  <use href="#f3-h" class="path-line" stroke="var(--hydra)"/>
+  <use href="#f3-vp" class="path-line" stroke="var(--kri)"/>
+  <use href="#f3-vh" class="path-line" stroke="var(--kri)"/>
+  <circle r="4" fill="var(--pulse)"><animateMotion dur="1.4s" repeatCount="indefinite"><mpath href="#f3-p"/></animateMotion></circle>
+  <circle r="4" fill="var(--hydra)"><animateMotion dur="1.4s" begin="0.4s" repeatCount="indefinite"><mpath href="#f3-h"/></animateMotion></circle>
+  <circle r="4" fill="var(--kri)"><animateMotion dur="1.4s" begin="1.4s" repeatCount="indefinite"><mpath href="#f3-vp"/></animateMotion></circle>
+  <circle r="4" fill="var(--kri)"><animateMotion dur="1.4s" begin="1.8s" repeatCount="indefinite"><mpath href="#f3-vh"/></animateMotion></circle>
+</svg>
+<p>Tenants ask kri for secrets by scoped name. kri checks RBAC and serves the value. Replaces gitignored <code>hosts.yml</code>, Tailscale auth keys, iOS signing certs scattered across repos.</p>
+</div>
+
+<!-- Flow 4: Dashboards -->
+<div class="card">
+<h3>④ Dashboards — owned by workload, served by kri</h3>
+<svg class="diagram" viewBox="0 0 400 200" style="height:200px;">
+  <defs>
+    <path id="f4-p" d="M 80 60 Q 150 60, 220 100"/>
+    <path id="f4-h" d="M 80 140 Q 150 140, 220 100"/>
+    <path id="f4-g" d="M 220 100 Q 290 100, 360 100"/>
+  </defs>
+  <rect x="20" y="40" width="60" height="40" rx="6" class="node-pulse"/>
+  <text x="50" y="58" text-anchor="middle" class="node-label">pulse</text>
+  <text x="50" y="72" text-anchor="middle" class="node-sub">.json</text>
+  <rect x="20" y="120" width="60" height="40" rx="6" class="node-hydra"/>
+  <text x="50" y="138" text-anchor="middle" class="node-label">hydra</text>
+  <text x="50" y="152" text-anchor="middle" class="node-sub">.json</text>
+  <rect x="190" y="80" width="60" height="40" rx="6" fill="none" stroke="var(--good)" stroke-width="1.5"/>
+  <text x="220" y="98" text-anchor="middle" class="node-sub">ConfigMap</text>
+  <text x="220" y="112" text-anchor="middle" class="node-sub">grafana_dashboard:"1"</text>
+  <rect x="320" y="80" width="60" height="40" rx="8" class="node-kri"/>
+  <text x="350" y="103" text-anchor="middle" class="node-label">kri</text>
+  <text x="350" y="118" text-anchor="middle" class="node-sub">Grafana</text>
+  <use href="#f4-p" class="path-line" stroke="var(--pulse)"/>
+  <use href="#f4-h" class="path-line" stroke="var(--hydra)"/>
+  <use href="#f4-g" class="path-line" stroke="var(--good)"/>
+  <circle r="4" fill="var(--pulse)"><animateMotion dur="1.8s" repeatCount="indefinite"><mpath href="#f4-p"/></animateMotion></circle>
+  <circle r="4" fill="var(--hydra)"><animateMotion dur="1.8s" begin="0.3s" repeatCount="indefinite"><mpath href="#f4-h"/></animateMotion></circle>
+  <circle r="4" fill="var(--good)"><animateMotion dur="1.4s" begin="1.8s" repeatCount="indefinite"><mpath href="#f4-g"/></animateMotion></circle>
+</svg>
+<p>Each workload owns the JSON; kri's Grafana sidecar picks up any ConfigMap labelled <code>grafana_dashboard: "1"</code>. Hydra already adopted this in PR #19; same pattern for pulse.</p>
+</div>
+
+</div><!-- /grid -->
+
+<h2>Placement decisions (the 10 redundancies)</h2>
+
+<table>
+<tr><th>#</th><th>Today's duplication</th><th>Lands in</th><th>Why</th></tr>
+<tr><td>1</td><td>Apple Silicon hardware exporter</td><td><span class="badge" style="background:#ddf4ff;color:#0550ae">kri</span></td><td>Measures the node, not the workload</td></tr>
+<tr><td>2</td><td>Prometheus / Grafana / Alertmanager / OTel gateway</td><td><span class="badge" style="background:#ddf4ff;color:#0550ae">kri</span></td><td>One stack per cluster; cylon already proves it</td></tr>
+<tr><td>3</td><td>Node onboarding / bootstrap</td><td><span class="badge" style="background:#ddf4ff;color:#0550ae">kri</span></td><td>kri's UI already solves this</td></tr>
+<tr><td>4</td><td>Ansible / Salt runner execution</td><td><span class="badge" style="background:#ddf4ff;color:#0550ae">kri runs · tenants author</span></td><td>Drift detection needs a single runner</td></tr>
+<tr><td>5</td><td>Tailscale / network ACL</td><td><span class="badge" style="background:#ddf4ff;color:#0550ae">kri</span></td><td>Network is a platform concern</td></tr>
+<tr><td>6</td><td>Secrets store</td><td><span class="badge" style="background:#ddf4ff;color:#0550ae">kri</span></td><td>Single API; RBAC-scoped reads</td></tr>
+<tr><td>7</td><td>Grafana dashboards (definitions)</td><td><span class="badge" style="background:#f2e9ff;color:#5a2bcc">workload repo</span> · runtime in <span class="badge" style="background:#ddf4ff;color:#0550ae">kri</span></td><td>JSON close to the code; runtime central</td></tr>
+<tr><td>8</td><td>LaunchDaemon / systemd unit creation</td><td>spec in <span class="badge" style="background:#f2e9ff;color:#5a2bcc">workload</span> · operate in <span class="badge" style="background:#ddf4ff;color:#0550ae">kri</span></td><td>Workload knows what; kri knows how to talk to launchctl</td></tr>
+<tr><td>9</td><td>CI/CD pipelines</td><td><span class="badge" style="background:#fff1e5;color:#bc4c00">pulse</span></td><td>One CI brain across all three repos</td></tr>
+<tr><td>10</td><td>OTel agent role on each Mac</td><td><span class="badge" style="background:#ddf4ff;color:#0550ae">kri runs · tenants extend</span></td><td>One agent per host; many publishers</td></tr>
+</table>
+
+<h2>Migration path (smallest blast radius first)</h2>
+
+<table>
+<tr><th>Step</th><th>Effort</th><th>Risk</th><th>Blocks</th></tr>
+<tr><td>1. Apple Silicon exporter → kri</td><td>1 day</td><td>Low</td><td>hydra updates scrape config</td></tr>
+<tr><td>2. Cylon becomes kri's reference cluster</td><td>2 days</td><td>Medium</td><td>tenants publish via ConfigMaps</td></tr>
+<tr><td>3. pulse Jenkins migrates to kri-provisioned agents</td><td>1 week</td><td>Medium</td><td>kri onboarding → pulse agent role</td></tr>
+<tr><td>4. hydra ansible roles → kri's role registry</td><td>2 weeks</td><td>Medium</td><td>kri UI gains LLM role catalogue</td></tr>
+<tr><td>5. CI consolidation (10-line triggers per repo)</td><td>ongoing</td><td>Low</td><td>—</td></tr>
+</table>
+
+<details>
+<summary>Open questions for the platform team</summary>
+<ol>
+<li><strong>Should kri ship its own Grafana / Prometheus, or wrap an existing kube-prometheus-stack release?</strong> Suggest: wrap for now (cylon already proves the pattern), revisit at v1.</li>
+<li><strong>What's the contract for "role content packages" handed off to kri?</strong> Suggest: OCI artifact via ghcr.io — versioned, signed, immutable.</li>
+<li><strong>Do pulse's Jenkins jobs need access to kri's secrets API at build time?</strong> Yes for iOS provisioning. Define the auth boundary: Jenkins agent token → kri secret-API scope.</li>
+<li><strong>Drift detection coverage</strong> — should kri detect drift in <code>apple-silicon-exporter.plist</code> (hydra-owned content)? Suggest: yes; baselines come from hydra, kri scores them.</li>
+<li><strong>Namespacing</strong> — should hydra's roles be <code>kri-roles/llm-mlx</code> or <code>hydra-llm-mlx</code> once in kri's registry? Suggest: keep workload prefix for origin visibility.</li>
+</ol>
+</details>
+
+<details>
+<summary>Trade-offs worth naming</summary>
+<ul>
+<li><strong>kri becomes a single point of failure.</strong> Mitigated by treating kri itself as workload-on-cluster (HA via standard k8s patterns) and by keeping per-Mac agents capable of running headless when kri is down.</li>
+<li><strong>kri becomes a release-cadence bottleneck.</strong> Counter-pattern: kri exposes stable APIs; tenants pin versions.</li>
+<li><strong>Workload repos become "less self-contained".</strong> Document a standalone dev-mode path (a <code>docker-compose.dev.yml</code> in hydra brings up a minimal local Prom + Grafana).</li>
+<li><strong>One-cluster assumption.</strong> Multi-cluster is a follow-up; kri's API needs cluster scopes.</li>
+</ul>
+</details>
+
+<p style="margin-top:32px; color:var(--muted);">
+Companion markdown: <code>docs/ARCHITECTURE-3-repo-split.md</code> · Cross-repo graph: <code>hydra/docs/cross-repo-knowledge.html</code> · Live observability state: <code>hydra/docs/SAVEPOINT-2026-06-05.md</code>
+</p>
+
+</body>
+</html>
