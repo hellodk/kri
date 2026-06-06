@@ -15,6 +15,9 @@ class PlaybookEntryResponse(BaseModel):
     var_descriptions: dict = {}  # {var_name: help_text} — shown in kri run modal
     lint_errors: list[str] = []
     source_dir: str | None = None  # absolute path of the directory this was discovered in
+    # Catalog fields — populated when library feature is active
+    catalog_id: uuid.UUID | None = None
+    is_favorite: bool = False
 
 
 class PlaybookRunRequest(BaseModel):
@@ -108,3 +111,36 @@ class PlaybookSourceValidateResponse(BaseModel):
     logs: list[str] = []
     auth_required: bool = False
     error_kind: str | None = None
+
+
+class PlaybookCatalogEnableRequest(BaseModel):
+    source_key: str
+    source_label: str
+    filename: str
+    entry_type: str
+
+
+class PlaybookCatalogDisableRequest(BaseModel):
+    catalog_id: uuid.UUID
+
+
+class PlaybookCatalogEnableSourceRequest(BaseModel):
+    source_key: str
+
+
+class PlaybookLibraryEntryResponse(BaseModel):
+    """A discovered playbook annotated with its catalog state."""
+
+    filename: str
+    name: str
+    description: str | None
+    entry_type: str
+    default_vars: dict
+    var_descriptions: dict = {}
+    lint_errors: list[str] = []
+    source_dir: str | None = None
+    source_key: str
+    source_label: str
+    enabled: bool
+    catalog_id: uuid.UUID | None = None
+    auto_disabled_at: datetime | None = None
