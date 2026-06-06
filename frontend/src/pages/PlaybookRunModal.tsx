@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { playbooksApi } from '../api/playbooks'
@@ -9,14 +9,18 @@ import { useToastStore } from '../stores/toastStore'
 import { LogPane } from '../lib/LogPane'
 
 // Running job output panel — fills available height, auto-scrolls while live
-function JobOutput({ jobData, jobId, status, label, colour }: {
-  jobData: { target_label?: string; stdout?: string | null; rc?: number | null } | undefined
+function JobOutput({ jobData, jobId, status, label, colour, logText }: {
+  jobData: { target_label?: string; stdout?: string | null; rc?: number | null; running_task?: string | null } | undefined
   jobId: string | null
   status: string | undefined
   label: string
   colour: string
+  logText: string
 }) {
   const isLive = status === 'pending' || status === 'running'
+
+  // Prefer server-extracted running_task; fall back to regex on logText for old servers (#371)
+  const taskName = jobData?.running_task ?? logText.match(/\[running: ([^\]]+)\]\s*$/)?.[1]
 
   return (
     <div className="flex flex-col h-full space-y-3">
@@ -25,6 +29,9 @@ function JobOutput({ jobData, jobId, status, label, colour }: {
         <span className={`text-sm font-semibold ${colour}`}>{label}</span>
         {jobData?.target_label && (
           <span className="text-sm text-gray-600 flex-1">on <span className="font-medium font-mono">{jobData.target_label}</span></span>
+        )}
+        {taskName && (
+          <span className="text-xs text-amber-600 font-mono shrink-0">▶ {taskName}</span>
         )}
         {isLive && (
           <div className="w-4 h-4 border-2 border-brand-600 border-t-transparent rounded-full animate-spin shrink-0" />
@@ -51,7 +58,7 @@ function JobOutput({ jobData, jobId, status, label, colour }: {
       {/* Log output — fills available space (shared LogPane handles tail-follow) */}
       <div className="flex-1 flex flex-col min-h-0">
         <p className="text-xs font-medium text-gray-400 uppercase tracking-wide mb-1 shrink-0">Output</p>
-        <LogPane raw={jobData?.stdout || ''} isLive={isLive} emptyText="No output recorded." className="rounded-lg" />
+        <LogPane raw={logText} isLive={isLive} emptyText="No output recorded." className="rounded-lg" />
       </div>
 
       {/* Exit code */}
@@ -138,6 +145,18 @@ export function PlaybookRunModal({ playbook, onClose, initialTargetType, initial
   const [targetId, setTargetId] = useState(initialTargetId ?? '')
   const [verbosity, setVerbosity] = useState(0)
   const [jobId] = useState<string | null>(null)
+
+  // Delta-accumulator for modal log output (#371)
+  const acc = useRef<{ text: string; total: number }>({ text: '', total: 0 })
+  const [logText, setLogText] = useState('')
+
+  // Reset accumulator when jobId changes
+  useEffect(() => {
+    acc.current = { text: '', total: 0 }
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- intentional reset when switching to a different job run
+    setLogText('')
+  }, [jobId])
+
   const [vars, setVars] = useState<Record<string, string>>(
     initialVars ?? Object.fromEntries(
       Object.entries(playbook.default_vars).map(([k, v]) => [k, String(v ?? '')])
@@ -188,13 +207,33 @@ export function PlaybookRunModal({ playbook, onClose, initialTargetType, initial
 
   const { data: jobData } = useQuery({
     queryKey: ['ansible-job', jobId],
-    queryFn: () => playbooksApi.getJob(jobId!),
+    queryFn: () => playbooksApi.getJob(jobId!, acc.current.total),
     enabled: !!jobId,
     refetchInterval: (query) => {
       const s = query.state.data?.status
       return (s === 'pending' || s === 'running') ? 3000 : false
     },
   })
+
+  // Delta accumulation for modal log output (#371)
+  useEffect(() => {
+    if (!jobData) return
+    if (jobData.stdout_total_len == null) {
+      // Old server (no delta support): fall back to full replacement
+      acc.current = { text: jobData.stdout ?? '', total: 0 }
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- syncing accumulated log from polled server response (#371 delta accumulator)
+      setLogText(jobData.stdout ?? '')
+    } else if (jobData.stdout_total_len < acc.current.total) {
+      // stdout was rewritten (error path resync): reset and re-poll from byte 0
+      acc.current = { text: '', total: 0 }
+      setLogText('')
+    } else {
+      // Normal delta: append new bytes
+      const appended = acc.current.text + (jobData.stdout ?? '')
+      acc.current = { text: appended, total: jobData.stdout_total_len }
+      setLogText(appended)
+    }
+  }, [jobData])
 
   useEffect(() => {
     if (jobData?.status === 'completed' || jobData?.status === 'failed') {
@@ -363,7 +402,7 @@ export function PlaybookRunModal({ playbook, onClose, initialTargetType, initial
             </div>
           </div>
         ) : (
-          <JobOutput jobData={jobData} jobId={jobId} status={status} label={label} colour={colour} />
+          <JobOutput jobData={jobData} jobId={jobId} status={status} label={label} colour={colour} logText={logText} />
         )}
         </div>
 
