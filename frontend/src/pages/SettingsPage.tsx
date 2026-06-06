@@ -10,6 +10,7 @@ import { SecretInput } from '../components/SecretInput'
 import { useToastStore } from '../stores/toastStore'
 import { api } from '../api/client'
 import { buildsApi } from '../api/builds'
+import { PlaybookLibraryTab } from './PlaybookLibraryTab'
 
 function UrlStatusPill({ status, checking }: { status?: { ok: boolean; latency_ms: number | null; error?: string } | null; checking: boolean }) {
   if (checking) return <span className="text-xs text-gray-400 flex items-center gap-1"><span className="inline-block animate-spin">⟳</span> Checking</span>
@@ -248,7 +249,7 @@ export function SettingsPage() {
       ? `http://${master}/api/v1/ingest/grains`
       : null
 
-  const TABS = ['General', 'Automation', 'Remote Access', 'Integrations', 'LLM', 'Notifications'] as const
+  const TABS = ['General', 'Automation', 'Remote Access', 'Integrations', 'Playbook Library', 'LLM', 'Notifications'] as const
   type Tab = typeof TABS[number]
 
   // Legacy tab-name mapping: stored/URL values 'Bootstrap' and 'Advanced' both
@@ -715,6 +716,19 @@ export function SettingsPage() {
                 placeholder="Leave blank to keep existing" className={inputClass} />
             </div>
           </div>
+        </div>
+      )}
+
+      {/* Playbook Library tab */}
+      {activeTab === 'Playbook Library' && (
+        <div className="space-y-4">
+          <div>
+            <h2 className="text-base font-semibold text-gray-900">Playbook Library</h2>
+            <p className="text-sm text-gray-500 mt-0.5">
+              Enable playbooks from configured sources to make them available on the Playbooks page.
+            </p>
+          </div>
+          <PlaybookLibraryTab />
         </div>
       )}
 

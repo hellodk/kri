@@ -9,6 +9,9 @@ export interface PlaybookEntry {
   var_descriptions?: Record<string, string>
   lint_errors: string[]
   source_dir: string | null
+  // Catalog fields — present when library feature is active
+  catalog_id?: string
+  is_favorite?: boolean
 }
 
 export interface PlaybookRunResponse {

@@ -26,13 +26,15 @@ def test_tabs_literal_matches_ac():
         r"['\"]Automation['\"],\s*"
         r"['\"]Remote Access['\"],\s*"
         r"['\"]Integrations['\"],\s*"
+        r"['\"]Playbook Library['\"],\s*"
         r"['\"]LLM['\"],\s*"
         r"['\"]Notifications['\"]"
         r"\]\s*as\s+const"
     )
     assert pattern.search(_SOURCE), (
-        "TABS literal does not match AC1. "
-        "Expected: ['General', 'Automation', 'Remote Access', 'Integrations', 'LLM', 'Notifications']"
+        "TABS literal does not match expected order. "
+        "Expected: ['General', 'Automation', 'Remote Access', 'Integrations', "
+        "'Playbook Library', 'LLM', 'Notifications']"
     )
 
 
