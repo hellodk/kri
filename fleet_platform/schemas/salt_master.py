@@ -8,7 +8,7 @@ import uuid
 from datetime import datetime
 from typing import Any
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 
 class SaltMasterCreate(BaseModel):
@@ -58,8 +58,21 @@ class SaltMasterResponse(BaseModel):
     status: str
     last_checked_at: datetime | None
     last_error: str | None
-    checks: dict[str, Any] | None
+    # checks is a JSON list of per-check result objects (or None if never probed)
+    checks: list[Any] | None
     created_at: datetime
     updated_at: datetime
 
     model_config = {"from_attributes": True}
+
+    @field_validator("checks", mode="before")
+    @classmethod
+    def coerce_checks(cls, v: Any) -> Any:
+        """Accept either None, a list, or a dict (legacy) for the checks field."""
+        if v is None:
+            return v
+        if isinstance(v, list):
+            return v
+        if isinstance(v, dict):
+            return list(v.values())
+        return v

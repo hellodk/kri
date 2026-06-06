@@ -5,6 +5,8 @@ import { ansibleApi } from '../api/ansible'
 import { searchApi } from '../api/search'
 import { fleetApi } from '../api/fleet'
 import { groupsApi } from '../api/groups'
+import { saltMastersApi } from '../api/saltMasters'
+import { isBootstrapBlocked } from '../lib/saltMasterHelpers'
 import { useToastStore } from '../stores/toastStore'
 import type { Node } from '../types'
 
@@ -244,6 +246,16 @@ function SingleMode({ onClose }: { onClose: () => void }) {
     }
   }, [localLogs])
 
+  // Salt-master health gate — fetch the default master's status to block bootstrap
+  // when the master is unreachable (#521).  staleTime keeps it cached across re-renders.
+  const { data: saltMasters } = useQuery({
+    queryKey: ['salt-masters'],
+    queryFn: saltMastersApi.list,
+    staleTime: 30_000,
+  })
+  const defaultMasterStatus = saltMasters?.find((m) => m.is_default)?.status ?? saltMasters?.[0]?.status ?? null
+  const saltMasterBlocked = isBootstrapBlocked(defaultMasterStatus)
+
   // Detect stuck bootstrap — only if bootstrap_status is returned by backend
   const isStuckBootstrap = !nodeId &&
     !!existingNode &&
@@ -304,7 +316,8 @@ function SingleMode({ onClose }: { onClose: () => void }) {
 
     const canSubmit = !!minionId && !!targetIp && !!sshUsername &&
       (!(!sshPassword && !hasSavedPassword)) &&
-      !bootstrapMutation.isPending
+      !bootstrapMutation.isPending &&
+      !saltMasterBlocked
 
     return (
       <form onSubmit={(e) => { e.preventDefault(); bootstrapMutation.mutate() }} className="space-y-4">
@@ -526,13 +539,22 @@ function SingleMode({ onClose }: { onClose: () => void }) {
         <p className="text-xs text-gray-500 bg-amber-50 border border-amber-200 rounded-lg p-3">
           Make sure Remote Login (SSH) is enabled before bootstrapping.
         </p>
+        {saltMasterBlocked && (
+          <p className="text-xs text-red-700 bg-red-50 border border-red-200 rounded-lg p-3">
+            Salt-master unreachable — check Settings → Salt Masters before bootstrapping.
+          </p>
+        )}
         <div className="flex gap-3 pt-2">
           <button type="button" onClick={onClose}
             className="flex-1 py-2.5 border border-gray-300 text-gray-700 rounded-lg text-sm font-medium hover:bg-gray-50">
             Cancel
           </button>
-          <button type="submit" disabled={!canSubmit}
-            className="flex-1 py-2.5 bg-brand-600 text-white rounded-lg text-sm font-medium hover:bg-brand-700 disabled:opacity-50">
+          <button
+            type="submit"
+            disabled={!canSubmit}
+            title={saltMasterBlocked ? 'Salt-master unreachable — check Settings → Salt Masters' : undefined}
+            className="flex-1 py-2.5 bg-brand-600 text-white rounded-lg text-sm font-medium hover:bg-brand-700 disabled:opacity-50"
+          >
             {bootstrapMutation.isPending ? 'Starting…' : 'Bootstrap'}
           </button>
         </div>

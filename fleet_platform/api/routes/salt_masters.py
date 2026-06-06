@@ -1,6 +1,7 @@
-"""Routes for SaltMaster management — issue #517, #519, epic #523.
+"""Routes for SaltMaster management — issue #517, #519, #521, epic #523.
 
 Endpoints:
+    GET  /api/v1/salt/masters                     — list all masters (viewer+).
     POST /api/v1/salt/masters/{master_id}/test    — live probe (admin only).
     GET  /api/v1/salt/masters/{master_id}/health  — cached health (viewer+).
 """
@@ -8,6 +9,7 @@ Endpoints:
 import asyncio
 import uuid
 from datetime import UTC, datetime
+from typing import List
 
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import select
@@ -16,11 +18,26 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from fleet_platform.api.deps import get_db
 from fleet_platform.core.auth import get_current_user, require_role
 from fleet_platform.models.salt_master import SaltMaster
+from fleet_platform.schemas.salt_master import SaltMasterResponse
 from fleet_platform.services.salt_master_probe import run_probe
 
 router = APIRouter(prefix="/api/v1/salt")
 
 _PROBE_TIMEOUT_SECONDS = 30
+
+
+@router.get("/masters", response_model=List[SaltMasterResponse])
+async def list_salt_masters(
+    db: AsyncSession = Depends(get_db),
+    _: dict = Depends(get_current_user),
+) -> List[SaltMasterResponse]:
+    """Return all configured SaltMasters, default first then alphabetically by name.
+
+    Accessible by any authenticated user (viewer role or above).
+    Never exposes api_password or api_password_enc.
+    """
+    result = await db.execute(select(SaltMaster).order_by(SaltMaster.is_default.desc(), SaltMaster.name))
+    return [SaltMasterResponse.model_validate(m) for m in result.scalars().all()]
 
 
 @router.post("/masters/{master_id}/test")
