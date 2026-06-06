@@ -160,11 +160,52 @@ def _credential_source_banner(hosts: list[dict]) -> str:
     return "\n".join(lines)
 
 
+def _write_known_hosts(tmpdir: str, hosts: list[dict]) -> tuple[str, bool]:
+    """Write a per-run known_hosts file for TOFU host-key verification (#354).
+
+    Writes one ``{ip} {key}`` line per host that has a stored ssh_host_key.
+    Hosts with empty/whitespace keys are skipped (their fingerprint is unknown).
+
+    Returns:
+        (path, all_have_keys) where:
+        - path: absolute path to the written known_hosts file (always created,
+          mode 0600, even when empty).
+        - all_have_keys: True only when every host has a non-empty stored key.
+          When True, StrictHostKeyChecking=yes is appropriate (full verification).
+          When False, StrictHostKeyChecking=accept-new is used — this records
+          unknown hosts for the run duration and REJECTS changed keys, so a MITM
+          on a previously-seen host is still caught clearly.
+
+    The file lives inside tmpdir and is discarded when the run completes.
+    Persisting newly-seen keys back to node records is a follow-up (#354).
+    """
+    kh_path = Path(tmpdir) / "known_hosts"
+    lines: list[str] = []
+    all_have_keys = True
+
+    for h in hosts:
+        key = (h.get("ssh_host_key") or "").strip()
+        if key:
+            lines.append(f"{h['ip']} {key}")
+        else:
+            all_have_keys = False
+
+    if not hosts:
+        all_have_keys = False
+
+    kh_path.write_text("\n".join(lines) + ("\n" if lines else ""))
+    kh_path.chmod(0o600)
+    return str(kh_path), all_have_keys
+
+
 def _host_entry(node: Node, db, override: dict | None) -> dict:
     """Build a host inventory entry, resolving credentials per node (#279).
 
     *override* (an explicit ssh_user/ssh_password supplied via the API) wins
     over the resolver and is reported as source ``manual``.
+
+    Always includes ``ssh_host_key`` (node.ssh_host_key or "") so that
+    _write_known_hosts can populate the per-run known_hosts file (#354).
     """
     if override and override.get("ssh_user"):
         creds = {
@@ -179,6 +220,7 @@ def _host_entry(node: Node, db, override: dict | None) -> dict:
     return {
         "hostname": node.hostname or node.minion_id,
         "ip": node.ip_address,
+        "ssh_host_key": node.ssh_host_key or "",
         **creds,
     }
 
@@ -340,6 +382,23 @@ def run_playbook(
         with tempfile.TemporaryDirectory(prefix="kri-playbook-") as tmpdir:
             inv_path = _write_static_inventory(tmpdir, hosts)
 
+            # TOFU host-key verification (#354): build a per-run known_hosts
+            # file from each node's stored ssh_host_key.  This env override
+            # takes precedence over the ansible.cfg ssh_args setting (which
+            # ships StrictHostKeyChecking=no as a safe manual-operator default).
+            #
+            # When all hosts have stored keys: StrictHostKeyChecking=yes —
+            # any deviation (MITM, re-imaged host) causes an immediate hard
+            # failure rather than silent trust.
+            #
+            # When any host is missing a stored key: StrictHostKeyChecking=
+            # accept-new — unknown hosts are recorded for the run and
+            # CHANGED keys are still rejected, so a MITM on a previously-
+            # seen host is caught clearly.  The newly-seen key is NOT
+            # persisted back to the node record (follow-up in #354).
+            kh_path, all_have_keys = _write_known_hosts(tmpdir, hosts)
+            _strict_mode = "yes" if all_have_keys else "accept-new"
+
             # If the selected item is a role directory (not a .yml file), synthesize
             # a minimal wrapper playbook so it can be executed by ansible-runner.
             if playbook_path.is_dir():
@@ -412,6 +471,14 @@ def run_playbook(
                     "ANSIBLE_COLLECTIONS_PATH": str(playbooks_dir / "collections" / "installed"),
                     # Point ansible at the source roles dir so role-only runs can find the role.
                     "ANSIBLE_ROLES_PATH": str(playbooks_dir / "roles"),
+                    # TOFU host-key override (#354): env beats ansible.cfg, so this
+                    # replaces the ansible.cfg default (StrictHostKeyChecking=no) with
+                    # per-run host-key verification.  ControlMaster=no is carried over
+                    # from the ansible.cfg setting so multiplexing does not interfere
+                    # with the per-run known_hosts file.
+                    "ANSIBLE_SSH_ARGS": (
+                        f"-o UserKnownHostsFile={kh_path} -o StrictHostKeyChecking={_strict_mode} -o ControlMaster=no"
+                    ),
                 },
                 event_handler=_event_handler,
                 quiet=True,  # DB is the sole sink — don't echo to worker stdout
