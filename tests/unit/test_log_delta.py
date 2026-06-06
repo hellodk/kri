@@ -1,7 +1,6 @@
 # tests/unit/test_log_delta.py
 """Unit tests for fleet_platform.services.log_delta (#371)."""
 
-
 from fleet_platform.services.log_delta import slice_from, split_running_marker
 
 # ---------------------------------------------------------------------------

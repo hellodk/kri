@@ -51,6 +51,7 @@ export function PlaybookJobDetail() {
   // Reset accumulator when jobId changes (navigation between jobs).
   useEffect(() => {
     acc.current = { text: '', total: 0 }
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- intentional reset when navigating to a different job
     setLogText('')
   }, [jobId])
 
@@ -71,6 +72,7 @@ export function PlaybookJobDetail() {
     if (job.stdout_total_len == null) {
       // Old server (no delta support): fall back to full replacement
       acc.current = { text: job.stdout ?? '', total: 0 }
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- syncing accumulated log from polled server response (#371 delta accumulator)
       setLogText(job.stdout ?? '')
     } else if (job.stdout_total_len < acc.current.total) {
       // stdout was rewritten (error path resync): reset and re-poll from byte 0
@@ -108,6 +110,7 @@ export function PlaybookJobDetail() {
   const isLive = job?.status === 'running' || job?.status === 'pending'
   const [elapsed, setElapsed] = useState(0)
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- resetting elapsed timer when job leaves live state; interval drives updates
     if (!isLive || !job?.started_at) { setElapsed(0); return }
     const base = new Date(job.started_at).getTime()
     const tick = () => setElapsed(Math.floor((Date.now() - base) / 1000))

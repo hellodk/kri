@@ -153,6 +153,7 @@ export function PlaybookRunModal({ playbook, onClose, initialTargetType, initial
   // Reset accumulator when jobId changes
   useEffect(() => {
     acc.current = { text: '', total: 0 }
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- intentional reset when switching to a different job run
     setLogText('')
   }, [jobId])
 
@@ -220,6 +221,7 @@ export function PlaybookRunModal({ playbook, onClose, initialTargetType, initial
     if (jobData.stdout_total_len == null) {
       // Old server (no delta support): fall back to full replacement
       acc.current = { text: jobData.stdout ?? '', total: 0 }
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- syncing accumulated log from polled server response (#371 delta accumulator)
       setLogText(jobData.stdout ?? '')
     } else if (jobData.stdout_total_len < acc.current.total) {
       // stdout was rewritten (error path resync): reset and re-poll from byte 0
