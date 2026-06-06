@@ -8,25 +8,33 @@ import pytest
 
 
 def test_ansible_timeout_is_10_seconds():
-    """ANSIBLE_TIMEOUT must be 10s so unreachable hosts fail within 5 min."""
-    import inspect
+    """ANSIBLE_TIMEOUT must be 10s so unreachable hosts fail within 5 min.
+    Moved from envvars to playbooks/ansible.cfg (#353): timeout = 10 under [defaults].
+    """
+    import configparser
+    from pathlib import Path
 
-    import fleet_platform.workers.playbook_tasks as pt
-
-    source = inspect.getsource(pt.run_playbook)
-    assert '"ANSIBLE_TIMEOUT": "10"' in source, (
-        "ANSIBLE_TIMEOUT must be 10s — was 30s which caused 30+ min hangs on unreachable hosts"
-    )
+    cfg_path = Path(__file__).parent.parent.parent / "playbooks" / "ansible.cfg"
+    cfg = configparser.ConfigParser()
+    cfg.read(str(cfg_path))
+    val = cfg.get("defaults", "timeout", fallback=None)
+    assert val is not None, "timeout must be set in playbooks/ansible.cfg [defaults]"
+    assert int(val.strip()) == 10, f"timeout must be 10s (to avoid long hangs on unreachable hosts), got {val!r}"
 
 
 def test_ansible_ssh_retries_is_2():
-    """3 total SSH attempts (initial + 2 retries)."""
-    import inspect
+    """3 total SSH attempts (initial + 2 retries).
+    Moved from envvars to playbooks/ansible.cfg (#353): retries = 2 under [ssh_connection].
+    """
+    import configparser
+    from pathlib import Path
 
-    import fleet_platform.workers.playbook_tasks as pt
-
-    source = inspect.getsource(pt.run_playbook)
-    assert '"ANSIBLE_SSH_RETRIES": "2"' in source
+    cfg_path = Path(__file__).parent.parent.parent / "playbooks" / "ansible.cfg"
+    cfg = configparser.ConfigParser()
+    cfg.read(str(cfg_path))
+    val = cfg.get("ssh_connection", "retries", fallback=None)
+    assert val is not None, "retries must be set in playbooks/ansible.cfg [ssh_connection]"
+    assert int(val.strip()) == 2, f"retries must be 2, got {val!r}"
 
 
 def test_ansible_connect_timeout_removed():

@@ -41,12 +41,12 @@ async def _search_nodes(db: AsyncSession, q: str, pattern: str) -> list[dict]:
                    greatest(
                        similarity(coalesce(hostname,''), :q),
                        similarity(minion_id, :q),
-                       similarity(coalesce(ip_address,''), :q)
+                       similarity(coalesce(ip_address::text,''), :q)
                    ) AS score
             FROM nodes
             WHERE coalesce(hostname,'') ILIKE :pat
                OR minion_id ILIKE :pat
-               OR coalesce(ip_address,'') ILIKE :pat
+               OR coalesce(ip_address::text,'') ILIKE :pat
                OR coalesce(hostname,'') % :q
                OR minion_id % :q
             ORDER BY score DESC

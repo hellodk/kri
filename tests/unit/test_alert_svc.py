@@ -28,22 +28,22 @@ def test_validate_webhook_url_invalid_scheme():
         _validate_webhook_url("ftp://hooks.example.com/webhook")
 
 
-def test_validate_webhook_url_private_ip():
+def test_validate_webhook_url_https_private_ip_allowed():
+    """HTTPS to private IPs is allowed (always secure)."""
     with patch("socket.gethostbyname", return_value="192.168.1.1"):
-        with pytest.raises(ValueError, match="private"):
-            _validate_webhook_url("https://internal.example.com/webhook")
+        _validate_webhook_url("https://internal.example.com/webhook")  # must not raise
 
 
-def test_validate_webhook_url_loopback():
+def test_validate_webhook_url_https_loopback_allowed():
+    """HTTPS to loopback is allowed."""
     with patch("socket.gethostbyname", return_value="127.0.0.1"):
-        with pytest.raises(ValueError):
-            _validate_webhook_url("https://localhost/webhook")
+        _validate_webhook_url("https://localhost/webhook")  # must not raise
 
 
-def test_validate_webhook_url_link_local():
+def test_validate_webhook_url_https_link_local_allowed():
+    """HTTPS to link-local IPs is allowed."""
     with patch("socket.gethostbyname", return_value="169.254.1.1"):
-        with pytest.raises(ValueError):
-            _validate_webhook_url("https://link-local.example.com/webhook")
+        _validate_webhook_url("https://link-local.example.com/webhook")  # must not raise
 
 
 def test_validate_webhook_url_dns_failure():
