@@ -58,7 +58,7 @@ def _runner_call(fun: str, timeout: int = 30) -> list[str] | None:
                 return list(inner.keys())
         return []
     except Exception as exc:
-        logger.debug("salt_presence: runner call %s failed: %s", fun, exc)
+        logger.warning("salt_presence: runner call %s failed: %s", fun, exc)
         return None
 
 
@@ -90,6 +90,8 @@ def sync_minion_presence() -> dict:
         result = db.execute(select(Node).where(Node.minion_id.in_(up_minions)))
         nodes = result.scalars().all()
         for node in nodes:
+            if node.maintenance_mode:
+                continue
             node.status = "online"
             node.last_seen_at = now
             updated += 1
