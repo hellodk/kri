@@ -1,8 +1,9 @@
 import { useParams, Link } from 'react-router-dom'
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { playbooksApi, type AnsibleJob } from '../api/playbooks'
 import { PlaybookRunModal } from './PlaybookRunModal'
+import { LogPane } from '../lib/LogPane'
 import { formatDistanceToNow, formatDuration, intervalToDuration } from 'date-fns'
 
 function statusBadge(status: string) {
@@ -54,16 +55,7 @@ export function PlaybookJobDetail() {
     },
   })
 
-  // Auto-scroll the log pane to the bottom as new output streams in.
-  // Only auto-scrolls when the user is already near the bottom, so manual
-  // scroll-up to read earlier output isn't yanked away.
-  const logRef = useRef<HTMLPreElement>(null)
-  useEffect(() => {
-    const el = logRef.current
-    if (!el) return
-    const nearBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 120
-    if (nearBottom) el.scrollTop = el.scrollHeight
-  }, [job?.stdout])
+  // Log scroll/tail-follow is handled by the shared LogPane component (#373).
 
   // Hooks must be declared before any early returns (Rules of Hooks)
   const qc = useQueryClient()
@@ -117,7 +109,7 @@ export function PlaybookJobDetail() {
   }
 
   return (
-    <div className="flex flex-col max-w-5xl" style={{ minHeight: 'calc(100vh - 120px)' }}>
+    <div className="flex flex-col max-w-7xl h-[calc(100vh-80px)]">
       <div className="flex items-center gap-3">
         <Link to="/automation?tab=executions" className="text-sm text-brand-600 hover:underline">← Executions</Link>
         <span className="text-gray-300">/</span>
@@ -228,7 +220,7 @@ export function PlaybookJobDetail() {
       </div>
 
       {/* Logs */}
-      <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden flex flex-col flex-1">
+      <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden flex flex-col flex-1 min-h-0">
         <div className="flex items-center justify-between px-4 py-2.5 border-b border-gray-100 bg-gray-50">
           <div>
             <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Output</p>
@@ -243,27 +235,7 @@ export function PlaybookJobDetail() {
             <span className="text-xs text-blue-500">Polling every 3s…</span>
           )}
         </div>
-        <div className="flex-1 overflow-hidden">
-          {job.stdout ? (
-            <pre
-              ref={logRef}
-              className="text-xs font-mono bg-gray-950 text-green-300 p-4 overflow-auto leading-relaxed whitespace-pre-wrap h-full"
-            >
-              {job.stdout}
-            </pre>
-          ) : (
-            <div className="flex items-center justify-center bg-gray-950 flex-1">
-              {isLive ? (
-                <div className="text-center space-y-2">
-                  <div className="w-6 h-6 border-2 border-blue-400 border-t-transparent rounded-full animate-spin mx-auto" />
-                  <p className="text-xs text-gray-500">Waiting for output…</p>
-                </div>
-              ) : (
-                <p className="text-xs text-gray-500">No output recorded</p>
-              )}
-            </div>
-          )}
-        </div>
+        <LogPane raw={job.stdout ?? ''} isLive={isLive} emptyText="No output recorded" />
       </div>
 
       {/* Re-run modal */}

@@ -7,6 +7,7 @@ collect_all_metrics() executes the actual Salt commands via docker exec.
 Requires sudo access for powermetrics:
     salt ALL=(ALL) NOPASSWD: /usr/bin/powermetrics
 """
+
 import json
 import logging
 import os
@@ -20,6 +21,7 @@ _SALT_CONTAINER = os.environ.get("SALT_MASTER_CONTAINER", "deploy-salt-master-1"
 
 # ── subprocess helper ─────────────────────────────────────────────────────────
 
+
 def _run_salt(
     function: str,
     target: str,
@@ -30,8 +32,7 @@ def _run_salt(
 
     Returns an empty dict on timeout, non-zero exit, or JSON parse failure.
     """
-    cmd = ["docker", "exec", _SALT_CONTAINER, "salt", "-L", target,
-           function, "--no-color", "--out=json"]
+    cmd = ["docker", "exec", _SALT_CONTAINER, "salt", "-L", target, function, "--no-color", "--out=json"]
     if args:
         cmd += args
     try:
@@ -49,6 +50,7 @@ def _run_salt(
 
 
 # ── parsers ───────────────────────────────────────────────────────────────────
+
 
 def parse_disk_usage(salt_out: dict, minion_id: str) -> dict:
     """Parse disk.usage Salt module output for one minion.
@@ -120,8 +122,8 @@ def parse_vm_stat(vm_stat_text: str, total_bytes: int) -> dict:
 
     free_pages = pages.get("Pages free", 0) + pages.get("Pages speculative", 0)
     free_bytes = free_pages * page_size
-    total_gb = total_bytes / (1024 ** 3)
-    free_gb = free_bytes / (1024 ** 3)
+    total_gb = total_bytes / (1024**3)
+    free_gb = free_bytes / (1024**3)
     used_gb = total_gb - free_gb
     used_pct = int((used_gb / total_gb) * 100) if total_gb > 0 else 0
     return {
@@ -222,6 +224,7 @@ def parse_powermetrics(raw_json: str) -> dict:
 
 # ── collection orchestrator ───────────────────────────────────────────────────
 
+
 def collect_all_metrics(minion_ids: list[str]) -> dict[str, dict]:
     """Run all health Salt commands against minion_ids and return parsed metrics per minion.
 
@@ -264,7 +267,8 @@ def collect_all_metrics(minion_ids: list[str]) -> dict[str, dict]:
         results[mid].update(parse_gpu_info(gpu_out.get(mid, "")))
 
     pm_out = _run_salt(
-        "cmd.run", target,
+        "cmd.run",
+        target,
         args=["sudo powermetrics -n 1 -i 500 --samplers cpu_power,gpu_power,thermal --output-format json 2>/dev/null"],
         timeout=30,
     )

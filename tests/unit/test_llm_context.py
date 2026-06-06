@@ -6,6 +6,7 @@ import pytest
 
 def test_build_context_returns_nonempty_string():
     from fleet_platform.services.llm_context import build_static_context
+
     ctx = build_static_context(
         node_count=5,
         online_count=4,
@@ -19,6 +20,7 @@ def test_build_context_returns_nonempty_string():
 
 def test_build_context_contains_node_count():
     from fleet_platform.services.llm_context import build_static_context
+
     ctx = build_static_context(
         node_count=12,
         online_count=10,
@@ -32,6 +34,7 @@ def test_build_context_contains_node_count():
 
 def test_build_context_contains_groups():
     from fleet_platform.services.llm_context import build_static_context
+
     ctx = build_static_context(
         node_count=3,
         online_count=3,
@@ -46,11 +49,13 @@ def test_build_context_contains_groups():
 
 def test_intent_addendum_covers_all_intents():
     from fleet_platform.services.llm_context import INTENT_ADDENDUM
+
     assert set(INTENT_ADDENDUM.keys()) == {"salt_state", "ansible_playbook", "fleet_command", "explain", "fleet_query"}
 
 
 def test_build_static_context_unknown_intent_falls_back_to_empty():
     from fleet_platform.services.llm_context import INTENT_ADDENDUM
+
     result = INTENT_ADDENDUM.get("magic_wand", "")
     assert result == ""
 
@@ -80,9 +85,15 @@ async def test_build_fleet_context_assembles_prompt():
     membership_result = MagicMock()
     membership_result.all.return_value = []
 
-    mock_db.execute = AsyncMock(side_effect=[
-        node_count_result, online_count_result, groups_result, nodes_result, membership_result,
-    ])
+    mock_db.execute = AsyncMock(
+        side_effect=[
+            node_count_result,
+            online_count_result,
+            groups_result,
+            nodes_result,
+            membership_result,
+        ]
+    )
 
     async def fake_get_settings_bulk(db, keys):
         return {
@@ -124,9 +135,15 @@ async def test_build_fleet_context_appends_intent_addendum():
     membership_result2.all.return_value = []
 
     with patch.object(svc_mod, "get_settings_bulk", side_effect=fake_get_settings_bulk):
-        mock_db.execute = AsyncMock(side_effect=[
-            count_result, count_result, groups_result, nodes_result2, membership_result2,
-        ])
+        mock_db.execute = AsyncMock(
+            side_effect=[
+                count_result,
+                count_result,
+                groups_result,
+                nodes_result2,
+                membership_result2,
+            ]
+        )
         ctx = await build_fleet_context(mock_db, "ansible_playbook")
 
     assert INTENT_ADDENDUM["ansible_playbook"] in ctx
@@ -134,8 +151,10 @@ async def test_build_fleet_context_appends_intent_addendum():
 
 # --- Task 3: Token budget + RAG slot -----------------------------------------
 
+
 def test_estimate_tokens_reasonable():
     from fleet_platform.services.llm_context import estimate_tokens
+
     # ~4 chars per token rule: 400 chars ≈ 100 tokens
     t = estimate_tokens("x" * 400)
     assert 90 <= t <= 110
@@ -143,6 +162,7 @@ def test_estimate_tokens_reasonable():
 
 def test_estimate_tokens_minimum_one():
     from fleet_platform.services.llm_context import estimate_tokens
+
     assert estimate_tokens("") == 1
     assert estimate_tokens("x") == 1
 
@@ -150,6 +170,7 @@ def test_estimate_tokens_minimum_one():
 def test_grounding_rules_never_truncated():
     """Grounding rules must survive even with a short context window."""
     from fleet_platform.services.llm_context import build_static_context
+
     ctx = build_static_context(
         node_count=2,
         online_count=1,
@@ -165,6 +186,7 @@ def test_grounding_rules_never_truncated():
 
 def test_rag_slot_present_when_chunks_provided():
     from fleet_platform.services.llm_context import build_static_context
+
     ctx = build_static_context(
         node_count=1,
         online_count=1,
@@ -179,6 +201,7 @@ def test_rag_slot_present_when_chunks_provided():
 
 def test_rag_slot_absent_when_no_chunks():
     from fleet_platform.services.llm_context import build_static_context
+
     ctx = build_static_context(
         node_count=1,
         online_count=1,
@@ -193,6 +216,7 @@ def test_rag_slot_absent_when_no_chunks():
 def test_grounding_rules_after_rag_slot():
     """Grounding rules must appear after the RAG section (never truncatable)."""
     from fleet_platform.services.llm_context import build_static_context
+
     ctx = build_static_context(
         node_count=1,
         online_count=1,
@@ -210,6 +234,7 @@ def test_format_last_seen_seconds():
     from datetime import UTC, datetime, timedelta
 
     from fleet_platform.services.llm_context import _format_last_seen
+
     recent = datetime.now(UTC) - timedelta(seconds=30)
     result = _format_last_seen(recent)
     assert result.endswith("s ago")
@@ -219,6 +244,7 @@ def test_format_last_seen_days():
     from datetime import UTC, datetime, timedelta
 
     from fleet_platform.services.llm_context import _format_last_seen
+
     old = datetime.now(UTC) - timedelta(days=3)
     result = _format_last_seen(old)
     assert result.endswith("d ago")
@@ -229,6 +255,7 @@ def test_format_last_seen_naive_datetime():
     from datetime import datetime, timedelta
 
     from fleet_platform.services.llm_context import _format_last_seen
+
     # naive datetime (no tzinfo)
     naive_dt = datetime.utcnow() - timedelta(minutes=5)
     result = _format_last_seen(naive_dt)

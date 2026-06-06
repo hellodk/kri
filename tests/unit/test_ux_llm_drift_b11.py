@@ -1,4 +1,5 @@
 """Unit tests for #143 (LLM persistence) and #155 (drift display names)."""
+
 from pathlib import Path
 
 
@@ -16,6 +17,7 @@ def test_llm_store_uses_zustand_persist():
     else:
         # fallback: check LLMAssistant component directly
         import glob
+
         files = glob.glob("frontend/src/components/LLMAssistant/**/*.tsx", recursive=True)
         files += glob.glob("frontend/src/components/LLMAssistant*.tsx")
         combined = "".join(Path(f).read_text() for f in files if Path(f).exists())
@@ -26,6 +28,7 @@ def test_llm_store_uses_zustand_persist():
 
 def test_drift_has_grain_display_names():
     import glob
+
     drift_files = glob.glob("frontend/src/**/*.tsx", recursive=True)
     drift_files = [f for f in drift_files if "drift" in f.lower() or "Drift" in f]
     combined = "".join(Path(f).read_text() for f in drift_files if Path(f).exists())

@@ -5,6 +5,7 @@ The /metrics endpoint itself is excluded to avoid self-referential noise in
 the data.  Path labels are normalised to prevent high cardinality from node
 IDs and UUIDs becoming separate time-series.
 """
+
 import re
 import time
 

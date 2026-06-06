@@ -1,4 +1,5 @@
 """Unit tests for auto-resolved playbook credentials + source banner (#279)."""
+
 import tempfile
 from pathlib import Path
 
@@ -17,6 +18,7 @@ def _host(hostname, ip, ssh_user, ssh_password="", ssh_key="", auth_mode="passwo
 
 def test_inventory_writes_per_host_user_and_password():
     from fleet_platform.workers.playbook_tasks import _write_static_inventory
+
     with tempfile.TemporaryDirectory() as tmp:
         hosts = [
             _host("web01", "10.0.0.5", "admin", ssh_password="pw1", source="group:prod"),
@@ -32,6 +34,7 @@ def test_inventory_writes_per_host_user_and_password():
 
 def test_inventory_key_auth_writes_key_file_not_password():
     from fleet_platform.workers.playbook_tasks import _write_static_inventory
+
     with tempfile.TemporaryDirectory() as tmp:
         hosts = [_host("k01", "10.0.0.1", "admin", ssh_key="PRIVKEY", auth_mode="key", source="node")]
         inv_path = _write_static_inventory(tmp, hosts)
@@ -44,6 +47,7 @@ def test_inventory_key_auth_writes_key_file_not_password():
 
 def test_inventory_file_is_not_world_readable():
     from fleet_platform.workers.playbook_tasks import _write_static_inventory
+
     with tempfile.TemporaryDirectory() as tmp:
         inv_path = _write_static_inventory(tmp, [_host("h", "1.2.3.4", "u", ssh_password="p")])
         mode = Path(inv_path).stat().st_mode & 0o077
@@ -52,6 +56,7 @@ def test_inventory_file_is_not_world_readable():
 
 def test_credential_source_banner_lists_each_host():
     from fleet_platform.workers.playbook_tasks import _credential_source_banner
+
     hosts = [
         _host("web01", "10.0.0.5", "admin", source="group:prod"),
         _host("db01", "10.0.0.9", "root", source="node"),

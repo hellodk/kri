@@ -5,6 +5,7 @@ The BM25 tests do not require the embedding endpoint — they insert FleetEmbedd
 directly and query via Postgres FTS. The dense-vector tests skip if the embed URL is
 absent.
 """
+
 from datetime import UTC, datetime
 
 import pytest
@@ -90,9 +91,7 @@ async def test_upsert_skips_unchanged_chunk(db_session):
 
     from fleet_platform.models.fleet_embedding import FleetEmbedding
 
-    result = await db_session.execute(
-        select(FleetEmbedding).where(FleetEmbedding.source_id == unique_id)
-    )
+    result = await db_session.execute(select(FleetEmbedding).where(FleetEmbedding.source_id == unique_id))
     inserted = result.scalar_one()
     original_embedded_at = inserted.embedded_at
 
@@ -150,9 +149,7 @@ async def test_content_hash_triggers_reembed(db_session):
 
     from fleet_platform.models.fleet_embedding import FleetEmbedding
 
-    result = await db_session.execute(
-        select(FleetEmbedding).where(FleetEmbedding.source_id == unique_id)
-    )
+    result = await db_session.execute(select(FleetEmbedding).where(FleetEmbedding.source_id == unique_id))
     inserted_v1 = result.scalar_one()
     _embedded_at_v1 = inserted_v1.embedded_at  # captured for potential future assertion
 
@@ -178,9 +175,7 @@ async def test_content_hash_triggers_reembed(db_session):
     mock_embed.assert_called_once()
 
     # Cleanup both rows
-    result2 = await db_session.execute(
-        select(FleetEmbedding).where(FleetEmbedding.source_id == unique_id)
-    )
+    result2 = await db_session.execute(select(FleetEmbedding).where(FleetEmbedding.source_id == unique_id))
     for row in result2.scalars().all():
         await db_session.delete(row)
     await db_session.commit()

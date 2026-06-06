@@ -164,8 +164,7 @@ def run_salt_cmd(
         logger.error("run_salt_cmd: rejected disallowed function %r", function)
         return {
             "status": "error",
-            "reason": f"Function '{function}' is not in the allowlist. "
-            f"Allowed functions: {sorted(allowed)}",
+            "reason": f"Function '{function}' is not in the allowlist. Allowed functions: {sorted(allowed)}",
         }
 
     if not _SALT_API_URL:

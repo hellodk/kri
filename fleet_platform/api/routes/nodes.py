@@ -37,9 +37,7 @@ async def register_node(
     db: AsyncSession = Depends(get_db),
     claims: dict = Depends(require_role("admin")),
 ):
-    existing = await db.execute(
-        select(Node).where(Node.minion_id == payload.minion_id)
-    )
+    existing = await db.execute(select(Node).where(Node.minion_id == payload.minion_id))
     if existing.scalar_one_or_none():
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
@@ -89,9 +87,7 @@ async def create_node(
     db: AsyncSession = Depends(get_db),
     claims: dict = Depends(require_role("operator", "admin")),
 ):
-    existing = await db.execute(
-        select(Node).where(Node.minion_id == payload.minion_id)
-    )
+    existing = await db.execute(select(Node).where(Node.minion_id == payload.minion_id))
     if existing.scalar_one_or_none():
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
@@ -131,9 +127,7 @@ async def create_node(
             detail=f"Node '{payload.minion_id}' is already registered",
         )
 
-    result = await db.execute(
-        select(Node).options(selectinload(Node.tags)).where(Node.id == node.id)
-    )
+    result = await db.execute(select(Node).options(selectinload(Node.tags)).where(Node.id == node.id))
     node = result.scalar_one()
     return NodeDetailResponse.model_validate(node)
 
@@ -145,9 +139,7 @@ async def update_node(
     db: AsyncSession = Depends(get_db),
     claims: dict = Depends(require_role("operator", "admin")),
 ):
-    result = await db.execute(
-        select(Node).options(selectinload(Node.tags)).where(Node.id == node_id)
-    )
+    result = await db.execute(select(Node).options(selectinload(Node.tags)).where(Node.id == node_id))
     node = result.scalar_one_or_none()
     if not node:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Node not found")
@@ -190,15 +182,15 @@ async def update_node(
     )
     await db.commit()
     # Re-query after commit so all columns (including encrypted ones) are fresh
-    result2 = await db.execute(
-        select(Node).options(selectinload(Node.tags)).where(Node.id == node_id)
-    )
+    result2 = await db.execute(select(Node).options(selectinload(Node.tags)).where(Node.id == node_id))
     node = result2.scalar_one()
-    return NodeDetailResponse.model_validate(node).model_copy(update={
-        "has_ssh_password": bool(node.ssh_password_enc),
-        "has_ssh_key": bool(node.ssh_key_enc),
-        "has_vnc_password": bool(node.vnc_password_enc),
-    })
+    return NodeDetailResponse.model_validate(node).model_copy(
+        update={
+            "has_ssh_password": bool(node.ssh_password_enc),
+            "has_ssh_key": bool(node.ssh_key_enc),
+            "has_vnc_password": bool(node.vnc_password_enc),
+        }
+    )
 
 
 @router.delete("/{node_id}", status_code=204)
@@ -246,6 +238,7 @@ async def list_nodes(
     _: dict = Depends(get_current_user),
 ):
     from sqlalchemy import or_
+
     query = select(Node).options(selectinload(Node.tags))
 
     if status:
@@ -253,9 +246,7 @@ async def list_nodes(
 
     if search:
         pattern = f"%{search}%"
-        query = query.where(
-            or_(Node.hostname.ilike(pattern), Node.minion_id.ilike(pattern))
-        )
+        query = query.where(or_(Node.hostname.ilike(pattern), Node.minion_id.ilike(pattern)))
 
     if os_version:
         query = query.where(Node.os_version.ilike(f"%{os_version}%"))
@@ -274,20 +265,13 @@ async def list_nodes(
 
     if tag:
         key, _sep1, value = tag.partition(":")
-        subq = (
-            select(Tag.node_id)
-            .where(Tag.key == key, Tag.value == value)
-            .scalar_subquery()
-        )
+        subq = select(Tag.node_id).where(Tag.key == key, Tag.value == value).scalar_subquery()
         query = query.where(Node.id.in_(subq))
 
     if group_id:
         from fleet_platform.models.group import GroupMember
-        member_subq = (
-            select(GroupMember.node_id)
-            .where(GroupMember.group_id == group_id)
-            .scalar_subquery()
-        )
+
+        member_subq = select(GroupMember.node_id).where(GroupMember.group_id == group_id).scalar_subquery()
         query = query.where(Node.id.in_(member_subq))
 
     sort_field, _sep2, sort_dir = sort.partition(":")
@@ -306,6 +290,7 @@ async def list_nodes(
     # Build group_count per node in one aggregate query
     if nodes:
         from fleet_platform.models.group import GroupMember as _GM
+
         node_ids = [n.id for n in nodes]
         gc_result = await db.execute(
             select(_GM.node_id, func.count(_GM.group_id).label("cnt"))
@@ -336,9 +321,7 @@ async def get_node(
     db: AsyncSession = Depends(get_db),
     _: dict = Depends(get_current_user),
 ):
-    result = await db.execute(
-        select(Node).options(selectinload(Node.tags)).where(Node.id == node_id)
-    )
+    result = await db.execute(select(Node).options(selectinload(Node.tags)).where(Node.id == node_id))
     node = result.scalar_one_or_none()
     if not node:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Node not found")
@@ -353,10 +336,7 @@ async def get_node_facts(
 ):
     """Return the latest Salt grain snapshot for a node."""
     result = await db.execute(
-        select(NodeFact)
-        .where(NodeFact.node_id == node_id)
-        .order_by(NodeFact.collected_at.desc())
-        .limit(1)
+        select(NodeFact).where(NodeFact.node_id == node_id).order_by(NodeFact.collected_at.desc()).limit(1)
     )
     fact = result.scalar_one_or_none()
     return {"grains": fact.grains if fact else {}}
@@ -370,10 +350,7 @@ async def get_node_packages(
 ):
     """Return installed packages extracted from the latest Salt grain snapshot."""
     result = await db.execute(
-        select(NodeFact)
-        .where(NodeFact.node_id == node_id)
-        .order_by(NodeFact.collected_at.desc())
-        .limit(1)
+        select(NodeFact).where(NodeFact.node_id == node_id).order_by(NodeFact.collected_at.desc()).limit(1)
     )
     fact = result.scalar_one_or_none()
     if not fact:
@@ -400,9 +377,7 @@ async def add_node_tag(
     if not node:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Node not found")
 
-    existing = await db.execute(
-        select(Tag).where(Tag.node_id == node_id, Tag.key == payload.key)
-    )
+    existing = await db.execute(select(Tag).where(Tag.node_id == node_id, Tag.key == payload.key))
     tag = existing.scalar_one_or_none()
     if tag:
         if tag.source == "system":
@@ -412,22 +387,24 @@ async def add_node_tag(
             )
         tag.value = payload.value
     else:
-        tag = Tag(node_id=node_id, key=payload.key, value=payload.value,
-                  source="user", created_at=datetime.now(UTC))
+        tag = Tag(node_id=node_id, key=payload.key, value=payload.value, source="user", created_at=datetime.now(UTC))
         db.add(tag)
 
-    await audit(db, actor=claims["email"], action="node.tag.upsert",
-                resource_type="node", resource_id=node_id,
-                new_value={"key": payload.key, "value": payload.value})
+    await audit(
+        db,
+        actor=claims["email"],
+        action="node.tag.upsert",
+        resource_type="node",
+        resource_id=node_id,
+        new_value={"key": payload.key, "value": payload.value},
+    )
 
     try:
         await db.commit()
     except IntegrityError:
         await db.rollback()
         # Concurrent insert won the race — fetch and return the existing tag
-        tag_result = await db.execute(
-            select(Tag).where(Tag.node_id == node_id, Tag.key == payload.key)
-        )
+        tag_result = await db.execute(select(Tag).where(Tag.node_id == node_id, Tag.key == payload.key))
         tag = tag_result.scalar_one()
         return TagResponse.model_validate(tag)
 
@@ -442,9 +419,7 @@ async def delete_node_tag(
     db: AsyncSession = Depends(get_db),
     claims: dict = Depends(require_role("operator", "admin")),
 ):
-    result = await db.execute(
-        select(Tag).where(Tag.node_id == node_id, Tag.key == key)
-    )
+    result = await db.execute(select(Tag).where(Tag.node_id == node_id, Tag.key == key))
     tag = result.scalar_one_or_none()
     if not tag:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Tag not found")
@@ -456,8 +431,14 @@ async def delete_node_tag(
 
     old_value = {"key": tag.key, "value": tag.value}
     await db.delete(tag)
-    await audit(db, actor=claims["email"], action="node.tag.delete",
-                resource_type="node", resource_id=node_id, old_value=old_value)
+    await audit(
+        db,
+        actor=claims["email"],
+        action="node.tag.delete",
+        resource_type="node",
+        resource_id=node_id,
+        old_value=old_value,
+    )
     await db.commit()
 
 
@@ -472,9 +453,7 @@ async def set_maintenance_mode(
     db: AsyncSession = Depends(get_db),
     claims: dict = Depends(require_role("operator", "admin")),
 ):
-    result = await db.execute(
-        select(Node).options(selectinload(Node.tags)).where(Node.id == node_id)
-    )
+    result = await db.execute(select(Node).options(selectinload(Node.tags)).where(Node.id == node_id))
     node = result.scalar_one_or_none()
     if not node:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Node not found")
@@ -492,9 +471,7 @@ async def set_maintenance_mode(
         new_value={"maintenance_mode": payload.enabled},
     )
     await db.commit()
-    result2 = await db.execute(
-        select(Node).options(selectinload(Node.tags)).where(Node.id == node_id)
-    )
+    result2 = await db.execute(select(Node).options(selectinload(Node.tags)).where(Node.id == node_id))
     node = result2.scalar_one()
     return NodeDetailResponse.model_validate(node)
 
@@ -529,13 +506,15 @@ def _parse_tart_output(output: str) -> list[dict]:
             continue
         parts = line.split()
         if parts:
-            vms.append({
-                "name": parts[0] if len(parts) > 0 else "",
-                "state": parts[2] if len(parts) > 2 else "unknown",
-                "cpu": None,
-                "memory": None,
-                "source": parts[1] if len(parts) > 1 else "",
-            })
+            vms.append(
+                {
+                    "name": parts[0] if len(parts) > 0 else "",
+                    "state": parts[2] if len(parts) > 2 else "unknown",
+                    "cpu": None,
+                    "memory": None,
+                    "source": parts[1] if len(parts) > 1 else "",
+                }
+            )
     return vms
 
 
@@ -564,6 +543,7 @@ async def list_node_vms(
 
     # Run tart list via Salt cmd.run
     from fleet_platform.workers.salt_tasks import run_salt_cmd as salt_run_cmd
+
     try:
         result_dict = await asyncio.get_event_loop().run_in_executor(
             None,
@@ -571,14 +551,11 @@ async def list_node_vms(
                 function="cmd.run",
                 target_minions=[minion_id],
                 args=["tart list --format=json 2>/dev/null || tart list 2>/dev/null || echo 'tart_not_found'"],
-            ).get(timeout=15)
+            ).get(timeout=15),
         )
     except Exception as e:
         return NodeVMsResponse(
-            node_id=str(node_id),
-            minion_id=minion_id,
-            vms=[],
-            error=f"Failed to fetch VMs: {str(e)[:200]}"
+            node_id=str(node_id), minion_id=minion_id, vms=[], error=f"Failed to fetch VMs: {str(e)[:200]}"
         )
 
     raw_output = ""

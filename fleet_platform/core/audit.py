@@ -7,8 +7,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from fleet_platform.models.audit import AuditEvent
 
-_SENSITIVE = re.compile(r'password|secret|token|api_key|apikey|passphrase', re.I)
-_REDACTED = '[redacted]'
+_SENSITIVE = re.compile(r"password|secret|token|api_key|apikey|passphrase", re.I)
+_REDACTED = "[redacted]"
 
 
 def _scrub(d: dict | None) -> dict | None:
@@ -31,13 +31,15 @@ async def audit(
     """Write an audit event. Must be called before db.commit() to share the transaction.
     Sensitive keys (password, secret, token, api_key, passphrase) are redacted.
     """
-    db.add(AuditEvent(
-        event_at=datetime.now(UTC),
-        actor=actor,
-        action=action,
-        resource_type=resource_type,
-        resource_id=resource_id,
-        new_value=_scrub(new_value),
-        old_value=_scrub(old_value),
-        ip_address=ip_address,
-    ))
+    db.add(
+        AuditEvent(
+            event_at=datetime.now(UTC),
+            actor=actor,
+            action=action,
+            resource_type=resource_type,
+            resource_id=resource_id,
+            new_value=_scrub(new_value),
+            old_value=_scrub(old_value),
+            ip_address=ip_address,
+        )
+    )

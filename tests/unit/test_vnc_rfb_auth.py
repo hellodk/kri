@@ -7,6 +7,7 @@ Tests cover:
   - _rfb_auth: returns False when server reports authentication failure
   - _rfb_auth: returns False when no password is stored but server requires type-2
 """
+
 import struct
 
 import pytest
@@ -179,7 +180,7 @@ async def test_rfb_auth_fails_gracefully_when_no_password_for_type2():
     the server stuck waiting for a 16-byte DES challenge response that never arrives.
     We fall through to "no supported type" and return False without writing anything.
     """
-    challenge = b"\xAA\xBB\xCC\xDD" * 4
+    challenge = b"\xaa\xbb\xcc\xdd" * 4
     version = b"RFB 003.008\n"
     sec_list = bytes([1, 2])  # n_types=1, types=[2]
     # Challenge + status are present in the stream but must NOT be consumed

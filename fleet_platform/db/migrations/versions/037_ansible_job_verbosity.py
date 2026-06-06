@@ -1,16 +1,17 @@
 """Add verbosity column to ansible_jobs."""
+
 import sqlalchemy as sa
 from alembic import op
 
-revision = '037'
-down_revision = '036'
+revision = "037"
+down_revision = "036"
 branch_labels = None
 depends_on = None
 
 
 def upgrade() -> None:
-    op.add_column('ansible_jobs', sa.Column('verbosity', sa.Integer(), nullable=False, server_default='0'))
+    op.add_column("ansible_jobs", sa.Column("verbosity", sa.Integer(), nullable=False, server_default="0"))
 
 
 def downgrade() -> None:
-    op.drop_column('ansible_jobs', 'verbosity')
+    op.drop_column("ansible_jobs", "verbosity")

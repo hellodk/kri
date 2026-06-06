@@ -7,9 +7,9 @@ from pydantic import BaseModel
 class BootstrapRequest(BaseModel):
     minion_id: str
     target_ip: str
-    ssh_username: str | None = None   # overrides platform setting ssh_bootstrap_username
-    ssh_password: str | None = None   # overrides platform setting ssh_bootstrap_password
-    ssh_key: str | None = None        # plaintext private key for key-based auth
+    ssh_username: str | None = None  # overrides platform setting ssh_bootstrap_username
+    ssh_password: str | None = None  # overrides platform setting ssh_bootstrap_password
+    ssh_key: str | None = None  # plaintext private key for key-based auth
 
 
 class BootstrapResponse(BaseModel):

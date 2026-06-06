@@ -1,4 +1,5 @@
 """Celery task: deploy or remove a mobileconfig profile on a fleet node via Ansible."""
+
 from __future__ import annotations
 
 import logging
@@ -44,9 +45,7 @@ def deploy_mobileconfig_task(
     log_uuid = uuid.UUID(log_id)
 
     with get_sync_db() as db:
-        log = db.execute(
-            select(ProfileDeploymentLog).where(ProfileDeploymentLog.id == log_uuid)
-        ).scalar_one_or_none()
+        log = db.execute(select(ProfileDeploymentLog).where(ProfileDeploymentLog.id == log_uuid)).scalar_one_or_none()
         if log:
             log.status = "running"
             db.commit()

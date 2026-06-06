@@ -1,5 +1,6 @@
 # fleet_platform/workers/playbook_tasks.py
 """Celery tasks for running arbitrary Ansible playbooks."""
+
 import logging
 import re
 import tempfile
@@ -22,15 +23,31 @@ from fleet_platform.workers.celery_app import celery_app
 _DEFAULT_PLAYBOOKS_DIR = Path(__file__).parent.parent.parent / "playbooks"
 
 _log = logging.getLogger(__name__)
-_SAFE_PATH_RE = re.compile(r'^[a-zA-Z0-9._\-]{1,128}$')
+_SAFE_PATH_RE = re.compile(r"^[a-zA-Z0-9._\-]{1,128}$")
 _LOG_BATCH_INTERVAL = 5  # seconds between intermediate stdout DB flushes
+# Cap stored stdout so a runaway/verbose run can't grow the TEXT column unbounded (#369).
+_MAX_STDOUT_BYTES = 2 * 1024 * 1024
+_TRUNCATION_SENTINEL = "\n\n[output truncated at 2 MB — full log not retained]"
+
+
+def _append_capped(lines: list[str], msg: str, state: dict) -> None:
+    """Append ``msg`` to ``lines`` until the 2 MB cap is reached, then append a
+    one-time truncation sentinel and stop. ``state`` carries {"size", "truncated"}
+    across calls so the size check is O(1) per event, not O(n)."""
+    if state.get("truncated"):
+        return
+    lines.append(msg)
+    state["size"] = state.get("size", 0) + len(msg)
+    if state["size"] >= _MAX_STDOUT_BYTES:
+        lines.append(_TRUNCATION_SENTINEL)
+        state["truncated"] = True
 
 
 def _safe_label(label: str) -> str:
     """Sanitise a label used in file paths — prevents path traversal."""
-    cleaned = re.sub(r'[^a-zA-Z0-9._\-]', '_', label)
-    cleaned = re.sub(r'\.{2,}', '.', cleaned)
-    cleaned = cleaned.strip('.')
+    cleaned = re.sub(r"[^a-zA-Z0-9._\-]", "_", label)
+    cleaned = re.sub(r"\.{2,}", ".", cleaned)
+    cleaned = cleaned.strip(".")
     if not cleaned:
         cleaned = "unknown"
     return cleaned[:128]
@@ -40,9 +57,8 @@ def _get_playbooks_dir(db) -> Path:
     from sqlalchemy import select as _select
 
     from fleet_platform.models.platform_setting import PlatformSetting
-    row = db.execute(
-        _select(PlatformSetting).where(PlatformSetting.key == "playbooks_dir")
-    ).scalar_one_or_none()
+
+    row = db.execute(_select(PlatformSetting).where(PlatformSetting.key == "playbooks_dir")).scalar_one_or_none()
     if row and row.value:
         return Path(row.value)
     return _DEFAULT_PLAYBOOKS_DIR
@@ -57,9 +73,7 @@ def _resolve_playbook_path(playbook_filename: str, db) -> tuple[Path, Path]:
     from fleet_platform.models.platform_setting import PlatformSetting
     from fleet_platform.services.playbook_sources import get_all_playbook_dirs
 
-    row = db.execute(
-        select(PlatformSetting).where(PlatformSetting.key == "playbook_sources")
-    ).scalar_one_or_none()
+    row = db.execute(select(PlatformSetting).where(PlatformSetting.key == "playbook_sources")).scalar_one_or_none()
     sources_json = row.value if row else None
 
     all_dirs = get_all_playbook_dirs(sources_json, _DEFAULT_PLAYBOOKS_DIR)
@@ -148,24 +162,21 @@ def _host_entry(node: Node, db, override: dict | None) -> dict:
 
 def _resolve_hosts(db, job: AnsibleJob, override: dict | None = None) -> list[dict] | None:
     if job.target_type == "node":
-        node = db.execute(
-            select(Node).where(Node.id == _uuid.UUID(job.target_id))
-        ).scalar_one_or_none()
+        node = db.execute(select(Node).where(Node.id == _uuid.UUID(job.target_id))).scalar_one_or_none()
         if not node or not node.ip_address:
             return None
         return [_host_entry(node, db, override)]
 
     if job.target_type == "group":
         from fleet_platform.models.group import GroupMember
-        memberships = db.execute(
-            select(GroupMember).where(GroupMember.group_id == _uuid.UUID(job.target_id))
-        ).scalars().all()
+
+        memberships = (
+            db.execute(select(GroupMember).where(GroupMember.group_id == _uuid.UUID(job.target_id))).scalars().all()
+        )
         node_ids = [m.node_id for m in memberships]
         if not node_ids:
             return []
-        nodes = db.execute(
-            select(Node).where(Node.id.in_(node_ids), Node.ip_address.isnot(None))
-        ).scalars().all()
+        nodes = db.execute(select(Node).where(Node.id.in_(node_ids), Node.ip_address.isnot(None))).scalars().all()
         return [_host_entry(n, db, override) for n in nodes]
 
     return None
@@ -194,9 +205,11 @@ def _flush_stdout(job_uuid: _uuid.UUID, lines: list[str], last_task: str | None)
     max_retries=0,
     queue="maintenance",
     soft_time_limit=1800,  # 30 min — real salt-master deploys can take 15-20 min
-    time_limit=1860,       # 31 min hard kill
+    time_limit=1860,  # 31 min hard kill
 )
-def run_playbook(self, job_id: str, ssh_username: str | None = None, ssh_password: str | None = None, verbosity: int = 0) -> dict:
+def run_playbook(
+    self, job_id: str, ssh_username: str | None = None, ssh_password: str | None = None, verbosity: int = 0
+) -> dict:
     job_uuid = _uuid.UUID(job_id)
     stdout_lines: list[str] = []
 
@@ -248,7 +261,6 @@ def run_playbook(self, job_id: str, ssh_username: str | None = None, ssh_passwor
                     vf = playbooks_dir / "group_vars" / f"{_safe_label(job.target_label)}.yml"
                     _write_var_file(vf, job.extravars)
 
-        last_task: str | None = None
         last_db_write: float = time.time()
         job_start_time: float = time.time()
 
@@ -278,6 +290,7 @@ def run_playbook(self, job_id: str, ssh_username: str | None = None, ssh_passwor
             # lock-guarded buffer and the main thread flushes it to the DB on a
             # cadence, so the UI sees logs grow live (#347).
             import threading as _threading
+
             _buf_lock = _threading.Lock()
 
             def _event_handler(event: dict) -> bool:
@@ -289,10 +302,11 @@ def run_playbook(self, job_id: str, ssh_username: str | None = None, ssh_passwor
                 msg = event.get("stdout", "")
                 if msg:
                     with _buf_lock:
-                        stdout_lines.append(msg)
+                        _append_capped(stdout_lines, msg, _trunc_ref)
                 return True
 
             _last_task_ref: dict = {"task": None}
+            _trunc_ref: dict = {"size": 0, "truncated": False}
 
             thread, runner = ansible_runner.run_async(
                 private_data_dir=tmpdir,
@@ -301,6 +315,12 @@ def run_playbook(self, job_id: str, ssh_username: str | None = None, ssh_passwor
                 extravars=job.extravars or {},
                 verbosity=max(0, min(4, verbosity or 0)),
                 envvars={
+                    # Force ansible to emit ANSI colour codes into event["stdout"] even
+                    # though there's no TTY, so the UI can render CLI-identical colours (#369).
+                    # Verified: awx_display propagates SGR codes into event stdout under this flag.
+                    "ANSIBLE_FORCE_COLOR": "1",
+                    # Unbuffered subprocess output → events stream without buffering delay.
+                    "PYTHONUNBUFFERED": "1",
                     # SSH credentials are set per host in the inventory (#279),
                     # resolved node → group → global — not via a single global env.
                     "ANSIBLE_COLLECTIONS_PATH": str(playbooks_dir / "collections" / "installed"),
@@ -325,7 +345,7 @@ def run_playbook(self, job_id: str, ssh_username: str | None = None, ssh_passwor
                     "ANSIBLE_TASK_TIMEOUT": "300",
                 },
                 event_handler=_event_handler,
-                quiet=True,          # DB is the sole sink — don't echo to worker stdout
+                quiet=True,  # DB is the sole sink — don't echo to worker stdout
                 rotate_artifacts=0,  # 0 disables rotation (None breaks: runner does None>0 → TypeError)
             )
 
@@ -342,7 +362,6 @@ def run_playbook(self, job_id: str, ssh_username: str | None = None, ssh_passwor
                 time.sleep(1)
             thread.join()
 
-            last_task = _last_task_ref["task"]
             final_status = runner.status
             final_rc = runner.rc
 
@@ -365,9 +384,8 @@ def run_playbook(self, job_id: str, ssh_username: str | None = None, ssh_passwor
             if job and job.status == "running":
                 job.status = "failed"
                 job.stdout = (
-                    ("\n".join(stdout_lines) + "\n\n" if stdout_lines else "")
-                    + "[ERROR] Celery task time limit exceeded — playbook was terminated."
-                )
+                    "\n".join(stdout_lines) + "\n\n" if stdout_lines else ""
+                ) + "[ERROR] Celery task time limit exceeded — playbook was terminated."
                 job.completed_at = datetime.now(UTC)
                 db.commit()
         return {"status": "timeout", "job_id": job_id}
@@ -379,9 +397,8 @@ def run_playbook(self, job_id: str, ssh_username: str | None = None, ssh_passwor
             if job and job.status == "running":
                 job.status = "failed"
                 job.stdout = (
-                    ("\n".join(stdout_lines) + "\n\n" if stdout_lines else "")
-                    + f"[ERROR] {type(exc).__name__}: {exc}"
-                )
+                    "\n".join(stdout_lines) + "\n\n" if stdout_lines else ""
+                ) + f"[ERROR] {type(exc).__name__}: {exc}"
                 job.completed_at = datetime.now(UTC)
                 db.commit()
         raise

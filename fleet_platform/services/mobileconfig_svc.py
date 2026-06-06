@@ -1,4 +1,5 @@
 """Service layer for macOS configuration profile management."""
+
 from __future__ import annotations
 
 import uuid
@@ -66,9 +67,7 @@ async def create_profile(
 
 async def list_profiles(db: AsyncSession) -> list[MobileconfigProfile]:
     """Return all profiles ordered by creation date descending."""
-    result = await db.execute(
-        select(MobileconfigProfile).order_by(MobileconfigProfile.created_at.desc())
-    )
+    result = await db.execute(select(MobileconfigProfile).order_by(MobileconfigProfile.created_at.desc()))
     return list(result.scalars().all())
 
 
@@ -77,17 +76,13 @@ async def get_profile(
     profile_id: uuid.UUID,
 ) -> MobileconfigProfile | None:
     """Return a single profile by ID, or None if not found."""
-    result = await db.execute(
-        select(MobileconfigProfile).where(MobileconfigProfile.id == profile_id)
-    )
+    result = await db.execute(select(MobileconfigProfile).where(MobileconfigProfile.id == profile_id))
     return result.scalar_one_or_none()
 
 
 async def delete_profile(db: AsyncSession, profile_id: uuid.UUID) -> None:
     """Delete a profile and cascade to assignments and logs."""
-    result = await db.execute(
-        select(MobileconfigProfile).where(MobileconfigProfile.id == profile_id)
-    )
+    result = await db.execute(select(MobileconfigProfile).where(MobileconfigProfile.id == profile_id))
     profile = result.scalar_one_or_none()
     if profile is not None:
         await db.delete(profile)
@@ -134,9 +129,7 @@ async def get_compliance(
     """
     # Find all groups assigned to this profile
     groups_result = await db.execute(
-        select(ProfileGroupAssignment.group_id).where(
-            ProfileGroupAssignment.profile_id == profile_id
-        )
+        select(ProfileGroupAssignment.group_id).where(ProfileGroupAssignment.profile_id == profile_id)
     )
     group_ids = [row[0] for row in groups_result.all()]
 
