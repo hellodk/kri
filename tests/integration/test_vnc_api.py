@@ -36,10 +36,9 @@ async def test_vnc_upgrade_without_token_closes_4001(app_with_test_db):
         new=AsyncMock(return_value="true"),
     ):
         with TestClient(app_with_test_db) as tc:
-            with tc.websocket_connect(
-                f"/api/v1/vnc/session/{node_id}",
-                raise_on_disconnect=False,
-            ) as ws:
+            # raise_on_disconnect is not supported in starlette 1.x — omit it.
+            # The server sends a close frame normally; no exception is raised.
+            with tc.websocket_connect(f"/api/v1/vnc/session/{node_id}") as ws:
                 data = ws.receive()
                 assert data.get("type") == "websocket.close"
                 assert data.get("code") == 4001
@@ -57,10 +56,7 @@ async def test_vnc_upgrade_with_invalid_token_closes_4001(app_with_test_db):
         new=AsyncMock(return_value="true"),
     ):
         with TestClient(app_with_test_db) as tc:
-            with tc.websocket_connect(
-                f"/api/v1/vnc/session/{node_id}?token=not-a-valid-jwt",
-                raise_on_disconnect=False,
-            ) as ws:
+            with tc.websocket_connect(f"/api/v1/vnc/session/{node_id}?token=not-a-valid-jwt") as ws:
                 data = ws.receive()
                 assert data.get("type") == "websocket.close"
                 assert data.get("code") == 4001
@@ -75,10 +71,7 @@ async def test_vnc_upgrade_valid_token_unknown_node_closes_4004(app_with_test_db
         new=AsyncMock(return_value="true"),
     ):
         with TestClient(app_with_test_db) as tc:
-            with tc.websocket_connect(
-                f"/api/v1/vnc/session/{node_id}?token={admin_token}",
-                raise_on_disconnect=False,
-            ) as ws:
+            with tc.websocket_connect(f"/api/v1/vnc/session/{node_id}?token={admin_token}") as ws:
                 data = ws.receive()
                 assert data.get("type") == "websocket.close"
                 assert data.get("code") == 4004
@@ -92,10 +85,7 @@ async def test_vnc_feature_flag_disabled_closes_4003(app_with_test_db, admin_tok
         new=AsyncMock(return_value="false"),
     ):
         with TestClient(app_with_test_db) as tc:
-            with tc.websocket_connect(
-                f"/api/v1/vnc/session/{node_id}?token={admin_token}",
-                raise_on_disconnect=False,
-            ) as ws:
+            with tc.websocket_connect(f"/api/v1/vnc/session/{node_id}?token={admin_token}") as ws:
                 data = ws.receive()
                 assert data.get("type") == "websocket.close"
                 assert data.get("code") == 4003

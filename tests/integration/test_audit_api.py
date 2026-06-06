@@ -74,7 +74,10 @@ async def test_audit_filter_by_resource_type(admin_client: AsyncClient, audit_ev
 
 async def test_audit_filter_from_ts(admin_client: AsyncClient, audit_events):
     from_ts = (datetime.now(UTC) - timedelta(hours=2)).isoformat()
-    resp = await admin_client.get(f"/api/v1/audit?from_ts={from_ts}")
+    # Use params= so httpx URL-encodes the '+' in the timezone offset correctly.
+    # Direct f-string interpolation leaves the bare '+' in the query string which
+    # Starlette decodes as a space, causing a 422 (TEST-BUG fix).
+    resp = await admin_client.get("/api/v1/audit", params={"from_ts": from_ts})
     assert resp.status_code == 200
     items = resp.json()["items"]
     # Should include the -1h and -10min events, not the -3h event
@@ -86,7 +89,7 @@ async def test_audit_filter_from_ts(admin_client: AsyncClient, audit_events):
 
 async def test_audit_filter_to_ts(admin_client: AsyncClient, audit_events):
     to_ts = (datetime.now(UTC) - timedelta(hours=2)).isoformat()
-    resp = await admin_client.get(f"/api/v1/audit?to_ts={to_ts}")
+    resp = await admin_client.get("/api/v1/audit", params={"to_ts": to_ts})
     assert resp.status_code == 200
     items = resp.json()["items"]
     # Should only include the -3h event among our seeded data
@@ -97,7 +100,10 @@ async def test_audit_filter_to_ts(admin_client: AsyncClient, audit_events):
 async def test_audit_filter_from_ts_and_to_ts(admin_client: AsyncClient, audit_events):
     from_ts = (datetime.now(UTC) - timedelta(hours=2)).isoformat()
     to_ts = (datetime.now(UTC) - timedelta(minutes=30)).isoformat()
-    resp = await admin_client.get(f"/api/v1/audit?from_ts={from_ts}&to_ts={to_ts}")
+    resp = await admin_client.get(
+        "/api/v1/audit",
+        params={"from_ts": from_ts, "to_ts": to_ts},
+    )
     assert resp.status_code == 200
     items = resp.json()["items"]
     # The -1h event should be in range; -10min and -3h should not
