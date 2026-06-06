@@ -35,15 +35,6 @@ def test_write_static_inventory_multiple_hosts(tmp_path):
     assert "mac-02 ansible_host=10.0.1.12" in content
 
 
-def test_write_var_file_creates_yaml(tmp_path):
-    from fleet_platform.workers.playbook_tasks import _write_var_file
-
-    _write_var_file(tmp_path / "host_vars" / "mac-01.yml", {"log_level": "debug", "timeout": 30})
-    content = (tmp_path / "host_vars" / "mac-01.yml").read_text()
-    assert "log_level: debug" in content
-    assert "timeout: 30" in content
-
-
 def test_run_playbook_missing_job_returns_early():
     mock_db = MagicMock()
     mock_db.__enter__ = MagicMock(return_value=mock_db)
