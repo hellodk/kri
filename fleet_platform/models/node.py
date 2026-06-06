@@ -58,6 +58,14 @@ class Node(Base, TimestampMixin):
 
     maintenance_mode: Mapped[bool] = mapped_column(default=False, nullable=False)
 
+    # Salt master association — nullable so existing nodes without an assignment still work (#516)
+    salt_master_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("salt_masters.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
+
     # SSH host key (TOFU — Trust-On-First-Use, stored on first connection)
     ssh_host_key: Mapped[str | None] = mapped_column(Text, nullable=True)
 
