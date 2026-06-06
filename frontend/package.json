@@ -1,7 +1,7 @@
 {
   "name": "frontend",
   "private": true,
-  "version": "0.1.345",
+  "version": "0.1.346",
   "packageManager": "pnpm@10.29.3",
   "type": "module",
   "scripts": {
@@ -20,7 +20,7 @@
     "date-fns": "^4.4.0",
     "date-fns-tz": "^3.2.0",
     "react": "^19.2.7",
-    "react-dom": "^19.2.6",
+    "react-dom": "^19.2.7",
     "react-is": "^19.2.6",
     "react-router-dom": "^7.16.0",
     "recharts": "^3.8.1",
