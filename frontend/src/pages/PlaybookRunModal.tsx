@@ -125,6 +125,7 @@ interface Props {
   initialTargetType?: 'node' | 'group'
   initialTargetId?: string
   initialVars?: Record<string, string>
+  initialTimeout?: number
 }
 
 const STATUS_STYLE: Record<string, { label: string; colour: string }> = {
@@ -140,10 +141,11 @@ function fmtDuration(secs: number): string {
   return m > 0 ? `${m}m ${s}s` : `${s}s`
 }
 
-export function PlaybookRunModal({ playbook, onClose, initialTargetType, initialTargetId, initialVars }: Props) {
+export function PlaybookRunModal({ playbook, onClose, initialTargetType, initialTargetId, initialVars, initialTimeout }: Props) {
   const [targetType, setTargetType] = useState<'node' | 'group'>(initialTargetType ?? 'node')
   const [targetId, setTargetId] = useState(initialTargetId ?? '')
   const [verbosity, setVerbosity] = useState(0)
+  const [timeoutMin, setTimeoutMin] = useState(initialTimeout ? Math.round(initialTimeout / 60) : 30)
   const [jobId] = useState<string | null>(null)
 
   // Delta-accumulator for modal log output (#371)
@@ -195,7 +197,7 @@ export function PlaybookRunModal({ playbook, onClose, initialTargetType, initial
         else if (v !== '' && !isNaN(Number(v))) extravars[k] = Number(v)
         else extravars[k] = v
       }
-      return playbooksApi.run(playbook.filename, targetType, targetId, extravars, undefined, undefined, verbosity)
+      return playbooksApi.run(playbook.filename, targetType, targetId, extravars, undefined, undefined, verbosity, timeoutMin * 60)
     },
     onSuccess: (data) => {
       toast('Playbook queued')
@@ -387,6 +389,26 @@ export function PlaybookRunModal({ playbook, onClose, initialTargetType, initial
               {verbosity > 0 && (
                 <p className="text-xs text-gray-400 mt-1">Higher verbosity shows more Ansible detail in the output log.</p>
               )}
+            </div>
+
+            {/* Timeout */}
+            <div>
+              <label htmlFor="timeout-input" className="block text-sm font-medium text-gray-700 mb-1">Timeout (minutes)</label>
+              <input
+                id="timeout-input"
+                type="number"
+                min="1"
+                max="360"
+                value={timeoutMin}
+                onChange={(e) => {
+                  const val = parseInt(e.target.value, 10)
+                  if (!isNaN(val)) {
+                    setTimeoutMin(Math.max(1, Math.min(360, val)))
+                  }
+                }}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm text-gray-900 focus:outline-none focus:border-brand-600"
+              />
+              <p className="text-xs text-gray-400 mt-1">Run is terminated if it exceeds this. Default 30 min.</p>
             </div>
 
             {/* SSH Credentials — resolved automatically, no prompt */}
