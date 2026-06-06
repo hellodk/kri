@@ -367,7 +367,7 @@ def run_playbook(
             try:
                 r = sync_redis.Redis.from_url(settings.redis_url)
                 lock = r.lock(
-                    f"{_TARGET_LOCK_PREFIX}{job.target_type}:{job.target_id}",
+                    f"{_TARGET_LOCK_PREFIX}{job.target_type}:{job.target_id}:{job.playbook}",
                     timeout=_TARGET_LOCK_TTL,
                     blocking=False,
                 )
