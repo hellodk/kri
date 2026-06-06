@@ -1,0 +1,29 @@
+# Build context is the repo root (api/worker/frontend all build from ..).
+# Exclude host-only artifacts so they never leak into images. Critically,
+# frontend/node_modules must NOT be copied: the frontend image runs its own
+# `pnpm install`, and copying the host's pnpm symlink store over the image's
+# breaks `COPY frontend/` ("cannot copy to non-directory"). (#428)
+
+# Node / frontend
+**/node_modules
+frontend/dist
+
+# Python
+**/__pycache__
+**/*.pyc
+.venv
+.pytest_cache
+.mypy_cache
+.ruff_cache
+
+# VCS / tooling / local state
+.git
+.github
+graphify-out
+.superpowers
+.claude
+
+# Local secrets / state that must never enter an image
+deploy/salt-pki
+**/*.local.ini
+inventory.manual.ini
