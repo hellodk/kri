@@ -45,6 +45,24 @@ router = APIRouter(prefix="/api/v1/ansible")
 _MINION_ID_RE = re.compile(r"^[a-zA-Z0-9._-]{1,128}$")
 _PLAYBOOKS_DIR = Path(__file__).parent.parent.parent.parent / "playbooks"
 
+_SENSITIVE_EV_KEYS = frozenset(
+    {
+        "ansible_ssh_pass",
+        "ansible_become_password",
+        "ansible_become_pass",
+        "password",
+        "secret",
+        "token",
+        "api_key",
+    }
+)
+
+
+def _scrub_extravars(ev: dict) -> dict:
+    if not ev:
+        return {}
+    return {k: ("***" if k.lower() in _SENSITIVE_EV_KEYS else v) for k, v in ev.items()}
+
 
 @router.post("/bootstrap", response_model=BootstrapResponse, status_code=202)
 @limiter.limit("10/minute")
@@ -125,7 +143,6 @@ async def bootstrap(
         str(node.id),
         payload.target_ip,
         ssh_username=payload.ssh_username,
-        ssh_password=payload.ssh_password,
     )
 
     return BootstrapResponse(
@@ -316,13 +333,16 @@ async def list_playbooks(
     import json as _json
     import uuid as _uuid
 
+    from fleet_platform.models.playbook_catalog import PlaybookCatalog
     from fleet_platform.services.playbook_catalog_svc import get_enabled
 
-    user_id = _uuid.UUID(claims["sub"])
-    enabled = await get_enabled(db, user_id=user_id)
-    if not enabled:
-        return []
+    # Fix #460: guard against missing sub claim
+    _sub = claims.get("sub")
+    if not _sub:
+        raise HTTPException(status_code=401, detail="Missing user identity in token")
+    user_id = _uuid.UUID(_sub)
 
+    # Load sources_json early so it's available for legacy fallback below
     result = await db.execute(select(PlatformSetting).where(PlatformSetting.key == "playbook_sources"))
     setting = result.scalar_one_or_none()
     sources_json = setting.value if setting else None
@@ -333,6 +353,32 @@ async def list_playbooks(
             sources = _json.loads(sources_json)
         except (ValueError, TypeError):
             sources = []
+
+    enabled = await get_enabled(db, user_id=user_id)
+    if not enabled:
+        # Fix #447: legacy fallback when catalog has never been configured
+        catalog_total = (await db.execute(select(func.count()).select_from(PlaybookCatalog))).scalar_one()
+        if catalog_total == 0:
+            # Catalog never set up — legacy mode: return all discovered playbooks
+            all_dirs_legacy = get_all_playbook_dirs(sources_json, _PLAYBOOKS_DIR)
+            legacy_entries = []
+            for d in all_dirs_legacy:
+                for e in discover_all(d):
+                    legacy_entries.append(
+                        PlaybookEntryResponse(
+                            filename=e.filename,
+                            name=e.name,
+                            description=e.description,
+                            entry_type=e.entry_type,
+                            default_vars=e.default_vars,
+                            lint_errors=e.lint_errors,
+                            source_dir=str(d),
+                            catalog_id=None,
+                            is_favorite=False,
+                        )
+                    )
+            return legacy_entries
+        return []
 
     all_dirs = get_all_playbook_dirs(sources_json, _PLAYBOOKS_DIR)
     catalog_lookup: dict[tuple[str, str], dict] = {(e["source_key"], e["filename"]): e for e in enabled}
@@ -832,10 +878,10 @@ async def sync_sources(
             pass
 
     all_dirs = get_all_playbook_dirs(sources_json, _PLAYBOOKS_DIR)
-    for i, d in enumerate(all_dirs):
-        if i == 0:
-            continue  # skip built-in dir
-        src = _sources_list[i - 1]
+    # Fix #446: zip extra source dirs with their source metadata explicitly,
+    # avoiding fragile index arithmetic that breaks when lengths diverge.
+    extra_dirs = all_dirs[1:]  # first entry is always the built-in playbooks dir
+    for d, src in zip(extra_dirs, _sources_list):
         source_key = src.get("url") or src.get("path") or str(d)
         discovered_filenames = {e.filename for e in discover_all(d)}
         disabled = await auto_disable_missing(db, source_key=source_key, discovered_filenames=discovered_filenames)
@@ -1252,7 +1298,7 @@ async def list_ansible_jobs(
             target_type=j.target_type,
             target_label=j.target_label,
             target_id=str(j.target_id) if j.target_id else None,
-            extravars=j.extravars,
+            extravars=_scrub_extravars(j.extravars or {}),
             status=j.status,
             triggered_by=j.triggered_by,
             started_at=j.started_at,
@@ -1298,7 +1344,7 @@ async def get_ansible_job(
         target_type=job.target_type,
         target_label=job.target_label,
         target_id=str(job.target_id) if job.target_id else None,
-        extravars=job.extravars,
+        extravars=_scrub_extravars(job.extravars or {}),
         status=job.status,
         triggered_by=job.triggered_by,
         started_at=job.started_at,
@@ -1347,19 +1393,18 @@ async def cancel_playbook_job(
     job.completed_at = now
     job.cancelled_at = now
     existing_stdout = job.stdout or ""
-    job.stdout = (
-        existing_stdout + f"\n\n[CANCELLED] Job manually cancelled by {claims['sub']} at {now.isoformat()}"
-    ).lstrip()
-    await db.commit()
+    _actor = claims.get("email") or claims.get("sub", "unknown")
+    job.stdout = (existing_stdout + f"\n\n[CANCELLED] Job manually cancelled by {_actor} at {now.isoformat()}").lstrip()
 
     await audit(
         db,
-        actor=claims["sub"],
+        actor=_actor,
         action="playbook_job_cancelled",
         resource_type="ansible_job",
         resource_id=job_id,
         new_value={"job_id": str(job_id), "playbook": job.playbook},
     )
+    await db.commit()  # single commit covers status + audit
 
     return {"job_id": str(job_id), "status": "cancelled", "message": "Job cancelled successfully"}
 
