@@ -38,10 +38,16 @@ def test_time_based_log_batching_present():
 
 
 def test_bootstrap_db_session_count_low():
-    """bootstrap_node must use ≤ 6 get_sync_db() opens total.
+    """bootstrap_node must use ≤ 7 get_sync_db() opens total.
 
-    The 6th session is the orphan-reaper finally block (#445 Part A) which only
-    opens on the error/exception path (guarded by _wrote_terminal_bootstrap).
+    Session breakdown (all error-path sessions are guarded, not on every run):
+      1. Load node + mark bootstrapping
+      2. Periodic log batch (inside ansible event loop, time-gated)
+      3. Write token hash + create BootstrapRun record
+      4. Finalise BootstrapRun + write terminal status (step 6, happy/failure path)
+      5. SoftTimeLimitExceeded handler (error path only)
+      6. except Exception handler (#509 — record terminal status on unexpected crash)
+      7. finally orphan-reaper (#445 Part A — only when step 6 did not complete)
     """
     # Count get_sync_db() calls in the bootstrap function body
     task_start = SRC.find("def bootstrap_node")
@@ -49,4 +55,4 @@ def test_bootstrap_db_session_count_low():
     next_fn = SRC.find("\ndef ", task_start + 20)
     task_body = SRC[task_start : next_fn if next_fn > 0 else task_start + 8000]
     count = task_body.count("get_sync_db()")
-    assert count <= 6, f"bootstrap_node opens {count} DB sessions, expected ≤ 6"
+    assert count <= 7, f"bootstrap_node opens {count} DB sessions, expected ≤ 7"
