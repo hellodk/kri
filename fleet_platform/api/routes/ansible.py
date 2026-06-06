@@ -339,7 +339,6 @@ async def list_playbooks(
     import json as _json
     import uuid as _uuid
 
-    from fleet_platform.models.playbook_catalog import PlaybookCatalog
     from fleet_platform.services.playbook_catalog_svc import get_enabled
 
     # Fix #460: guard against missing sub claim
@@ -362,41 +361,88 @@ async def list_playbooks(
 
     enabled = await get_enabled(db, user_id=user_id)
     if not enabled:
-        # Fix #447: legacy fallback when catalog has never been configured
-        catalog_total = (await db.execute(select(func.count()).select_from(PlaybookCatalog))).scalar_one()
-        if catalog_total == 0:
-            # Catalog never set up — legacy mode: return all discovered playbooks
-            all_dirs_legacy = get_all_playbook_dirs(sources_json, _PLAYBOOKS_DIR)
-            legacy_entries = []
-            for d in all_dirs_legacy:
-                for e in discover_all(d):
-                    legacy_entries.append(
-                        PlaybookEntryResponse(
-                            filename=e.filename,
-                            name=e.name,
-                            description=e.description,
-                            entry_type=e.entry_type,
-                            default_vars=e.default_vars,
-                            lint_errors=e.lint_errors,
-                            source_dir=str(d),
-                            catalog_id=None,
-                            is_favorite=False,
-                        )
+        # Fix #447/#503: legacy fallback when no enabled entries exist — covers
+        # both "catalog never configured" (catalog_total == 0) and "catalog has
+        # rows but all disabled" (catalog_total > 0, enabled empty).
+        # Previously guarded by catalog_total == 0 which silently returned []
+        # when all entries were disabled — fixed by always falling back here.
+        all_dirs_legacy = get_all_playbook_dirs(sources_json, _PLAYBOOKS_DIR)
+        legacy_entries = []
+        for d in all_dirs_legacy:
+            for e in discover_all(d):
+                legacy_entries.append(
+                    PlaybookEntryResponse(
+                        filename=e.filename,
+                        name=e.name,
+                        description=e.description,
+                        entry_type=e.entry_type,
+                        default_vars=e.default_vars,
+                        lint_errors=e.lint_errors,
+                        source_dir=str(d),
+                        catalog_id=None,
+                        is_favorite=False,
                     )
-            return legacy_entries
-        return []
+                )
+        return legacy_entries
 
-    all_dirs = get_all_playbook_dirs(sources_json, _PLAYBOOKS_DIR)
+    # Fix #496: build a per-source identity map (source_key → dir) so that absent
+    # source dirs do not corrupt the positional mapping between sources and dirs.
+    # get_all_playbook_dirs skips absent dirs, making it shorter than sources[];
+    # using positional index (i - 1) into sources[] was therefore wrong.
+    from fleet_platform.services.playbook_sources import (
+        _default_clone_path,
+        _translate_path,
+    )
+
+    # Build source_key → resolved_dir for each configured source (mirroring
+    # get_all_playbook_dirs logic) but keyed by identity, not position.
+    source_dir_map: dict[str, Path] = {}
+    for src in sources:
+        src_type = src.get("type", "local")
+        source_key = src.get("url") or src.get("path") or ""
+        if not source_key:
+            continue
+        if src_type == "local":
+            raw = src.get("path", "")
+            translated = _translate_path(raw)
+            p = Path(translated)
+            if p.is_dir():
+                source_dir_map[source_key] = p
+        elif src_type == "git":
+            url = src.get("url", "")
+            if not url:
+                continue
+            local_path = src.get("local_path") or _default_clone_path(url)
+            p = Path(local_path)
+            if p.is_dir():
+                source_dir_map[source_key] = p
+
     catalog_lookup: dict[tuple[str, str], dict] = {(e["source_key"], e["filename"]): e for e in enabled}
 
     all_entries: list[PlaybookEntryResponse] = []
-    for i, d in enumerate(all_dirs):
-        if i == 0:
-            source_key = str(d)
-        else:
-            src = sources[i - 1]
-            source_key = src.get("url") or src.get("path") or str(d)
 
+    # Built-in dir (always index 0 in get_all_playbook_dirs)
+    builtin_key = str(_PLAYBOOKS_DIR)
+    for e in discover_all(_PLAYBOOKS_DIR):
+        info = catalog_lookup.get((builtin_key, e.filename))
+        if info is None:
+            continue
+        all_entries.append(
+            PlaybookEntryResponse(
+                filename=e.filename,
+                name=e.name,
+                description=e.description,
+                entry_type=e.entry_type,
+                default_vars=e.default_vars,
+                lint_errors=e.lint_errors,
+                source_dir=builtin_key,
+                catalog_id=info["catalog_id"],
+                is_favorite=info["is_favorite"],
+            )
+        )
+
+    # Per-source dirs — keyed by identity, not position
+    for source_key, d in source_dir_map.items():
         for e in discover_all(d):
             info = catalog_lookup.get((source_key, e.filename))
             if info is None:
@@ -883,12 +929,38 @@ async def sync_sources(
         except (ValueError, TypeError):
             pass
 
-    all_dirs = get_all_playbook_dirs(sources_json, _PLAYBOOKS_DIR)
-    # Fix #446: zip extra source dirs with their source metadata explicitly,
-    # avoiding fragile index arithmetic that breaks when lengths diverge.
-    extra_dirs = all_dirs[1:]  # first entry is always the built-in playbooks dir
-    for d, src in zip(extra_dirs, _sources_list):
-        source_key = src.get("url") or src.get("path") or str(d)
+    # Fix #496: build per-source identity map so absent dirs don't corrupt the
+    # positional mapping. zip(extra_dirs, _sources_list) is still wrong when an
+    # earlier source dir is absent — extra_dirs is shorter, causing source N+1's
+    # dir to be paired with source N's metadata. Use is_dir() per source instead.
+    from fleet_platform.services.playbook_sources import (
+        _default_clone_path as _dcp,
+    )
+    from fleet_platform.services.playbook_sources import (
+        _translate_path as _tp,
+    )
+
+    for src in _sources_list:
+        src_type = src.get("type", "local")
+        source_key = src.get("url") or src.get("path") or ""
+        if not source_key:
+            continue
+        if src_type == "local":
+            raw = src.get("path", "")
+            translated = _tp(raw)
+            d = Path(translated)
+            if not d.is_dir():
+                continue
+        elif src_type == "git":
+            url = src.get("url", "")
+            if not url:
+                continue
+            local_path = src.get("local_path") or _dcp(url)
+            d = Path(local_path)
+            if not d.is_dir():
+                continue
+        else:
+            continue
         discovered_filenames = {e.filename for e in discover_all(d)}
         disabled = await auto_disable_missing(db, source_key=source_key, discovered_filenames=discovered_filenames)
         for row in disabled:
