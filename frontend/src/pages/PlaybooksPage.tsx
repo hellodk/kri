@@ -10,6 +10,7 @@ import { ErrorState } from '../components/ErrorState'
 import { PlaybookRunModal } from './PlaybookRunModal'
 import { PlaybookDrawer } from '../components/PlaybookDrawer'
 import { fuzzyAny } from '../utils/fuzzy'
+import { ansibleCardCta } from '../lib/ansibleCta'
 import { useToastStore } from '../stores/toastStore'
 
 function filterAndSort(entries: PlaybookEntry[], q: string): PlaybookEntry[] {
@@ -302,13 +303,23 @@ export function PlaybooksPage() {
               <div className="text-xs font-semibold uppercase tracking-wide text-gray-400 mb-2">★ Favorites</div>
               <div className="text-4xl font-black text-amber-500">{favorites.length}</div>
             </div>
-            <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-5">
-              <div className="text-xs font-semibold uppercase tracking-wide text-gray-400 mb-2">⊞ Ansible</div>
-              <div className={`text-lg font-bold ${settings?.ansible_endpoint_url ? 'text-emerald-600' : 'text-amber-600'}`}>
-                {settings?.ansible_endpoint_url ? 'Connected' : 'Not configured'}
-              </div>
-              <div className="text-xs text-gray-400 mt-1 truncate">{settings?.ansible_endpoint_url ?? 'Set in Settings'}</div>
-            </div>
+            {(() => {
+              const cta = ansibleCardCta(settings?.ansible_endpoint_url)
+              return (
+                <button
+                  type="button"
+                  onClick={() => navigate(cta.route)}
+                  title="Configure in Settings → Integrations"
+                  className="bg-white rounded-xl border border-gray-200 shadow-sm p-5 text-left w-full cursor-pointer hover:border-brand-400 hover:shadow-md transition-colors focus:outline-none focus:ring-2 focus:ring-brand-500"
+                >
+                  <div className="text-xs font-semibold uppercase tracking-wide text-gray-600 mb-2">⊞ Ansible</div>
+                  <div className={`text-lg font-bold ${settings?.ansible_endpoint_url ? 'text-emerald-600' : 'text-amber-600'}`}>
+                    {cta.status}
+                  </div>
+                  <div className="text-xs text-gray-600 mt-1 truncate underline decoration-dotted underline-offset-2">{cta.hint}</div>
+                </button>
+              )
+            })()}
           </div>
 
           {/* Fuzzy search */}
