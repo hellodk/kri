@@ -43,6 +43,7 @@ from fleet_platform.api.routes.oidc import router as oidc_router
 from fleet_platform.api.routes.playbook_library import router as playbook_library_router
 from fleet_platform.api.routes.provisioning import router as provisioning_router
 from fleet_platform.api.routes.salt_keys import router as salt_keys_router
+from fleet_platform.api.routes.salt_masters import router as salt_masters_router
 from fleet_platform.api.routes.salt_ops import router as salt_ops_router
 from fleet_platform.api.routes.security import router as security_router
 from fleet_platform.api.routes.vnc import router as vnc_router
@@ -146,6 +147,7 @@ def create_app() -> FastAPI:
     app.include_router(vnc_router, tags=["vnc"])
     app.include_router(audit_router, tags=["audit"])
     app.include_router(salt_keys_router, tags=["salt"])
+    app.include_router(salt_masters_router, tags=["salt-masters"])
     app.include_router(node_secrets_router, tags=["node-secrets"])
     app.include_router(group_secrets_router, tags=["group-secrets"])
     app.include_router(salt_ops_router, tags=["salt-ops"])
