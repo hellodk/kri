@@ -1,7 +1,7 @@
 from datetime import UTC, datetime, timedelta
 
 import redis as sync_redis
-from sqlalchemy import String, cast, func, or_, select, update
+from sqlalchemy import String, and_, cast, delete, func, or_, select, update
 
 from fleet_platform.core.config import settings
 from fleet_platform.db.session import get_sync_db
@@ -53,12 +53,14 @@ def mark_stale_nodes() -> dict:
             .where(Node.last_seen_at < stale_cutoff)
             .where(Node.last_seen_at >= offline_cutoff)
             .where(Node.status == "online")
+            .where(Node.maintenance_mode.is_(False))  # #456: skip nodes in maintenance mode
             .values(status="stale", updated_at=now)
         )
         offline = db.execute(
             update(Node)
             .where(Node.last_seen_at < offline_cutoff)
             .where(Node.status.in_(["online", "stale"]))
+            .where(Node.maintenance_mode.is_(False))  # #456: skip nodes in maintenance mode
             .values(status="offline", updated_at=now)
         )
         db.commit()
@@ -78,7 +80,10 @@ def mark_stale_nodes() -> dict:
     queue="maintenance",
 )
 def cleanup_old_bootstrap_runs() -> dict:
-    """Delete bootstrap run records older than the configured retention period."""
+    """Delete bootstrap run records older than the configured retention period.
+
+    Also deletes NULL finished_at rows that are stuck in non-running states (#445 Part B).
+    """
     with get_sync_db() as db:
         row = db.execute(
             select(PlatformSetting).where(PlatformSetting.key == "bootstrap_log_retention_days")
@@ -86,11 +91,20 @@ def cleanup_old_bootstrap_runs() -> dict:
         days = int(row.value) if row and row.value else 30
         cutoff = datetime.now(UTC) - timedelta(days=days)
 
-        runs = db.execute(select(BootstrapRun).where(BootstrapRun.finished_at < cutoff)).scalars().all()
-        count = len(runs)
-        for run in runs:
-            db.delete(run)
+        result = db.execute(
+            delete(BootstrapRun).where(
+                or_(
+                    BootstrapRun.finished_at < cutoff,
+                    and_(
+                        BootstrapRun.finished_at.is_(None),
+                        BootstrapRun.status != "running",
+                        BootstrapRun.started_at < cutoff,
+                    ),
+                )
+            )
+        )
         db.commit()
+        count = result.rowcount  # type: ignore[attr-defined]
 
     return {"deleted": count, "cutoff_days": days}
 
@@ -149,6 +163,32 @@ def reap_orphaned_jobs() -> dict:
                 completed_at=now,
                 stdout=func.concat(func.coalesce(cast(AnsibleJob.stdout, String), ""), _ORPHAN_MESSAGE),
             )
+        )
+        db.commit()
+    return {"reaped": result.rowcount}  # type: ignore[attr-defined]
+
+
+_BOOTSTRAP_ORPHAN_MINUTES = 90  # bootstraps taking longer than 90 min are orphaned
+
+
+@celery_app.task(
+    name="fleet_platform.workers.maintenance.reap_orphaned_bootstraps",
+    queue="maintenance",
+)
+def reap_orphaned_bootstraps() -> dict:
+    """Mark BootstrapRun rows stuck in 'running' as failed (#445 Part C).
+
+    A bootstrap is considered orphaned when it has been running for longer than
+    _BOOTSTRAP_ORPHAN_MINUTES — the worker was likely restarted mid-run.
+    """
+    now = datetime.now(UTC)
+    cutoff = now - timedelta(minutes=_BOOTSTRAP_ORPHAN_MINUTES)
+    with get_sync_db() as db:
+        result = db.execute(
+            update(BootstrapRun)
+            .where(BootstrapRun.status == "running")
+            .where(BootstrapRun.started_at < cutoff)
+            .values(status="failed", finished_at=now)
         )
         db.commit()
     return {"reaped": result.rowcount}  # type: ignore[attr-defined]

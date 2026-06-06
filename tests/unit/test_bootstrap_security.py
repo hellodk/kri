@@ -38,11 +38,15 @@ def test_time_based_log_batching_present():
 
 
 def test_bootstrap_db_session_count_low():
-    """bootstrap_node must use ≤ 5 get_sync_db() opens total."""
+    """bootstrap_node must use ≤ 6 get_sync_db() opens total.
+
+    The 6th session is the orphan-reaper finally block (#445 Part A) which only
+    opens on the error/exception path (guarded by _wrote_terminal_bootstrap).
+    """
     # Count get_sync_db() calls in the bootstrap function body
     task_start = SRC.find("def bootstrap_node")
     # Find next top-level function after bootstrap_node
     next_fn = SRC.find("\ndef ", task_start + 20)
     task_body = SRC[task_start : next_fn if next_fn > 0 else task_start + 8000]
     count = task_body.count("get_sync_db()")
-    assert count <= 5, f"bootstrap_node opens {count} DB sessions, expected ≤ 5"
+    assert count <= 6, f"bootstrap_node opens {count} DB sessions, expected ≤ 6"

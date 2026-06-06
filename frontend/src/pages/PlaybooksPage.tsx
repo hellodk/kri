@@ -29,10 +29,10 @@ interface PlaybookRowProps {
   onRun: (p: PlaybookEntry) => void
   onFiles: (p: PlaybookEntry) => void
   onToggleFavorite: (p: PlaybookEntry) => void
-  favPending: boolean
+  isFavPending: (catalogId: string | null) => boolean
 }
 
-function PlaybookRow({ p, badge, badgeClass, onRun, onFiles, onToggleFavorite, favPending }: PlaybookRowProps) {
+function PlaybookRow({ p, badge, badgeClass, onRun, onFiles, onToggleFavorite, isFavPending }: PlaybookRowProps) {
   const isFav = !!p.is_favorite
   return (
     <tr className="border-b border-gray-50 hover:bg-gray-50 transition-colors last:border-0">
@@ -40,18 +40,18 @@ function PlaybookRow({ p, badge, badgeClass, onRun, onFiles, onToggleFavorite, f
         {p.catalog_id ? (
           <button
             onClick={() => onToggleFavorite(p)}
-            disabled={favPending}
+            disabled={isFavPending(p.catalog_id)}
             title={isFav ? 'Remove from favorites' : 'Add to favorites'}
             className="leading-none disabled:opacity-40"
           >
             {isFav ? (
               <span className="text-amber-400 text-lg">★</span>
             ) : (
-              <span className="text-gray-300 hover:text-amber-300 text-lg">☆</span>
+              <span className="text-gray-400 hover:text-amber-300 text-lg">☆</span>
             )}
           </button>
         ) : (
-          <span className="text-gray-200 text-lg" title="Not in library">☆</span>
+          <span className="text-gray-400 text-lg" title="Not in library">☆</span>
         )}
       </td>
       <td className="px-5 py-3">
@@ -68,11 +68,11 @@ function PlaybookRow({ p, badge, badgeClass, onRun, onFiles, onToggleFavorite, f
           )}
         </div>
         {p.description && (
-          <p className="text-xs text-gray-400 mt-0.5 ml-7">{p.description}</p>
+          <p className="text-xs text-gray-600 mt-0.5 ml-7">{p.description}</p>
         )}
       </td>
       <td className="px-5 py-3 hidden md:table-cell">
-        <span className="font-mono text-xs text-gray-400">{p.filename}</span>
+        <span className="font-mono text-xs text-gray-600">{p.filename}</span>
       </td>
       <td className="px-5 py-3 text-center">
         {Object.keys(p.default_vars).length > 0 && (
@@ -112,7 +112,7 @@ interface EntriesTableProps {
   onRun: (p: PlaybookEntry) => void
   onFiles: (p: PlaybookEntry) => void
   onToggleFavorite: (p: PlaybookEntry) => void
-  favPending: boolean
+  isFavPending: (catalogId: string | null) => boolean
 }
 
 function EntriesTable({
@@ -125,7 +125,7 @@ function EntriesTable({
   onRun,
   onFiles,
   onToggleFavorite,
-  favPending,
+  isFavPending,
 }: EntriesTableProps) {
   const badge = entryType === 'playbook' ? '▤' : '⊡'
   const badgeClass =
@@ -144,7 +144,7 @@ function EntriesTable({
     <div className={containerClass}>
       <div className={`px-5 py-3 border-b ${headerBorderClass} flex items-center justify-between`}>
         <span className="text-sm font-semibold text-gray-700">{title}</span>
-        <span className="text-xs text-gray-400">
+        <span className="text-xs text-gray-600">
           {search ? `${entries.length} of ${allCount}` : `${allCount} total`}
         </span>
       </div>
@@ -168,7 +168,7 @@ function EntriesTable({
               onRun={onRun}
               onFiles={onFiles}
               onToggleFavorite={onToggleFavorite}
-              favPending={favPending}
+              isFavPending={isFavPending}
             />
           ))}
         </tbody>
@@ -182,6 +182,7 @@ export function PlaybooksPage() {
   const [pendingRun, setPendingRun] = useState<PlaybookEntry | null>(null)
   const [openPlaybook, setOpenPlaybook] = useState<PlaybookEntry | null>(null)
   const [search, setSearch] = useState('')
+  const [pendingFavIds, setPendingFavIds] = useState<Set<string>>(new Set())
 
   const navigate = useNavigate()
   const toast = useToastStore((s) => s.add)
@@ -213,7 +214,14 @@ export function PlaybooksPage() {
         await libraryApi.addFavorite(catalogId)
       }
     },
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['playbooks'] }),
+    onMutate: ({ catalogId }) => {
+      setPendingFavIds(prev => new Set([...prev, catalogId]))
+    },
+    onSettled: (_, __, { catalogId }) => {
+      setPendingFavIds(prev => { const next = new Set(prev); next.delete(catalogId); return next })
+      qc.invalidateQueries({ queryKey: ['playbooks'] })
+      qc.invalidateQueries({ queryKey: ['playbook-library'] })
+    },
     onError: () => toast('Failed to update favorite', 'error'),
   })
 
@@ -343,8 +351,8 @@ export function PlaybooksPage() {
           </div>
 
           {totalFiltered === 0 && search && (
-            <div className="bg-white rounded-xl border border-gray-200 p-10 text-center text-gray-400 text-sm">
-              No matches for <strong className="text-gray-600">"{search}"</strong>
+            <div className="bg-white rounded-xl border border-gray-200 p-10 text-center text-gray-600 text-sm">
+              No matches for <strong className="text-gray-900">"{search}"</strong>
               <button onClick={() => setSearch('')} className="ml-2 text-brand-600 hover:underline">clear</button>
             </div>
           )}
@@ -376,7 +384,7 @@ export function PlaybooksPage() {
                       onRun={setPendingRun}
                       onFiles={setOpenPlaybook}
                       onToggleFavorite={toggleFavorite}
-                      favPending={favMutation.isPending}
+                      isFavPending={(id) => pendingFavIds.has(id ?? '')}
                     />
                   ))}
                   {filteredFavRoles.map((r) => (
@@ -388,7 +396,7 @@ export function PlaybooksPage() {
                       onRun={setPendingRun}
                       onFiles={setOpenPlaybook}
                       onToggleFavorite={toggleFavorite}
-                      favPending={favMutation.isPending}
+                      isFavPending={(id) => pendingFavIds.has(id ?? '')}
                     />
                   ))}
                 </tbody>
@@ -407,7 +415,7 @@ export function PlaybooksPage() {
               onRun={setPendingRun}
               onFiles={setOpenPlaybook}
               onToggleFavorite={toggleFavorite}
-              favPending={favMutation.isPending}
+              isFavPending={(id) => pendingFavIds.has(id ?? '')}
             />
           )}
 
@@ -422,7 +430,7 @@ export function PlaybooksPage() {
               onRun={setPendingRun}
               onFiles={setOpenPlaybook}
               onToggleFavorite={toggleFavorite}
-              favPending={favMutation.isPending}
+              isFavPending={(id) => pendingFavIds.has(id ?? '')}
             />
           )}
         </>
@@ -435,7 +443,7 @@ export function PlaybooksPage() {
             <p className="text-sm text-gray-600">
               <span className="font-semibold">{pendingRun.name}</span> will run against real infrastructure. This cannot be undone.
             </p>
-            <p className="text-xs text-gray-400 font-mono">{pendingRun.filename}</p>
+            <p className="text-xs text-gray-600 font-mono">{pendingRun.filename}</p>
             <div className="flex gap-3">
               <button
                 onClick={() => setPendingRun(null)}
