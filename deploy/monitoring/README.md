@@ -49,3 +49,39 @@ Point any Prometheus at the host (see `prometheus-scrape-examples.yml`, job
 **Rule of thumb:** the *rule* (`rules/kri-alerts.rules.yml`) is identical
 everywhere; only the *scrape path* and *rule delivery* (rule_files vs
 PrometheusRule CR) differ by mode. Keep the two rule files in sync.
+
+---
+
+## Grafana dashboard
+
+The dashboard JSON lives at **`deploy/monitoring/dashboards/kri.json`**
+(uid `kri-fleet`, title `kri Fleet Platform`, schemaVersion 39, Grafana 10/11).
+
+It covers:
+- Stat row: Nodes Online / Offline / Total, SSH Sessions Active
+- Timeseries: SSH Reachability per Node (`kri_node_ssh_reachable` by `minion_id`)
+- Timeseries: HTTP Request Rate (`sum(rate(kri_http_requests_total[5m]))`)
+- Timeseries: p99 Latency (`histogram_quantile(0.99, …kri_http_request_duration_seconds_bucket…)`)
+- Timeseries: Celery Task Rate (`rate(kri_celery_tasks_total[5m])`)
+
+### docker-compose / standalone import
+
+In Grafana UI: **Dashboards → Import → Upload JSON file** → select
+`deploy/monitoring/dashboards/kri.json`. Choose your Prometheus datasource
+when prompted for `DS_PROMETHEUS`.
+
+Alternatively, copy the file into Grafana's provisioned dashboard directory
+and set `updateIntervalSeconds: 30` in the provisioning config.
+
+### kubernetes — automatic via Grafana sidecar
+
+Apply the ConfigMap once; the Grafana sidecar (label selector `grafana_dashboard: "1"`)
+picks it up automatically within ~30 seconds:
+
+```bash
+kubectl apply -f deploy/k8s/observability/grafana-dashboard.yaml
+```
+
+The ConfigMap lives in the **`kri` namespace** (not `monitoring`). The JSON
+embedded in `data.kri.json` must stay byte-identical to
+`deploy/monitoring/dashboards/kri.json` — update both files together.

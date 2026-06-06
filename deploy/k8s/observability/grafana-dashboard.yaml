@@ -1,167 +1,337 @@
+# Grafana dashboard ConfigMap for kri Fleet Platform (issue #430).
+# Grafana's sidecar container discovers this ConfigMap via the
+# grafana_dashboard: "1" label and injects kri.json into Grafana automatically.
+#
+# Apply:  kubectl apply -f deploy/k8s/observability/grafana-dashboard.yaml
+# The JSON embedded here MUST stay byte-identical to
+# deploy/monitoring/dashboards/kri.json — update both together.
 apiVersion: v1
 kind: ConfigMap
 metadata:
   name: kri-dashboard
-  namespace: utilities           # app namespace — never monitoring
+  namespace: kri                  # app namespace — never monitoring
   labels:
-    grafana_dashboard: "1"       # Grafana sidecar picks this up via label selector
+    grafana_dashboard: "1"        # Grafana sidecar picks this up via label selector
 data:
-  kri-dashboard.json: |
+  kri.json: |
     {
       "id": null,
-      "uid": "kri-fleet-overview",
-      "title": "KRI Fleet Platform",
-      "tags": ["kri", "fleet"],
+      "uid": "kri-fleet",
+      "title": "kri Fleet Platform",
+      "tags": ["kri"],
       "timezone": "browser",
-      "schemaVersion": 38,
+      "schemaVersion": 39,
       "version": 1,
       "refresh": "30s",
       "time": { "from": "now-1h", "to": "now" },
+      "templating": {
+        "list": [
+          {
+            "name": "DS_PROMETHEUS",
+            "type": "datasource",
+            "pluginId": "prometheus",
+            "query": "prometheus",
+            "label": "Datasource",
+            "hide": 0,
+            "refresh": 1,
+            "includeAll": false,
+            "multi": false,
+            "options": [],
+            "current": {}
+          }
+        ]
+      },
       "panels": [
         {
           "id": 1,
-          "type": "timeseries",
-          "title": "HTTP Request Rate (req/s)",
-          "gridPos": { "x": 0, "y": 0, "w": 12, "h": 8 },
-          "datasource": "KRI-Prometheus",
-          "targets": [
-            {
-              "expr": "sum(rate(kri_http_requests_total[5m])) by (method, endpoint)",
-              "legendFormat": "{{method}} {{endpoint}}"
-            }
-          ],
-          "fieldConfig": {
-            "defaults": { "unit": "reqps", "color": { "mode": "palette-classic" } }
-          }
+          "type": "row",
+          "title": "Node Overview",
+          "collapsed": false,
+          "gridPos": { "x": 0, "y": 0, "w": 24, "h": 1 }
         },
         {
           "id": 2,
-          "type": "timeseries",
-          "title": "HTTP Error Rate (5xx req/s)",
-          "gridPos": { "x": 12, "y": 0, "w": 12, "h": 8 },
-          "datasource": "KRI-Prometheus",
+          "type": "stat",
+          "title": "Nodes Online",
+          "gridPos": { "x": 0, "y": 1, "w": 6, "h": 4 },
+          "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
           "targets": [
             {
-              "expr": "sum(rate(kri_http_requests_total{status_code=~\"5..\"}[5m])) by (endpoint)",
-              "legendFormat": "{{endpoint}}"
+              "expr": "kri_nodes_online",
+              "legendFormat": "Online",
+              "refId": "A"
             }
           ],
           "fieldConfig": {
             "defaults": {
-              "unit": "reqps",
-              "color": { "fixedColor": "red", "mode": "fixed" }
-            }
+              "unit": "short",
+              "color": { "mode": "thresholds" },
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  { "color": "red", "value": null },
+                  { "color": "green", "value": 1 }
+                ]
+              }
+            },
+            "overrides": []
+          },
+          "options": {
+            "reduceOptions": { "calcs": ["lastNotNull"] },
+            "orientation": "auto",
+            "textMode": "auto",
+            "colorMode": "background",
+            "graphMode": "none",
+            "justifyMode": "center"
           }
         },
         {
           "id": 3,
-          "type": "timeseries",
-          "title": "Request Duration p50 / p95",
-          "gridPos": { "x": 0, "y": 8, "w": 12, "h": 8 },
-          "datasource": "KRI-Prometheus",
+          "type": "stat",
+          "title": "Nodes Offline",
+          "gridPos": { "x": 6, "y": 1, "w": 6, "h": 4 },
+          "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
           "targets": [
             {
-              "expr": "histogram_quantile(0.50, sum(rate(kri_http_request_duration_seconds_bucket[5m])) by (le, endpoint))",
-              "legendFormat": "p50 {{endpoint}}"
-            },
-            {
-              "expr": "histogram_quantile(0.95, sum(rate(kri_http_request_duration_seconds_bucket[5m])) by (le, endpoint))",
-              "legendFormat": "p95 {{endpoint}}"
+              "expr": "kri_nodes_offline",
+              "legendFormat": "Offline",
+              "refId": "A"
             }
           ],
           "fieldConfig": {
-            "defaults": { "unit": "s", "color": { "mode": "palette-classic" } }
+            "defaults": {
+              "unit": "short",
+              "color": { "mode": "thresholds" },
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  { "color": "green", "value": null },
+                  { "color": "orange", "value": 1 },
+                  { "color": "red", "value": 5 }
+                ]
+              }
+            },
+            "overrides": []
+          },
+          "options": {
+            "reduceOptions": { "calcs": ["lastNotNull"] },
+            "orientation": "auto",
+            "textMode": "auto",
+            "colorMode": "background",
+            "graphMode": "none",
+            "justifyMode": "center"
           }
         },
         {
           "id": 4,
           "type": "stat",
-          "title": "Nodes — Total",
-          "gridPos": { "x": 12, "y": 8, "w": 4, "h": 4 },
-          "datasource": "KRI-Prometheus",
+          "title": "Nodes Total",
+          "gridPos": { "x": 12, "y": 1, "w": 6, "h": 4 },
+          "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
           "targets": [
-            { "expr": "kri_nodes_total", "legendFormat": "Total" }
+            {
+              "expr": "kri_nodes_total",
+              "legendFormat": "Total",
+              "refId": "A"
+            }
           ],
           "fieldConfig": {
-            "defaults": { "unit": "short", "color": { "mode": "thresholds" },
-              "thresholds": { "steps": [{ "color": "blue", "value": null }] }
-            }
+            "defaults": {
+              "unit": "short",
+              "color": { "mode": "thresholds" },
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  { "color": "blue", "value": null }
+                ]
+              }
+            },
+            "overrides": []
+          },
+          "options": {
+            "reduceOptions": { "calcs": ["lastNotNull"] },
+            "orientation": "auto",
+            "textMode": "auto",
+            "colorMode": "value",
+            "graphMode": "none",
+            "justifyMode": "center"
           }
         },
         {
           "id": 5,
           "type": "stat",
-          "title": "Nodes — Online",
-          "gridPos": { "x": 16, "y": 8, "w": 4, "h": 4 },
-          "datasource": "KRI-Prometheus",
+          "title": "SSH Sessions Active",
+          "gridPos": { "x": 18, "y": 1, "w": 6, "h": 4 },
+          "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
           "targets": [
-            { "expr": "kri_nodes_online", "legendFormat": "Online" }
+            {
+              "expr": "kri_ssh_sessions_active",
+              "legendFormat": "Active",
+              "refId": "A"
+            }
           ],
           "fieldConfig": {
-            "defaults": { "unit": "short", "color": { "mode": "thresholds" },
-              "thresholds": { "steps": [
-                { "color": "red", "value": null },
-                { "color": "green", "value": 1 }
-              ]}
-            }
+            "defaults": {
+              "unit": "short",
+              "color": { "mode": "thresholds" },
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  { "color": "green", "value": null },
+                  { "color": "orange", "value": 10 },
+                  { "color": "red", "value": 30 }
+                ]
+              }
+            },
+            "overrides": []
+          },
+          "options": {
+            "reduceOptions": { "calcs": ["lastNotNull"] },
+            "orientation": "auto",
+            "textMode": "auto",
+            "colorMode": "background",
+            "graphMode": "none",
+            "justifyMode": "center"
           }
         },
         {
           "id": 6,
-          "type": "stat",
-          "title": "Nodes — Offline",
-          "gridPos": { "x": 20, "y": 8, "w": 4, "h": 4 },
-          "datasource": "KRI-Prometheus",
-          "targets": [
-            { "expr": "kri_nodes_offline", "legendFormat": "Offline" }
-          ],
-          "fieldConfig": {
-            "defaults": { "unit": "short", "color": { "mode": "thresholds" },
-              "thresholds": { "steps": [
-                { "color": "green", "value": null },
-                { "color": "orange", "value": 1 },
-                { "color": "red", "value": 5 }
-              ]}
-            }
-          }
+          "type": "row",
+          "title": "SSH Reachability",
+          "collapsed": false,
+          "gridPos": { "x": 0, "y": 5, "w": 24, "h": 1 }
         },
         {
           "id": 7,
-          "type": "gauge",
-          "title": "SSH Sessions — Active",
-          "gridPos": { "x": 12, "y": 12, "w": 6, "h": 4 },
-          "datasource": "KRI-Prometheus",
+          "type": "timeseries",
+          "title": "SSH Reachability per Node",
+          "gridPos": { "x": 0, "y": 6, "w": 24, "h": 8 },
+          "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
           "targets": [
-            { "expr": "kri_ssh_sessions_active", "legendFormat": "Active" }
+            {
+              "expr": "kri_node_ssh_reachable",
+              "legendFormat": "{{minion_id}}",
+              "refId": "A"
+            }
           ],
           "fieldConfig": {
             "defaults": {
               "unit": "short",
               "min": 0,
-              "max": 50,
-              "color": { "mode": "thresholds" },
-              "thresholds": { "steps": [
-                { "color": "green", "value": null },
-                { "color": "orange", "value": 10 },
-                { "color": "red", "value": 30 }
-              ]}
-            }
+              "max": 1,
+              "color": { "mode": "palette-classic" },
+              "custom": {
+                "lineWidth": 2,
+                "fillOpacity": 10,
+                "spanNulls": false
+              }
+            },
+            "overrides": []
+          },
+          "options": {
+            "tooltip": { "mode": "multi", "sort": "none" },
+            "legend": { "displayMode": "table", "placement": "bottom" }
           }
         },
         {
           "id": 8,
+          "type": "row",
+          "title": "HTTP",
+          "collapsed": false,
+          "gridPos": { "x": 0, "y": 14, "w": 24, "h": 1 }
+        },
+        {
+          "id": 9,
           "type": "timeseries",
-          "title": "Celery Task Rate by Status",
-          "gridPos": { "x": 18, "y": 12, "w": 6, "h": 4 },
-          "datasource": "KRI-Prometheus",
+          "title": "HTTP Request Rate",
+          "gridPos": { "x": 0, "y": 15, "w": 12, "h": 8 },
+          "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
           "targets": [
             {
-              "expr": "sum(rate(kri_celery_tasks_total[5m])) by (task_name, status)",
-              "legendFormat": "{{task_name}} [{{status}}]"
+              "expr": "sum(rate(kri_http_requests_total[5m]))",
+              "legendFormat": "req/s",
+              "refId": "A"
             }
           ],
           "fieldConfig": {
-            "defaults": { "unit": "ops", "color": { "mode": "palette-classic" } }
+            "defaults": {
+              "unit": "reqps",
+              "color": { "mode": "palette-classic" },
+              "custom": {
+                "lineWidth": 2,
+                "fillOpacity": 10
+              }
+            },
+            "overrides": []
+          },
+          "options": {
+            "tooltip": { "mode": "single", "sort": "none" },
+            "legend": { "displayMode": "list", "placement": "bottom" }
+          }
+        },
+        {
+          "id": 10,
+          "type": "timeseries",
+          "title": "p99 Latency",
+          "gridPos": { "x": 12, "y": 15, "w": 12, "h": 8 },
+          "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+          "targets": [
+            {
+              "expr": "histogram_quantile(0.99, sum(rate(kri_http_request_duration_seconds_bucket[5m])) by (le))",
+              "legendFormat": "p99",
+              "refId": "A"
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "s",
+              "color": { "mode": "palette-classic" },
+              "custom": {
+                "lineWidth": 2,
+                "fillOpacity": 10
+              }
+            },
+            "overrides": []
+          },
+          "options": {
+            "tooltip": { "mode": "single", "sort": "none" },
+            "legend": { "displayMode": "list", "placement": "bottom" }
+          }
+        },
+        {
+          "id": 11,
+          "type": "row",
+          "title": "Celery",
+          "collapsed": false,
+          "gridPos": { "x": 0, "y": 23, "w": 24, "h": 1 }
+        },
+        {
+          "id": 12,
+          "type": "timeseries",
+          "title": "Celery Task Rate",
+          "gridPos": { "x": 0, "y": 24, "w": 24, "h": 8 },
+          "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+          "targets": [
+            {
+              "expr": "rate(kri_celery_tasks_total[5m])",
+              "legendFormat": "tasks/s",
+              "refId": "A"
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "ops",
+              "color": { "mode": "palette-classic" },
+              "custom": {
+                "lineWidth": 2,
+                "fillOpacity": 10
+              }
+            },
+            "overrides": []
+          },
+          "options": {
+            "tooltip": { "mode": "single", "sort": "none" },
+            "legend": { "displayMode": "list", "placement": "bottom" }
           }
         }
       ]
