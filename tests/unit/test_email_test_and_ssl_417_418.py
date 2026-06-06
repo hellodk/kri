@@ -191,10 +191,8 @@ def _patch_get_setting_sync(monkeypatch, settings: dict):
         "fleet_platform.services.digest_svc.get_setting_sync",
         fake_get_setting_sync,
     )
-    monkeypatch.setattr(
-        "fleet_platform.services.digest_svc.decrypt_secret",
-        lambda v: v or "",
-    )
+    # NOTE: digest_svc no longer calls decrypt_secret — get_setting_sync already
+    # returns decrypted values; the old double-decrypt was the #425 bug.
 
 
 class TestSendTestEmail:

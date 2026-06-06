@@ -16,7 +16,6 @@ from fleet_platform.services.platform_settings_svc import (
     SMTP_PASSWORD,
     SMTP_PORT,
     SMTP_USERNAME,
-    decrypt_secret,
     get_setting_sync,
 )
 
@@ -194,7 +193,7 @@ def send_digest(db: Session) -> dict:
     smtp_port = int(get_setting_sync(db, SMTP_PORT) or "587")
     smtp_user = get_setting_sync(db, SMTP_USERNAME)
     smtp_password_raw = get_setting_sync(db, SMTP_PASSWORD)
-    smtp_password = decrypt_secret(smtp_password_raw) if smtp_password_raw else ""
+    smtp_password = smtp_password_raw or ""  # get_setting_sync already decrypts (#425)
     from_addr = get_setting_sync(db, SMTP_FROM) or smtp_user or ""
     recipients_raw = get_setting_sync(db, DIGEST_RECIPIENTS) or ""
     recipients = [r.strip() for r in recipients_raw.split(",") if r.strip()]
@@ -232,7 +231,7 @@ def send_alert_email(rule: object, alert_event: object) -> None:
         smtp_port = int(get_setting_sync(db, SMTP_PORT) or "587")
         smtp_user = get_setting_sync(db, SMTP_USERNAME)
         smtp_password_raw = get_setting_sync(db, SMTP_PASSWORD)
-        smtp_password = decrypt_secret(smtp_password_raw) if smtp_password_raw else ""
+        smtp_password = smtp_password_raw or ""  # get_setting_sync already decrypts (#425)
         from_addr = get_setting_sync(db, SMTP_FROM) or smtp_user or ""
         recipients_raw = get_setting_sync(db, DIGEST_RECIPIENTS) or ""
         recipients = [r.strip() for r in recipients_raw.split(",") if r.strip()]
@@ -289,7 +288,7 @@ def send_test_email(db: Session, to_addr: str | None = None) -> dict:
     smtp_port = int(get_setting_sync(db, SMTP_PORT) or "587")
     smtp_user = get_setting_sync(db, SMTP_USERNAME)
     smtp_password_raw = get_setting_sync(db, SMTP_PASSWORD)
-    smtp_password = decrypt_secret(smtp_password_raw) if smtp_password_raw else ""
+    smtp_password = smtp_password_raw or ""  # get_setting_sync already decrypts (#425)
     from_addr = get_setting_sync(db, SMTP_FROM) or smtp_user or ""
 
     if to_addr:
