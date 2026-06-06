@@ -121,16 +121,15 @@ async def get_current_user(
         raise _unauthorized("Invalid token")
     if claims.get("type") != "access":
         raise _unauthorized("Refresh tokens cannot access this endpoint")
-    jti = claims.get("jti", "")
-    if jti:
-        try:
-            if await is_token_revoked(redis, jti):
-                raise _unauthorized("Token has been revoked")
-        except aioredis.RedisError:
-            logger.error("Redis unavailable during token revocation check — denying request")
-            raise HTTPException(
-                status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="Service temporarily unavailable"
-            )
+    jti = claims.get("jti")
+    if not jti:
+        raise _unauthorized("Token missing required jti claim")
+    try:
+        if await is_token_revoked(redis, jti):
+            raise _unauthorized("Token has been revoked")
+    except aioredis.RedisError:
+        logger.error("Redis unavailable during token revocation check — denying request")
+        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="Service temporarily unavailable")
     return claims
 
 
