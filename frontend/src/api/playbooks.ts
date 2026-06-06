@@ -10,7 +10,7 @@ export interface PlaybookEntry {
   lint_errors: string[]
   source_dir: string | null
   // Catalog fields — present when library feature is active
-  catalog_id?: string
+  catalog_id: string | null
   is_favorite?: boolean
 }
 
