@@ -4,7 +4,7 @@ from pathlib import Path
 
 
 def _kri() -> str:
-    return Path("scripts/kri.sh").read_text()
+    return Path("scripts/kri").read_text()
 
 
 def test_diagnose_command_exists():

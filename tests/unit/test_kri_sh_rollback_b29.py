@@ -2,7 +2,7 @@
 
 from pathlib import Path
 
-KRI_SH = (Path(__file__).parent.parent.parent / "scripts/kri.sh").read_text()
+KRI_SH = (Path(__file__).parent.parent.parent / "scripts/kri").read_text()
 
 
 def test_rolling_deploy_function_exists():
@@ -50,6 +50,6 @@ def test_kri_sh_bash_syntax():
     import subprocess
 
     result = subprocess.run(
-        ["bash", "-n", str(Path(__file__).parent.parent.parent / "scripts/kri.sh")], capture_output=True
+        ["bash", "-n", str(Path(__file__).parent.parent.parent / "scripts/kri")], capture_output=True
     )
     assert result.returncode == 0, f"bash -n failed: {result.stderr.decode()}"
