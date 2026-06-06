@@ -1,0 +1,27 @@
+# kri Prometheus alerting rules — PORTABLE (works with ANY Prometheus).
+#
+# This is the single source of truth for kri's alert rules. It is consumed
+# differently per deployment mode (see deploy/monitoring/README.md):
+#   - docker-compose / standalone : referenced directly via `rule_files:` in prometheus.yml
+#   - kubernetes                  : embedded verbatim into a PrometheusRule CR
+#                                   (deploy/k8s/observability/kri-prometheusrule.yaml)
+#
+# Keep the `groups:` content here authoritative; the k8s wrapper mirrors it.
+groups:
+  - name: kri.ssh_reachability
+    interval: 1m
+    rules:
+      - alert: KriNodeSSHUnreachable
+        # Metric source: fleet_platform.workers.connectivity_tasks.check_ssh_connectivity
+        # (Celery beat, every 15 min) → redis → exposed on kri /metrics (#356).
+        expr: kri_node_ssh_reachable == 0
+        for: 30m
+        labels:
+          severity: warning
+        annotations:
+          summary: "kri node {{ $labels.minion_id }} SSH unreachable"
+          description: >
+            Node {{ $labels.minion_id }} has reported SSH unreachable for more
+            than 30 minutes. Indicates a network issue, crashed SSH daemon, or
+            misconfigured firewall. Investigate before any playbook/provisioning
+            run against this node.

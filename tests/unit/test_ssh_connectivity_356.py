@@ -325,7 +325,7 @@ def test_metrics_endpoint_refreshes_ssh_gauge():
     """main.py /metrics endpoint must call refresh_ssh_reachability_gauge before generate_latest."""
     import pathlib
 
-    src = pathlib.Path("/home/dk/Documents/git/kri-356/fleet_platform/api/main.py").read_text()
+    src = (pathlib.Path(__file__).parent.parent.parent / "fleet_platform/api/main.py").read_text()
     assert "refresh_ssh_reachability_gauge" in src, (
         "main.py does not call refresh_ssh_reachability_gauge — /metrics will not expose SSH gauge"
     )
