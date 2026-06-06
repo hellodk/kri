@@ -9,6 +9,7 @@ from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from fleet_platform.api.deps import get_db
+from fleet_platform.core.audit import audit
 from fleet_platform.core.auth import get_current_user, require_role
 
 router = APIRouter(prefix="/api/v1/salt")
@@ -62,7 +63,8 @@ async def list_states(_: dict = Depends(get_current_user)):
 @router.post("/apply", status_code=202)
 async def apply_state(
     payload: ApplyRequest,
-    _: dict = Depends(require_role("operator", "admin")),
+    db: AsyncSession = Depends(get_db),
+    claims: dict = Depends(require_role("operator", "admin")),
 ):
     """Queue a Salt state.apply task. Returns the Celery task_id."""
     if not payload.minion_ids:
@@ -77,6 +79,14 @@ async def apply_state(
         target_minions=payload.minion_ids,
         pillar_data=payload.pillar,
     )
+    await audit(
+        db,
+        actor=claims["email"],
+        action="salt.state.apply",
+        resource_type="salt_state",
+        new_value={"state": payload.state, "minion_ids": payload.minion_ids, "task_id": task.id},
+    )
+    await db.commit()
     return {"task_id": task.id}
 
 
@@ -113,7 +123,7 @@ async def get_salt_allowlist(
 async def run_cmd(
     payload: CmdRequest,
     db: AsyncSession = Depends(get_db),
-    _: dict = Depends(require_role("operator", "admin")),
+    claims: dict = Depends(require_role("operator", "admin")),
 ):
     """Queue an ad-hoc Salt command. Returns the Celery task_id."""
     if not payload.minion_ids:
@@ -150,4 +160,12 @@ async def run_cmd(
         target_minions=payload.minion_ids,
         args=payload.args,
     )
+    await audit(
+        db,
+        actor=claims["email"],
+        action="salt.cmd.run",
+        resource_type="salt_cmd",
+        new_value={"function": payload.function, "minion_ids": payload.minion_ids, "task_id": task.id},
+    )
+    await db.commit()
     return {"task_id": task.id}

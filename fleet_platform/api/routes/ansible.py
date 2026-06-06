@@ -83,6 +83,7 @@ async def bootstrap(
             bootstrap_ip=payload.target_ip,
         )
         db.add(node)
+        await db.flush()
         await db.commit()
         await db.refresh(node)
     else:
@@ -108,6 +109,14 @@ async def bootstrap(
     elif payload.ssh_key:
         node.ssh_key_enc = encrypt_secret(payload.ssh_key)
         node.ssh_auth_mode = "key"
+    await audit(
+        db,
+        actor=claims["email"],
+        action="node.bootstrap.request",
+        resource_type="node",
+        resource_id=node.id,
+        new_value={"minion_id": node.minion_id, "target_ip": payload.target_ip},
+    )
     await db.commit()
     await db.refresh(node)
 
@@ -176,7 +185,7 @@ async def bootstrap_status(
 async def cancel_bootstrap(
     node_id: uuid.UUID,
     db: AsyncSession = Depends(get_db),
-    _: dict = Depends(require_role("operator", "admin")),
+    claims: dict = Depends(require_role("operator", "admin")),
 ):
     """Reset a stuck bootstrap job so the node can be re-bootstrapped."""
     result = await db.execute(select(Node).where(Node.id == node_id))
@@ -190,6 +199,14 @@ async def cancel_bootstrap(
         )
     node.bootstrap_status = "failed"
     node.bootstrap_error = "Manually cancelled by user"
+    await audit(
+        db,
+        actor=claims["email"],
+        action="node.bootstrap.cancel",
+        resource_type="node",
+        resource_id=node.id,
+        new_value={"minion_id": node.minion_id},
+    )
     await db.commit()
     return {"node_id": str(node.id), "bootstrap_status": "failed", "message": "Bootstrap cancelled"}
 
@@ -567,7 +584,7 @@ async def validate_source(
 async def add_source(
     payload: PlaybookSourceRequest,
     db: AsyncSession = Depends(get_db),
-    _: dict = Depends(require_role("operator", "admin")),
+    claims: dict = Depends(require_role("operator", "admin")),
 ):
     """Add a new playbook source (local directory or git repository)."""
     import json as _json
@@ -631,6 +648,13 @@ async def add_source(
     else:
         setting = PlatformSetting(key="playbook_sources", value=_json.dumps(sources))
         db.add(setting)
+    await audit(
+        db,
+        actor=claims["email"],
+        action="playbook_source.create",
+        resource_type="playbook_source",
+        new_value={"type": payload.type, "index": new_index, "label": payload.label},
+    )
     await db.commit()
 
     # For git sources: clone in the background so the repo appears immediately
@@ -656,7 +680,7 @@ async def add_source(
 async def remove_source(
     index: int,
     db: AsyncSession = Depends(get_db),
-    _: dict = Depends(require_role("operator", "admin")),
+    claims: dict = Depends(require_role("operator", "admin")),
 ):
     """Remove a playbook source by its index."""
     import json as _json
@@ -671,15 +695,22 @@ async def remove_source(
         raise HTTPException(status_code=500, detail="Corrupt sources setting")
     if index < 0 or index >= len(sources):
         raise HTTPException(status_code=404, detail=f"Source index {index} not found")
-    sources.pop(index)
+    removed = sources.pop(index)
     setting.value = _json.dumps(sources)
+    await audit(
+        db,
+        actor=claims["email"],
+        action="playbook_source.delete",
+        resource_type="playbook_source",
+        new_value={"index": index, "type": removed.get("type")},
+    )
     await db.commit()
 
 
 @router.post("/sources/sync", response_model=PlaybookSourceSyncResult)
 async def sync_sources(
     db: AsyncSession = Depends(get_db),
-    _: dict = Depends(require_role("operator", "admin")),
+    claims: dict = Depends(require_role("operator", "admin")),
 ):
     """Force-sync all configured git playbook sources (runs git pull in a thread)."""
     import asyncio as _asyncio
@@ -689,6 +720,14 @@ async def sync_sources(
     sources_json = setting.value if setting else None
     # Run blocking git pull in a thread so we don't stall the async event loop
     sync_results = await _asyncio.to_thread(sync_all_git_sources, sources_json)
+    await audit(
+        db,
+        actor=claims["email"],
+        action="playbook_source.sync",
+        resource_type="playbook_source",
+        new_value={"sources_synced": len(sync_results)},
+    )
+    await db.commit()
     return PlaybookSourceSyncResult(results=sync_results)
 
 
@@ -696,7 +735,7 @@ async def sync_sources(
 async def import_sources_csv(
     payload: PlaybookSourcesImportRequest,
     db: AsyncSession = Depends(get_db),
-    _: dict = Depends(require_role("operator", "admin")),
+    claims: dict = Depends(require_role("operator", "admin")),
 ):
     """Bulk-import playbook sources from CSV text.
 
@@ -743,6 +782,13 @@ async def import_sources_csv(
         setting = PlatformSetting(key="playbook_sources", value=_json.dumps(sources))
         db.add(setting)
     if added:
+        await audit(
+            db,
+            actor=claims["email"],
+            action="playbook_source.bulk_import",
+            resource_type="playbook_source",
+            new_value={"added": added},
+        )
         await db.commit()
 
     return {"added": added}
@@ -980,6 +1026,15 @@ async def run_playbook_endpoint(
         triggered_by=claims["sub"],
     )
     db.add(job)
+    await db.flush()
+    await audit(
+        db,
+        actor=claims["email"],
+        action="playbook.run",
+        resource_type="ansible_job",
+        resource_id=job.id,
+        new_value={"playbook": safe_name, "target_type": payload.target_type, "target_id": payload.target_id},
+    )
     await db.commit()
     await db.refresh(job)
 
@@ -1286,6 +1341,14 @@ async def update_playbook_file(
         raise HTTPException(status_code=422, detail="content must be a string")
     target.parent.mkdir(parents=True, exist_ok=True)
     target.write_text(content)
+    await audit(
+        db,
+        actor=claims["email"],
+        action="playbook_file.update",
+        resource_type="playbook_file",
+        new_value={"path": str(target)},
+    )
+    await db.commit()
     return {"path": str(target), "size": target.stat().st_size, "saved": True}
 
 
