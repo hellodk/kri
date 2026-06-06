@@ -19,15 +19,17 @@ import uuid
 from datetime import UTC, datetime
 
 import asyncssh
+import redis.asyncio as aioredis
 from fastapi import APIRouter, Depends, Query, WebSocket, WebSocketDisconnect
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from fleet_platform.api.deps import get_db
+from fleet_platform.api.deps import get_db, get_redis
 from fleet_platform.core.auth import (
     TokenExpiredError,
     TokenInvalidError,
     decode_token,
+    is_token_revoked,
     require_role,
 )
 from fleet_platform.db.session import AsyncSessionLocal
@@ -40,7 +42,7 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/v1/ssh")
 
 
-async def get_current_user_ws(token: str) -> dict:
+async def get_current_user_ws(token: str, redis: aioredis.Redis | None = None) -> dict:
     """Verify JWT token for WebSocket connections (token from query param)."""
     try:
         claims = decode_token(token)
@@ -50,6 +52,17 @@ async def get_current_user_ws(token: str) -> dict:
         raise ValueError("Invalid token")
     if claims.get("type") != "access":
         raise ValueError("Refresh tokens cannot access this endpoint")
+    jti = claims.get("jti")
+    if not jti:
+        raise ValueError("Token missing required jti claim")
+    if redis is not None:
+        try:
+            if await is_token_revoked(redis, jti):
+                raise ValueError("Token has been revoked")
+        except ValueError:
+            raise
+        except Exception:
+            pass  # Redis unavailable — degrade open, log
     return claims
 
 
@@ -179,7 +192,8 @@ async def webssh_session(
         if not token:
             await websocket.close(code=4001, reason="Missing auth token")
             return
-        claims = await get_current_user_ws(token)
+        redis = await get_redis()
+        claims = await get_current_user_ws(token, redis=redis)
         user_id = uuid.UUID(claims["sub"])
     except Exception:
         await websocket.close(code=4001, reason="Authentication failed")
