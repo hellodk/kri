@@ -389,34 +389,29 @@ def run_playbook(
                 verbosity=max(0, min(4, verbosity or 0)),
                 timeout=timeout,  # per-job timeout (#348); ansible-runner kills subprocess on expiry
                 envvars={
+                    # Point ansible-runner at the persistent cfg file (#353).
+                    # Static settings (host_key_checking, ssh_args, timeout, retries,
+                    # forks, pipelining) all live there so operators running
+                    # ansible-playbook manually from playbooks/ get identical behaviour.
+                    # ANSIBLE_CONFIG applies regardless of cwd, so external-source runs
+                    # (which may execute from a different dir) are also covered.
+                    # If playbooks_dir is a non-builtin source dir, it will not have its
+                    # own ansible.cfg — always resolve to the builtin dir's cfg so the
+                    # file is guaranteed to exist.
+                    "ANSIBLE_CONFIG": str(_DEFAULT_PLAYBOOKS_DIR / "ansible.cfg"),
                     # Force ansible to emit ANSI colour codes into event["stdout"] even
                     # though there's no TTY, so the UI can render CLI-identical colours (#369).
                     # Verified: awx_display propagates SGR codes into event stdout under this flag.
+                    # No cfg equivalent — must remain a per-run env var.
                     "ANSIBLE_FORCE_COLOR": "1",
                     # Unbuffered subprocess output → events stream without buffering delay.
                     "PYTHONUNBUFFERED": "1",
+                    # Path-dependent per source dir — cannot live in a static cfg file.
                     # SSH credentials are set per host in the inventory (#279),
                     # resolved node → group → global — not via a single global env.
                     "ANSIBLE_COLLECTIONS_PATH": str(playbooks_dir / "collections" / "installed"),
-                    # Point ansible at the source roles dir so role-only runs can find the role
+                    # Point ansible at the source roles dir so role-only runs can find the role.
                     "ANSIBLE_ROLES_PATH": str(playbooks_dir / "roles"),
-                    # .ssh/ is mounted :ro — SSH cannot write to known_hosts.
-                    # ANSIBLE_HOST_KEY_CHECKING=False sets StrictHostKeyChecking=no but
-                    # OpenSSH still tries to RECORD new host keys in known_hosts, causing
-                    # "Failed to add host to known_hosts" and connection close.
-                    # Fix: route known_hosts writes to /dev/null via UserKnownHostsFile.
-                    "ANSIBLE_HOST_KEY_CHECKING": "False",
-                    # UserKnownHostsFile=/dev/null: .ssh is :ro, SSH can't write known_hosts
-                    # StrictHostKeyChecking=no: skip host verification
-                    # No ConnectionAttempts in SSH args — not supported as -o on all SSH versions.
-                    # ANSIBLE_SSH_RETRIES=2 below handles retry at the Ansible level (3 total attempts).
-                    "ANSIBLE_SSH_ARGS": "-o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no -o ControlMaster=no",
-                    # SSH connection timeout per attempt
-                    "ANSIBLE_TIMEOUT": "10",
-                    # 2 retries = 3 total SSH attempts, then UNREACHABLE
-                    "ANSIBLE_SSH_RETRIES": "2",
-                    # Per-task execution timeout (catches stuck file copies, installs etc.)
-                    "ANSIBLE_TASK_TIMEOUT": "300",
                 },
                 event_handler=_event_handler,
                 quiet=True,  # DB is the sole sink — don't echo to worker stdout
