@@ -6,6 +6,8 @@ export interface SaltKeys {
   rejected: string[]
   denied: string[]
   pending_count: number
+  degraded: boolean
+  degraded_reason: string | null
 }
 
 export const saltKeysApi = {

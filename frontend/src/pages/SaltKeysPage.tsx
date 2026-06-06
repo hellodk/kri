@@ -60,6 +60,23 @@ export function SaltKeysPage() {
         )}
       </div>
 
+      {keys?.degraded && (
+        <div className="flex items-start gap-3 p-4 rounded-lg border border-red-200 bg-red-50">
+          <svg width="20" height="20" viewBox="0 0 20 20" fill="none" className="flex-shrink-0 mt-0.5" aria-hidden="true">
+            <path d="M10 2a8 8 0 100 16A8 8 0 0010 2zm0 4a.75.75 0 01.75.75v3.5a.75.75 0 01-1.5 0v-3.5A.75.75 0 0110 6zm0 7a1 1 0 110 2 1 1 0 010-2z" fill="#DC2626"/>
+          </svg>
+          <div>
+            <p className="text-sm font-semibold text-red-800">Salt PKI directory unavailable</p>
+            <p className="text-sm text-red-700 mt-0.5">
+              {keys.degraded_reason ?? 'Cannot read Salt key directory — check container mount and permissions.'}
+            </p>
+            <p className="text-xs text-red-600 mt-1">
+              Key list may be incomplete or empty. Resolve the permission issue and reload.
+            </p>
+          </div>
+        </div>
+      )}
+
       {isLoading ? (
         <Skeleton rows={6} />
       ) : (
@@ -112,7 +129,13 @@ export function SaltKeysPage() {
         )
       )}
 
-      {!isLoading && sections.every((s) => s.items.length === 0) && (
+      {!isLoading && keys?.degraded && keys.accepted.length === 0 && keys.pending.length === 0 && keys.rejected.length === 0 && keys.denied.length === 0 && (
+        <div className="text-center py-8 text-gray-500 text-sm">
+          No keys available — Salt PKI directory is inaccessible.
+        </div>
+      )}
+
+      {!isLoading && !keys?.degraded && sections.every((s) => s.items.length === 0) && (
         <div className="text-center py-16 text-gray-400">
           <p className="text-3xl mb-2">🔑</p>
           <p className="text-sm">No minion keys yet.</p>
