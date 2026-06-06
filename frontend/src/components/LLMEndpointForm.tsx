@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { useMutation } from '@tanstack/react-query'
 import { llmApi, type LLMEndpoint, type LLMEndpointCreate, type LLMProvider } from '../api/llm'
 import { useToastStore } from '../stores/toastStore'
+import { SecretInput } from './SecretInput'
 
 interface Props {
   endpoint?: LLMEndpoint
@@ -285,10 +286,9 @@ export function LLMEndpointForm({ endpoint, onClose, onSaved }: Props) {
               API key
               <span className="ml-2 text-xs font-normal text-gray-400">(stored encrypted)</span>
             </label>
-            <input
-              type="password"
+            <SecretInput
               value={apiKey}
-              onChange={(e) => setApiKey(e.target.value)}
+              onChange={setApiKey}
               placeholder={
                 isEdit && endpoint?.has_api_key
                   ? 'Leave blank to keep existing'

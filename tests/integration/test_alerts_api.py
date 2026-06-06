@@ -122,7 +122,7 @@ async def test_list_webhooks_forbidden_for_viewer(viewer_client: AsyncClient):
     ),
 )
 async def test_create_webhook_validates_url_scheme(admin_client: AsyncClient):
-    """Non-https URLs must be rejected."""
+    """Non-https URLs must be rejected (unless loopback/private)."""
     resp = await admin_client.post(
         "/api/v1/alerts/webhooks",
         json={"name": "bad-webhook", "url": "http://example.com/webhook"},

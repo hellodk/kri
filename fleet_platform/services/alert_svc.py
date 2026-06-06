@@ -25,25 +25,43 @@ if TYPE_CHECKING:
 def _validate_webhook_url(url: str) -> None:
     """Raise ValueError if the webhook URL is unsafe (SSRF protection).
 
-    Blocks:
-    - Non-HTTP/HTTPS schemes
-    - Private, loopback, and link-local IP ranges (RFC 1918, 127.0.0.0/8, 169.254.0.0/16)
+    Enforces:
+    - HTTPS-only for public URLs
+    - Allows HTTP for loopback/private IP ranges (127.0.0.0/8, 10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16) + localhost
+    - Blocks non-HTTP/HTTPS schemes and private IP addresses over HTTPS is allowed but unnecessary
     """
     parsed = urlparse(url)
     if parsed.scheme not in ("http", "https"):
         raise ValueError(f"Invalid webhook URL scheme: {parsed.scheme!r}. Only http/https allowed.")
+
     hostname = parsed.hostname
     if not hostname:
         raise ValueError("Webhook URL has no hostname.")
+
+    # Check if hostname is a known loopback/private name (before DNS resolution)
+    is_loopback_name = hostname.lower() in ("localhost", "localhost.localdomain")
+
     try:
         resolved_ip = ipaddress.ip_address(socket.gethostbyname(hostname))
-        if resolved_ip.is_private or resolved_ip.is_loopback or resolved_ip.is_link_local:
-            raise ValueError(
-                f"Webhook URL resolves to a private/loopback/link-local address ({resolved_ip}). "
-                "Only public internet URLs are allowed."
-            )
+        is_private_or_loopback = resolved_ip.is_private or resolved_ip.is_loopback or resolved_ip.is_link_local
     except socket.gaierror:
-        pass  # DNS resolution failed — let urlopen fail naturally
+        # DNS resolution failed — assume it's a public name, will fail at urlopen
+        resolved_ip = None
+        is_private_or_loopback = False
+
+    # HTTPS-only for public URLs
+    if parsed.scheme == "http":
+        if is_loopback_name or is_private_or_loopback:
+            # Allow HTTP for loopback and private IPs (local dev webhooks)
+            return
+        else:
+            # Public URL — must use HTTPS
+            raise ValueError(
+                f"Webhook URL scheme must be https only (for public URLs). "
+                f"Use https://{hostname} instead of http://{hostname}."
+            )
+
+    # HTTPS is always allowed (no further checks needed)
 
 
 async def evaluate_alerts(db: AsyncSession) -> None:

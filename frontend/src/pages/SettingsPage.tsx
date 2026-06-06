@@ -6,6 +6,7 @@ import { playbookSourcesApi, type PlaybookSource, type PlaybookSourceValidateRes
 import { credentialsApi, type Credential } from '../api/credentials'
 import { llmApi, type LLMEndpoint } from '../api/llm'
 import { LLMEndpointForm } from '../components/LLMEndpointForm'
+import { SecretInput } from '../components/SecretInput'
 import { useToastStore } from '../stores/toastStore'
 import { api } from '../api/client'
 import { buildsApi } from '../api/builds'
@@ -576,7 +577,7 @@ export function SettingsPage() {
                 <label className="block text-sm font-medium text-gray-700 mb-1">
                   CxOne API Token <span className="text-xs text-gray-400 font-normal">(encrypted)</span>
                 </label>
-                <input type="password" value={cxoneToken} onChange={e => setCxoneToken(e.target.value)}
+                <SecretInput value={cxoneToken} onChange={setCxoneToken}
                   placeholder="Leave blank to keep existing" className={inputClass} />
               </div>
               <div>
@@ -596,7 +597,7 @@ export function SettingsPage() {
                 <label className="block text-sm font-medium text-gray-700 mb-1">
                   SonarQube Token <span className="text-xs text-gray-400 font-normal">(encrypted)</span>
                 </label>
-                <input type="password" value={sonarToken} onChange={e => setSonarToken(e.target.value)}
+                <SecretInput value={sonarToken} onChange={setSonarToken}
                   placeholder="Leave blank to keep existing" className={inputClass} />
               </div>
             </div>
@@ -640,8 +641,8 @@ export function SettingsPage() {
                   <label className="block text-sm font-medium text-gray-700 mb-1">
                     Client Secret <span className="text-xs font-normal text-gray-400">(stored encrypted, leave blank to keep)</span>
                   </label>
-                  <input type="password" value={oidcClientSecret}
-                    onChange={(e) => setOidcClientSecret(e.target.value)}
+                  <SecretInput value={oidcClientSecret}
+                    onChange={setOidcClientSecret}
                     placeholder="Leave blank to keep existing"
                     className={inputClass} />
                 </div>
@@ -688,7 +689,7 @@ export function SettingsPage() {
               <label className="block text-sm font-medium text-gray-700 mb-1">
                 API Token <span className="ml-2 text-xs font-normal text-gray-400">(stored encrypted)</span>
               </label>
-              <input type="password" value={ansibleToken} onChange={(e) => setAnsibleToken(e.target.value)}
+              <SecretInput value={ansibleToken} onChange={setAnsibleToken}
                 placeholder="Leave blank to keep existing" className={inputClass} />
             </div>
           </div>
@@ -779,10 +780,9 @@ export function SettingsPage() {
               <label className="block text-sm font-medium text-gray-700 mb-1">
                 Shared Secret (X-Jenkins-Secret header)
               </label>
-              <input
-                type="password"
+              <SecretInput
                 value={jenkinsSecret}
-                onChange={(e) => setJenkinsSecret(e.target.value)}
+                onChange={setJenkinsSecret}
                 placeholder="Enter new secret to set or rotate"
                 className={inputClass}
               />
@@ -879,10 +879,9 @@ export function SettingsPage() {
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">SMTP Password</label>
-              <input
-                type="password"
+              <SecretInput
                 value={smtpPassword}
-                onChange={(e) => setSmtpPassword(e.target.value)}
+                onChange={setSmtpPassword}
                 placeholder="Enter password to set or update"
                 className={inputClass}
               />
@@ -1416,14 +1415,11 @@ function CredentialsSection() {
               {credKind === 'token' ? 'Token' : 'Private key'}
             </label>
             {credKind === 'token' ? (
-              <input
-                type="password"
-                autoComplete="new-password"
-                name="kri_cred_secret"
+              <SecretInput
                 value={credSecret}
-                onChange={(e) => setCredSecret(e.target.value)}
+                onChange={setCredSecret}
                 placeholder="ghp_xxxxxxxxxxxxxxxxxxxx"
-                className={inputClass + ' font-mono'}
+                className={inputClass}
               />
             ) : (
               <textarea

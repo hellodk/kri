@@ -17,6 +17,7 @@ import { Pagination } from '../components/Pagination'
 import { BootstrapModal } from './BootstrapModal'
 import { ImportNodesModal } from './ImportNodesModal'
 import { ConfirmDialog } from '../components/ConfirmDialog'
+import { SecretInput } from '../components/SecretInput'
 import { formatDistanceToNow, differenceInDays, parseISO } from 'date-fns'
 import { formatIST } from '../utils/time'
 import type { Node } from '../types'
@@ -616,9 +617,12 @@ function EditNodeModal({ node, onClose }: { node: Node; onClose: () => void }) {
                 <label className="block text-sm font-medium text-gray-700 mb-1">
                   Password {node.has_ssh_password && <span className="text-gray-400 font-normal">(saved — leave blank to keep)</span>}
                 </label>
-                <input type="password" value={sshPassword} onChange={(e) => setSshPassword(e.target.value)}
+                <SecretInput
+                  value={sshPassword}
+                  onChange={setSshPassword}
                   placeholder={node.has_ssh_password ? '••••••••' : 'Enter password'}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm text-gray-900 focus:outline-none focus:border-brand-600" />
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm text-gray-900 focus:outline-none focus:border-brand-600"
+                />
               </div>
             ) : (
               <div>
