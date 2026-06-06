@@ -9,8 +9,8 @@ content_hash: sha256 of chunk_text — skip re-embedding if unchanged
 import uuid
 from datetime import datetime
 
-from sqlalchemy import DateTime, Index, String, Text
-from sqlalchemy.dialects.postgresql import JSONB, UUID
+from sqlalchemy import Computed, DateTime, Index, String, Text
+from sqlalchemy.dialects.postgresql import JSONB, TSVECTOR, UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
 from fleet_platform.models.base import Base
@@ -39,6 +39,11 @@ class FleetEmbedding(Base):
     metadata_: Mapped[dict | None] = mapped_column("metadata", JSONB, nullable=True)
     content_hash: Mapped[str | None] = mapped_column(String(64), nullable=True)
     embedded_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    tsv: Mapped[None] = mapped_column(
+        TSVECTOR,
+        Computed("to_tsvector('english', chunk_text)", persisted=True),
+        nullable=True,
+    )
 
     __table_args__ = (
         Index("idx_fleet_embeddings_source", "source_type", "source_id"),
