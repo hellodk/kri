@@ -20,23 +20,25 @@ repos:
 
   - repo: local
     hooks:
+      # VENV resolves to the MAIN repo's .venv even from linked git worktrees
+      # (worktrees have no .venv; `source .venv/bin/activate` aborted commits there — #380)
       - id: mypy
         name: mypy type check
-        entry: bash -c 'source .venv/bin/activate && mypy fleet_platform/ --ignore-missing-imports --no-error-summary'
+        entry: bash -c 'VENV="$(git rev-parse --path-format=absolute --git-common-dir)/../.venv"; "$VENV/bin/mypy" fleet_platform/ --ignore-missing-imports --no-error-summary'
         language: system
         files: ^fleet_platform/
         pass_filenames: false
 
       - id: vulture
         name: dead code (vulture)
-        entry: bash -c 'source .venv/bin/activate && vulture fleet_platform/ --min-confidence 80'
+        entry: bash -c 'VENV="$(git rev-parse --path-format=absolute --git-common-dir)/../.venv"; "$VENV/bin/vulture" fleet_platform/ --min-confidence 80'
         language: system
         files: ^fleet_platform/
         pass_filenames: false
 
       - id: bandit
         name: security scan (bandit)
-        entry: bash -c 'source .venv/bin/activate && bandit -r fleet_platform/ -ll --skip B101 -q'
+        entry: bash -c 'VENV="$(git rev-parse --path-format=absolute --git-common-dir)/../.venv"; "$VENV/bin/bandit" -r fleet_platform/ -ll --skip B101 -q'
         language: system
         files: ^fleet_platform/
         pass_filenames: false
@@ -60,4 +62,11 @@ repos:
         entry: bash -c 'cd frontend && npx tsc -b --pretty false'
         language: system
         files: ^frontend/src/
+        pass_filenames: false
+
+      - id: eslint
+        name: eslint (frontend)
+        entry: bash -c 'cd frontend && npx eslint .'
+        language: system
+        files: ^frontend/src/.*\.(ts|tsx)$
         pass_filenames: false
