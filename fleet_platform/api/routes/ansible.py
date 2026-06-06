@@ -324,27 +324,57 @@ async def bootstrap_run_detail(
 @router.get("/playbooks", response_model=list[PlaybookEntryResponse])
 async def list_playbooks(
     db: AsyncSession = Depends(get_db),
-    _: dict = Depends(require_role("viewer", "operator", "admin")),
+    claims: dict = Depends(require_role("viewer", "operator", "admin")),
 ):
+    import json as _json
+    import uuid as _uuid
+
+    from fleet_platform.services.playbook_catalog_svc import get_enabled
+
+    user_id = _uuid.UUID(claims["sub"])
+    enabled = await get_enabled(db, user_id=user_id)
+    if not enabled:
+        return []
+
     result = await db.execute(select(PlatformSetting).where(PlatformSetting.key == "playbook_sources"))
     setting = result.scalar_one_or_none()
     sources_json = setting.value if setting else None
 
+    sources: list[dict] = []
+    if sources_json:
+        try:
+            sources = _json.loads(sources_json)
+        except (ValueError, TypeError):
+            sources = []
+
     all_dirs = get_all_playbook_dirs(sources_json, _PLAYBOOKS_DIR)
+    catalog_lookup: dict[tuple[str, str], dict] = {(e["source_key"], e["filename"]): e for e in enabled}
+
     all_entries: list[PlaybookEntryResponse] = []
-    for d in all_dirs:
-        all_entries.extend(
-            PlaybookEntryResponse(
-                filename=e.filename,
-                name=e.name,
-                description=e.description,
-                entry_type=e.entry_type,
-                default_vars=e.default_vars,
-                lint_errors=e.lint_errors,
-                source_dir=str(d),  # absolute path of the source directory
+    for i, d in enumerate(all_dirs):
+        if i == 0:
+            source_key = str(d)
+        else:
+            src = sources[i - 1]
+            source_key = src.get("url") or src.get("path") or str(d)
+
+        for e in discover_all(d):
+            info = catalog_lookup.get((source_key, e.filename))
+            if info is None:
+                continue
+            all_entries.append(
+                PlaybookEntryResponse(
+                    filename=e.filename,
+                    name=e.name,
+                    description=e.description,
+                    entry_type=e.entry_type,
+                    default_vars=e.default_vars,
+                    lint_errors=e.lint_errors,
+                    source_dir=str(d),
+                    catalog_id=info["catalog_id"],
+                    is_favorite=info["is_favorite"],
+                )
             )
-            for e in discover_all(d)
-        )
     return all_entries
 
 
@@ -796,12 +826,42 @@ async def sync_sources(
 ):
     """Force-sync all configured git playbook sources (runs git pull in a thread)."""
     import asyncio as _asyncio
+    import json as _json
+
+    from fleet_platform.services.playbook_catalog_svc import auto_disable_missing
 
     result = await db.execute(select(PlatformSetting).where(PlatformSetting.key == "playbook_sources"))
     setting = result.scalar_one_or_none()
     sources_json = setting.value if setting else None
     # Run blocking git pull in a thread so we don't stall the async event loop
     sync_results = await _asyncio.to_thread(sync_all_git_sources, sources_json)
+
+    # Auto-disable catalog entries whose files were removed from synced sources
+    _sources_list: list[dict] = []
+    if sources_json:
+        try:
+            _sources_list = _json.loads(sources_json)
+        except (ValueError, TypeError):
+            pass
+
+    all_dirs = get_all_playbook_dirs(sources_json, _PLAYBOOKS_DIR)
+    for i, d in enumerate(all_dirs):
+        if i == 0:
+            continue  # skip built-in dir
+        src = _sources_list[i - 1]
+        source_key = src.get("url") or src.get("path") or str(d)
+        discovered_filenames = {e.filename for e in discover_all(d)}
+        disabled = await auto_disable_missing(db, source_key=source_key, discovered_filenames=discovered_filenames)
+        for row in disabled:
+            await audit(
+                db,
+                actor="system",
+                action="playbook.auto_disable",
+                resource_type="playbook_catalog",
+                resource_id=row.id,
+                new_value={"enabled": False, "reason": "source file removed", "filename": row.filename},
+            )
+
     await audit(
         db,
         actor=claims["email"],
