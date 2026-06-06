@@ -28,6 +28,7 @@ const FG: Record<number, string> = {
   37: '#F9FAFB', 97: '#F9FAFB', // white      -> default/recap text
 }
 
+// eslint-disable-next-line no-control-regex -- intentional: \x1b is the ANSI escape character required for SGR colour sequence parsing
 const SGR = /\x1b\[([0-9;]*)m/g
 
 export function ansiToSpans(raw: string): AnsiSpan[] {
