@@ -67,6 +67,7 @@ class PlaybookSourceRequest(BaseModel):
     local_path: str | None = None  # override clone destination for git
     ssh_key: str | None = None  # PEM private key content for private repos
     token: str | None = None  # Personal access token / GitHub token
+    credential_id: str | None = None  # ID of stored Credential row
 
 
 class PlaybookSourceResponse(BaseModel):
@@ -94,6 +95,7 @@ class PlaybookSourceValidateRequest(BaseModel):
     branch: str = "main"
     ssh_key: str | None = None  # PEM private key content for private repos
     token: str | None = None  # Personal access token / GitHub token
+    credential_id: str | None = None  # ID of stored Credential row
 
 
 class PlaybookSourceValidateResponse(BaseModel):
@@ -104,3 +106,5 @@ class PlaybookSourceValidateResponse(BaseModel):
     role_count: int = 0
     entries: list[PlaybookEntryResponse] = []
     logs: list[str] = []
+    auth_required: bool = False
+    error_kind: str | None = None

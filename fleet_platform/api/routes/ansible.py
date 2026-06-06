@@ -32,8 +32,9 @@ from fleet_platform.schemas.playbook import (
     PlaybookSourceValidateResponse,
 )
 from fleet_platform.services.credential_resolver import node_has_group
+from fleet_platform.services.git_auth import classify_git_error, git_auth_env, redact_secrets
 from fleet_platform.services.log_delta import slice_from, split_running_marker
-from fleet_platform.services.platform_settings_svc import encrypt_secret
+from fleet_platform.services.platform_settings_svc import decrypt_secret, encrypt_secret
 from fleet_platform.services.playbook_discovery import discover_all
 from fleet_platform.services.playbook_sources import get_all_playbook_dirs, sync_all_git_sources
 from fleet_platform.workers.ansible_tasks import bootstrap_node
@@ -373,7 +374,6 @@ async def validate_source(
 ):
     """Validate a playbook source without saving it. Returns scan results."""
     import os
-    import tempfile
 
     warnings: list[str] = []
     logs: list[str] = []
@@ -436,71 +436,123 @@ async def validate_source(
         if not payload.url:
             return PlaybookSourceValidateResponse(valid=False, error="url is required for git source", logs=logs)
 
+        import logging as _logging
+
+        _log = _logging.getLogger(__name__)
+
         raw_url = payload.url.strip()
         branch = payload.branch or "main"
 
-        # Build authenticated URL if token provided
-        url = raw_url
-        if payload.token:
-            # Strip existing scheme and prepend token
-            import re as _re
+        # Resolve credentials: stored Credential row > inline token/ssh_key (back-compat)
+        token: str | None = None
+        ssh_key: str | None = None
 
-            scheme_match = _re.match(r"^(https?://)(.+)$", raw_url)
-            if scheme_match:
-                url = f"{scheme_match.group(1)}{payload.token}@{scheme_match.group(2)}"
-            else:
-                url = raw_url  # SSH or unknown scheme — leave as-is
+        if payload.credential_id:
+            import uuid as _uuid
 
-        # Build SSH env if ssh_key provided
-        ssh_env: dict | None = None
-        _ssh_key_file = None
-        if payload.ssh_key:
-            _ssh_key_file = tempfile.NamedTemporaryFile(mode="w", suffix=".pem", delete=False, prefix="kri-ssh-")
-            _ssh_key_file.write(payload.ssh_key)
-            _ssh_key_file.flush()
-            os.chmod(_ssh_key_file.name, 0o600)
-            _ssh_key_file.close()
-            ssh_env = {
-                **os.environ,
-                "GIT_SSH_COMMAND": f"ssh -i {_ssh_key_file.name} -o StrictHostKeyChecking=no",
-            }
+            from fleet_platform.models.credential import Credential as _Credential
 
-        try:
+            try:
+                _cred_uuid = _uuid.UUID(payload.credential_id)
+            except ValueError:
+                return PlaybookSourceValidateResponse(valid=False, error="Invalid credential_id format.", logs=logs)
+            # Resolve via async DB session — inject via a separate dependency would
+            # require signature change; we rely on the outer async session from the
+            # route that owns this request.  Use a fresh session to keep it simple.
+            from fleet_platform.db.session import AsyncSessionLocal as _ASL
+
+            async with _ASL() as _cred_db:
+                _res = await _cred_db.execute(select(_Credential).where(_Credential.id == _cred_uuid))
+                _cred = _res.scalar_one_or_none()
+            if _cred is None:
+                return PlaybookSourceValidateResponse(
+                    valid=False, error=f"Credential {payload.credential_id!r} not found.", logs=logs
+                )
+            if _cred.kind in ("token", "username_password"):
+                token = decrypt_secret(_cred.secret_enc)
+            elif _cred.kind == "ssh_key":
+                ssh_key = decrypt_secret(_cred.secret_enc)
+            # Update last_used_at asynchronously (fire and forget)
+            from datetime import UTC as _UTC
+            from datetime import datetime as _datetime
+
+            from fleet_platform.db.session import AsyncSessionLocal as _ASL2
+
+            async def _touch_cred() -> None:
+                async with _ASL2() as _db2:
+                    _r = await _db2.execute(select(_Credential).where(_Credential.id == _cred_uuid))
+                    _c = _r.scalar_one_or_none()
+                    if _c:
+                        _c.last_used_at = _datetime.now(_UTC)
+                        await _db2.commit()
+
+            asyncio.create_task(_touch_cred())
+        else:
+            token = payload.token
+            ssh_key = payload.ssh_key
+
+        import tempfile as _tmpfile
+
+        with git_auth_env(token=token, ssh_key=ssh_key) as _git_env:
             # Step 1: ls-remote — fast, non-destructive connectivity check
             logs.append("[1/3] Testing connectivity to repository...")
-            if payload.token:
+            if token:
                 logs.append("[1/3] Authenticating with personal access token...")
-            elif payload.ssh_key:
+            elif ssh_key:
                 logs.append("[1/3] Authenticating with SSH key...")
 
             try:
                 ls_result = await asyncio.to_thread(
                     lambda: subprocess.run(
-                        ["git", "ls-remote", "--exit-code", "--heads", url, f"refs/heads/{branch}"],
+                        ["git", "ls-remote", "--exit-code", "--heads", raw_url, f"refs/heads/{branch}"],
                         capture_output=True,
                         timeout=20,
-                        env=ssh_env,
+                        env=_git_env,
                     )
                 )
                 if ls_result.returncode != 0:
                     # Branch might exist but ls-remote filtering missed it — try without filter
                     ls_result2 = await asyncio.to_thread(
                         lambda: subprocess.run(
-                            ["git", "ls-remote", "--exit-code", url],
+                            ["git", "ls-remote", "--exit-code", raw_url],
                             capture_output=True,
                             timeout=20,
-                            env=ssh_env,
+                            env=_git_env,
                         )
                     )
                     if ls_result2.returncode != 0:
-                        err = ls_result2.stderr.decode(errors="replace").strip()
-                        msg = err or "connection refused or repo not found"
-                        logs.append(f"[1/3] ✗ Cannot access repository: {msg}")
-                        return PlaybookSourceValidateResponse(
-                            valid=False,
-                            error=f"Cannot access git repository: {err or 'connection refused or repo not found'}",
-                            logs=logs,
-                        )
+                        raw_err = ls_result2.stderr.decode(errors="replace").strip()
+                        err = redact_secrets(raw_err, [token, ssh_key])
+                        kind = classify_git_error(raw_err)
+                        if kind == "auth_required":
+                            logs.append("[1/3] ✗ Repository requires authentication (private, or not found)")
+                            _log.warning("[validate] auth_required for %s", raw_url)
+                            return PlaybookSourceValidateResponse(
+                                valid=False,
+                                error=(
+                                    "Repository requires authentication — it is private or does not exist anonymously"
+                                ),
+                                auth_required=True,
+                                error_kind=kind,
+                                logs=logs,
+                            )
+                        elif kind == "unreachable":
+                            logs.append(f"[1/3] ✗ Host unreachable: {err}")
+                            return PlaybookSourceValidateResponse(
+                                valid=False,
+                                error="Host unreachable — check the URL/network",
+                                error_kind=kind,
+                                logs=logs,
+                            )
+                        else:
+                            msg = err or "connection refused or repo not found"
+                            logs.append(f"[1/3] ✗ Cannot access repository: {msg}")
+                            return PlaybookSourceValidateResponse(
+                                valid=False,
+                                error=f"Cannot access git repository: {msg}",
+                                error_kind=kind,
+                                logs=logs,
+                            )
                     warnings.append(f"Branch '{branch}' not found — will use default branch.")
                     logs.append(f"[1/3] ⚠ Branch '{branch}' not found — will use default branch")
                     branch = "HEAD"
@@ -512,22 +564,25 @@ async def validate_source(
 
             # Step 2: shallow clone to temp dir and scan
             logs.append("[2/3] Shallow clone (depth=1)...")
-            with tempfile.TemporaryDirectory(prefix="kri-validate-") as tmpdir:
+            with _tmpfile.TemporaryDirectory(prefix="kri-validate-") as tmpdir:
                 clone_cmd = ["git", "clone", "--depth=1", "--single-branch"]
                 if branch != "HEAD":
                     clone_cmd += ["--branch", branch]
-                clone_cmd += [url, tmpdir]
+                clone_cmd += [raw_url, tmpdir]
 
                 try:
                     clone_result = await asyncio.to_thread(
-                        lambda: subprocess.run(clone_cmd, capture_output=True, timeout=60, env=ssh_env)
+                        lambda: subprocess.run(clone_cmd, capture_output=True, timeout=60, env=_git_env)
                     )
                     if clone_result.returncode != 0:
-                        err = clone_result.stderr.decode(errors="replace").strip()
+                        raw_err = clone_result.stderr.decode(errors="replace").strip()
+                        err = redact_secrets(raw_err, [token, ssh_key])
+                        kind = classify_git_error(raw_err)
                         logs.append(f"[2/3] ✗ Clone failed: {err[:200]}")
                         return PlaybookSourceValidateResponse(
                             valid=False,
                             error=f"Clone failed: {err[:300]}",
+                            error_kind=kind,
                             logs=logs,
                         )
                     logs.append("[2/3] ✓ Clone complete")
@@ -569,13 +624,6 @@ async def validate_source(
                     for e in entries
                 ],
             )
-        finally:
-            # Clean up temp SSH key file if created
-            if _ssh_key_file is not None:
-                try:
-                    os.unlink(_ssh_key_file.name)
-                except OSError:
-                    pass
 
     return PlaybookSourceValidateResponse(valid=False, error=f"Unknown source type: {payload.type}", logs=logs)
 
@@ -603,16 +651,44 @@ async def add_source(
     elif payload.type == "git":
         if not payload.url:
             raise HTTPException(status_code=422, detail="url is required for git source")
-        url = payload.url.strip()
-        ls = await asyncio.to_thread(
-            lambda: subprocess.run(
-                ["git", "ls-remote", "--exit-code", url],
-                capture_output=True,
-                timeout=20,
+        raw_url = payload.url.strip()
+
+        # Resolve credentials for the ls-remote access check
+        _add_token: str | None = None
+        _add_ssh_key: str | None = None
+        if payload.credential_id:
+            import uuid as _uuid_mod
+
+            from fleet_platform.models.credential import Credential as _Cred
+
+            try:
+                _cred_uuid = _uuid_mod.UUID(payload.credential_id)
+            except ValueError:
+                raise HTTPException(status_code=422, detail="Invalid credential_id format.")
+            _cr = await db.execute(select(_Cred).where(_Cred.id == _cred_uuid))
+            _c = _cr.scalar_one_or_none()
+            if _c is None:
+                raise HTTPException(status_code=404, detail=f"Credential {payload.credential_id!r} not found.")
+            if _c.kind in ("token", "username_password"):
+                _add_token = decrypt_secret(_c.secret_enc)
+            elif _c.kind == "ssh_key":
+                _add_ssh_key = decrypt_secret(_c.secret_enc)
+        else:
+            _add_token = payload.token
+            _add_ssh_key = payload.ssh_key
+
+        with git_auth_env(token=_add_token, ssh_key=_add_ssh_key) as _git_env:
+            ls = await asyncio.to_thread(
+                lambda: subprocess.run(
+                    ["git", "ls-remote", "--exit-code", raw_url],
+                    capture_output=True,
+                    timeout=20,
+                    env=_git_env,
+                )
             )
-        )
         if ls.returncode != 0:
-            err = ls.stderr.decode(errors="replace").strip()
+            raw_err = ls.stderr.decode(errors="replace").strip()
+            err = redact_secrets(raw_err, [_add_token, _add_ssh_key])
             detail = f"Cannot access git repository: {err[:200] or 'connection refused'}"
             raise HTTPException(status_code=422, detail=detail)
 
@@ -633,10 +709,14 @@ async def add_source(
         new_src["branch"] = payload.branch
         if payload.local_path:
             new_src["local_path"] = payload.local_path
-        if payload.token:
-            new_src["token_enc"] = encrypt_secret(payload.token)
-        if payload.ssh_key:
-            new_src["ssh_key_enc"] = encrypt_secret(payload.ssh_key)
+        if payload.credential_id:
+            # Prefer credential reference over inline secrets
+            new_src["credential_id"] = payload.credential_id
+        else:
+            if payload.token:
+                new_src["token_enc"] = encrypt_secret(payload.token)
+            if payload.ssh_key:
+                new_src["ssh_key_enc"] = encrypt_secret(payload.ssh_key)
     if payload.label:
         new_src["label"] = payload.label
 
@@ -670,6 +750,8 @@ async def add_source(
                 payload.url,
                 payload.branch or "main",
                 local_path,
+                token=_add_token if payload.type == "git" else None,
+                ssh_key=_add_ssh_key if payload.type == "git" else None,
             )
         )
 
