@@ -386,5 +386,6 @@
         status_code: [200, 201, 204]
         timeout: 30
       become: false
+      no_log: true
       failed_when: false
       when: ingest_url is defined and node_token is defined
