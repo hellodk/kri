@@ -21,6 +21,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from fleet_platform.api.deps import get_db
+from fleet_platform.core.audit import audit
 from fleet_platform.core.auth import get_current_user
 from fleet_platform.db.session import AsyncSessionLocal
 from fleet_platform.models.node import Node
@@ -205,6 +206,15 @@ async def vnc_session(
             ssh_user="screen-share",
         )
         sdb.add(session_rec)
+        await audit(
+            sdb,
+            actor=claims["email"],
+            action="vnc.session.start",
+            resource_type="node",
+            resource_id=node_id,
+            new_value={"minion_id": node.minion_id, "target_ip": node.bootstrap_ip},
+            ip_address=websocket.client.host if websocket.client else None,
+        )
         await sdb.commit()
         await sdb.refresh(session_rec)
         session_id = session_rec.id

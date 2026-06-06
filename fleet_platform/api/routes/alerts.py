@@ -15,6 +15,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from fleet_platform.api.deps import get_db
+from fleet_platform.core.audit import audit
 from fleet_platform.core.auth import require_role
 from fleet_platform.models.alert import AlertEvent, AlertRule, WebhookConfig
 from fleet_platform.services.alert_svc import _validate_webhook_url
@@ -68,7 +69,7 @@ async def list_rules(
 async def create_rule(
     body: CreateRuleBody,
     db: AsyncSession = Depends(get_db),
-    _: dict = Depends(require_role("admin")),
+    claims: dict = Depends(require_role("admin")),
 ):
     valid_types = {"node_offline", "drift_threshold", "cve_found", "key_pending"}
     if body.event_type not in valid_types:
@@ -84,6 +85,15 @@ async def create_rule(
         created_at=datetime.now(UTC),
     )
     db.add(rule)
+    await db.flush()
+    await audit(
+        db,
+        actor=claims["email"],
+        action="alert_rule.create",
+        resource_type="alert_rule",
+        resource_id=rule.id,
+        new_value={"name": body.name, "event_type": body.event_type},
+    )
     await db.commit()
     return {
         "id": str(rule.id),
@@ -99,12 +109,20 @@ async def create_rule(
 async def delete_rule(
     rule_id: uuid.UUID,
     db: AsyncSession = Depends(get_db),
-    _: dict = Depends(require_role("admin")),
+    claims: dict = Depends(require_role("admin")),
 ):
     result = await db.execute(select(AlertRule).where(AlertRule.id == rule_id))
     rule = result.scalar_one_or_none()
     if not rule:
         raise HTTPException(status_code=404, detail="Alert rule not found")
+    await audit(
+        db,
+        actor=claims["email"],
+        action="alert_rule.delete",
+        resource_type="alert_rule",
+        resource_id=rule_id,
+        new_value={"name": rule.name, "event_type": rule.event_type},
+    )
     await db.delete(rule)
     await db.commit()
 
@@ -138,7 +156,7 @@ async def list_webhooks(
 async def create_webhook(
     body: CreateWebhookBody,
     db: AsyncSession = Depends(get_db),
-    _: dict = Depends(require_role("admin")),
+    claims: dict = Depends(require_role("admin")),
 ):
     if body.type not in ("slack", "generic"):
         raise HTTPException(status_code=422, detail="type must be 'slack' or 'generic'")
@@ -154,6 +172,15 @@ async def create_webhook(
         created_at=datetime.now(UTC),
     )
     db.add(webhook)
+    await db.flush()
+    await audit(
+        db,
+        actor=claims["email"],
+        action="webhook.create",
+        resource_type="webhook",
+        resource_id=webhook.id,
+        new_value={"name": body.name, "type": body.type},
+    )
     await db.commit()
     return {
         "id": str(webhook.id),
@@ -169,12 +196,20 @@ async def create_webhook(
 async def delete_webhook(
     webhook_id: uuid.UUID,
     db: AsyncSession = Depends(get_db),
-    _: dict = Depends(require_role("admin")),
+    claims: dict = Depends(require_role("admin")),
 ):
     result = await db.execute(select(WebhookConfig).where(WebhookConfig.id == webhook_id))
     webhook = result.scalar_one_or_none()
     if not webhook:
         raise HTTPException(status_code=404, detail="Webhook not found")
+    await audit(
+        db,
+        actor=claims["email"],
+        action="webhook.delete",
+        resource_type="webhook",
+        resource_id=webhook_id,
+        new_value={"name": webhook.name, "type": webhook.type},
+    )
     await db.delete(webhook)
     await db.commit()
 

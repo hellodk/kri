@@ -10,6 +10,7 @@ from fastapi.responses import RedirectResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from fleet_platform.api.deps import get_db, get_redis
+from fleet_platform.core.audit import audit
 from fleet_platform.core.config import settings as app_settings
 from fleet_platform.services import oidc_svc
 from fleet_platform.services.platform_settings_svc import (
@@ -130,6 +131,16 @@ async def oidc_callback(
     role = oidc_svc._extract_role(claims, prefix=role_prefix)
     user = await oidc_svc.upsert_oidc_user(db, email=email, role=role)
     tokens = oidc_svc.issue_kri_tokens(user)
+
+    await audit(
+        db,
+        actor=email,
+        action="auth.oidc_login",
+        resource_type="user",
+        resource_id=user.id,
+        new_value={"email": email, "role": role},
+    )
+    await db.commit()
 
     # Store tokens behind a one-time exchange code; redirect with only the code (fix #84)
     exchange_code = secrets.token_urlsafe(32)

@@ -5,12 +5,15 @@ from __future__ import annotations
 import logging
 import tempfile
 import uuid
+from datetime import UTC, datetime
 from pathlib import Path
 
 import ansible_runner
 from sqlalchemy import select
 
+from fleet_platform.core.audit import _scrub
 from fleet_platform.db.session import get_sync_db
+from fleet_platform.models.audit import AuditEvent
 from fleet_platform.workers.celery_app import celery_app
 
 logger = logging.getLogger(__name__)
@@ -78,7 +81,25 @@ def deploy_mobileconfig_task(
                 log.status = "success" if success else "failed"
                 if error_msg:
                     log.error = error_msg[:1000]
-                db.commit()
+            db.add(
+                AuditEvent(
+                    event_at=datetime.now(UTC),
+                    actor="system",
+                    action="mobileconfig.deploy.complete",
+                    resource_type="mobileconfig_profile",
+                    resource_id=uuid.UUID(profile_id),
+                    new_value=_scrub(
+                        {
+                            "node_hostname": node_hostname,
+                            "action": action,
+                            "status": "success" if success else "failed",
+                        }
+                    ),
+                    old_value=None,
+                    ip_address=None,
+                )
+            )
+            db.commit()
 
         return {
             "status": "success" if success else "failed",

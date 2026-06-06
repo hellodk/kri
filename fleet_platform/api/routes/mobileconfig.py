@@ -10,6 +10,7 @@ from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from fleet_platform.api.deps import get_db
+from fleet_platform.core.audit import audit
 from fleet_platform.core.auth import get_current_user, require_role
 from fleet_platform.models.mobileconfig import ProfileDeploymentLog
 from fleet_platform.schemas.mobileconfig import (
@@ -30,10 +31,19 @@ router = APIRouter(prefix="/api/v1/mobileconfig")
 async def create_profile(
     body: MobileconfigProfileCreate,
     db: AsyncSession = Depends(get_db),
-    _: dict = Depends(require_role("admin")),
+    claims: dict = Depends(require_role("admin")),
 ):
     """Create a new macOS configuration profile (admin only)."""
     profile = await mobileconfig_svc.create_profile(db, body)
+    await audit(
+        db,
+        actor=claims["email"],
+        action="mobileconfig.profile.create",
+        resource_type="mobileconfig_profile",
+        resource_id=profile.id,
+        new_value={"name": profile.name},
+    )
+    await db.commit()
     return profile
 
 
@@ -64,12 +74,20 @@ async def get_profile(
 async def delete_profile(
     profile_id: uuid.UUID,
     db: AsyncSession = Depends(get_db),
-    _: dict = Depends(require_role("admin")),
+    claims: dict = Depends(require_role("admin")),
 ):
     """Delete a macOS configuration profile (admin only)."""
     profile = await mobileconfig_svc.get_profile(db, profile_id)
     if profile is None:
         raise HTTPException(status_code=404, detail="Profile not found")
+    await audit(
+        db,
+        actor=claims["email"],
+        action="mobileconfig.profile.delete",
+        resource_type="mobileconfig_profile",
+        resource_id=profile_id,
+        new_value={"name": profile.name},
+    )
     await mobileconfig_svc.delete_profile(db, profile_id)
 
 
@@ -94,6 +112,15 @@ async def assign_profile_to_group(
 
     actor = current_user.get("sub", "unknown")
     assignment = await mobileconfig_svc.assign_to_group(db, profile_id, body.group_id, actor)
+    await audit(
+        db,
+        actor=current_user.get("email", actor),
+        action="mobileconfig.profile.assign_group",
+        resource_type="mobileconfig_profile",
+        resource_id=profile_id,
+        new_value={"group_id": str(body.group_id)},
+    )
+    await db.commit()
     return {
         "id": str(assignment.id),
         "profile_id": str(assignment.profile_id),
@@ -158,6 +185,14 @@ async def deploy_profile(
         )
         job_ids.append(task.id)
 
+    await audit(
+        db,
+        actor=current_user.get("email", actor),
+        action="mobileconfig.profile.deploy",
+        resource_type="mobileconfig_profile",
+        resource_id=profile_id,
+        new_value={"action": body.action, "node_count": len(job_ids)},
+    )
     await db.commit()
 
     return {

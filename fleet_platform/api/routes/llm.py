@@ -91,9 +91,18 @@ async def list_endpoints(
 async def create_endpoint(
     payload: LLMEndpointCreate,
     db: AsyncSession = Depends(get_db),
-    _: dict = Depends(require_role("admin")),
+    claims: dict = Depends(require_role("admin")),
 ):
     endpoint = await llm_svc.create_endpoint(db, payload)
+    await audit(
+        db,
+        actor=claims["email"],
+        action="llm_endpoint.create",
+        resource_type="llm_endpoint",
+        resource_id=endpoint.id,
+        new_value={"name": endpoint.name, "provider": endpoint.provider, "model": endpoint.model},
+    )
+    await db.commit()
     return _to_response(endpoint)
 
 
@@ -114,12 +123,21 @@ async def update_endpoint(
     endpoint_id: uuid.UUID,
     payload: LLMEndpointUpdate,
     db: AsyncSession = Depends(get_db),
-    _: dict = Depends(require_role("admin")),
+    claims: dict = Depends(require_role("admin")),
 ):
     endpoint = await llm_svc.get_endpoint(db, endpoint_id)
     if not endpoint:
         raise HTTPException(status_code=404, detail="LLM endpoint not found")
     endpoint = await llm_svc.update_endpoint(db, endpoint, payload)
+    await audit(
+        db,
+        actor=claims["email"],
+        action="llm_endpoint.update",
+        resource_type="llm_endpoint",
+        resource_id=endpoint_id,
+        new_value={"name": endpoint.name, "provider": endpoint.provider, "model": endpoint.model},
+    )
+    await db.commit()
     return _to_response(endpoint)
 
 
@@ -127,11 +145,19 @@ async def update_endpoint(
 async def delete_endpoint(
     endpoint_id: uuid.UUID,
     db: AsyncSession = Depends(get_db),
-    _: dict = Depends(require_role("admin")),
+    claims: dict = Depends(require_role("admin")),
 ):
     endpoint = await llm_svc.get_endpoint(db, endpoint_id)
     if not endpoint:
         raise HTTPException(status_code=404, detail="LLM endpoint not found")
+    await audit(
+        db,
+        actor=claims["email"],
+        action="llm_endpoint.delete",
+        resource_type="llm_endpoint",
+        resource_id=endpoint_id,
+        new_value={"name": endpoint.name, "provider": endpoint.provider},
+    )
     await llm_svc.delete_endpoint(db, endpoint)
 
 
