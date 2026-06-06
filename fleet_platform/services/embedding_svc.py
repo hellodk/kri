@@ -6,6 +6,7 @@ Responsibilities:
 3. Retrieval: hybrid BM25 (Postgres FTS) + pgvector cosine, RRF fusion
 4. Context injection: format top-N chunks with [src: path/id] citations
 """
+
 import hashlib
 from datetime import UTC, datetime
 from typing import Any
@@ -18,6 +19,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from fleet_platform.models.fleet_embedding import FleetEmbedding
 
 # --- Chunking helpers ---------------------------------------------------------
+
 
 def compute_content_hash(text: str) -> str:
     """Return sha256 hex digest of text (64 hex chars)."""
@@ -47,13 +49,15 @@ def chunk_node(
         f"OS: {os_info}\n"
         f"Last seen: {last_seen}"
     )
-    return [{
-        "source_type": "node",
-        "source_id": node_id,
-        "chunk_text": f"[src: node/{hostname}] {body}",
-        "content_hash": compute_content_hash(body),
-        "metadata": {"hostname": hostname, "status": status, "group": group},
-    }]
+    return [
+        {
+            "source_type": "node",
+            "source_id": node_id,
+            "chunk_text": f"[src: node/{hostname}] {body}",
+            "content_hash": compute_content_hash(body),
+            "metadata": {"hostname": hostname, "status": status, "group": group},
+        }
+    ]
 
 
 def chunk_playbook(path: str, yaml_content: str) -> list[dict[str, Any]]:
@@ -72,20 +76,17 @@ def chunk_playbook(path: str, yaml_content: str) -> list[dict[str, Any]]:
         hosts = play.get("hosts", "all")
         tasks = play.get("tasks", [])
         task_names = [t.get("name", "") for t in tasks if isinstance(t, dict)]
-        body = (
-            f"Playbook: {path}\n"
-            f"Play: {name}\n"
-            f"Hosts: {hosts}\n"
-            f"Tasks: {', '.join(t for t in task_names if t)}"
-        )
+        body = f"Playbook: {path}\nPlay: {name}\nHosts: {hosts}\nTasks: {', '.join(t for t in task_names if t)}"
         source_id = f"{path}:play_{i}"
-        chunks.append({
-            "source_type": "playbook",
-            "source_id": source_id,
-            "chunk_text": f"[src: {source_id}] {body}",
-            "content_hash": compute_content_hash(body),
-            "metadata": {"path": path, "play_name": name, "hosts": hosts},
-        })
+        chunks.append(
+            {
+                "source_type": "playbook",
+                "source_id": source_id,
+                "chunk_text": f"[src: {source_id}] {body}",
+                "content_hash": compute_content_hash(body),
+                "metadata": {"path": path, "play_name": name, "hosts": hosts},
+            }
+        )
     return chunks
 
 
@@ -105,13 +106,15 @@ def chunk_salt_state(path: str, sls_content: str) -> list[dict[str, Any]]:
     for state_id, body_val in states.items():
         body = f"Salt state: {path}\nID: {state_id}\nDeclaration: {str(body_val)[:400]}"
         source_id = f"{path}:{state_id}"
-        chunks.append({
-            "source_type": "salt_state",
-            "source_id": source_id,
-            "chunk_text": f"[src: {source_id}] {body}",
-            "content_hash": compute_content_hash(body),
-            "metadata": {"path": path, "state_id": state_id},
-        })
+        chunks.append(
+            {
+                "source_type": "salt_state",
+                "source_id": source_id,
+                "chunk_text": f"[src: {source_id}] {body}",
+                "content_hash": compute_content_hash(body),
+                "metadata": {"path": path, "state_id": state_id},
+            }
+        )
     return chunks
 
 
@@ -133,26 +136,25 @@ def chunk_drift_record(
         findings.append(f"extra: {p}")
     for v in version_mismatches[:10]:
         findings.append(f"mismatch: {v}")
-    body = (
-        f"Drift report for {node_hostname} at {computed_at}\n"
-        f"Score: {drift_score}\n"
-        + "\n".join(findings)
-    )
+    body = f"Drift report for {node_hostname} at {computed_at}\nScore: {drift_score}\n" + "\n".join(findings)
     source_id = f"drift:{drift_id}"
-    return [{
-        "source_type": "drift",
-        "source_id": source_id,
-        "chunk_text": f"[src: {source_id}] {body}",
-        "content_hash": compute_content_hash(body),
-        "metadata": {
-            "node_hostname": node_hostname,
-            "drift_score": drift_score,
-            "computed_at": computed_at,
-        },
-    }]
+    return [
+        {
+            "source_type": "drift",
+            "source_id": source_id,
+            "chunk_text": f"[src: {source_id}] {body}",
+            "content_hash": compute_content_hash(body),
+            "metadata": {
+                "node_hostname": node_hostname,
+                "drift_score": drift_score,
+                "computed_at": computed_at,
+            },
+        }
+    ]
 
 
 # --- RRF fusion ---------------------------------------------------------------
+
 
 def reciprocal_rank_fusion(
     bm25_ids: list[str],
@@ -173,6 +175,7 @@ def reciprocal_rank_fusion(
 
 # --- Embedding call -----------------------------------------------------------
 
+
 async def embed_texts(
     texts: list[str],
     base_url: str,
@@ -184,6 +187,7 @@ async def embed_texts(
     Raises httpx.HTTPError on failure.
     """
     from fleet_platform.services.llm_caller import normalize_openai_base_url
+
     url = f"{normalize_openai_base_url(base_url)}/v1/embeddings"
     async with httpx.AsyncClient(timeout=30.0) as client:
         resp = await client.post(url, json={"model": model, "input": texts})
@@ -193,6 +197,7 @@ async def embed_texts(
 
 
 # --- Upsert -------------------------------------------------------------------
+
 
 async def upsert_chunks(
     db: AsyncSession,
@@ -209,11 +214,7 @@ async def upsert_chunks(
 
     # Check which hashes already exist
     hashes = [c["content_hash"] for c in chunks]
-    result = await db.execute(
-        select(FleetEmbedding.content_hash).where(
-            FleetEmbedding.content_hash.in_(hashes)
-        )
-    )
+    result = await db.execute(select(FleetEmbedding.content_hash).where(FleetEmbedding.content_hash.in_(hashes)))
     existing_hashes = {row[0] for row in result.all()}
 
     new_chunks = [c for c in chunks if c["content_hash"] not in existing_hashes]
@@ -241,6 +242,7 @@ async def upsert_chunks(
 
 
 # --- Retrieval ----------------------------------------------------------------
+
 
 async def retrieve(
     db: AsyncSession,

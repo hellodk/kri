@@ -9,7 +9,9 @@ from pathlib import Path
 
 from sqlalchemy import delete, select
 
+from fleet_platform.core.audit import _scrub
 from fleet_platform.db.session import get_sync_db
+from fleet_platform.models.audit import AuditEvent
 from fleet_platform.models.sbom import SBOMComponent, SBOMScan
 from fleet_platform.models.security import LicenseFinding, VulnerabilityFinding
 from fleet_platform.workers.celery_app import celery_app
@@ -227,6 +229,24 @@ def scan_node_security(self, node_id: str, scanner: str = "trivy") -> dict:
             db.add(vrow)
         for lrow in license_rows:
             db.add(lrow)
+        db.add(
+            AuditEvent(
+                event_at=datetime.now(UTC),
+                actor="system",
+                action="security_scan.complete",
+                resource_type="node",
+                resource_id=node_uuid,
+                new_value=_scrub(
+                    {
+                        "scanner": scanner,
+                        "vulnerabilities": len(vuln_rows),
+                        "license_findings": len(license_rows),
+                    }
+                ),
+                old_value=None,
+                ip_address=None,
+            )
+        )
         db.commit()
 
     return {

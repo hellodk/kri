@@ -20,9 +20,7 @@ async def get_db() -> AsyncGenerator[AsyncSession, None]:
 
 async def init_redis() -> None:
     global _redis_client
-    _redis_client = aioredis.from_url(
-        settings.redis_url, decode_responses=True, health_check_interval=30
-    )
+    _redis_client = aioredis.from_url(settings.redis_url, decode_responses=True, health_check_interval=30)
 
 
 async def close_redis() -> None:
@@ -35,7 +33,5 @@ async def close_redis() -> None:
 async def get_redis() -> aioredis.Redis:
     global _redis_client
     if _redis_client is None:
-        _redis_client = aioredis.from_url(
-            settings.redis_url, decode_responses=True, health_check_interval=30
-        )
+        _redis_client = aioredis.from_url(settings.redis_url, decode_responses=True, health_check_interval=30)
     return _redis_client

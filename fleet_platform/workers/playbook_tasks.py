@@ -1,5 +1,7 @@
 # fleet_platform/workers/playbook_tasks.py
 """Celery tasks for running arbitrary Ansible playbooks."""
+
+import json
 import logging
 import re
 import tempfile
@@ -9,10 +11,11 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 import ansible_runner
-import yaml as _yaml
+import redis as sync_redis
 from celery.exceptions import SoftTimeLimitExceeded
 from sqlalchemy import select
 
+from fleet_platform.core.config import settings
 from fleet_platform.db.session import get_sync_db
 from fleet_platform.models.ansible_job import AnsibleJob
 from fleet_platform.models.node import Node
@@ -22,11 +25,18 @@ from fleet_platform.workers.celery_app import celery_app
 _DEFAULT_PLAYBOOKS_DIR = Path(__file__).parent.parent.parent / "playbooks"
 
 _log = logging.getLogger(__name__)
-_SAFE_PATH_RE = re.compile(r'^[a-zA-Z0-9._\-]{1,128}$')
+_SAFE_PATH_RE = re.compile(r"^[a-zA-Z0-9._\-]{1,128}$")
 _LOG_BATCH_INTERVAL = 5  # seconds between intermediate stdout DB flushes
 # Cap stored stdout so a runaway/verbose run can't grow the TEXT column unbounded (#369).
 _MAX_STDOUT_BYTES = 2 * 1024 * 1024
 _TRUNCATION_SENTINEL = "\n\n[output truncated at 2 MB — full log not retained]"
+# Window (seconds) used by the entry idempotency guard (#350).  Matches the task
+# hard time_limit so any live delivery of this job falls inside the window.
+_DUPLICATE_GUARD_SECONDS = 1860  # == time_limit on the @celery_app.task decorator
+# Per-target Redis advisory lock (#351): prevents two concurrent playbook runs against
+# the same node/group causing package-manager races or conflicting state mutations.
+_TARGET_LOCK_PREFIX = "kri:playbook-target-lock:"
+_TARGET_LOCK_TTL = 1920  # hard time_limit (1860) + buffer — self-expires if worker SIGKILLed
 
 
 def _append_capped(lines: list[str], msg: str, state: dict) -> None:
@@ -44,9 +54,9 @@ def _append_capped(lines: list[str], msg: str, state: dict) -> None:
 
 def _safe_label(label: str) -> str:
     """Sanitise a label used in file paths — prevents path traversal."""
-    cleaned = re.sub(r'[^a-zA-Z0-9._\-]', '_', label)
-    cleaned = re.sub(r'\.{2,}', '.', cleaned)
-    cleaned = cleaned.strip('.')
+    cleaned = re.sub(r"[^a-zA-Z0-9._\-]", "_", label)
+    cleaned = re.sub(r"\.{2,}", ".", cleaned)
+    cleaned = cleaned.strip(".")
     if not cleaned:
         cleaned = "unknown"
     return cleaned[:128]
@@ -56,9 +66,8 @@ def _get_playbooks_dir(db) -> Path:
     from sqlalchemy import select as _select
 
     from fleet_platform.models.platform_setting import PlatformSetting
-    row = db.execute(
-        _select(PlatformSetting).where(PlatformSetting.key == "playbooks_dir")
-    ).scalar_one_or_none()
+
+    row = db.execute(_select(PlatformSetting).where(PlatformSetting.key == "playbooks_dir")).scalar_one_or_none()
     if row and row.value:
         return Path(row.value)
     return _DEFAULT_PLAYBOOKS_DIR
@@ -73,9 +82,7 @@ def _resolve_playbook_path(playbook_filename: str, db) -> tuple[Path, Path]:
     from fleet_platform.models.platform_setting import PlatformSetting
     from fleet_platform.services.playbook_sources import get_all_playbook_dirs
 
-    row = db.execute(
-        select(PlatformSetting).where(PlatformSetting.key == "playbook_sources")
-    ).scalar_one_or_none()
+    row = db.execute(select(PlatformSetting).where(PlatformSetting.key == "playbook_sources")).scalar_one_or_none()
     sources_json = row.value if row else None
 
     all_dirs = get_all_playbook_dirs(sources_json, _DEFAULT_PLAYBOOKS_DIR)
@@ -103,26 +110,45 @@ def _write_static_inventory(tmpdir: str, hosts: list[dict]) -> str:
     Credentials differ per host (node override vs group vs global), so they go
     inline per host rather than via a single global env var. Private keys are
     written to 0600 files in *tmpdir* and referenced, never inlined (#279).
+
+    Passwords are written to host_vars/{alias}.yml (mode 0600) instead of
+    being inlined into inventory.ini (#349). Inlining ansible_ssh_pass leaks
+    the password into ansible -vvv output and artifact files even at 0600.
+    The alias and the host_vars filename use the same value: the raw hostname
+    when it is safe (passes _SAFE_PATH_RE), otherwise the _safe_label() form,
+    preventing path-traversal attacks in both the inventory alias and the file
+    system path.
     """
     # [targets] is the kri-managed group (referenced by kri-synthesized wrappers).
     # [all:children] makes all hosts visible to playbooks using `hosts: all`.
     lines = ["[targets]"]
     for h in hosts:
-        parts = [h["hostname"], f"ansible_host={h['ip']}", f"ansible_user={h['ssh_user']}"]
+        raw_hostname = h["hostname"]
+        # Use safe label for both the inventory alias and the host_vars filename
+        # so they always match. If the raw hostname is already safe, keep it as-is
+        # to preserve the alias ansible expects; otherwise sanitise both.
+        alias = raw_hostname if _SAFE_PATH_RE.match(raw_hostname) else _safe_label(raw_hostname)
+        parts = [alias, f"ansible_host={h['ip']}", f"ansible_user={h['ssh_user']}"]
         if h.get("auth_mode") == "key" and h.get("ssh_key"):
-            key_path = Path(tmpdir) / f"{_safe_label(h['hostname'])}.key"
+            key_path = Path(tmpdir) / f"{_safe_label(raw_hostname)}.key"
             key_path.write_text(h["ssh_key"] if h["ssh_key"].endswith("\n") else h["ssh_key"] + "\n")
             key_path.chmod(0o600)
             parts.append(f"ansible_ssh_private_key_file={key_path}")
         elif h.get("ssh_password"):
-            parts.append(f"ansible_ssh_pass={h['ssh_password']}")
+            # Write password to host_vars/{alias}.yml (mode 0600) — never inline (#349).
+            # A JSON-quoted string is a valid YAML scalar; avoids importing yaml (#346).
+            hv_dir = Path(tmpdir) / "host_vars"
+            hv_dir.mkdir(parents=True, exist_ok=True)
+            hv_file = hv_dir / f"{alias}.yml"
+            hv_file.write_text(f"ansible_ssh_pass: {json.dumps(h['ssh_password'])}\n")
+            hv_file.chmod(0o600)
         lines.append(" ".join(parts))
     # Add [all:children] so playbooks using `hosts: all` see the selected nodes.
     # This fixes playbooks that use `hosts: all` instead of `hosts: targets`.
     lines += ["", "[all:children]", "targets"]
     inv_path = Path(tmpdir) / "inventory.ini"
     inv_path.write_text("\n".join(lines))
-    inv_path.chmod(0o600)  # holds SSH passwords + IPs — never world/group readable
+    inv_path.chmod(0o600)  # holds SSH IPs — never world/group readable
     return str(inv_path)
 
 
@@ -132,11 +158,6 @@ def _credential_source_banner(hosts: list[dict]) -> str:
     for h in hosts:
         lines.append(f"  {h['hostname']} ({h['ip']}) ← {_source_label(h['credential_source'])}")
     return "\n".join(lines)
-
-
-def _write_var_file(path: Path, vars_dict: dict) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(_yaml.dump(vars_dict, default_flow_style=False, allow_unicode=True))
 
 
 def _host_entry(node: Node, db, override: dict | None) -> dict:
@@ -164,24 +185,21 @@ def _host_entry(node: Node, db, override: dict | None) -> dict:
 
 def _resolve_hosts(db, job: AnsibleJob, override: dict | None = None) -> list[dict] | None:
     if job.target_type == "node":
-        node = db.execute(
-            select(Node).where(Node.id == _uuid.UUID(job.target_id))
-        ).scalar_one_or_none()
+        node = db.execute(select(Node).where(Node.id == _uuid.UUID(job.target_id))).scalar_one_or_none()
         if not node or not node.ip_address:
             return None
         return [_host_entry(node, db, override)]
 
     if job.target_type == "group":
         from fleet_platform.models.group import GroupMember
-        memberships = db.execute(
-            select(GroupMember).where(GroupMember.group_id == _uuid.UUID(job.target_id))
-        ).scalars().all()
+
+        memberships = (
+            db.execute(select(GroupMember).where(GroupMember.group_id == _uuid.UUID(job.target_id))).scalars().all()
+        )
         node_ids = [m.node_id for m in memberships]
         if not node_ids:
             return []
-        nodes = db.execute(
-            select(Node).where(Node.id.in_(node_ids), Node.ip_address.isnot(None))
-        ).scalars().all()
+        nodes = db.execute(select(Node).where(Node.id.in_(node_ids), Node.ip_address.isnot(None))).scalars().all()
         return [_host_entry(n, db, override) for n in nodes]
 
     return None
@@ -210,17 +228,66 @@ def _flush_stdout(job_uuid: _uuid.UUID, lines: list[str], last_task: str | None)
     max_retries=0,
     queue="maintenance",
     soft_time_limit=1800,  # 30 min — real salt-master deploys can take 15-20 min
-    time_limit=1860,       # 31 min hard kill
+    time_limit=1860,  # 31 min hard kill
+    acks_late=False,  # ack BEFORE execution — a SIGKILLed run must NOT be redelivered
+    # and re-executed against the node (#350). Lost-on-crash jobs are
+    # marked failed by the orphan reaper instead.
 )
-def run_playbook(self, job_id: str, ssh_username: str | None = None, ssh_password: str | None = None, verbosity: int = 0) -> dict:
+def run_playbook(
+    self, job_id: str, ssh_username: str | None = None, ssh_password: str | None = None, verbosity: int = 0
+) -> dict:
     job_uuid = _uuid.UUID(job_id)
     stdout_lines: list[str] = []
+    lock = None  # per-target advisory lock (#351); initialised here so finally never NameErrors
 
     try:
         with get_sync_db() as db:
             job = db.execute(select(AnsibleJob).where(AnsibleJob.id == job_uuid)).scalar_one_or_none()
             if not job:
                 return {"status": "error", "reason": "job_not_found"}
+            # Defense-in-depth idempotency guard (#350): if the job is already
+            # 'running' and was started recently, this is a duplicate delivery of the
+            # same Celery message (e.g. SIGKILL redelivery despite acks_late=False
+            # on an older broker snapshot, or a manual re-queue).  Skip without
+            # mutating the record — mutating would clobber the live run's stdout/status.
+            # Truly-dead stale rows (status=running, old started_at) are reaped by
+            # maintenance.reap_orphaned_jobs (#352), not here.
+            # DESIGN NOTE: the issue's test sketch said 'mark failed immediately', but
+            # that clobbers a live run when the duplicate arrives while the original is
+            # alive — skipping without mutation is strictly safer.
+            if job.status == "running" and job.started_at is not None:
+                started = job.started_at if job.started_at.tzinfo else job.started_at.replace(tzinfo=UTC)
+                age = (datetime.now(UTC) - started).total_seconds()
+                if age < _DUPLICATE_GUARD_SECONDS:
+                    _log.warning(
+                        "playbook_tasks: job %s already running (started %ds ago) — duplicate delivery skipped (#350)",
+                        job_uuid,
+                        int(age),
+                    )
+                    return {"status": "duplicate-skipped", "job_id": job_id}
+            # Per-target advisory lock (#351): prevent two concurrent runs against the
+            # same node/group (package-manager races, conflicting state mutations).
+            # The lock is non-blocking — if it is already held, mark the job failed and
+            # return immediately rather than blocking the entire Celery worker queue.
+            # Advisory only: if Redis is unreachable we degrade open with a warning
+            # rather than blocking all playbook runs (the broker is likely also down).
+            try:
+                r = sync_redis.Redis.from_url(settings.redis_url)
+                lock = r.lock(
+                    f"{_TARGET_LOCK_PREFIX}{job.target_type}:{job.target_id}",
+                    timeout=_TARGET_LOCK_TTL,
+                    blocking=False,
+                )
+                if not lock.acquire(blocking=False):
+                    job.status = "failed"
+                    job.stdout = "Another run is in progress against this target — try again when it completes."
+                    job.completed_at = datetime.now(UTC)
+                    db.commit()
+                    return {"status": "target-locked", "job_id": job_id}
+            except sync_redis.RedisError as exc:
+                # Advisory lock only — degrade open if Redis is unreachable (#351)
+                _log.warning("playbook_tasks: target-lock unavailable (%s) — proceeding without lock", exc)
+                lock = None
             job.status = "running"
             job.started_at = datetime.now(UTC)
             db.commit()
@@ -253,16 +320,8 @@ def run_playbook(self, job_id: str, ssh_username: str | None = None, ssh_passwor
             job.stdout = "\n".join(stdout_lines)
             db.commit()
 
-        with get_sync_db() as db:
-            job = db.execute(select(AnsibleJob).where(AnsibleJob.id == job_uuid)).scalar_one()
-            if job.extravars:
-                if job.target_type == "node" and hosts:
-                    hostname = _safe_label(hosts[0]["hostname"])
-                    vf = playbooks_dir / "host_vars" / f"{hostname}.yml"
-                    _write_var_file(vf, job.extravars)
-                elif job.target_type == "group":
-                    vf = playbooks_dir / "group_vars" / f"{_safe_label(job.target_label)}.yml"
-                    _write_var_file(vf, job.extravars)
+        # Extravars are passed exclusively via run_async(extravars=...) — never written
+        # to persistent host_vars/group_vars (#346: secrets leaked across runs + concurrency clobber)
 
         last_db_write: float = time.time()
         job_start_time: float = time.time()
@@ -293,6 +352,7 @@ def run_playbook(self, job_id: str, ssh_username: str | None = None, ssh_passwor
             # lock-guarded buffer and the main thread flushes it to the DB on a
             # cadence, so the UI sees logs grow live (#347).
             import threading as _threading
+
             _buf_lock = _threading.Lock()
 
             def _event_handler(event: dict) -> bool:
@@ -347,7 +407,7 @@ def run_playbook(self, job_id: str, ssh_username: str | None = None, ssh_passwor
                     "ANSIBLE_TASK_TIMEOUT": "300",
                 },
                 event_handler=_event_handler,
-                quiet=True,          # DB is the sole sink — don't echo to worker stdout
+                quiet=True,  # DB is the sole sink — don't echo to worker stdout
                 rotate_artifacts=0,  # 0 disables rotation (None breaks: runner does None>0 → TypeError)
             )
 
@@ -386,9 +446,8 @@ def run_playbook(self, job_id: str, ssh_username: str | None = None, ssh_passwor
             if job and job.status == "running":
                 job.status = "failed"
                 job.stdout = (
-                    ("\n".join(stdout_lines) + "\n\n" if stdout_lines else "")
-                    + "[ERROR] Celery task time limit exceeded — playbook was terminated."
-                )
+                    "\n".join(stdout_lines) + "\n\n" if stdout_lines else ""
+                ) + "[ERROR] Celery task time limit exceeded — playbook was terminated."
                 job.completed_at = datetime.now(UTC)
                 db.commit()
         return {"status": "timeout", "job_id": job_id}
@@ -400,9 +459,19 @@ def run_playbook(self, job_id: str, ssh_username: str | None = None, ssh_passwor
             if job and job.status == "running":
                 job.status = "failed"
                 job.stdout = (
-                    ("\n".join(stdout_lines) + "\n\n" if stdout_lines else "")
-                    + f"[ERROR] {type(exc).__name__}: {exc}"
-                )
+                    "\n".join(stdout_lines) + "\n\n" if stdout_lines else ""
+                ) + f"[ERROR] {type(exc).__name__}: {exc}"
                 job.completed_at = datetime.now(UTC)
                 db.commit()
         raise
+
+    finally:
+        # Release the per-target advisory lock (#351) regardless of outcome —
+        # success, failure, soft-timeout, hard-kill, or exception.
+        # TTL is the backstop: the lock self-expires if the worker is SIGKILLed
+        # before this finally block executes.
+        if lock is not None:
+            try:
+                lock.release()
+            except Exception:
+                pass  # already expired or not owned — TTL handles cleanup

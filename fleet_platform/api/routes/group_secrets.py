@@ -1,5 +1,6 @@
 # fleet_platform/api/routes/group_secrets.py
 """Group-scoped Salt pillar secrets API."""
+
 import uuid
 
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -8,6 +9,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from fleet_platform.api.deps import get_db
+from fleet_platform.core.audit import audit
 from fleet_platform.core.auth import get_current_user, require_role
 from fleet_platform.models.group import Group
 from fleet_platform.services import group_secrets_svc
@@ -63,11 +65,17 @@ async def upsert_group_secret(
     key: str,
     payload: SecretUpsertRequest,
     db: AsyncSession = Depends(get_db),
-    _: dict = Depends(require_role("operator", "admin")),
+    claims: dict = Depends(require_role("operator", "admin")),
 ):
     await _get_group_or_404(group_id, db)
-    secret = await group_secrets_svc.upsert_secret(
-        db, group_id, key, payload.value, payload.description
+    secret = await group_secrets_svc.upsert_secret(db, group_id, key, payload.value, payload.description)
+    await audit(
+        db,
+        actor=claims["email"],
+        action="group_secret.upsert",
+        resource_type="group",
+        resource_id=group_id,
+        new_value={"key": key, "description": payload.description},
     )
     try:
         await group_secrets_svc.write_group_pillar(group_id, db)
@@ -88,13 +96,21 @@ async def delete_group_secret(
     group_id: uuid.UUID,
     key: str,
     db: AsyncSession = Depends(get_db),
-    _: dict = Depends(require_role("operator", "admin")),
+    claims: dict = Depends(require_role("operator", "admin")),
 ):
     await _get_group_or_404(group_id, db)
     deleted = await group_secrets_svc.delete_secret(db, group_id, key)
     if not deleted:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Secret not found")
 
+    await audit(
+        db,
+        actor=claims["email"],
+        action="group_secret.delete",
+        resource_type="group",
+        resource_id=group_id,
+        new_value={"key": key},
+    )
     try:
         await group_secrets_svc.write_group_pillar(group_id, db)
         await group_secrets_svc.rebuild_top_sls(db)

@@ -1,4 +1,5 @@
 """Tests for #173: structured API error responses."""
+
 from fleet_platform.core.errors import AppError, ErrorCode, error_code_for_status
 
 
@@ -32,12 +33,14 @@ def test_app_error_stores_error_code():
 
 def test_app_error_is_http_exception():
     from fastapi import HTTPException
+
     err = AppError(status_code=404, error_code="NOT_FOUND", detail="nope")
     assert isinstance(err, HTTPException)
 
 
 def test_main_registers_http_exception_handler():
     from pathlib import Path
+
     src = (Path(__file__).parent.parent.parent / "fleet_platform/api/main.py").read_text()
     assert "structured_http_exception_handler" in src
     assert "error_code" in src

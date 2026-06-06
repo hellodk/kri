@@ -9,6 +9,7 @@ import { Pagination } from '../components/Pagination'
 import { formatDistanceToNow } from 'date-fns'
 import { useFilterStore } from '../stores/filterStore'
 
+// eslint-disable-next-line react-refresh/only-export-components -- GRAIN_DISPLAY_NAMES is a shared constant reused by other pages; moving to a separate file is tracked in #380 follow-up
 export const GRAIN_DISPLAY_NAMES: Record<string, string> = {
   'system.machinename': 'Machine Name',
   'system.kernelversion': 'Kernel Version',
@@ -23,6 +24,7 @@ export const GRAIN_DISPLAY_NAMES: Record<string, string> = {
   'os.release': 'OS Release',
 }
 
+// eslint-disable-next-line react-refresh/only-export-components -- formatGrainKey is a helper reused by other pages; moving to a separate file is tracked in #380 follow-up
 export function formatGrainKey(key: string | undefined | null): string {
   if (!key) return '—'
   return GRAIN_DISPLAY_NAMES[key] ??

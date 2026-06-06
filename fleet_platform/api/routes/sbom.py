@@ -20,23 +20,49 @@ from fleet_platform.schemas.sbom import (
 router = APIRouter(prefix="/api/v1/sbom")
 
 # Copyleft license identifiers that require policy attention
-_COPYLEFT_LICENSES = frozenset({
-    "GPL-2.0", "GPL-2.0-only", "GPL-2.0-or-later",
-    "GPL-3.0", "GPL-3.0-only", "GPL-3.0-or-later",
-    "LGPL-2.0", "LGPL-2.0-only", "LGPL-2.0-or-later",
-    "LGPL-2.1", "LGPL-2.1-only", "LGPL-2.1-or-later",
-    "LGPL-3.0", "LGPL-3.0-only", "LGPL-3.0-or-later",
-    "AGPL-3.0", "AGPL-3.0-only", "AGPL-3.0-or-later",
-    "EUPL-1.1", "EUPL-1.2",
-    "OSL-3.0",
-    "CC-BY-SA-4.0", "CC-BY-NC-SA-4.0",
-})
+_COPYLEFT_LICENSES = frozenset(
+    {
+        "GPL-2.0",
+        "GPL-2.0-only",
+        "GPL-2.0-or-later",
+        "GPL-3.0",
+        "GPL-3.0-only",
+        "GPL-3.0-or-later",
+        "LGPL-2.0",
+        "LGPL-2.0-only",
+        "LGPL-2.0-or-later",
+        "LGPL-2.1",
+        "LGPL-2.1-only",
+        "LGPL-2.1-or-later",
+        "LGPL-3.0",
+        "LGPL-3.0-only",
+        "LGPL-3.0-or-later",
+        "AGPL-3.0",
+        "AGPL-3.0-only",
+        "AGPL-3.0-or-later",
+        "EUPL-1.1",
+        "EUPL-1.2",
+        "OSL-3.0",
+        "CC-BY-SA-4.0",
+        "CC-BY-NC-SA-4.0",
+    }
+)
 
-_PERMISSIVE_LICENSES = frozenset({
-    "MIT", "Apache-2.0", "BSD-2-Clause", "BSD-3-Clause",
-    "ISC", "Unlicense", "0BSD", "CC0-1.0",
-    "Python-2.0", "PSF-2.0", "CDDL-1.0",
-})
+_PERMISSIVE_LICENSES = frozenset(
+    {
+        "MIT",
+        "Apache-2.0",
+        "BSD-2-Clause",
+        "BSD-3-Clause",
+        "ISC",
+        "Unlicense",
+        "0BSD",
+        "CC0-1.0",
+        "Python-2.0",
+        "PSF-2.0",
+        "CDDL-1.0",
+    }
+)
 
 
 @router.get("/search", response_model=list[SBOMSearchResult])
@@ -56,9 +82,7 @@ async def search_sbom(
     q_safe = q.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
 
     latest_scan = (
-        select(func.max(SBOMScan.scanned_at).label("max_at"), SBOMScan.node_id)
-        .group_by(SBOMScan.node_id)
-        .subquery()
+        select(func.max(SBOMScan.scanned_at).label("max_at"), SBOMScan.node_id).group_by(SBOMScan.node_id).subquery()
     )
 
     result = await db.execute(
@@ -99,9 +123,7 @@ async def browse_sbom(
 ):
     """Return all packages from the latest SBOM scan per node."""
     latest_scan = (
-        select(func.max(SBOMScan.scanned_at).label("max_at"), SBOMScan.node_id)
-        .group_by(SBOMScan.node_id)
-        .subquery()
+        select(func.max(SBOMScan.scanned_at).label("max_at"), SBOMScan.node_id).group_by(SBOMScan.node_id).subquery()
     )
     result = await db.execute(
         select(SBOMComponent, SBOMScan, Node)
@@ -140,10 +162,7 @@ async def get_latest_scan(
     _: dict = Depends(get_current_user),
 ):
     result = await db.execute(
-        select(SBOMScan)
-        .where(SBOMScan.node_id == node_id)
-        .order_by(SBOMScan.scanned_at.desc())
-        .limit(1)
+        select(SBOMScan).where(SBOMScan.node_id == node_id).order_by(SBOMScan.scanned_at.desc()).limit(1)
     )
     scan = result.scalar_one_or_none()
     if not scan:
@@ -160,9 +179,7 @@ async def list_scans(
     _: dict = Depends(get_current_user),
 ):
     total = (
-        await db.execute(
-            select(func.count()).select_from(SBOMScan).where(SBOMScan.node_id == node_id)
-        )
+        await db.execute(select(func.count()).select_from(SBOMScan).where(SBOMScan.node_id == node_id))
     ).scalar_one()
     result = await db.execute(
         select(SBOMScan)
@@ -226,10 +243,7 @@ async def sbom_delta(
     """Return packages added/removed between the two most recent SBOM scans for a node."""
     # Get the two most recent scans for this node
     scans_result = await db.execute(
-        select(SBOMScan)
-        .where(SBOMScan.node_id == node_id)
-        .order_by(SBOMScan.scanned_at.desc())
-        .limit(2)
+        select(SBOMScan).where(SBOMScan.node_id == node_id).order_by(SBOMScan.scanned_at.desc()).limit(2)
     )
     scans = scans_result.scalars().all()
 
@@ -273,12 +287,8 @@ async def sbom_delta(
         has_delta=True,
         latest_scan_at=latest.scanned_at,
         previous_scan_at=previous.scanned_at,
-        new_packages=[
-            SBOMPackage(**latest_pkgs[k]) for k in sorted(new_keys)
-        ],
-        removed_packages=[
-            SBOMPackage(**prev_pkgs[k]) for k in sorted(removed_keys)
-        ],
+        new_packages=[SBOMPackage(**latest_pkgs[k]) for k in sorted(new_keys)],
+        removed_packages=[SBOMPackage(**prev_pkgs[k]) for k in sorted(removed_keys)],
         new_count=len(new_keys),
         removed_count=len(removed_keys),
     )
@@ -292,9 +302,7 @@ async def license_summary(
     """Return license compliance summary across all latest SBOM scans."""
     # Get latest scan per node
     latest_scan_subq = (
-        select(func.max(SBOMScan.scanned_at).label("max_at"), SBOMScan.node_id)
-        .group_by(SBOMScan.node_id)
-        .subquery()
+        select(func.max(SBOMScan.scanned_at).label("max_at"), SBOMScan.node_id).group_by(SBOMScan.node_id).subquery()
     )
 
     result = await db.execute(
@@ -320,21 +328,25 @@ async def license_summary(
             if isinstance(lic, str):
                 license_counts[lic] = license_counts.get(lic, 0) + 1
                 if lic in _COPYLEFT_LICENSES:
-                    copyleft_packages.append({
-                        "name": name,
-                        "version": version or "",
-                        "license": lic,
-                        "node_id": str(node_id),
-                        "purl": purl or "",
-                    })
+                    copyleft_packages.append(
+                        {
+                            "name": name,
+                            "version": version or "",
+                            "license": lic,
+                            "node_id": str(node_id),
+                            "purl": purl or "",
+                        }
+                    )
 
         if not license_list:
-            unknown_packages.append({
-                "name": name,
-                "version": version or "",
-                "node_id": str(node_id),
-                "purl": purl or "",
-            })
+            unknown_packages.append(
+                {
+                    "name": name,
+                    "version": version or "",
+                    "node_id": str(node_id),
+                    "purl": purl or "",
+                }
+            )
 
     # Deduplicate by name+license
     seen = set()

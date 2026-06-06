@@ -1,5 +1,6 @@
 # fleet_platform/workers/health_tasks.py
 """Celery task for periodic fleet health metric collection."""
+
 import logging
 import time
 from datetime import datetime, timedelta
@@ -41,9 +42,7 @@ def collect_fleet_health() -> dict:
     """
     # --- Session 1: read online nodes, close before any Salt calls ----------
     with get_sync_db() as db:
-        nodes = db.execute(
-            select(Node).where(Node.status == "online")
-        ).scalars().all()
+        nodes = db.execute(select(Node).where(Node.status == "online")).scalars().all()
 
         if not nodes:
             _log.info("collect_fleet_health: no online nodes, skipping")
@@ -52,9 +51,7 @@ def collect_fleet_health() -> dict:
         # Copy only primitive data out of the session-bound ORM objects so
         # they remain usable after the session closes (detached ORM instances
         # would raise DetachedInstanceError).
-        node_by_minion: dict[str, dict] = {
-            n.minion_id: {"id": n.id, "minion_id": n.minion_id} for n in nodes
-        }
+        node_by_minion: dict[str, dict] = {n.minion_id: {"id": n.id, "minion_id": n.minion_id} for n in nodes}
     # Session 1 is now closed — connection pool slot released.
 
     minion_ids = list(node_by_minion.keys())

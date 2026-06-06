@@ -1,5 +1,6 @@
 # fleet_platform/api/routes/node_secrets.py
 """Per-node Salt pillar secrets API."""
+
 import uuid
 
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -8,6 +9,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from fleet_platform.api.deps import get_db
+from fleet_platform.core.audit import audit
 from fleet_platform.core.auth import get_current_user, require_role
 from fleet_platform.models.node import Node
 from fleet_platform.services import node_secrets_svc
@@ -64,12 +66,18 @@ async def upsert_node_secret(
     key: str,
     payload: SecretUpsertRequest,
     db: AsyncSession = Depends(get_db),
-    _: dict = Depends(require_role("operator", "admin")),
+    claims: dict = Depends(require_role("operator", "admin")),
 ):
     """Create or update a node secret. After save, pillar file is regenerated."""
     node = await _get_node_or_404(node_id, db)
-    secret = await node_secrets_svc.upsert_secret(
-        db, node_id, key, payload.value, payload.description
+    secret = await node_secrets_svc.upsert_secret(db, node_id, key, payload.value, payload.description)
+    await audit(
+        db,
+        actor=claims["email"],
+        action="node_secret.upsert",
+        resource_type="node",
+        resource_id=node_id,
+        new_value={"key": key, "description": payload.description},
     )
     # Regenerate the pillar file for this node
     try:
@@ -90,7 +98,7 @@ async def delete_node_secret(
     node_id: uuid.UUID,
     key: str,
     db: AsyncSession = Depends(get_db),
-    _: dict = Depends(require_role("operator", "admin")),
+    claims: dict = Depends(require_role("operator", "admin")),
 ):
     """Delete a node secret. After delete, pillar file is regenerated."""
     node = await _get_node_or_404(node_id, db)
@@ -98,6 +106,14 @@ async def delete_node_secret(
     if not deleted:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Secret not found")
 
+    await audit(
+        db,
+        actor=claims["email"],
+        action="node_secret.delete",
+        resource_type="node",
+        resource_id=node_id,
+        new_value={"key": key},
+    )
     try:
         await node_secrets_svc.write_node_pillar(node_id, node.minion_id, db)
     except Exception:

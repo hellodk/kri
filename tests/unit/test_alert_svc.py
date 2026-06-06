@@ -85,9 +85,7 @@ async def test_evaluate_alerts_calls_check_for_each_type():
     rule_key.event_type = "key_pending"
 
     exec_result = MagicMock()
-    exec_result.scalars.return_value.all.return_value = [
-        rule_offline, rule_drift, rule_cve, rule_key
-    ]
+    exec_result.scalars.return_value.all.return_value = [rule_offline, rule_drift, rule_cve, rule_key]
     db.execute.return_value = exec_result
 
     with (

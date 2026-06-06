@@ -1,4 +1,5 @@
 """Tests for silent exception logging fixes — issues #63 and #66."""
+
 import logging
 from unittest.mock import MagicMock, patch
 
@@ -26,9 +27,7 @@ class TestGetNodeCredentialsLogging:
         # Must not crash
         assert result is not None
         # Must emit at least one WARNING
-        assert any(
-            r.levelno == logging.WARNING for r in caplog.records
-        ), "Expected a WARNING log when decryption fails"
+        assert any(r.levelno == logging.WARNING for r in caplog.records), "Expected a WARNING log when decryption fails"
         # Log must mention the node id
         warning_text = " ".join(r.message for r in caplog.records if r.levelno == logging.WARNING)
         assert "test-node-id-123" in warning_text
@@ -64,9 +63,7 @@ class TestWebSSHLogger:
         assert hasattr(webssh_module, "logger"), (
             "fleet_platform.api.routes.webssh must have a module-level 'logger' attribute"
         )
-        assert isinstance(webssh_module.logger, logging.Logger), (
-            "webssh.logger must be a logging.Logger instance"
-        )
+        assert isinstance(webssh_module.logger, logging.Logger), "webssh.logger must be a logging.Logger instance"
 
     def test_webssh_send_to_browser_logs_on_send_failure(self, caplog):
         """logger.debug fires when ws.send_text raises."""
@@ -83,9 +80,7 @@ class TestWebSSHLogger:
         proxy._flush_recording = AsyncMock()
 
         with caplog.at_level(logging.DEBUG, logger="fleet_platform.api.routes.webssh"):
-            asyncio.run(
-                proxy.send_to_browser(b"hello")
-            )
+            asyncio.run(proxy.send_to_browser(b"hello"))
 
         assert any("send_to_browser" in r.message for r in caplog.records), (
             "logger.debug must fire in send_to_browser when ws.send_text raises"

@@ -6,7 +6,7 @@ from cryptography.hazmat.primitives.asymmetric import rsa
 
 _DEFAULT_KRI_DIR = Path.home() / ".kri"
 _DEFAULT_PRIV = _DEFAULT_KRI_DIR / "id_rsa"
-_DEFAULT_PUB  = _DEFAULT_KRI_DIR / "id_rsa.pub"
+_DEFAULT_PUB = _DEFAULT_KRI_DIR / "id_rsa.pub"
 
 
 def ensure_controller_keypair(
@@ -14,7 +14,7 @@ def ensure_controller_keypair(
     pub_path=None,
 ) -> tuple[str, str]:
     priv_path = Path(priv_path) if priv_path else _DEFAULT_PRIV
-    pub_path  = Path(pub_path)  if pub_path  else _DEFAULT_PUB
+    pub_path = Path(pub_path) if pub_path else _DEFAULT_PUB
     priv_path.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
 
     if not priv_path.exists():

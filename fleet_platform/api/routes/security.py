@@ -6,6 +6,7 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from fleet_platform.api.deps import get_db
+from fleet_platform.core.audit import audit
 from fleet_platform.core.auth import require_role
 from fleet_platform.models.node import Node
 from fleet_platform.models.sbom import SBOMScan
@@ -173,9 +174,7 @@ async def security_node_detail(
             VulnerabilityFinding.severity.in_(["CRITICAL", "HIGH"]).desc(), VulnerabilityFinding.scanned_at.desc()
         )
     )
-    total_vulns = (
-        await db.execute(select(func.count()).select_from(vuln_query.subquery()))
-    ).scalar_one()
+    total_vulns = (await db.execute(select(func.count()).select_from(vuln_query.subquery()))).scalar_one()
     result = await db.execute(vuln_query.offset((page - 1) * per_page).limit(per_page))
     vulns = result.scalars().all()
 
@@ -185,9 +184,7 @@ async def security_node_detail(
         .where(LicenseFinding.node_id == node_id)
         .order_by(LicenseFinding.risk.desc(), LicenseFinding.package_name)
     )
-    total_licenses = (
-        await db.execute(select(func.count()).select_from(lic_query.subquery()))
-    ).scalar_one()
+    total_licenses = (await db.execute(select(func.count()).select_from(lic_query.subquery()))).scalar_one()
     lic_result = await db.execute(lic_query.offset((page - 1) * per_page).limit(per_page))
     licenses = lic_result.scalars().all()
 
@@ -236,7 +233,7 @@ async def trigger_node_scan(
     node_id: uuid.UUID,
     scanner: str = "trivy",
     db: AsyncSession = Depends(get_db),
-    _: dict = Depends(require_role("operator", "admin")),
+    claims: dict = Depends(require_role("operator", "admin")),
 ):
     """Trigger a vulnerability/license scan for a specific node."""
     if scanner not in _VALID_SCANNERS:
@@ -251,13 +248,23 @@ async def trigger_node_scan(
         raise HTTPException(status_code=404, detail="Node not found")
 
     task = scan_node_security.delay(str(node_id), scanner=scanner)
+    await audit(
+        db,
+        actor=claims["email"],
+        action="security_scan.trigger",
+        resource_type="node",
+        resource_id=node_id,
+        new_value={"scanner": scanner, "task_id": task.id},
+    )
+    await db.commit()
     return {"task_id": task.id, "node_id": str(node_id), "scanner": scanner, "status": "queued"}
 
 
 @router.post("/scan-all", status_code=202)
 async def trigger_fleet_scan(
     scanner: str = "trivy",
-    _: dict = Depends(require_role("operator", "admin")),
+    db: AsyncSession = Depends(get_db),
+    claims: dict = Depends(require_role("operator", "admin")),
 ):
     """Trigger vulnerability/license scans for all nodes."""
     if scanner not in _VALID_SCANNERS:
@@ -267,6 +274,14 @@ async def trigger_fleet_scan(
     from fleet_platform.workers.security_tasks import scan_all_nodes
 
     task = scan_all_nodes.delay(scanner=scanner)
+    await audit(
+        db,
+        actor=claims["email"],
+        action="security_scan.trigger_fleet",
+        resource_type="fleet",
+        new_value={"scanner": scanner, "task_id": task.id},
+    )
+    await db.commit()
     return {"task_id": task.id, "scanner": scanner, "status": "queued"}
 
 
@@ -288,9 +303,7 @@ async def integration_status(
 
     # Trivy — use asyncio.to_thread to avoid blocking the event loop
     try:
-        result = await asyncio.to_thread(
-            subprocess.run, ["trivy", "--version"], capture_output=True, timeout=5
-        )
+        result = await asyncio.to_thread(subprocess.run, ["trivy", "--version"], capture_output=True, timeout=5)
         trivy_ok = result.returncode == 0
     except (FileNotFoundError, subprocess.TimeoutExpired):
         trivy_ok = False
@@ -301,7 +314,9 @@ async def integration_status(
     if cxone_url:
         try:
             await asyncio.to_thread(
-                urllib.request.urlopen, f"{cxone_url}/api/health", timeout=5  # nosec B310
+                urllib.request.urlopen,
+                f"{cxone_url}/api/health",
+                timeout=5,  # nosec B310
             )
             cxone_ok = True
         except Exception:
@@ -313,7 +328,9 @@ async def integration_status(
     if sonar_url:
         try:
             await asyncio.to_thread(
-                urllib.request.urlopen, f"{sonar_url}/api/system/health", timeout=5  # nosec B310
+                urllib.request.urlopen,
+                f"{sonar_url}/api/system/health",
+                timeout=5,  # nosec B310
             )
             sonar_ok = True
         except Exception:

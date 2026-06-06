@@ -4,6 +4,7 @@
 The routes read and move files under a PKI directory. Tests patch the
 filesystem helpers so no real /etc/salt path is required.
 """
+
 from pathlib import Path
 from unittest.mock import patch
 

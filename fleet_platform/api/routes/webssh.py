@@ -11,6 +11,7 @@ Security model:
 # sudo restrictions, SELinux/AppArmor profiles, and restricted shells on fleet nodes.
 # The previous blocklist was removed (issue #118) to avoid false confidence.
 """
+
 import asyncio
 import base64
 import logging
@@ -61,11 +62,11 @@ class SSHProxySession:
         self.max_mins = max_mins
         self._ssh_conn: asyncssh.SSHClientConnection | None = None
         self._ssh_process: asyncssh.SSHClientProcess | None = None
-        self._cmd_buffer = ""          # accumulates keystrokes until Enter
+        self._cmd_buffer = ""  # accumulates keystrokes until Enter
         self._recording_chunks: list[tuple[str, datetime]] = []
         self._chunk_index = 0
         self._alert_count = 0
-        self._owns_connection = True   # False when connection comes from cache
+        self._owns_connection = True  # False when connection comes from cache
 
     async def send_to_browser(self, data: bytes) -> None:
         """Send terminal output to browser and record it."""
@@ -85,12 +86,14 @@ class SSHProxySession:
         self._recording_chunks.clear()
         async with AsyncSessionLocal() as db:
             for text, ts in chunks:
-                db.add(SessionRecording(
-                    session_id=self.session_id,
-                    chunk_index=self._chunk_index,
-                    data=base64.b64encode(text.encode()).decode(),
-                    recorded_at=ts,
-                ))
+                db.add(
+                    SessionRecording(
+                        session_id=self.session_id,
+                        chunk_index=self._chunk_index,
+                        data=base64.b64encode(text.encode()).decode(),
+                        recorded_at=ts,
+                    )
+                )
                 self._chunk_index += 1
             await db.commit()
 
@@ -124,13 +127,15 @@ class SSHProxySession:
 
     async def _log_security_event(self, event_type: str, command: str, severity: str) -> None:
         async with AsyncSessionLocal() as db:
-            db.add(SecurityEvent(
-                session_id=self.session_id,
-                event_type=event_type,
-                command=command[:500],
-                severity=severity,
-                created_at=datetime.now(UTC),
-            ))
+            db.add(
+                SecurityEvent(
+                    session_id=self.session_id,
+                    event_type=event_type,
+                    command=command[:500],
+                    severity=severity,
+                    created_at=datetime.now(UTC),
+                )
+            )
             # Increment alert count on session
             session = await db.get(SSHSession, self.session_id)
             if session:
@@ -193,6 +198,7 @@ async def webssh_session(
 
     # Resolve credentials server-side
     from fleet_platform.services.credential_resolver import resolve_node_credentials
+
     creds = await resolve_node_credentials(node, db)
 
     # Create session record
@@ -214,6 +220,7 @@ async def webssh_session(
     # Get session max mins from group (default 60 if not configured)
     max_mins = 60
     from fleet_platform.models.group import Group, GroupMember
+
     group_result = await db.execute(
         select(Group)
         .join(GroupMember, GroupMember.group_id == Group.id)
@@ -246,32 +253,37 @@ async def webssh_session(
 
     # Log session_start security event
     async with AsyncSessionLocal() as ev_db:
-        ev_db.add(SecurityEvent(
-            session_id=session_id,
-            node_id=node_id,
-            user_id=user_id,
-            event_type="session_start",
-            severity="info",
-            detail=f"source_ip={session_rec.source_ip} credential_source={creds['credential_source']}",
-            created_at=datetime.now(UTC),
-        ))
+        ev_db.add(
+            SecurityEvent(
+                session_id=session_id,
+                node_id=node_id,
+                user_id=user_id,
+                event_type="session_start",
+                severity="info",
+                detail=f"source_ip={session_rec.source_ip} credential_source={creds['credential_source']}",
+                created_at=datetime.now(UTC),
+            )
+        )
         await ev_db.commit()
 
     # Guard: if credentials could not be decrypted the password will be empty string.
     # Surface this clearly in the terminal rather than letting SSH auth silently fail.
     if creds["auth_mode"] == "password" and not creds.get("ssh_password"):
         import json
-        error_event = json.dumps({
-            "type": "credential_error",
-            "code": "credential_decryption_failed",
-            "node_id": str(node_id),
-        })
+
+        error_event = json.dumps(
+            {
+                "type": "credential_error",
+                "code": "credential_decryption_failed",
+                "node_id": str(node_id),
+            }
+        )
         await proxy.send_to_browser(
             b"\r\n\x1b[31m[SSH Error] Credentials could not be decrypted.\x1b[0m\r\n"
             b"\x1b[33mThe SSH password stored for this node was encrypted with a different\r\n"
             b"JWT_SECRET than the one currently in .env.docker.\r\n"
             b"\r\nFix: go to Node \xe2\x86\x92 Secrets tab and re-enter the SSH password.\x1b[0m\r\n"
-            b'\x1b]kri_event:' + error_event.encode() + b'\x07\r\n'
+            b"\x1b]kri_event:" + error_event.encode() + b"\x07\r\n"
         )
         await proxy._flush_recording()
         await proxy.close(status="failed")
@@ -289,6 +301,7 @@ async def webssh_session(
         if creds["auth_mode"] == "key" and creds.get("ssh_key"):
             import os
             import tempfile
+
             with tempfile.NamedTemporaryFile(mode="w", suffix=".pem", delete=False) as f:
                 f.write(creds["ssh_key"])
                 key_path = f.name
@@ -325,6 +338,7 @@ async def webssh_session(
                 key_bytes = key_bytes.encode()
             key_b64 = base64.b64encode(key_bytes).decode()
             from fleet_platform.services.ssh_host_key_svc import verify_or_store_host_key
+
             key_ok = await verify_or_store_host_key(node, key_b64, db, user_id=str(user_id))
             if not key_ok:
                 proxy._ssh_conn.close()
@@ -358,18 +372,14 @@ async def webssh_session(
         while True:
             remaining = deadline - loop.time()
             if remaining <= 0:
-                timeout_msg = (
-                    f"\r\n\033[33m[TIMEOUT] Session timed out (max {max_mins} min)\033[0m\r\n"
-                )
+                timeout_msg = f"\r\n\033[33m[TIMEOUT] Session timed out (max {max_mins} min)\033[0m\r\n"
                 await proxy.send_to_browser(timeout_msg.encode())
                 await proxy.close("timed_out")
                 await websocket.close()
                 return
 
             try:
-                data = await asyncio.wait_for(
-                    websocket.receive_text(), timeout=min(remaining, 30)
-                )
+                data = await asyncio.wait_for(websocket.receive_text(), timeout=min(remaining, 30))
                 if not await proxy.handle_keystroke(data):
                     break
             except asyncio.TimeoutError:
@@ -392,6 +402,7 @@ async def webssh_session(
 
 # ── Session list and recording endpoints ──────────────────────────────────────
 
+
 @router.get("/sessions")
 async def list_sessions(
     node_id: uuid.UUID | None = None,
@@ -408,22 +419,24 @@ async def list_sessions(
         q = q.where(SSHSession.status == status)
     result = await db.execute(q)
     sessions = result.scalars().all()
-    return {"items": [
-        {
-            "id": str(s.id),
-            "node_id": str(s.node_id),
-            "user_id": str(s.user_id) if s.user_id else None,
-            "started_at": s.started_at,
-            "ended_at": s.ended_at,
-            "source_ip": s.source_ip,
-            "credential_source": s.credential_source,
-            "status": s.status,
-            "alert_count": s.alert_count,
-            "target_ip": s.target_ip,
-            "ssh_user": s.ssh_user,
-        }
-        for s in sessions
-    ]}
+    return {
+        "items": [
+            {
+                "id": str(s.id),
+                "node_id": str(s.node_id),
+                "user_id": str(s.user_id) if s.user_id else None,
+                "started_at": s.started_at,
+                "ended_at": s.ended_at,
+                "source_ip": s.source_ip,
+                "credential_source": s.credential_source,
+                "status": s.status,
+                "alert_count": s.alert_count,
+                "target_ip": s.target_ip,
+                "ssh_user": s.ssh_user,
+            }
+            for s in sessions
+        ]
+    }
 
 
 @router.get("/sessions/{session_id}/recording")
@@ -441,10 +454,7 @@ async def get_session_recording(
     chunks = result.scalars().all()
     return {
         "session_id": str(session_id),
-        "chunks": [
-            {"index": c.chunk_index, "data": c.data, "recorded_at": c.recorded_at}
-            for c in chunks
-        ],
+        "chunks": [{"index": c.chunk_index, "data": c.data, "recorded_at": c.recorded_at} for c in chunks],
     }
 
 
@@ -464,16 +474,18 @@ async def list_security_events(
         q = q.where(SecurityEvent.event_type == event_type)
     result = await db.execute(q)
     events = result.scalars().all()
-    return {"items": [
-        {
-            "id": str(e.id),
-            "session_id": str(e.session_id) if e.session_id else None,
-            "node_id": str(e.node_id) if e.node_id else None,
-            "event_type": e.event_type,
-            "command": e.command,
-            "severity": e.severity,
-            "detail": e.detail,
-            "created_at": e.created_at,
-        }
-        for e in events
-    ]}
+    return {
+        "items": [
+            {
+                "id": str(e.id),
+                "session_id": str(e.session_id) if e.session_id else None,
+                "node_id": str(e.node_id) if e.node_id else None,
+                "event_type": e.event_type,
+                "command": e.command,
+                "severity": e.severity,
+                "detail": e.detail,
+                "created_at": e.created_at,
+            }
+            for e in events
+        ]
+    }

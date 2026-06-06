@@ -36,7 +36,7 @@ export function AutomationHub() {
     playbookSourcesApi.sync()
       .then((data) => {
         setSyncing(false)
-        const results: SyncResult[] = (data.results ?? []).map((r: any) => ({
+        const results: SyncResult[] = (data.results ?? []).map((r: { url?: string; status?: string }) => ({
           label: (r.url ?? 'source').split('/').slice(-1)[0].replace('.git', ''),
           ok: r.status === 'ok',
         }))

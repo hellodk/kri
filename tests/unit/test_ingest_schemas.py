@@ -56,5 +56,6 @@ def test_node_register_request_requires_minion_id():
 
 def test_node_register_response_has_token():
     import uuid
+
     r = NodeRegisterResponse(node_id=uuid.uuid4(), minion_id="foo.local", token="abc123")
     assert r.token == "abc123"

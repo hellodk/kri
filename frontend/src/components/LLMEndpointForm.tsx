@@ -38,6 +38,7 @@ export function LLMEndpointForm({ endpoint, onClose, onSaved }: Props) {
   // Reset form when endpoint prop changes (edit-mode) or clears (add-mode)
   useEffect(() => {
     if (endpoint) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- syncing all form fields from the endpoint prop on prop change; refactor tracked in #380 follow-up
       setName(endpoint.name)
       setProvider(endpoint.provider)
       setBaseUrl(endpoint.base_url ?? '')
@@ -63,12 +64,14 @@ export function LLMEndpointForm({ endpoint, onClose, onSaved }: Props) {
   useEffect(() => {
     const p = PROVIDERS.find((p) => p.value === provider)
     if (p?.defaultKey && !isEdit) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- auto-populating default API key when provider changes; refactor tracked in #380 follow-up
       setApiKey(p.defaultKey)
     }
   }, [provider]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Reset discovered models when provider changes
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- resetting derived model list on provider change; refactor tracked in #380 follow-up
     setDiscoveredModels([])
     setDiscoveryError(null)
   }, [provider])
@@ -76,6 +79,7 @@ export function LLMEndpointForm({ endpoint, onClose, onSaved }: Props) {
   // Auto-discover models on URL change (debounced 600ms)
   useEffect(() => {
     if (!baseUrl.trim() || provider === 'anthropic') {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- clearing stale model list when URL is blank or provider is Anthropic; refactor tracked in #380 follow-up
       setDiscoveredModels([])
       return
     }

@@ -1,5 +1,6 @@
 # tests/unit/test_credential_resolver_sync.py
 """Unit tests for the sync credential resolver used by the playbook worker (#279)."""
+
 import uuid
 from unittest.mock import MagicMock
 
@@ -21,13 +22,14 @@ def _sync_db(*scalar_returns):
     return db
 
 
-def _node(ssh_username=None, ssh_password_enc=None, ssh_key_enc=None, ssh_auth_mode=None):
+def _node(ssh_username=None, ssh_password_enc=None, ssh_key_enc=None, ssh_auth_mode=None, ssh_host_key=None):
     node = MagicMock()
     node.id = uuid.uuid4()
     node.ssh_username = ssh_username
     node.ssh_password_enc = ssh_password_enc
     node.ssh_key_enc = ssh_key_enc
     node.ssh_auth_mode = ssh_auth_mode
+    node.ssh_host_key = ssh_host_key  # None = not bootstrapped; explicit to avoid MagicMock truthy default
     return node
 
 
@@ -50,6 +52,7 @@ def _platform_row(value, is_encrypted=False):
 
 def test_sync_node_level_credentials():
     from fleet_platform.services.credential_resolver import resolve_node_credentials_sync
+
     node = _node(ssh_username="admin", ssh_password_enc=encrypt_secret("pw"))
     db = MagicMock()
     result = resolve_node_credentials_sync(node, db)
@@ -61,6 +64,7 @@ def test_sync_node_level_credentials():
 
 def test_sync_group_level_credentials():
     from fleet_platform.services.credential_resolver import resolve_node_credentials_sync
+
     node = _node()
     group = _group(name="prod", ssh_username="guser", ssh_password_enc=encrypt_secret("gpw"))
     db = _sync_db(group)
@@ -72,6 +76,7 @@ def test_sync_group_level_credentials():
 
 def test_sync_global_fallback():
     from fleet_platform.services.credential_resolver import resolve_node_credentials_sync
+
     node = _node()
     encrypted_pw = _fernet().encrypt(b"secretpass").decode()
     db = _sync_db(None, _platform_row("deploy"), _platform_row(encrypted_pw, is_encrypted=True))
@@ -83,6 +88,7 @@ def test_sync_global_fallback():
 
 def test_sync_node_key_auth_mode():
     from fleet_platform.services.credential_resolver import resolve_node_credentials_sync
+
     node = _node(ssh_username="admin", ssh_key_enc=encrypt_secret("KEYDATA"), ssh_auth_mode="key")
     result = resolve_node_credentials_sync(node, MagicMock())
     assert result["auth_mode"] == "key"

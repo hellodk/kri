@@ -4,6 +4,7 @@ Routes the user prompt to one of the five supported intents.
 Design: keyword/regex rules first (fast, deterministic, transparent).
 Upgrade path: replace with a small classifier model (distilbert) in Wave 3.
 """
+
 import re
 
 AUTO_INTENT = "auto"

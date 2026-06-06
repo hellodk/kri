@@ -8,6 +8,7 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from fleet_platform.api.deps import get_db
+from fleet_platform.core.audit import audit
 from fleet_platform.core.auth import require_role
 from fleet_platform.models.provisioning import ProvisioningProfile
 from fleet_platform.schemas.provisioning import ProvisioningProfileList, ProvisioningProfileResponse
@@ -19,7 +20,7 @@ MAX_PROFILE_SIZE = 5 * 1024 * 1024  # 5 MB
 
 def _safe_filename(name: str) -> str:
     # Strip control chars, quotes, backslashes, and forward slashes (path traversal)
-    return re.sub(r'[\x00-\x1f\x7f"\\\/]', '_', name)
+    return re.sub(r'[\x00-\x1f\x7f"\\\/]', "_", name)
 
 
 def _parse_profile_metadata(content: bytes) -> dict:
@@ -89,6 +90,15 @@ async def upload_profile(
         created_at=datetime.now(UTC),
     )
     db.add(profile)
+    await db.flush()
+    await audit(
+        db,
+        actor=claims["email"],
+        action="provisioning_profile.upload",
+        resource_type="provisioning_profile",
+        resource_id=profile.id,
+        new_value={"name": name, "filename": file.filename, "profile_type": profile.profile_type},
+    )
     await db.commit()
     await db.refresh(profile)
     return ProvisioningProfileResponse.model_validate(profile)
@@ -99,9 +109,7 @@ async def list_profiles(
     db: AsyncSession = Depends(get_db),
     _: dict = Depends(require_role("viewer", "operator", "admin")),
 ):
-    result = await db.execute(
-        select(ProvisioningProfile).order_by(ProvisioningProfile.created_at.desc())
-    )
+    result = await db.execute(select(ProvisioningProfile).order_by(ProvisioningProfile.created_at.desc()))
     profiles = result.scalars().all()
     total = await db.scalar(select(func.count()).select_from(ProvisioningProfile))
     return ProvisioningProfileList(
@@ -118,9 +126,7 @@ async def download_profile(
 ):
     from fastapi.responses import Response
 
-    result = await db.execute(
-        select(ProvisioningProfile).where(ProvisioningProfile.id == profile_id)
-    )
+    result = await db.execute(select(ProvisioningProfile).where(ProvisioningProfile.id == profile_id))
     profile = result.scalar_one_or_none()
     if not profile:
         raise HTTPException(status_code=404, detail="Profile not found")
@@ -135,13 +141,19 @@ async def download_profile(
 async def delete_profile(
     profile_id: uuid.UUID,
     db: AsyncSession = Depends(get_db),
-    _: dict = Depends(require_role("operator", "admin")),
+    claims: dict = Depends(require_role("operator", "admin")),
 ):
-    result = await db.execute(
-        select(ProvisioningProfile).where(ProvisioningProfile.id == profile_id)
-    )
+    result = await db.execute(select(ProvisioningProfile).where(ProvisioningProfile.id == profile_id))
     profile = result.scalar_one_or_none()
     if not profile:
         raise HTTPException(status_code=404, detail="Profile not found")
+    await audit(
+        db,
+        actor=claims["email"],
+        action="provisioning_profile.delete",
+        resource_type="provisioning_profile",
+        resource_id=profile_id,
+        new_value={"name": profile.name, "filename": profile.filename},
+    )
     await db.delete(profile)
     await db.commit()

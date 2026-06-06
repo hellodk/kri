@@ -91,6 +91,7 @@ export function AuditPage() {
   }
 
   function applyPreset(minutes: number) {
+    // eslint-disable-next-line react-hooks/purity -- Date.now() is intentional here; this function is only called from a click handler, not during render
     const from = new Date(Date.now() - minutes * 60 * 1000).toISOString()
     setParams(prev => {
       const next = new URLSearchParams(prev)

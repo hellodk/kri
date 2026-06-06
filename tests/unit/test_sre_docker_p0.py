@@ -6,6 +6,7 @@ These tests verify that the five critical Docker/SRE hardening fixes are in
 place. They are purely file-inspection tests — no network, DB, or Docker
 required.
 """
+
 import re
 from pathlib import Path
 
@@ -15,18 +16,15 @@ REPO_ROOT = Path(__file__).parent.parent.parent
 
 # ── #80: JWT_SECRET is a placeholder, not a real hex secret ──────────────────
 
+
 def test_env_docker_example_has_placeholder_jwt_secret():
     """`.env.docker.example` must contain a CHANGE_ME placeholder, not a real hex secret."""
     env_file = REPO_ROOT / ".env.docker.example"
     assert env_file.exists(), ".env.docker.example does not exist"
     content = env_file.read_text()
     real_secret_pattern = re.compile(r"JWT_SECRET=[0-9a-fA-F]{32,}")
-    assert not real_secret_pattern.search(content), (
-        ".env.docker.example still contains a real JWT_SECRET hex value"
-    )
-    assert "CHANGE_ME" in content, (
-        ".env.docker.example JWT_SECRET must contain CHANGE_ME placeholder"
-    )
+    assert not real_secret_pattern.search(content), ".env.docker.example still contains a real JWT_SECRET hex value"
+    assert "CHANGE_ME" in content, ".env.docker.example JWT_SECRET must contain CHANGE_ME placeholder"
 
 
 def test_env_docker_example_exists():
@@ -34,24 +32,22 @@ def test_env_docker_example_exists():
     example_file = REPO_ROOT / ".env.docker.example"
     assert example_file.exists(), ".env.docker.example does not exist at repo root"
     content = example_file.read_text()
-    assert "CHANGE_ME" in content, (
-        ".env.docker.example must contain CHANGE_ME placeholders for secrets"
-    )
+    assert "CHANGE_ME" in content, ".env.docker.example must contain CHANGE_ME placeholders for secrets"
 
 
 # ── #80: .gitignore must exclude .env.docker ─────────────────────────────────
+
 
 def test_gitignore_excludes_env_docker():
     """.gitignore must list .env.docker so the real secrets file is never committed."""
     gitignore = REPO_ROOT / ".gitignore"
     assert gitignore.exists(), ".gitignore does not exist"
     content = gitignore.read_text()
-    assert ".env.docker" in content, (
-        ".gitignore must explicitly list .env.docker"
-    )
+    assert ".env.docker" in content, ".gitignore must explicitly list .env.docker"
 
 
 # ── #82: No Docker socket in worker ──────────────────────────────────────────
+
 
 def test_worker_has_no_docker_socket():
     """docker-compose.yml worker service must not mount /var/run/docker.sock."""
@@ -88,6 +84,7 @@ def test_worker_has_no_docker_binary_mount():
 
 # ── #88: Dockerfile runs as non-root ─────────────────────────────────────────
 
+
 def test_dockerfile_api_has_user_directive():
     """deploy/Dockerfile.api must contain a USER directive to run as non-root."""
     dockerfile = REPO_ROOT / "deploy" / "Dockerfile.api"
@@ -109,6 +106,7 @@ def test_dockerfile_api_creates_appuser():
 
 
 # ── #90: Advisory lock migration script ──────────────────────────────────────
+
 
 def test_migrate_sh_exists():
     """deploy/migrate.sh must exist."""
@@ -139,8 +137,7 @@ def test_docker_compose_api_uses_migrate_sh():
 
     api_command = " ".join(cfg["services"]["api"].get("command", []))
     assert "migrate.sh" in api_command, (
-        "docker-compose.yml api service command must call migrate.sh (issue #90). "
-        f"Current command: {api_command!r}"
+        f"docker-compose.yml api service command must call migrate.sh (issue #90). Current command: {api_command!r}"
     )
 
 
@@ -148,12 +145,11 @@ def test_dockerfile_api_copies_migrate_sh():
     """deploy/Dockerfile.api must COPY migrate.sh into the image."""
     dockerfile = REPO_ROOT / "deploy" / "Dockerfile.api"
     content = dockerfile.read_text()
-    assert "migrate.sh" in content, (
-        "Dockerfile.api must COPY deploy/migrate.sh into the image (issue #90)."
-    )
+    assert "migrate.sh" in content, "Dockerfile.api must COPY deploy/migrate.sh into the image (issue #90)."
 
 
 # ── #91: No personal ~/.ssh in worker ────────────────────────────────────────
+
 
 def test_worker_has_no_personal_ssh_mount():
     """docker-compose.yml worker must not mount the operator's personal ~/.ssh."""
@@ -176,8 +172,7 @@ def test_worker_uses_configurable_ssh_dir():
     compose_file = REPO_ROOT / "deploy" / "docker-compose.yml"
     content = compose_file.read_text()
     assert "WORKER_SSH_DIR" in content, (
-        "docker-compose.yml worker SSH mount must be configurable via "
-        "WORKER_SSH_DIR env var (issue #91)."
+        "docker-compose.yml worker SSH mount must be configurable via WORKER_SSH_DIR env var (issue #91)."
     )
 
 
@@ -194,9 +189,7 @@ def test_gitignore_excludes_deploy_ssh_keys():
     """.gitignore must exclude deploy/ssh/* to prevent SSH private key commits."""
     gitignore = REPO_ROOT / ".gitignore"
     content = gitignore.read_text()
-    assert "deploy/ssh/*" in content, (
-        ".gitignore must list deploy/ssh/* to exclude SSH private keys (issue #91)."
-    )
+    assert "deploy/ssh/*" in content, ".gitignore must list deploy/ssh/* to exclude SSH private keys (issue #91)."
     # .gitkeep should NOT be excluded
     assert "!deploy/ssh/.gitkeep" in content, (
         ".gitignore must whitelist deploy/ssh/.gitkeep so the directory is tracked."

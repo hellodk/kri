@@ -3,6 +3,7 @@
 Runs the real TS via node --experimental-strip-types — the threshold math is the
 bug-prone part the fix hinges on, so it is tested behaviorally.
 """
+
 import json
 import shutil
 import subprocess
@@ -16,14 +17,14 @@ HELPER = ROOT / "frontend/src/lib/scrollFollow.ts"
 
 # (name, [scrollHeight, scrollTop, clientHeight, (threshold?)], expected)
 CASES = [
-    ("at_bottom", [1000, 900, 100], True),       # 0 < 40
+    ("at_bottom", [1000, 900, 100], True),  # 0 < 40
     ("within_threshold", [1000, 870, 100], True),  # 30 < 40
     ("beyond_threshold", [1000, 850, 100], False),  # 50 < 40 -> false
-    ("at_top", [1000, 0, 100], False),            # 900 < 40 -> false
-    ("non_scrollable", [100, 0, 100], True),      # 0 < 40
+    ("at_top", [1000, 0, 100], False),  # 900 < 40 -> false
+    ("non_scrollable", [100, 0, 100], True),  # 0 < 40
     ("exact_boundary", [1000, 860, 100], False),  # 40 < 40 -> false (strict)
-    ("custom_threshold_within", [1000, 850, 100, 120], True),   # 50 < 120
-    ("custom_threshold_beyond", [1000, 850, 100, 30], False),   # 50 < 30 -> false
+    ("custom_threshold_within", [1000, 850, 100, 120], True),  # 50 < 120
+    ("custom_threshold_beyond", [1000, 850, 100, 30], False),  # 50 < 30 -> false
 ]
 
 
@@ -34,7 +35,10 @@ def results():
     args = [c[1] for c in CASES]
     proc = subprocess.run(
         ["node", "--experimental-strip-types", "--no-warnings", str(HARNESS), json.dumps(args)],
-        capture_output=True, text=True, cwd=str(ROOT), timeout=30,
+        capture_output=True,
+        text=True,
+        cwd=str(ROOT),
+        timeout=30,
     )
     if proc.returncode != 0:
         pytest.fail(f"harness failed (rc={proc.returncode}):\n{proc.stderr}")

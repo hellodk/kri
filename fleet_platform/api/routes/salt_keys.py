@@ -4,10 +4,13 @@ import shutil
 from pathlib import Path
 
 from fastapi import APIRouter, Depends, HTTPException
+from sqlalchemy.ext.asyncio import AsyncSession
 
+from fleet_platform.api.deps import get_db
+from fleet_platform.core.audit import audit
 from fleet_platform.core.auth import get_current_user, require_role
 
-_MINION_ID_RE = re.compile(r'^[a-zA-Z0-9._-]+$')
+_MINION_ID_RE = re.compile(r"^[a-zA-Z0-9._-]+$")
 
 router = APIRouter(prefix="/api/v1/salt")
 
@@ -47,7 +50,8 @@ def _validate_minion_id(minion_id: str) -> None:
 @router.post("/keys/{minion_id}/accept")
 async def accept_key(
     minion_id: str,
-    _: dict = Depends(require_role("operator", "admin")),
+    db: AsyncSession = Depends(get_db),
+    claims: dict = Depends(require_role("operator", "admin")),
 ):
     """Accept a pending minion key."""
     _validate_minion_id(minion_id)
@@ -57,13 +61,22 @@ async def accept_key(
         raise HTTPException(status_code=404, detail=f"No pending key for '{minion_id}'")
     dirs["accepted"].mkdir(parents=True, exist_ok=True)
     shutil.move(str(src), str(dirs["accepted"] / minion_id))
+    await audit(
+        db,
+        actor=claims["email"],
+        action="salt_key.accept",
+        resource_type="salt_key",
+        new_value={"minion_id": minion_id},
+    )
+    await db.commit()
     return {"status": "accepted", "minion_id": minion_id}
 
 
 @router.post("/keys/{minion_id}/reject")
 async def reject_key(
     minion_id: str,
-    _: dict = Depends(require_role("admin")),
+    db: AsyncSession = Depends(get_db),
+    claims: dict = Depends(require_role("admin")),
 ):
     """Move a pending key to rejected."""
     _validate_minion_id(minion_id)
@@ -73,13 +86,22 @@ async def reject_key(
         raise HTTPException(status_code=404, detail=f"No pending key for '{minion_id}'")
     dirs["rejected"].mkdir(parents=True, exist_ok=True)
     shutil.move(str(src), str(dirs["rejected"] / minion_id))
+    await audit(
+        db,
+        actor=claims["email"],
+        action="salt_key.reject",
+        resource_type="salt_key",
+        new_value={"minion_id": minion_id},
+    )
+    await db.commit()
     return {"status": "rejected", "minion_id": minion_id}
 
 
 @router.delete("/keys/{minion_id}")
 async def delete_key(
     minion_id: str,
-    _: dict = Depends(require_role("admin")),
+    db: AsyncSession = Depends(get_db),
+    claims: dict = Depends(require_role("admin")),
 ):
     """Delete a key from any status bucket."""
     _validate_minion_id(minion_id)
@@ -87,5 +109,13 @@ async def delete_key(
         target = path / minion_id
         if target.exists():
             target.unlink()
+            await audit(
+                db,
+                actor=claims["email"],
+                action="salt_key.delete",
+                resource_type="salt_key",
+                new_value={"minion_id": minion_id},
+            )
+            await db.commit()
             return {"status": "deleted", "minion_id": minion_id}
     raise HTTPException(status_code=404, detail=f"No key found for '{minion_id}'")

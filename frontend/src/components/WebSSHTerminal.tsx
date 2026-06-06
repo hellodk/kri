@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import type { Terminal } from '@xterm/xterm'
 
 interface WebSSHTerminalProps {
   nodeId: string
@@ -11,7 +12,7 @@ interface WebSSHTerminalProps {
 export function WebSSHTerminal({ nodeId, nodeName, onClose, sessionId }: WebSSHTerminalProps) {
   const termRef = useRef<HTMLDivElement>(null)
   const wsRef = useRef<WebSocket | null>(null)
-  const terminalRef = useRef<any>(null)
+  const terminalRef = useRef<Terminal | null>(null)
   const [status, setStatus] = useState<'connecting' | 'connected' | 'closed' | 'error'>('connecting')
   const [errorMsg, setErrorMsg] = useState('')
 

@@ -48,9 +48,7 @@ async def test_execution_ingest_returns_200(client: AsyncClient, exec_node):
     assert "job_id" in data
 
 
-async def test_execution_ingest_creates_job_and_result(
-    client: AsyncClient, exec_node, db_session: AsyncSession
-):
+async def test_execution_ingest_creates_job_and_result(client: AsyncClient, exec_node, db_session: AsyncSession):
     from sqlalchemy import select
 
     from fleet_platform.models.execution import ExecutionJob, ExecutionResult
@@ -68,15 +66,15 @@ async def test_execution_ingest_creates_job_and_result(
         headers={"X-Node-Token": token},
     )
 
-    job = (await db_session.execute(
-        select(ExecutionJob).where(ExecutionJob.salt_jid == "20260512100000999999")
-    )).scalar_one_or_none()
+    job = (
+        await db_session.execute(select(ExecutionJob).where(ExecutionJob.salt_jid == "20260512100000999999"))
+    ).scalar_one_or_none()
     assert job is not None
     assert job.status == "completed"
 
-    result = (await db_session.execute(
-        select(ExecutionResult).where(ExecutionResult.job_id == job.id)
-    )).scalar_one_or_none()
+    result = (
+        await db_session.execute(select(ExecutionResult).where(ExecutionResult.job_id == job.id))
+    ).scalar_one_or_none()
     assert result is not None
     assert result.node_id == node.id
 

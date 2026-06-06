@@ -1,4 +1,5 @@
 """Service for the email approval gate on destructive node actions (#291)."""
+
 from __future__ import annotations
 
 import json
@@ -22,6 +23,7 @@ async def create_pending_action(
     requested_by: str,
 ) -> PendingAction:
     import secrets as _secrets
+
     now = datetime.now(UTC)
     action = PendingAction(
         node_id=node_id,
@@ -40,9 +42,7 @@ async def create_pending_action(
 
 
 async def get_by_token(db: AsyncSession, token: str) -> PendingAction | None:
-    result = await db.execute(
-        select(PendingAction).where(PendingAction.approval_token == token)
-    )
+    result = await db.execute(select(PendingAction).where(PendingAction.approval_token == token))
     return result.scalar_one_or_none()
 
 
@@ -74,6 +74,7 @@ async def reject(db: AsyncSession, action: PendingAction) -> PendingAction:
 async def expire_old(db: AsyncSession) -> int:
     """Mark all pending actions past their expiry as expired. Returns count."""
     from sqlalchemy import update
+
     now = datetime.now(UTC)
     result = await db.execute(
         update(PendingAction)
@@ -125,11 +126,7 @@ async def _send_approval_email(action: PendingAction, node, requested_by: str) -
         if not recipients:
             return
 
-        node_name = (
-            getattr(node, "hostname", None)
-            or getattr(node, "minion_id", None)
-            or str(action.node_id)
-        )
+        node_name = getattr(node, "hostname", None) or getattr(node, "minion_id", None) or str(action.node_id)
         approve_url = f"{api_url}/api/v1/actions/{action.approval_token}/approve"
         reject_url = f"{api_url}/api/v1/actions/{action.approval_token}/reject"
 

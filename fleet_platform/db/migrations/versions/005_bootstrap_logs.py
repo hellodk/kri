@@ -1,4 +1,5 @@
 """Add bootstrap_logs column to nodes."""
+
 import sqlalchemy as sa
 from alembic import op
 

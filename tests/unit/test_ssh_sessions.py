@@ -7,35 +7,41 @@ No network, DB, or SSH connection needed.
 Note: the command-level blocklist (_is_dangerous) was removed in issue #118.
 Security is now enforced at the OS level. See webssh.py for the full rationale.
 """
+
 import uuid
 from datetime import UTC, datetime
 from unittest.mock import AsyncMock, MagicMock
 
 # ── Blocklist removal verification ────────────────────────────────────────────
 
+
 class TestBlocklistRemoved:
     """Verify the blocklist was properly removed (issue #118)."""
 
     def test_is_dangerous_not_exported(self):
         import fleet_platform.api.routes.webssh as webssh_module
-        assert not hasattr(webssh_module, '_is_dangerous'), (
+
+        assert not hasattr(webssh_module, "_is_dangerous"), (
             "_is_dangerous must be removed — blocklist was removed in issue #118"
         )
 
     def test_block_patterns_not_exported(self):
         import fleet_platform.api.routes.webssh as webssh_module
-        assert not hasattr(webssh_module, '_BLOCK_PATTERNS'), (
+
+        assert not hasattr(webssh_module, "_BLOCK_PATTERNS"), (
             "_BLOCK_PATTERNS must be removed — blocklist was removed in issue #118"
         )
 
     def test_block_re_not_exported(self):
         import fleet_platform.api.routes.webssh as webssh_module
-        assert not hasattr(webssh_module, '_BLOCK_RE'), (
+
+        assert not hasattr(webssh_module, "_BLOCK_RE"), (
             "_BLOCK_RE must be removed — blocklist was removed in issue #118"
         )
 
 
 # ── SSHSession model shape tests ───────────────────────────────────────────────
+
 
 class TestSSHSessionModel:
     """SSHSession model has correct field defaults and accepts required fields."""
@@ -44,6 +50,7 @@ class TestSSHSessionModel:
         from sqlalchemy import inspect as sa_inspect
 
         from fleet_platform.models.ssh_session import SSHSession
+
         mapper = sa_inspect(SSHSession)
         # SQLAlchemy mapped_column defaults are DB-level; verify via column metadata
         status_col = mapper.c.status
@@ -55,6 +62,7 @@ class TestSSHSessionModel:
 
     def test_session_with_all_fields(self):
         from fleet_platform.models.ssh_session import SSHSession
+
         nid = uuid.uuid4()
         uid = uuid.uuid4()
         now = datetime.now(UTC)
@@ -77,12 +85,14 @@ class TestSSHSessionModel:
         from sqlalchemy import inspect as sa_inspect
 
         from fleet_platform.models.ssh_session import SecurityEvent
+
         mapper = sa_inspect(SecurityEvent)
         severity_col = mapper.c.severity
         assert severity_col.default.arg == "info"
 
     def test_security_event_critical_severity(self):
         from fleet_platform.models.ssh_session import SecurityEvent
+
         ev = SecurityEvent(
             event_type="block",
             severity="critical",
@@ -95,13 +105,22 @@ class TestSSHSessionModel:
 
 # ── Session list response structure tests ─────────────────────────────────────
 
+
 class TestSessionListResponseStructure:
     """Verify the expected keys in the session list response dict."""
 
     EXPECTED_KEYS = {
-        "id", "node_id", "user_id", "started_at", "ended_at",
-        "source_ip", "credential_source", "status", "alert_count",
-        "target_ip", "ssh_user",
+        "id",
+        "node_id",
+        "user_id",
+        "started_at",
+        "ended_at",
+        "source_ip",
+        "credential_source",
+        "status",
+        "alert_count",
+        "target_ip",
+        "ssh_user",
     }
 
     def _make_session_dict(self, **overrides) -> dict:
@@ -147,11 +166,13 @@ class TestSessionListResponseStructure:
 
 # ── SSHProxySession command buffer tests ─────────────────────────────────────
 
+
 class TestSSHProxySessionCommandBuffer:
     """Test that the command buffer accumulates and resets correctly."""
 
     def _make_proxy(self):
         from fleet_platform.api.routes.webssh import SSHProxySession
+
         ws = MagicMock()
         ws.send_text = AsyncMock()
         return SSHProxySession(ws=ws, session_id=uuid.uuid4(), max_mins=60)
@@ -167,6 +188,7 @@ class TestSSHProxySessionCommandBuffer:
     def test_proxy_initial_session_id_stored(self):
         sid = uuid.uuid4()
         from fleet_platform.api.routes.webssh import SSHProxySession
+
         ws = MagicMock()
         proxy = SSHProxySession(ws=ws, session_id=sid, max_mins=30)
         assert proxy.session_id == sid

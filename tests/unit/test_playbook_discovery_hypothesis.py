@@ -6,6 +6,7 @@ regardless of input.
 
 Closes #8
 """
+
 from __future__ import annotations
 
 import tempfile
@@ -23,6 +24,7 @@ from fleet_platform.services.playbook_discovery import (
 )
 
 # ── _parse_description ────────────────────────────────────────────────────────
+
 
 @given(st.text())
 def test_parse_description_never_crashes(text: str) -> None:
@@ -51,6 +53,7 @@ def test_parse_description_returns_none_without_marker(text: str) -> None:
 
 
 # ── _lint_yaml ────────────────────────────────────────────────────────────────
+
 
 @given(st.text())
 def test_lint_yaml_never_crashes(content: str) -> None:
@@ -171,6 +174,7 @@ def test_discover_all_role_with_arbitrary_defaults_content(content: str) -> None
 
 
 # ── PlaybookEntry invariants ──────────────────────────────────────────────────
+
 
 def test_playbook_entry_filename_is_just_basename() -> None:
     """Discovered playbooks must use only the .yml filename, not full path."""

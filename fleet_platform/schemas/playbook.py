@@ -52,6 +52,8 @@ class AnsibleJobResponse(BaseModel):
     created_at: datetime
     celery_task_id: str | None = None
     cancelled_at: datetime | None = None
+    stdout_total_len: int | None = None  # len of append-only base when ?from_byte used (#371)
+    running_task: str | None = None  # current task extracted from the volatile marker (#371)
 
 
 class PlaybookSourceRequest(BaseModel):

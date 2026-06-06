@@ -1,4 +1,5 @@
 """iOS fleet tracking API: certs, Jenkins agents, Xcode/macOS versions."""
+
 from __future__ import annotations
 
 import uuid
@@ -10,6 +11,7 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from fleet_platform.api.deps import get_db
+from fleet_platform.core.audit import audit
 from fleet_platform.core.auth import get_current_user, require_role
 from fleet_platform.models.ios_tracking import Certificate, JenkinsAgent
 from fleet_platform.models.node import Node
@@ -18,6 +20,7 @@ router = APIRouter(prefix="/api/v1/ios")
 
 
 # ── Schemas ───────────────────────────────────────────────────────────
+
 
 class AddCertBody(BaseModel):
     name: str
@@ -33,6 +36,7 @@ class UpsertJenkinsBody(BaseModel):
 
 
 # ── Helpers ───────────────────────────────────────────────────────────
+
 
 def _cert_out(c: Certificate) -> dict:
     return {
@@ -62,6 +66,7 @@ def _agent_out(a: JenkinsAgent) -> dict:
 
 # ── Fleet Overview ────────────────────────────────────────────────────
 
+
 @router.get("/nodes")
 async def list_ios_nodes(
     db: AsyncSession = Depends(get_db),
@@ -75,28 +80,27 @@ async def list_ios_nodes(
     for node in nodes:
         # Cert count and next expiry
         cert_result = await db.execute(
-            select(func.count(), func.min(Certificate.expiry_date))
-            .where(Certificate.node_id == node.id)
+            select(func.count(), func.min(Certificate.expiry_date)).where(Certificate.node_id == node.id)
         )
         cert_count, next_expiry = cert_result.one()
 
         # Jenkins agent
-        agent_result = await db.execute(
-            select(JenkinsAgent).where(JenkinsAgent.node_id == node.id)
-        )
+        agent_result = await db.execute(select(JenkinsAgent).where(JenkinsAgent.node_id == node.id))
         agent = agent_result.scalar_one_or_none()
 
-        items.append({
-            "node_id": str(node.id),
-            "minion_id": node.minion_id,
-            "hostname": node.hostname,
-            "status": node.status,
-            "macos_version": node.macos_version,
-            "xcode_version": node.xcode_version,
-            "cert_count": cert_count or 0,
-            "next_cert_expiry": next_expiry.isoformat() if next_expiry else None,
-            "jenkins_status": agent.status if agent else None,
-        })
+        items.append(
+            {
+                "node_id": str(node.id),
+                "minion_id": node.minion_id,
+                "hostname": node.hostname,
+                "status": node.status,
+                "macos_version": node.macos_version,
+                "xcode_version": node.xcode_version,
+                "cert_count": cert_count or 0,
+                "next_cert_expiry": next_expiry.isoformat() if next_expiry else None,
+                "jenkins_status": agent.status if agent else None,
+            }
+        )
 
     return {"items": items, "total": len(items)}
 
@@ -115,16 +119,12 @@ async def get_ios_node_detail(
 
     # Certs
     certs_result = await db.execute(
-        select(Certificate)
-        .where(Certificate.node_id == node_id)
-        .order_by(Certificate.expiry_date)
+        select(Certificate).where(Certificate.node_id == node_id).order_by(Certificate.expiry_date)
     )
     certs = certs_result.scalars().all()
 
     # Jenkins agent
-    agent_result = await db.execute(
-        select(JenkinsAgent).where(JenkinsAgent.node_id == node_id)
-    )
+    agent_result = await db.execute(select(JenkinsAgent).where(JenkinsAgent.node_id == node_id))
     agent = agent_result.scalar_one_or_none()
 
     return {
@@ -141,12 +141,13 @@ async def get_ios_node_detail(
 
 # ── Certificates ──────────────────────────────────────────────────────
 
+
 @router.post("/nodes/{node_id}/certificates", status_code=201)
 async def add_certificate(
     node_id: uuid.UUID,
     body: AddCertBody,
     db: AsyncSession = Depends(get_db),
-    _: dict = Depends(require_role("operator", "admin")),
+    claims: dict = Depends(require_role("operator", "admin")),
 ):
     result = await db.execute(select(Node).where(Node.id == node_id))
     if not result.scalar_one_or_none():
@@ -164,6 +165,15 @@ async def add_certificate(
         updated_at=now,
     )
     db.add(cert)
+    await db.flush()
+    await audit(
+        db,
+        actor=claims["email"],
+        action="ios_cert.create",
+        resource_type="ios_cert",
+        resource_id=cert.id,
+        new_value={"name": body.name, "cert_type": body.cert_type, "node_id": str(node_id)},
+    )
     await db.commit()
     return _cert_out(cert)
 
@@ -172,17 +182,26 @@ async def add_certificate(
 async def delete_certificate(
     cert_id: uuid.UUID,
     db: AsyncSession = Depends(get_db),
-    _: dict = Depends(require_role("operator", "admin")),
+    claims: dict = Depends(require_role("operator", "admin")),
 ):
     result = await db.execute(select(Certificate).where(Certificate.id == cert_id))
     cert = result.scalar_one_or_none()
     if not cert:
         raise HTTPException(status_code=404, detail="Certificate not found")
+    await audit(
+        db,
+        actor=claims["email"],
+        action="ios_cert.delete",
+        resource_type="ios_cert",
+        resource_id=cert_id,
+        new_value={"name": cert.name, "cert_type": cert.cert_type},
+    )
     await db.delete(cert)
     await db.commit()
 
 
 # ── Jenkins Agents ────────────────────────────────────────────────────
+
 
 @router.get("/nodes/{node_id}/jenkins")
 async def get_jenkins_agent(
@@ -190,9 +209,7 @@ async def get_jenkins_agent(
     db: AsyncSession = Depends(get_db),
     _: dict = Depends(get_current_user),
 ):
-    result = await db.execute(
-        select(JenkinsAgent).where(JenkinsAgent.node_id == node_id)
-    )
+    result = await db.execute(select(JenkinsAgent).where(JenkinsAgent.node_id == node_id))
     agent = result.scalar_one_or_none()
     if not agent:
         raise HTTPException(status_code=404, detail="Jenkins agent not configured for this node")
@@ -204,15 +221,13 @@ async def upsert_jenkins_agent(
     node_id: uuid.UUID,
     body: UpsertJenkinsBody,
     db: AsyncSession = Depends(get_db),
-    _: dict = Depends(require_role("operator", "admin")),
+    claims: dict = Depends(require_role("operator", "admin")),
 ):
     node_result = await db.execute(select(Node).where(Node.id == node_id))
     if not node_result.scalar_one_or_none():
         raise HTTPException(status_code=404, detail="Node not found")
 
-    result = await db.execute(
-        select(JenkinsAgent).where(JenkinsAgent.node_id == node_id)
-    )
+    result = await db.execute(select(JenkinsAgent).where(JenkinsAgent.node_id == node_id))
     agent = result.scalar_one_or_none()
 
     if agent:
@@ -228,6 +243,13 @@ async def upsert_jenkins_agent(
         )
         db.add(agent)
 
+    await audit(
+        db,
+        actor=claims["email"],
+        action="ios_jenkins_agent.upsert",
+        resource_type="ios_jenkins_agent",
+        new_value={"node_id": str(node_id), "agent_name": body.agent_name, "jenkins_url": body.jenkins_url},
+    )
     await db.commit()
     return _agent_out(agent)
 
@@ -238,14 +260,13 @@ async def check_jenkins_now(
     db: AsyncSession = Depends(get_db),
     _: dict = Depends(require_role("operator", "admin")),
 ):
-    result = await db.execute(
-        select(JenkinsAgent).where(JenkinsAgent.node_id == node_id)
-    )
+    result = await db.execute(select(JenkinsAgent).where(JenkinsAgent.node_id == node_id))
     agent = result.scalar_one_or_none()
     if not agent:
         raise HTTPException(status_code=404, detail="Jenkins agent not configured for this node")
 
     from fleet_platform.services.ios_tracking_svc import check_jenkins_agent
+
     await check_jenkins_agent(agent.id, db)
 
     # Re-fetch after update
@@ -256,6 +277,7 @@ async def check_jenkins_now(
 
 # ── Expiring Certs ────────────────────────────────────────────────────
 
+
 @router.get("/expiring-certs")
 async def get_expiring_certs(
     days: int = 30,
@@ -263,6 +285,7 @@ async def get_expiring_certs(
     _: dict = Depends(get_current_user),
 ):
     from fleet_platform.services.ios_tracking_svc import get_expiring_certs
+
     certs = await get_expiring_certs(db, days=days)
     return {
         "items": [_cert_out(c) for c in certs],

@@ -81,6 +81,7 @@ export function TopBar() {
   const resultIndexMap = new Map(results.map((r, i) => [r, i]))
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- syncing dropdown open state from query string length; refactor tracked in #380 follow-up
     setOpen(q.length >= 2)
     setSelectedIdx(-1)
   }, [q])

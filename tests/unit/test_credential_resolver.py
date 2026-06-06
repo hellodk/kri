@@ -1,5 +1,6 @@
 # tests/unit/test_credential_resolver.py
 """Unit tests for fleet_platform.services.credential_resolver."""
+
 import uuid
 from unittest.mock import AsyncMock, MagicMock
 
@@ -14,6 +15,7 @@ from fleet_platform.services.platform_settings_svc import _fernet, encrypt_secre
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
 
 def _make_db(*scalar_returns):
     """Build an AsyncMock db whose execute() returns results in order."""
@@ -30,18 +32,18 @@ def _make_db(*scalar_returns):
     return db
 
 
-def _node(ssh_username=None, ssh_password_enc=None, ssh_key_enc=None, ssh_auth_mode=None):
+def _node(ssh_username=None, ssh_password_enc=None, ssh_key_enc=None, ssh_auth_mode=None, ssh_host_key=None):
     node = MagicMock()
     node.id = uuid.uuid4()
     node.ssh_username = ssh_username
     node.ssh_password_enc = ssh_password_enc
     node.ssh_key_enc = ssh_key_enc
     node.ssh_auth_mode = ssh_auth_mode
+    node.ssh_host_key = ssh_host_key  # None = not bootstrapped; explicit to avoid MagicMock truthy default
     return node
 
 
-def _group(name="mygroup", ssh_username="guser", ssh_password_enc=None,
-           ssh_key_enc=None, ssh_auth_mode=None):
+def _group(name="mygroup", ssh_username="guser", ssh_password_enc=None, ssh_key_enc=None, ssh_auth_mode=None):
     group = MagicMock()
     group.name = name
     group.ssh_username = ssh_username
@@ -62,6 +64,7 @@ def _platform_row(value, is_encrypted=False):
 # Test 1: node-level creds, no secrets at all
 # ---------------------------------------------------------------------------
 
+
 async def test_node_level_credentials_no_secrets():
     node = _node(ssh_username="admin")
     db = AsyncMock(spec=AsyncSession)
@@ -80,6 +83,7 @@ async def test_node_level_credentials_no_secrets():
 # Test 2: node-level creds, password decrypts correctly
 # ---------------------------------------------------------------------------
 
+
 async def test_node_level_credentials_with_encrypted_password():
     encrypted_pw = encrypt_secret("mypassword")
     node = _node(ssh_username="admin", ssh_password_enc=encrypted_pw)
@@ -96,6 +100,7 @@ async def test_node_level_credentials_with_encrypted_password():
 # Test 3: ssh_password_enc is garbage — exception swallowed, password=""
 # ---------------------------------------------------------------------------
 
+
 async def test_node_level_credentials_decrypt_failure():
     node = _node(ssh_username="admin", ssh_password_enc="not-valid-fernet-data")
     db = AsyncMock(spec=AsyncSession)
@@ -109,6 +114,7 @@ async def test_node_level_credentials_decrypt_failure():
 # ---------------------------------------------------------------------------
 # Test 4: node-level creds with ssh_key
 # ---------------------------------------------------------------------------
+
 
 async def test_node_level_credentials_with_ssh_key():
     encrypted_key = encrypt_secret("SSH_KEY_PLACEHOLDER_RSA")
@@ -125,6 +131,7 @@ async def test_node_level_credentials_with_ssh_key():
 # ---------------------------------------------------------------------------
 # Test 5: group-level credentials
 # ---------------------------------------------------------------------------
+
 
 async def test_group_level_credentials():
     node = _node()
@@ -144,6 +151,7 @@ async def test_group_level_credentials():
 # Test 6: group found but ssh_password_enc=None → ssh_password=""
 # ---------------------------------------------------------------------------
 
+
 async def test_group_level_no_password_enc():
     node = _node()
     group = _group(ssh_username="guser", ssh_password_enc=None)
@@ -158,6 +166,7 @@ async def test_group_level_no_password_enc():
 # ---------------------------------------------------------------------------
 # Test 7: global fallback, db returns None for both settings
 # ---------------------------------------------------------------------------
+
 
 async def test_global_fallback_no_settings():
     node = _node()
@@ -177,6 +186,7 @@ async def test_global_fallback_no_settings():
 # Test 8: global fallback, SSH_USERNAME setting found
 # ---------------------------------------------------------------------------
 
+
 async def test_global_fallback_with_setting():
     node = _node()
     user_row = _platform_row("deploy", is_encrypted=False)
@@ -192,6 +202,7 @@ async def test_global_fallback_with_setting():
 # ---------------------------------------------------------------------------
 # Test 9: global fallback, SSH_PASSWORD setting is encrypted and decrypts
 # ---------------------------------------------------------------------------
+
 
 async def test_global_fallback_with_encrypted_password():
     node = _node()
@@ -211,6 +222,7 @@ async def test_global_fallback_with_encrypted_password():
 # Test 10: node_has_group returns True
 # ---------------------------------------------------------------------------
 
+
 async def test_node_has_group_true():
     member = MagicMock()
     db = _make_db(member)
@@ -224,6 +236,7 @@ async def test_node_has_group_true():
 # Test 11: node_has_group returns False
 # ---------------------------------------------------------------------------
 
+
 async def test_node_has_group_false():
     db = _make_db(None)
 
@@ -235,6 +248,7 @@ async def test_node_has_group_false():
 # ---------------------------------------------------------------------------
 # Test 12: group-level — ssh_password_enc is garbage, exception swallowed
 # ---------------------------------------------------------------------------
+
 
 async def test_group_level_decrypt_failure_swallowed():
     node = _node()
@@ -250,6 +264,7 @@ async def test_group_level_decrypt_failure_swallowed():
 # ---------------------------------------------------------------------------
 # Test 13: group with ssh_key decrypts correctly
 # ---------------------------------------------------------------------------
+
 
 async def test_group_level_with_ssh_key():
     encrypted_key = encrypt_secret("SSH_KEY_PLACEHOLDER_EC")
@@ -267,6 +282,7 @@ async def test_group_level_with_ssh_key():
 # Test 14: node ssh_auth_mode propagated when set
 # ---------------------------------------------------------------------------
 
+
 async def test_node_auth_mode_propagated():
     node = _node(ssh_username="admin", ssh_auth_mode="key")
     db = AsyncMock(spec=AsyncSession)
@@ -279,6 +295,7 @@ async def test_node_auth_mode_propagated():
 # ---------------------------------------------------------------------------
 # Test 15: global fallback, SSH_PASSWORD Fernet decryption fails gracefully
 # ---------------------------------------------------------------------------
+
 
 async def test_node_level_ssh_key_decrypt_failure_swallowed():
     """ssh_key decryption failure is swallowed; ssh_key="" returned (covers lines 50-51)."""

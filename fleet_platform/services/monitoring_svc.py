@@ -1,4 +1,5 @@
 """Monitoring aggregation service — sources data for /monitoring/summary endpoint."""
+
 from __future__ import annotations
 
 import asyncio
@@ -19,9 +20,7 @@ _log = logging.getLogger(__name__)
 
 async def get_node_counts(db: AsyncSession) -> dict[str, int]:
     """Return count of nodes by status: online, stale, offline, unknown."""
-    rows = await db.execute(
-        select(Node.status, func.count().label("cnt")).group_by(Node.status)
-    )
+    rows = await db.execute(select(Node.status, func.count().label("cnt")).group_by(Node.status))
     counts: dict[str, int] = {"online": 0, "stale": 0, "offline": 0, "unknown": 0}
     for status, cnt in rows.all():
         if status in counts:
@@ -67,6 +66,7 @@ async def get_celery_queue_stats() -> dict[str, int]:
             stats[q] = int(await length)  # type: ignore[misc]
         # Active tasks: try Celery inspect with short timeout
         from fleet_platform.workers.celery_app import celery_app  # noqa: PLC0415
+
         inspector = celery_app.control.inspect(timeout=1)
         try:
             active = await asyncio.get_event_loop().run_in_executor(None, inspector.active)
@@ -132,9 +132,7 @@ async def get_fleet_health_aggregates(db: AsyncSession) -> dict:
     disk_vals = [float(s.disk_root_pct) for s in snapshots if s.disk_root_pct is not None]
 
     # Count nodes with acceptable thermal pressure (None, empty, "nominal", "fair")
-    thermal_ok = sum(
-        1 for s in snapshots if s.thermal_pressure in (None, "", "nominal", "fair")
-    )
+    thermal_ok = sum(1 for s in snapshots if s.thermal_pressure in (None, "", "nominal", "fair"))
 
     # GPU aggregates
     gpu_nodes = [s for s in snapshots if s.gpu_name]
@@ -183,6 +181,7 @@ async def get_maintenance_heartbeat() -> dict:
     H-4 fix (SRE audit): makes a hung beat worker immediately visible in monitoring.
     """
     from fleet_platform.workers.maintenance import _MAINTENANCE_HEARTBEAT_KEY  # noqa: PLC0415
+
     try:
         redis_client = await get_redis()
         value = await redis_client.get(_MAINTENANCE_HEARTBEAT_KEY)

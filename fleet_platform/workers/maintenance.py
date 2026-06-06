@@ -81,16 +81,12 @@ def cleanup_old_bootstrap_runs() -> dict:
     """Delete bootstrap run records older than the configured retention period."""
     with get_sync_db() as db:
         row = db.execute(
-            select(PlatformSetting).where(
-                PlatformSetting.key == "bootstrap_log_retention_days"
-            )
+            select(PlatformSetting).where(PlatformSetting.key == "bootstrap_log_retention_days")
         ).scalar_one_or_none()
         days = int(row.value) if row and row.value else 30
         cutoff = datetime.now(UTC) - timedelta(days=days)
 
-        runs = db.execute(
-            select(BootstrapRun).where(BootstrapRun.finished_at < cutoff)
-        ).scalars().all()
+        runs = db.execute(select(BootstrapRun).where(BootstrapRun.finished_at < cutoff)).scalars().all()
         count = len(runs)
         for run in runs:
             db.delete(run)

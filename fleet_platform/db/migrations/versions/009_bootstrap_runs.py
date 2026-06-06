@@ -1,4 +1,5 @@
 """Add bootstrap_runs table for historical log retention."""
+
 import sqlalchemy as sa
 from alembic import op
 from sqlalchemy.dialects import postgresql

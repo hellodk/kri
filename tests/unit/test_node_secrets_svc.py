@@ -1,5 +1,6 @@
 # tests/unit/test_node_secrets_svc.py
 """Unit tests for fleet_platform.services.node_secrets_svc."""
+
 import uuid
 from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
@@ -21,6 +22,7 @@ from fleet_platform.services.platform_settings_svc import encrypt_secret
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
 
 def _make_db_single(scalar_one_or_none_val=None, scalars_all_val=None):
     """Build an AsyncMock db for a single execute() call."""
@@ -72,6 +74,7 @@ def _node_secret(key, encrypted_value):
 # Test 1: _get_pillar_dir returns path from DB setting
 # ---------------------------------------------------------------------------
 
+
 async def test_get_pillar_dir_from_setting():
     row = _platform_row("/custom/pillar")
     db = _make_db_single(scalar_one_or_none_val=row)
@@ -85,6 +88,7 @@ async def test_get_pillar_dir_from_setting():
 # Test 2: _get_pillar_dir falls back to default when DB returns None
 # ---------------------------------------------------------------------------
 
+
 async def test_get_pillar_dir_default():
     db = _make_db_single(scalar_one_or_none_val=None)
 
@@ -96,6 +100,7 @@ async def test_get_pillar_dir_default():
 # ---------------------------------------------------------------------------
 # Test 3: get_secrets returns list of NodeSecret rows
 # ---------------------------------------------------------------------------
+
 
 async def test_get_secrets_returns_list():
     secret1 = _node_secret("db_pass", "enc1")
@@ -112,6 +117,7 @@ async def test_get_secrets_returns_list():
 # ---------------------------------------------------------------------------
 # Test 4: upsert_secret creates a new NodeSecret when none exists
 # ---------------------------------------------------------------------------
+
 
 async def test_upsert_secret_creates_new():
     db = AsyncMock(spec=AsyncSession)
@@ -131,6 +137,7 @@ async def test_upsert_secret_creates_new():
 # ---------------------------------------------------------------------------
 # Test 5: upsert_secret updates encrypted_value on existing secret
 # ---------------------------------------------------------------------------
+
 
 async def test_upsert_secret_updates_existing():
     existing = MagicMock()
@@ -155,6 +162,7 @@ async def test_upsert_secret_updates_existing():
 # Test 6: upsert_secret updates description when provided
 # ---------------------------------------------------------------------------
 
+
 async def test_upsert_secret_updates_description_when_provided():
     existing = MagicMock()
     existing.encrypted_value = "old_enc"
@@ -174,6 +182,7 @@ async def test_upsert_secret_updates_description_when_provided():
 # Test 7: delete_secret returns False when secret not found
 # ---------------------------------------------------------------------------
 
+
 async def test_delete_secret_not_found():
     db = _make_db_single(scalar_one_or_none_val=None)
 
@@ -187,6 +196,7 @@ async def test_delete_secret_not_found():
 # ---------------------------------------------------------------------------
 # Test 8: delete_secret returns True and calls db.delete when found
 # ---------------------------------------------------------------------------
+
 
 async def test_delete_secret_found():
     secret = MagicMock()
@@ -203,6 +213,7 @@ async def test_delete_secret_found():
 # Test 9: get_decrypted_secrets roundtrip with real encrypt/decrypt
 # ---------------------------------------------------------------------------
 
+
 async def test_get_decrypted_secrets_roundtrip():
     node_id = uuid.uuid4()
     encrypted = encrypt_secret("supersecret")
@@ -218,6 +229,7 @@ async def test_get_decrypted_secrets_roundtrip():
 # ---------------------------------------------------------------------------
 # Test 10: get_decrypted_secrets skips entries with garbage encrypted_value
 # ---------------------------------------------------------------------------
+
 
 async def test_get_decrypted_secrets_skips_bad_value():
     node_id = uuid.uuid4()
@@ -237,6 +249,7 @@ async def test_get_decrypted_secrets_skips_bad_value():
 # ---------------------------------------------------------------------------
 # Test 11: write_node_pillar creates file with correct YAML
 # ---------------------------------------------------------------------------
+
 
 async def test_write_node_pillar_creates_file(tmp_path):
     node_id = uuid.uuid4()
@@ -264,6 +277,7 @@ async def test_write_node_pillar_creates_file(tmp_path):
 # ---------------------------------------------------------------------------
 # Test 12: write_node_pillar merges with existing pillar content
 # ---------------------------------------------------------------------------
+
 
 async def test_write_node_pillar_merges_existing(tmp_path):
     node_id = uuid.uuid4()
@@ -295,6 +309,7 @@ async def test_write_node_pillar_merges_existing(tmp_path):
 # Test 13: get_secrets returns empty list when db returns none
 # ---------------------------------------------------------------------------
 
+
 async def test_get_secrets_returns_empty_list():
     db = _make_db_single(scalars_all_val=[])
 
@@ -306,6 +321,7 @@ async def test_get_secrets_returns_empty_list():
 # ---------------------------------------------------------------------------
 # Test 14: get_decrypted_secrets returns empty dict when no secrets
 # ---------------------------------------------------------------------------
+
 
 async def test_get_decrypted_secrets_empty():
     db = _make_db_single(scalars_all_val=[])

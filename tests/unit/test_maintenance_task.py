@@ -59,16 +59,16 @@ def test_mark_stale_nodes_sets_offline_when_last_seen_2h_ago():
     mock_session.__enter__ = lambda s: s
     mock_session.__exit__ = MagicMock(return_value=False)
 
-    with patch("fleet_platform.workers.maintenance.get_sync_db") as mock_db, patch(
-        "fleet_platform.workers.maintenance.get_setting_sync", return_value=None
+    with (
+        patch("fleet_platform.workers.maintenance.get_sync_db") as mock_db,
+        patch("fleet_platform.workers.maintenance.get_setting_sync", return_value=None),
     ):
         mock_db.return_value = mock_session
         result = mark_stale_nodes()
 
     # Two UPDATE statements must have been issued
     assert mock_session.execute.call_count == 2, (
-        "Expected exactly 2 UPDATE calls (stale + offline) — got "
-        f"{mock_session.execute.call_count}"
+        f"Expected exactly 2 UPDATE calls (stale + offline) — got {mock_session.execute.call_count}"
     )
     mock_session.commit.assert_called_once()
 

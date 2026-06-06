@@ -1,5 +1,6 @@
 # fleet_platform/api/routes/salt_ops.py
 """Salt state runner API — browse states, apply them, run ad-hoc commands."""
+
 import os
 from pathlib import Path
 
@@ -8,6 +9,7 @@ from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from fleet_platform.api.deps import get_db
+from fleet_platform.core.audit import audit
 from fleet_platform.core.auth import get_current_user, require_role
 
 router = APIRouter(prefix="/api/v1/salt")
@@ -29,11 +31,13 @@ def _scan_states(base: Path) -> list[dict]:
         dot_name = ".".join(parts)
         # Human display: drop trailing .init  (jenkins_slave.init → jenkins_slave)
         display = dot_name.removesuffix(".init")
-        states.append({
-            "name": dot_name,
-            "display": display,
-            "path": str(rel),
-        })
+        states.append(
+            {
+                "name": dot_name,
+                "display": display,
+                "path": str(rel),
+            }
+        )
     return states
 
 
@@ -59,7 +63,8 @@ async def list_states(_: dict = Depends(get_current_user)):
 @router.post("/apply", status_code=202)
 async def apply_state(
     payload: ApplyRequest,
-    _: dict = Depends(require_role("operator", "admin")),
+    db: AsyncSession = Depends(get_db),
+    claims: dict = Depends(require_role("operator", "admin")),
 ):
     """Queue a Salt state.apply task. Returns the Celery task_id."""
     if not payload.minion_ids:
@@ -68,11 +73,20 @@ async def apply_state(
             detail="minion_ids must not be empty",
         )
     from fleet_platform.workers.salt_tasks import apply_salt_state
+
     task = apply_salt_state.delay(
         state_name=payload.state,
         target_minions=payload.minion_ids,
         pillar_data=payload.pillar,
     )
+    await audit(
+        db,
+        actor=claims["email"],
+        action="salt.state.apply",
+        resource_type="salt_state",
+        new_value={"state": payload.state, "minion_ids": payload.minion_ids, "task_id": task.id},
+    )
+    await db.commit()
     return {"task_id": task.id}
 
 
@@ -109,7 +123,7 @@ async def get_salt_allowlist(
 async def run_cmd(
     payload: CmdRequest,
     db: AsyncSession = Depends(get_db),
-    _: dict = Depends(require_role("operator", "admin")),
+    claims: dict = Depends(require_role("operator", "admin")),
 ):
     """Queue an ad-hoc Salt command. Returns the Celery task_id."""
     if not payload.minion_ids:
@@ -139,14 +153,19 @@ async def run_cmd(
     if payload.function not in allowed:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail=(
-                f"Function '{payload.function}' is not in the allowlist. "
-                f"Allowed functions: {sorted(allowed)}"
-            ),
+            detail=(f"Function '{payload.function}' is not in the allowlist. Allowed functions: {sorted(allowed)}"),
         )
     task = run_salt_cmd.delay(
         function=payload.function,
         target_minions=payload.minion_ids,
         args=payload.args,
     )
+    await audit(
+        db,
+        actor=claims["email"],
+        action="salt.cmd.run",
+        resource_type="salt_cmd",
+        new_value={"function": payload.function, "minion_ids": payload.minion_ids, "task_id": task.id},
+    )
+    await db.commit()
     return {"task_id": task.id}

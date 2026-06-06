@@ -19,6 +19,7 @@ class BaselineUpdate(BaseModel):
     state_json: Optional[dict] = None
     description: Optional[str] = None
 
+
 router = APIRouter(prefix="/api/v1/baselines")
 
 
@@ -30,11 +31,9 @@ async def capture_node_state(
 ):
     """Return the latest grain facts for a node, formatted for baseline capture."""
     from fleet_platform.models.facts import NodeFact
+
     result = await db.execute(
-        select(NodeFact)
-        .where(NodeFact.node_id == node_id)
-        .order_by(NodeFact.collected_at.desc())
-        .limit(1)
+        select(NodeFact).where(NodeFact.node_id == node_id).order_by(NodeFact.collected_at.desc()).limit(1)
     )
     fact = result.scalar_one_or_none()
     if not fact:
@@ -47,14 +46,12 @@ async def capture_node_state(
         if isinstance(val, dict):
             pkgs.update(val)
 
-    packages = [
-        {"name": name, "version": str(ver) if ver else None}
-        for name, ver in sorted(pkgs.items())
-    ]
+    packages = [{"name": name, "version": str(ver) if ver else None} for name, ver in sorted(pkgs.items())]
 
     services = list(grains.get("services") or [])
 
     from fleet_platform.models.node import Node
+
     node_result = await db.execute(select(Node).where(Node.id == node_id))
     node = node_result.scalar_one_or_none()
 
@@ -82,9 +79,7 @@ async def common_packages(
 
     # Count how many distinct nodes have each package (from latest SBOM per node)
     latest_scans = (
-        select(_func.max(SBOMScan.scanned_at).label("max_at"), SBOMScan.node_id)
-        .group_by(SBOMScan.node_id)
-        .subquery()
+        select(_func.max(SBOMScan.scanned_at).label("max_at"), SBOMScan.node_id).group_by(SBOMScan.node_id).subquery()
     )
     result = await db.execute(
         select(
@@ -95,8 +90,7 @@ async def common_packages(
         .join(SBOMScan, SBOMComponent.scan_id == SBOMScan.id)
         .join(
             latest_scans,
-            (SBOMScan.node_id == latest_scans.c.node_id) &
-            (SBOMScan.scanned_at == latest_scans.c.max_at),
+            (SBOMScan.node_id == latest_scans.c.node_id) & (SBOMScan.scanned_at == latest_scans.c.max_at),
         )
         .group_by(SBOMComponent.name, SBOMComponent.version)
         .order_by(_func.count(_func.distinct(SBOMComponent.node_id)).desc())
@@ -115,15 +109,14 @@ async def list_baselines(
 ):
     total = (await db.execute(select(func.count()).select_from(DesiredStateBaseline))).scalar_one()
     result = await db.execute(
-        select(DesiredStateBaseline)
-        .order_by(DesiredStateBaseline.name)
-        .offset((page - 1) * per_page)
-        .limit(per_page)
+        select(DesiredStateBaseline).order_by(DesiredStateBaseline.name).offset((page - 1) * per_page).limit(per_page)
     )
     baselines = result.scalars().all()
     return PaginatedResponse(
         items=[BaselineResponse.model_validate(b) for b in baselines],
-        total=total, page=page, per_page=per_page,
+        total=total,
+        page=page,
+        per_page=per_page,
     )
 
 
@@ -134,6 +127,7 @@ async def create_baseline(
     claims: dict = Depends(require_role("admin")),
 ):
     from fleet_platform.core.audit import audit
+
     baseline = DesiredStateBaseline(
         name=payload.name,
         description=payload.description,
@@ -144,9 +138,14 @@ async def create_baseline(
     )
     db.add(baseline)
     await db.flush()
-    await audit(db, actor=claims["email"], action="baseline.create",
-                resource_type="baseline", resource_id=baseline.id,
-                new_value={"name": baseline.name, "target_type": baseline.target_type})
+    await audit(
+        db,
+        actor=claims["email"],
+        action="baseline.create",
+        resource_type="baseline",
+        resource_id=baseline.id,
+        new_value={"name": baseline.name, "target_type": baseline.target_type},
+    )
     await db.commit()
     await db.refresh(baseline)
     return BaselineResponse.model_validate(baseline)
@@ -158,9 +157,7 @@ async def get_baseline(
     db: AsyncSession = Depends(get_db),
     _: dict = Depends(get_current_user),
 ):
-    result = await db.execute(
-        select(DesiredStateBaseline).where(DesiredStateBaseline.id == baseline_id)
-    )
+    result = await db.execute(select(DesiredStateBaseline).where(DesiredStateBaseline.id == baseline_id))
     baseline = result.scalar_one_or_none()
     if not baseline:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Baseline not found")
@@ -175,9 +172,8 @@ async def update_baseline(
     claims: dict = Depends(require_role("operator", "admin")),
 ):
     from fleet_platform.core.audit import audit
-    result = await db.execute(
-        select(DesiredStateBaseline).where(DesiredStateBaseline.id == baseline_id)
-    )
+
+    result = await db.execute(select(DesiredStateBaseline).where(DesiredStateBaseline.id == baseline_id))
     baseline = result.scalar_one_or_none()
     if not baseline:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Baseline not found")
@@ -188,9 +184,14 @@ async def update_baseline(
         baseline.version = baseline.version + 1
     if payload.description is not None:
         baseline.description = payload.description
-    await audit(db, actor=claims["email"], action="baseline.update",
-                resource_type="baseline", resource_id=baseline_id,
-                new_value={"name": baseline.name})
+    await audit(
+        db,
+        actor=claims["email"],
+        action="baseline.update",
+        resource_type="baseline",
+        resource_id=baseline_id,
+        new_value={"name": baseline.name},
+    )
     await db.commit()
     await db.refresh(baseline)
     return BaselineResponse.model_validate(baseline)
