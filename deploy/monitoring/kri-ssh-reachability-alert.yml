@@ -1,0 +1,45 @@
+# deploy/monitoring/kri-ssh-reachability-alert.yml
+#
+# PrometheusRule — kri SSH reachability alert (issue #356)
+#
+# NOTE: This file is NOT applied automatically by kri.
+# Wiring it into your Prometheus instance is a manual step:
+#
+#   kubectl apply -f deploy/monitoring/kri-ssh-reachability-alert.yml -n <app-namespace>
+#
+# The PrometheusRule will be picked up by the kube-prometheus-stack operator
+# once the CRD is available.  No changes to the monitoring namespace are
+# required — keep this resource in the same namespace as the kri app.
+#
+# Metric populated by: fleet_platform.workers.connectivity_tasks.check_ssh_connectivity
+# Updated every 15 minutes via Celery beat (schedule=900).
+# Alert fires if any node reports kri_node_ssh_reachable == 0 for 30 continuous minutes.
+---
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: kri-ssh-reachability
+  # Deploy to the same namespace as kri — never to the monitoring namespace.
+  # Update this if kri is deployed to a different namespace.
+  namespace: production
+  labels:
+    # Must match the Prometheus operator's ruleSelector labels.
+    # For kube-prometheus-stack default installs this is typically:
+    release: monitoring
+spec:
+  groups:
+    - name: kri.ssh_reachability
+      interval: 1m
+      rules:
+        - alert: KriNodeSSHUnreachable
+          expr: kri_node_ssh_reachable == 0
+          for: 30m
+          labels:
+            severity: warning
+          annotations:
+            summary: "kri node {{ $labels.minion_id }} SSH unreachable"
+            description: >
+              Node {{ $labels.minion_id }} has reported SSH unreachable for
+              more than 30 minutes.  This indicates a network issue, a crashed
+              SSH daemon, or a misconfigured firewall.  Investigate before
+              attempting any playbook or provisioning run against this node.
