@@ -47,11 +47,11 @@ function PlaybookRow({ p, badge, badgeClass, onRun, onFiles, onToggleFavorite, i
             {isFav ? (
               <span className="text-amber-400 text-lg">★</span>
             ) : (
-              <span className="text-gray-400 hover:text-amber-300 text-lg">☆</span>
+              <span className="text-gray-500 hover:text-amber-400 text-lg">☆</span>
             )}
           </button>
         ) : (
-          <span className="text-gray-400 text-lg" title="Not in library">☆</span>
+          <span className="text-gray-500 text-lg" title="Not in library">☆</span>
         )}
       </td>
       <td className="px-5 py-3">
@@ -200,7 +200,7 @@ export function PlaybooksPage() {
     staleTime: 60_000,
   })
 
-  const { data: libraryData } = useQuery({
+  const { data: libraryData, isLoading: libLoading, isError: libError } = useQuery({
     queryKey: ['playbook-library'],
     queryFn: libraryApi.list,
     staleTime: 60_000,
@@ -262,9 +262,9 @@ export function PlaybooksPage() {
         </p>
       </div>
 
-      {isLoading ? (
+      {isLoading || libLoading ? (
         <Skeleton rows={4} />
-      ) : isError ? (
+      ) : isError || libError ? (
         <ErrorState message="Failed to load playbooks" retry={refetch} />
       ) : !hasEnabled && !hasSources ? (
         /* Empty state 1: no sources configured */
@@ -304,11 +304,11 @@ export function PlaybooksPage() {
           {/* Stat cards */}
           <div className="grid grid-cols-3 gap-4 mb-6">
             <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-5">
-              <div className="text-xs font-semibold uppercase tracking-wide text-gray-400 mb-2">▤ Enabled</div>
+              <div className="text-xs font-semibold uppercase tracking-wide text-gray-600 mb-2">▤ Enabled</div>
               <div className="text-4xl font-black text-gray-900">{allEntries.length}</div>
             </div>
             <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-5">
-              <div className="text-xs font-semibold uppercase tracking-wide text-gray-400 mb-2">★ Favorites</div>
+              <div className="text-xs font-semibold uppercase tracking-wide text-gray-600 mb-2">★ Favorites</div>
               <div className="text-4xl font-black text-amber-500">{favorites.length}</div>
             </div>
             {(() => {
@@ -332,7 +332,7 @@ export function PlaybooksPage() {
 
           {/* Fuzzy search */}
           <div className="relative">
-            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-sm select-none">⌕</span>
+            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 text-sm select-none">⌕</span>
             <input
               type="search"
               placeholder="Search playbooks and roles… (fuzzy: type 'bsmc' to match 'bootstrap_mac_mini')"
@@ -343,7 +343,7 @@ export function PlaybooksPage() {
             {search && (
               <button
                 onClick={() => setSearch('')}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 text-lg leading-none"
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-700 text-lg leading-none"
               >
                 ×
               </button>
