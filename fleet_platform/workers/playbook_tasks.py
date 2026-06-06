@@ -331,6 +331,7 @@ def run_playbook(
     lock = None  # per-target advisory lock (#351); initialised here so finally never NameErrors
     runner = None  # ansible-runner handle; initialised here so SoftTimeLimitExceeded handler can cancel (#348)
     thread = None  # runner thread; initialised here so SoftTimeLimitExceeded handler can join (#348)
+    job_start_time: float = 0.0  # pre-initialised so SoftTimeLimitExceeded handler never NameErrors (#455)
 
     try:
         with get_sync_db() as db:
@@ -433,14 +434,14 @@ def run_playbook(
         with get_sync_db() as db:
             _job_for_timeout = db.execute(select(AnsibleJob).where(AnsibleJob.id == job_uuid)).scalar_one()
             _raw_timeout = getattr(_job_for_timeout, "timeout_seconds", None)
-            _timeout_int = int(_raw_timeout) if isinstance(_raw_timeout, int) else 1800
+            _timeout_int = int(_raw_timeout) if _raw_timeout is not None else 1800
             timeout = max(60, min(7200, _timeout_int))
 
         # Extravars are passed exclusively via run_async(extravars=...) — never written
         # to persistent host_vars/group_vars (#346: secrets leaked across runs + concurrency clobber)
 
         last_db_write: float = time.time()
-        job_start_time: float = time.time()
+        job_start_time = time.time()
 
         with tempfile.TemporaryDirectory(prefix="kri-playbook-") as tmpdir:
             inv_path = _write_static_inventory(tmpdir, hosts)
