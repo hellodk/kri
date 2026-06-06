@@ -99,10 +99,17 @@ def test_ansible_host_key_checking_env_removed():
     )
 
 
-def test_ansible_ssh_args_env_removed():
-    """ANSIBLE_SSH_ARGS moved to ansible.cfg — must not be in envvars."""
-    assert '"ANSIBLE_SSH_ARGS"' not in _WORKER_SRC, (
-        "ANSIBLE_SSH_ARGS has been moved to ansible.cfg and must be removed from envvars"
+def test_ansible_ssh_args_env_is_tofu_override():
+    """ANSIBLE_SSH_ARGS is a dynamic per-run security override (#354): must be present in
+    envvars (env beats ansible.cfg) and must include UserKnownHostsFile for TOFU host-key
+    verification.  The ansible.cfg default (StrictHostKeyChecking=no) is intentionally
+    overridden here — a static cfg file cannot contain a per-run tmpdir path.
+    """
+    assert '"ANSIBLE_SSH_ARGS"' in _WORKER_SRC, (
+        "ANSIBLE_SSH_ARGS must be present in envvars as a dynamic TOFU override (#354)"
+    )
+    assert "UserKnownHostsFile" in _WORKER_SRC, (
+        "ANSIBLE_SSH_ARGS override must reference UserKnownHostsFile for TOFU verification (#354)"
     )
 
 
