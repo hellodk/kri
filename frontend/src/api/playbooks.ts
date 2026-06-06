@@ -34,6 +34,7 @@ export interface AnsibleJob {
   stdout: string | null
   rc: number | null
   verbosity?: number
+  timeout_seconds?: number           // per-job timeout in seconds (#348)
   created_at: string
   celery_task_id?: string | null
   stdout_total_len?: number | null   // len of append-only base when ?from_byte used (#371)
@@ -49,8 +50,8 @@ export interface PlaybookStats {
 
 export const playbooksApi = {
   list: () => api.get<PlaybookEntry[]>('/api/v1/ansible/playbooks'),
-  run: (playbook: string, target_type: string, target_id: string, extravars: Record<string, unknown>, sshUsername?: string, sshPassword?: string, verbosity?: number) =>
-    api.post<PlaybookRunResponse>('/api/v1/ansible/playbooks/run', { playbook, target_type, target_id, extravars, ssh_username: sshUsername || undefined, ssh_password: sshPassword || undefined, verbosity: verbosity || 0 }),
+  run: (playbook: string, target_type: string, target_id: string, extravars: Record<string, unknown>, sshUsername?: string, sshPassword?: string, verbosity?: number, timeoutSeconds?: number) =>
+    api.post<PlaybookRunResponse>('/api/v1/ansible/playbooks/run', { playbook, target_type, target_id, extravars, ssh_username: sshUsername || undefined, ssh_password: sshPassword || undefined, verbosity: verbosity || 0, timeout_seconds: timeoutSeconds || 1800 }),
   getJob: (jobId: string, fromByte?: number) => api.get<AnsibleJob>(`/api/v1/ansible/jobs/${jobId}${fromByte != null ? `?from_byte=${fromByte}` : ''}`),
   listJobs: (params?: { status?: string; node_id?: string; page?: number; per_page?: number }) => {
     const q = new URLSearchParams()

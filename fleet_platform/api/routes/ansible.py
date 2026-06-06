@@ -1104,6 +1104,7 @@ async def run_playbook_endpoint(
         target_label=target_label,
         extravars=payload.extravars,
         verbosity=max(0, min(4, payload.verbosity or 0)),
+        timeout_seconds=max(60, min(21600, payload.timeout_seconds)),
         status="pending",
         triggered_by=claims["sub"],
     )
@@ -1211,6 +1212,7 @@ async def list_ansible_jobs(
             completed_at=j.completed_at,
             stdout=j.stdout,
             rc=j.rc,
+            timeout_seconds=j.timeout_seconds,
             created_at=j.created_at,
             celery_task_id=j.celery_task_id,
             cancelled_at=j.cancelled_at,
@@ -1257,6 +1259,7 @@ async def get_ansible_job(
         stdout=stdout_out,
         rc=job.rc,
         verbosity=job.verbosity,
+        timeout_seconds=job.timeout_seconds,
         created_at=job.created_at,
         celery_task_id=job.celery_task_id,
         cancelled_at=job.cancelled_at,

@@ -88,7 +88,7 @@ celery_app.conf.update(
         },
         "reap-orphaned-jobs": {
             "task": "fleet_platform.workers.maintenance.reap_orphaned_jobs",
-            "schedule": 900,  # every 15 minutes — clears jobs orphaned by worker restarts
+            "schedule": 300,  # every 5 minutes — worst-case stale-running window (#352)
         },
         "reindex-nodes": {
             "task": "fleet_platform.workers.embedding_tasks.reindex_nodes",

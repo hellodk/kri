@@ -6,6 +6,7 @@ ROOT = Path(__file__).parent.parent.parent
 CREDS_API = (ROOT / "frontend/src/api/credentials.ts").read_text()
 SOURCES_API = (ROOT / "frontend/src/api/playbookSources.ts").read_text()
 SETTINGS = (ROOT / "frontend/src/pages/SettingsPage.tsx").read_text()
+SECRET_INPUT = (ROOT / "frontend/src/components/SecretInput.tsx").read_text()
 
 
 def test_credentials_ts_exists_and_has_no_secret_field():
@@ -47,7 +48,10 @@ def test_settings_page_has_credential_dropdown_state():
 
 
 def test_settings_page_secret_input_has_autocomplete_new_password():
-    assert 'autoComplete="new-password"' in SETTINGS
+    # #390: autoComplete="new-password" now lives in the shared SecretInput component
+    # which SettingsPage uses for all secret fields.
+    assert 'autoComplete="new-password"' in SECRET_INPUT
+    assert "SecretInput" in SETTINGS
 
 
 def test_settings_page_has_amber_auth_message():

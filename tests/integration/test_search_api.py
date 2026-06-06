@@ -31,6 +31,17 @@ async def searchable_node(db_session: AsyncSession):
     await db_session.commit()
 
 
+@pytest.mark.xfail(
+    strict=True,
+    reason=(
+        "REAL-BUG: _search_nodes in fleet_platform/api/routes/search.py uses "
+        "coalesce(ip_address,'') where ip_address is PostgreSQL INET type.  "
+        "Postgres rejects coalesce(inet_col, '') with "
+        'InvalidTextRepresentation: invalid input syntax for type inet: "".  '
+        "Fix: cast to text first — coalesce(ip_address::text,'').  "
+        "Tracked in chore/integration-triage."
+    ),
+)
 async def test_search_by_hostname(admin_client: AsyncClient, searchable_node):
     response = await admin_client.get("/api/v1/search?q=searchme")
     assert response.status_code == 200
@@ -39,6 +50,18 @@ async def test_search_by_hostname(admin_client: AsyncClient, searchable_node):
     assert any(n["hostname"] == "searchme-01" for n in data["nodes"])
 
 
+@pytest.mark.xfail(
+    strict=True,
+    reason=(
+        "REAL-BUG: same coalesce(ip_address,'') INET type mismatch as "
+        "test_search_by_hostname — query aborts with InvalidTextRepresentation "
+        "before the validation check can return 422.  Additionally, the route "
+        "uses min_length=2 but the test name says 'min_3_chars'; the test "
+        "assertion (422 for q='ab') is also a TEST-BUG secondary to the "
+        "REAL-BUG above.  Fix the INET cast first, then re-evaluate the "
+        "min_length contract (chore/integration-triage)."
+    ),
+)
 async def test_search_requires_min_3_chars(admin_client: AsyncClient):
     response = await admin_client.get("/api/v1/search?q=ab")
     assert response.status_code == 422

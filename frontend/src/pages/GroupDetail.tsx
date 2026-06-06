@@ -11,6 +11,7 @@ import { ErrorState } from '../components/ErrorState'
 import { Pagination } from '../components/Pagination'
 import { ConfirmDialog } from '../components/ConfirmDialog'
 import { useToastStore } from '../stores/toastStore'
+import { SecretInput } from '../components/SecretInput'
 import { formatDistanceToNow } from 'date-fns'
 
 type GroupTab = 'Members' | 'Drift' | 'SSH' | 'Secrets'
@@ -361,10 +362,9 @@ export function GroupDetail() {
                     <span className="text-gray-400 font-normal">(saved — leave blank to keep)</span>
                   )}
                 </label>
-                <input
-                  type="password"
+                <SecretInput
                   value={sshPassword}
-                  onChange={(e) => setSshPassword(e.target.value)}
+                  onChange={setSshPassword}
                   placeholder={creds?.has_ssh_password ? '••••••••' : 'Enter password'}
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm text-gray-900 focus:outline-none focus:border-brand-600"
                 />
