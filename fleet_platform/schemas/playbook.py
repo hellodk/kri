@@ -3,7 +3,7 @@ import uuid
 from datetime import datetime
 from typing import Any, Literal
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 
 class PlaybookEntryResponse(BaseModel):
@@ -25,6 +25,7 @@ class PlaybookRunRequest(BaseModel):
     ssh_username: str | None = None  # overrides platform setting ssh_bootstrap_username
     ssh_password: str | None = None  # overrides platform setting ssh_bootstrap_password
     verbosity: int = 0  # 0=default, 1=-v, 2=-vv, 3=-vvv, 4=-vvvv
+    timeout_seconds: int = Field(default=1800, ge=60, le=21600)  # per-job timeout; range 60s..6h (#348)
 
 
 class PlaybookRunResponse(BaseModel):
@@ -49,6 +50,7 @@ class AnsibleJobResponse(BaseModel):
     stdout: str | None
     rc: int | None
     verbosity: int = 0
+    timeout_seconds: int = 1800  # per-job timeout in seconds (#348)
     created_at: datetime
     celery_task_id: str | None = None
     cancelled_at: datetime | None = None

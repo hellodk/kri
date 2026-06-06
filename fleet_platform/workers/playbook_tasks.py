@@ -32,11 +32,11 @@ _MAX_STDOUT_BYTES = 2 * 1024 * 1024
 _TRUNCATION_SENTINEL = "\n\n[output truncated at 2 MB — full log not retained]"
 # Window (seconds) used by the entry idempotency guard (#350).  Matches the task
 # hard time_limit so any live delivery of this job falls inside the window.
-_DUPLICATE_GUARD_SECONDS = 1860  # == time_limit on the @celery_app.task decorator
+_DUPLICATE_GUARD_SECONDS = 7260  # == time_limit on the @celery_app.task decorator (#348/#352)
 # Per-target Redis advisory lock (#351): prevents two concurrent playbook runs against
 # the same node/group causing package-manager races or conflicting state mutations.
 _TARGET_LOCK_PREFIX = "kri:playbook-target-lock:"
-_TARGET_LOCK_TTL = 1920  # hard time_limit (1860) + buffer — self-expires if worker SIGKILLed
+_TARGET_LOCK_TTL = 7260  # hard time_limit + buffer — self-expires if worker SIGKILLed (#348/#352)
 
 
 def _append_capped(lines: list[str], msg: str, state: dict) -> None:
@@ -227,8 +227,8 @@ def _flush_stdout(job_uuid: _uuid.UUID, lines: list[str], last_task: str | None)
     bind=True,
     max_retries=0,
     queue="maintenance",
-    soft_time_limit=1800,  # 30 min — real salt-master deploys can take 15-20 min
-    time_limit=1860,  # 31 min hard kill
+    soft_time_limit=7200,  # 2h ceiling — per-job timeout_seconds is the real limit (#348); this is the absolute max
+    time_limit=7260,  # 2h + 60s hard kill
     acks_late=False,  # ack BEFORE execution — a SIGKILLed run must NOT be redelivered
     # and re-executed against the node (#350). Lost-on-crash jobs are
     # marked failed by the orphan reaper instead.
@@ -239,6 +239,8 @@ def run_playbook(
     job_uuid = _uuid.UUID(job_id)
     stdout_lines: list[str] = []
     lock = None  # per-target advisory lock (#351); initialised here so finally never NameErrors
+    runner = None  # ansible-runner handle; initialised here so SoftTimeLimitExceeded handler can cancel (#348)
+    thread = None  # runner thread; initialised here so SoftTimeLimitExceeded handler can join (#348)
 
     try:
         with get_sync_db() as db:
@@ -320,6 +322,15 @@ def run_playbook(
             job.stdout = "\n".join(stdout_lines)
             db.commit()
 
+        # Per-job timeout (#348): read from the job record, clamp to [60, 7200].
+        # ansible-runner owns the kill (runner.status → "timeout") so the worker
+        # Celery ceiling (soft_time_limit=7200) is only the absolute backstop.
+        with get_sync_db() as db:
+            _job_for_timeout = db.execute(select(AnsibleJob).where(AnsibleJob.id == job_uuid)).scalar_one()
+            _raw_timeout = getattr(_job_for_timeout, "timeout_seconds", None)
+            _timeout_int = int(_raw_timeout) if isinstance(_raw_timeout, int) else 1800
+            timeout = max(60, min(7200, _timeout_int))
+
         # Extravars are passed exclusively via run_async(extravars=...) — never written
         # to persistent host_vars/group_vars (#346: secrets leaked across runs + concurrency clobber)
 
@@ -376,6 +387,7 @@ def run_playbook(
                 inventory=inv_path,
                 extravars=job.extravars or {},
                 verbosity=max(0, min(4, verbosity or 0)),
+                timeout=timeout,  # per-job timeout (#348); ansible-runner kills subprocess on expiry
                 envvars={
                     # Force ansible to emit ANSI colour codes into event["stdout"] even
                     # though there's no TTY, so the UI can render CLI-identical colours (#369).
@@ -429,16 +441,34 @@ def run_playbook(
 
         with get_sync_db() as db:
             job = db.execute(select(AnsibleJob).where(AnsibleJob.id == job_uuid)).scalar_one()
-            job.status = "completed" if final_status == "successful" and final_rc == 0 else "failed"
-            job.rc = final_rc
-            job.stdout = "\n".join(stdout_lines) or f"rc={final_rc} status={final_status}"
+            if final_status == "timeout":
+                job.status = "failed"
+                job.rc = final_rc
+                timeout_msg = (
+                    f"\n\n[ERROR] playbook exceeded its {timeout}s timeout — ansible-runner terminated the subprocess."
+                )
+                job.stdout = ("\n".join(stdout_lines) or f"rc={final_rc} status={final_status}") + timeout_msg
+            else:
+                job.status = "completed" if final_status == "successful" and final_rc == 0 else "failed"
+                job.rc = final_rc
+                job.stdout = "\n".join(stdout_lines) or f"rc={final_rc} status={final_status}"
             job.completed_at = datetime.now(UTC)
             db.commit()
 
         return {"status": final_status, "rc": final_rc, "job_id": job_id}
 
     except SoftTimeLimitExceeded:
-        _log.warning("playbook_tasks: job %s hit soft time limit", job_uuid)
+        _log.warning("playbook_tasks: job %s hit soft time limit (7200s ceiling) — cancelling runner (#348)", job_uuid)
+        # Best-effort: cancel the ansible-runner subprocess and join its thread (#348).
+        # runner/thread are initialised to None above so this never NameErrors even if
+        # the exception fires before run_async is called.
+        try:
+            if runner is not None:
+                runner.cancel()
+            if thread is not None:
+                thread.join(timeout=5)
+        except Exception:
+            _log.warning("playbook_tasks: best-effort runner cancel failed", exc_info=True)
         elapsed = int(time.time() - job_start_time)
         _flush_stdout(job_uuid, stdout_lines, f"TIMED OUT after {elapsed}s elapsed")
         with get_sync_db() as db:
