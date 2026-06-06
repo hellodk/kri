@@ -87,8 +87,13 @@ async def refresh(
     if claims.get("type") != "refresh":
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Not a refresh token")
 
-    jti = claims.get("jti", "")
-    if jti and await is_token_revoked(redis, jti):
+    jti = claims.get("jti")
+    if not jti:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Refresh token missing required jti claim",
+        )
+    if await is_token_revoked(redis, jti):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Refresh token has been revoked",
@@ -123,11 +128,15 @@ async def logout(
     if payload and payload.refresh_token:
         try:
             rt_claims = decode_token(payload.refresh_token)
-            jti = rt_claims.get("jti", "")
-            if jti:
-                exp = rt_claims.get("exp", 0)
-                remaining_ttl = max(1, int(exp - datetime.now(UTC).timestamp()))
-                await revoke_token(redis, jti, remaining_ttl)
+            jti = rt_claims.get("jti")
+            if not jti:
+                raise HTTPException(
+                    status_code=status.HTTP_401_UNAUTHORIZED,
+                    detail="Refresh token missing required jti claim",
+                )
+            exp = rt_claims.get("exp", 0)
+            remaining_ttl = max(1, int(exp - datetime.now(UTC).timestamp()))
+            await revoke_token(redis, jti, remaining_ttl)
         except (TokenExpiredError, TokenInvalidError):
             pass
     await _audit(
