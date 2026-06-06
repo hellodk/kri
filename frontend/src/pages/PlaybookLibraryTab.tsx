@@ -25,6 +25,10 @@ export function PlaybookLibraryTab() {
   const [filter, setFilter] = useState<FilterMode>('all')
   const [expanded, setExpanded] = useState<Set<string>>(new Set())
   const [dismissed, setDismissed] = useState(false)
+  // Per-entry pending state: tracks catalog_id (enabled) or filename (not-yet-enabled)
+  const [pendingEntryIds, setPendingEntryIds] = useState<Set<string>>(new Set())
+  // Per-source pending state: tracks source_key currently mutating via "Enable All"
+  const [pendingSourceKeys, setPendingSourceKeys] = useState<Set<string>>(new Set())
 
   const { data, isLoading, isError, refetch } = useQuery({
     queryKey: ['playbook-library'],
@@ -37,8 +41,22 @@ export function PlaybookLibraryTab() {
     qc.invalidateQueries({ queryKey: ['playbooks'] })
   }
 
+  // Returns a stable key for an entry regardless of whether it has a catalog_id yet
+  const entryKey = (entry: LibraryEntry): string =>
+    entry.catalog_id ?? entry.filename
+
   const enableMutation = useMutation({
     mutationFn: libraryApi.enable,
+    onMutate: (vars) => {
+      setPendingEntryIds((prev) => new Set([...prev, vars.filename]))
+    },
+    onSettled: (_data, _err, vars) => {
+      setPendingEntryIds((prev) => {
+        const next = new Set(prev)
+        next.delete(vars.filename)
+        return next
+      })
+    },
     onSuccess: () => {
       toast('Playbook enabled', 'success')
       invalidate()
@@ -48,6 +66,16 @@ export function PlaybookLibraryTab() {
 
   const disableMutation = useMutation({
     mutationFn: (catalog_id: string) => libraryApi.disable(catalog_id),
+    onMutate: (catalog_id) => {
+      setPendingEntryIds((prev) => new Set([...prev, catalog_id]))
+    },
+    onSettled: (_data, _err, catalog_id) => {
+      setPendingEntryIds((prev) => {
+        const next = new Set(prev)
+        next.delete(catalog_id)
+        return next
+      })
+    },
     onSuccess: () => {
       toast('Playbook disabled', 'success')
       invalidate()
@@ -57,6 +85,16 @@ export function PlaybookLibraryTab() {
 
   const enableSourceMutation = useMutation({
     mutationFn: (source_key: string) => libraryApi.enableSource(source_key),
+    onMutate: (source_key) => {
+      setPendingSourceKeys((prev) => new Set([...prev, source_key]))
+    },
+    onSettled: (_data, _err, source_key) => {
+      setPendingSourceKeys((prev) => {
+        const next = new Set(prev)
+        next.delete(source_key)
+        return next
+      })
+    },
     onSuccess: (result) => {
       toast(`Enabled ${result.enabled_count} playbooks`, 'success')
       invalidate()
@@ -193,12 +231,12 @@ export function PlaybookLibraryTab() {
                       ev.stopPropagation()
                       enableSourceMutation.mutate(group.key)
                     }}
-                    disabled={enableSourceMutation.isPending}
+                    disabled={pendingSourceKeys.has(group.key)}
                     className="px-2.5 py-1 text-xs font-semibold border border-indigo-200 text-indigo-700 rounded-lg hover:bg-indigo-50 transition-colors disabled:opacity-50"
                   >
                     Enable All
                   </button>
-                  <span className="text-gray-400 text-sm">{isOpen ? '▾' : '▸'}</span>
+                  <span className="text-gray-500 text-sm">{isOpen ? '▾' : '▸'}</span>
                 </div>
               </button>
 
@@ -234,7 +272,7 @@ export function PlaybookLibraryTab() {
                             {entry.description}
                           </p>
                         )}
-                        <p className="font-mono text-xs text-gray-400 mt-0.5 truncate">
+                        <p className="font-mono text-xs text-gray-500 mt-0.5 truncate">
                           {entry.filename}
                         </p>
                       </div>
@@ -253,7 +291,7 @@ export function PlaybookLibraryTab() {
                             })
                           }
                         }}
-                        disabled={enableMutation.isPending || disableMutation.isPending}
+                        disabled={pendingEntryIds.has(entryKey(entry))}
                         className={`relative w-10 h-5 rounded-full transition-colors focus:outline-none disabled:opacity-50 shrink-0 ${
                           entry.enabled ? 'bg-emerald-500' : 'bg-gray-200'
                         }`}
@@ -275,7 +313,7 @@ export function PlaybookLibraryTab() {
       </div>
 
       {groups.length === 0 && (
-        <div className="bg-white rounded-xl border border-gray-200 p-10 text-center text-gray-400 text-sm">
+        <div className="bg-white rounded-xl border border-gray-200 p-10 text-center text-gray-600 text-sm">
           {search
             ? `No matches for "${search}"`
             : 'No playbooks discovered across configured sources.'}
