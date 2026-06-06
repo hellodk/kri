@@ -8,14 +8,6 @@ from fleet_platform.core.auth import create_access_token, hash_password
 from fleet_platform.core.config import settings
 from fleet_platform.models import Base, User
 
-# Import models that are NOT in fleet_platform/models/__init__.py so that
-# Base.metadata.create_all creates the tables they define.  These are real
-# application models whose omission from __init__.py is a pre-existing bug
-# (tracked as REAL-BUG in chore/integration-triage); we import them here so
-# the test DB schema is complete without touching app code.
-from fleet_platform.models.alert import AlertEvent, AlertRule, WebhookConfig  # noqa: F401
-from fleet_platform.models.ssh_session import SSHSession  # noqa: F401
-
 
 @pytest_asyncio.fixture(scope="module", loop_scope="module")
 async def test_engine():
