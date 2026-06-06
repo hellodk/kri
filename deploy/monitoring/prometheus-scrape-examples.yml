@@ -1,0 +1,27 @@
+# Example Prometheus scrape configs for kri /metrics, per deployment mode.
+# kri exposes Prometheus metrics at /metrics (no auth) on the API/nginx port.
+# Copy the relevant block into your prometheus.yml `scrape_configs:`.
+#
+# (Kubernetes does NOT use this file — use the ServiceMonitor instead:
+#  deploy/k8s/observability/service-monitor.yaml.)
+
+scrape_configs:
+  # ── docker-compose ────────────────────────────────────────────────
+  # Prometheus running in the same compose project reaches the API by
+  # service DNS. If Prometheus is the cluster's (running on the same host
+  # as the compose stack), target the host instead (see standalone below).
+  - job_name: kri-compose
+    metrics_path: /metrics
+    static_configs:
+      - targets: ["api:8000"]          # compose service DNS (api container)
+        labels: { app: kri, mode: compose }
+
+  # ── standalone (Linux / Mac Mini) ─────────────────────────────────
+  # kri running as a systemd/launchd service, or a compose stack scraped
+  # from OUTSIDE its network (e.g. the on-host k0s Prometheus reaching the
+  # host's published nginx port). Use the host's reachable address.
+  - job_name: kri-standalone
+    metrics_path: /metrics
+    static_configs:
+      - targets: ["KRI_HOST:80"]       # replace KRI_HOST with the host IP/DNS
+        labels: { app: kri, mode: standalone }

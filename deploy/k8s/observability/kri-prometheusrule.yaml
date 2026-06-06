@@ -1,0 +1,31 @@
+# k8s wrapper for kri's portable alert rules (deploy/monitoring/rules/kri-alerts.rules.yml).
+# The `spec.groups` MUST mirror that file — it is the same rule expressed as a
+# Prometheus Operator CRD so kube-prometheus-stack picks it up automatically.
+#
+# Apply:  kubectl apply -f deploy/k8s/observability/kri-prometheusrule.yaml
+# Picked up because ruleNamespaceSelector={} (all namespaces) + ruleSelector
+# matches release=monitoring on this resource.
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: kri-alerts
+  namespace: kri                 # app namespace (never the monitoring namespace)
+  labels:
+    release: monitoring          # must match the Prometheus operator's ruleSelector
+spec:
+  groups:
+    - name: kri.ssh_reachability
+      interval: 1m
+      rules:
+        - alert: KriNodeSSHUnreachable
+          expr: kri_node_ssh_reachable == 0
+          for: 30m
+          labels:
+            severity: warning
+          annotations:
+            summary: "kri node {{ $labels.minion_id }} SSH unreachable"
+            description: >
+              Node {{ $labels.minion_id }} has reported SSH unreachable for more
+              than 30 minutes. Indicates a network issue, crashed SSH daemon, or
+              misconfigured firewall. Investigate before any playbook/provisioning
+              run against this node.

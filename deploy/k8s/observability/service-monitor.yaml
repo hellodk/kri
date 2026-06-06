@@ -2,7 +2,7 @@ apiVersion: monitoring.coreos.com/v1
 kind: ServiceMonitor
 metadata:
   name: kri-api
-  namespace: utilities          # app namespace — never monitoring
+  namespace: kri              # app namespace — never monitoring
   labels:
     release: monitoring         # must match Prometheus serviceMonitorSelector
 spec:
