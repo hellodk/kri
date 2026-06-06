@@ -18,7 +18,7 @@ export interface SaltMaster {
   status: string
   last_checked_at: string | null
   last_error: string | null
-  checks: Record<string, unknown> | null
+  checks: Array<{ check: string; status: string; detail: string; latency_ms: number }> | null
   created_at: string
   updated_at: string
 }
@@ -57,11 +57,27 @@ export interface SaltMasterUpdate {
   token_delivery?: string
 }
 
+export interface SaltMasterHealthResponse {
+  status: string
+  last_checked_at: string | null
+  last_error: string | null
+  checks: Array<{ check: string; status: string; detail: string; latency_ms: number }>
+}
+
+export interface SaltMasterTestResponse {
+  status: string
+  checks: Array<{ check: string; status: string; detail: string; latency_ms: number }>
+}
+
 export const saltMastersApi = {
-  list: () => api.get<SaltMaster[]>('/api/v1/salt-masters'),
-  get: (id: string) => api.get<SaltMaster>(`/api/v1/salt-masters/${id}`),
-  create: (body: SaltMasterCreate) => api.post<SaltMaster>('/api/v1/salt-masters', body),
+  list: () => api.get<SaltMaster[]>('/api/v1/salt/masters'),
+  get: (id: string) => api.get<SaltMaster>(`/api/v1/salt/masters/${id}`),
+  create: (body: SaltMasterCreate) => api.post<SaltMaster>('/api/v1/salt/masters', body),
   update: (id: string, body: SaltMasterUpdate) =>
-    api.patch<SaltMaster>(`/api/v1/salt-masters/${id}`, body),
-  remove: (id: string) => api.delete(`/api/v1/salt-masters/${id}`),
+    api.patch<SaltMaster>(`/api/v1/salt/masters/${id}`, body),
+  remove: (id: string) => api.delete(`/api/v1/salt/masters/${id}`),
+  test: (id: string) =>
+    api.post<SaltMasterTestResponse>(`/api/v1/salt/masters/${id}/test`, {}),
+  health: (id: string) =>
+    api.get<SaltMasterHealthResponse>(`/api/v1/salt/masters/${id}/health`),
 }

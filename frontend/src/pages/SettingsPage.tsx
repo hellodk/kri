@@ -12,6 +12,7 @@ import { useToastStore } from '../stores/toastStore'
 import { api } from '../api/client'
 import { buildsApi } from '../api/builds'
 import { PlaybookLibraryTab } from './PlaybookLibraryTab'
+import { SaltMastersTab } from './SaltMastersTab'
 
 function UrlStatusPill({ status, checking }: { status?: { ok: boolean; latency_ms: number | null; error?: string } | null; checking: boolean }) {
   if (checking) return <span className="text-xs text-gray-400 flex items-center gap-1"><span className="inline-block animate-spin">⟳</span> Checking</span>
@@ -251,7 +252,7 @@ export function SettingsPage() {
       ? `http://${master}/api/v1/ingest/grains`
       : null
 
-  const TABS = ['General', 'Automation', 'Remote Access', 'Integrations', 'Playbook Library', 'LLM', 'Notifications'] as const
+  const TABS = ['General', 'Automation', 'Remote Access', 'Integrations', 'Salt Masters', 'Playbook Library', 'LLM', 'Notifications'] as const
   type Tab = typeof TABS[number]
 
   // Legacy tab-name mapping: stored/URL values 'Bootstrap' and 'Advanced' both
@@ -728,6 +729,9 @@ export function SettingsPage() {
         </div>
       )}
 
+      {/* Salt Masters tab */}
+      {activeTab === 'Salt Masters' && <SaltMastersTab />}
+
       {/* Playbook Library tab */}
       {activeTab === 'Playbook Library' && (
         <div className="space-y-4">
@@ -1027,8 +1031,8 @@ export function SettingsPage() {
         </div>
       )}
 
-      {/* Save button — visible for all tabs except LLM, Notifications, and Playbook Library (which manages its own save button) */}
-      {activeTab !== 'LLM' && activeTab !== 'Notifications' && activeTab !== 'Playbook Library' && (
+      {/* Save button — visible for all tabs except LLM, Notifications, Playbook Library, and Salt Masters (which manage their own state) */}
+      {activeTab !== 'LLM' && activeTab !== 'Notifications' && activeTab !== 'Playbook Library' && activeTab !== 'Salt Masters' && (
         <div className="flex justify-end pt-2">
           <button
             onClick={() => saveMutation.mutate()}
