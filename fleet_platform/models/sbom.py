@@ -11,9 +11,7 @@ from fleet_platform.models.base import Base
 class SBOMScan(Base):
     __tablename__ = "sbom_scans"
 
-    id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
-    )
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     node_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True),
         ForeignKey("nodes.id", ondelete="CASCADE"),

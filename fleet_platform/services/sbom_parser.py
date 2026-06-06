@@ -8,9 +8,7 @@ class SBOMParser:
     def parse_cyclonedx(self, node_id: str, raw: dict) -> tuple[SBOMScan, list[dict]]:
         metadata = raw.get("metadata", {})
         tools = metadata.get("tools", [])
-        syft_version = next(
-            (t.get("version") for t in tools if t.get("name") == "syft"), None
-        )
+        syft_version = next((t.get("version") for t in tools if t.get("name") == "syft"), None)
 
         ts_raw = metadata.get("timestamp", "")
         try:

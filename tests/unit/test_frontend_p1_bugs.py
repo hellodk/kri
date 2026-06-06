@@ -1,4 +1,5 @@
 """Unit tests confirming P1 frontend bug fixes (#62 #70 #71 #72 #73 #74)."""
+
 from pathlib import Path
 
 FRONTEND = Path(__file__).parent.parent.parent / "frontend" / "src"
@@ -33,9 +34,7 @@ def test_group_deletion_has_confirm():
 def test_login_page_shows_oidc_error():
     """LoginPage.tsx must read and display the ?error query param."""
     src = (FRONTEND / "pages" / "LoginPage.tsx").read_text()
-    assert "oidcError" in src or "error" in src.lower(), (
-        "LoginPage must display OIDC error from query string"
-    )
+    assert "oidcError" in src or "error" in src.lower(), "LoginPage must display OIDC error from query string"
 
 
 def test_sidebar_contrast_fixed():

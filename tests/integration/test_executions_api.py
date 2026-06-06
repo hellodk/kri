@@ -16,9 +16,11 @@ from fleet_platform.models.node import Node
 async def job_with_result(db_session: AsyncSession):
     token = secrets.token_urlsafe(32)
     node = Node(
-        minion_id="exec-node-01.local", hostname="exec-node-01",
+        minion_id="exec-node-01.local",
+        hostname="exec-node-01",
         node_token_hash=hash_password(token),
-        first_seen_at=datetime.now(UTC), status="online",
+        first_seen_at=datetime.now(UTC),
+        status="online",
     )
     db_session.add(node)
     await db_session.commit()

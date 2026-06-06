@@ -1,4 +1,5 @@
 """Contract tests for #369: both log views render via the ANSI parser, safely."""
+
 from pathlib import Path
 
 ROOT = Path(__file__).parent.parent.parent

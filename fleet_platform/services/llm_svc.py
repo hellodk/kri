@@ -30,9 +30,7 @@ async def list_endpoints(db: AsyncSession) -> list[LLMEndpoint]:
 
 
 async def get_endpoint(db: AsyncSession, endpoint_id: uuid.UUID) -> LLMEndpoint | None:
-    result = await db.execute(
-        select(LLMEndpoint).where(LLMEndpoint.id == endpoint_id)
-    )
+    result = await db.execute(select(LLMEndpoint).where(LLMEndpoint.id == endpoint_id))
     return result.scalar_one_or_none()
 
 
@@ -59,10 +57,7 @@ async def create_endpoint(db: AsyncSession, payload: LLMEndpointCreate) -> LLMEn
         is_default=payload.is_default,
         enabled=payload.enabled,
         model_context_length=payload.model_context_length,
-        model_capabilities=(
-            ",".join(payload.model_capabilities)
-            if payload.model_capabilities else None
-        ),
+        model_capabilities=(",".join(payload.model_capabilities) if payload.model_capabilities else None),
     )
     db.add(endpoint)
     await db.commit()
@@ -70,9 +65,7 @@ async def create_endpoint(db: AsyncSession, payload: LLMEndpointCreate) -> LLMEn
     return endpoint
 
 
-async def update_endpoint(
-    db: AsyncSession, endpoint: LLMEndpoint, payload: LLMEndpointUpdate
-) -> LLMEndpoint:
+async def update_endpoint(db: AsyncSession, endpoint: LLMEndpoint, payload: LLMEndpointUpdate) -> LLMEndpoint:
     if payload.name is not None:
         endpoint.name = payload.name
     if payload.provider is not None:
@@ -136,9 +129,7 @@ async def create_query_log(
         else system_prompt
     )
     truncated_user_prompt = (
-        prompt[:_PROMPT_LOG_LIMIT] + "... [truncated]"
-        if len(prompt) > _PROMPT_LOG_LIMIT
-        else prompt
+        prompt[:_PROMPT_LOG_LIMIT] + "... [truncated]" if len(prompt) > _PROMPT_LOG_LIMIT else prompt
     )
     log = LLMQueryLog(
         endpoint_id=endpoint_id,
@@ -159,9 +150,7 @@ async def create_query_log(
     return log
 
 
-async def list_query_logs(
-    db: AsyncSession, user_id: str | None = None, limit: int = 50
-) -> list[LLMQueryLog]:
+async def list_query_logs(db: AsyncSession, user_id: str | None = None, limit: int = 50) -> list[LLMQueryLog]:
     q = select(LLMQueryLog).order_by(LLMQueryLog.created_at.desc()).limit(limit)
     if user_id is not None:
         q = q.where(LLMQueryLog.user_id == user_id)

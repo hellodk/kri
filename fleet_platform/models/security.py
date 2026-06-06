@@ -15,11 +15,11 @@ class VulnerabilityFinding(Base):
     node_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True), ForeignKey("nodes.id", ondelete="CASCADE"), nullable=False, index=True
     )
-    scanner: Mapped[str] = mapped_column(String(30), nullable=False)   # trivy | cxone | sonarqube
+    scanner: Mapped[str] = mapped_column(String(30), nullable=False)  # trivy | cxone | sonarqube
     cve_id: Mapped[str] = mapped_column(String(30), nullable=False)
     package_name: Mapped[str] = mapped_column(String(255), nullable=False)
     package_version: Mapped[str | None] = mapped_column(String(100), nullable=True)
-    severity: Mapped[str] = mapped_column(String(20), nullable=False)   # CRITICAL|HIGH|MEDIUM|LOW|UNKNOWN
+    severity: Mapped[str] = mapped_column(String(20), nullable=False)  # CRITICAL|HIGH|MEDIUM|LOW|UNKNOWN
     cvss_score: Mapped[float | None] = mapped_column(Float, nullable=True)
     fixed_version: Mapped[str | None] = mapped_column(String(100), nullable=True)
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
@@ -42,8 +42,8 @@ class LicenseFinding(Base):
     scanner: Mapped[str] = mapped_column(String(30), nullable=False)
     package_name: Mapped[str] = mapped_column(String(255), nullable=False)
     package_version: Mapped[str | None] = mapped_column(String(100), nullable=True)
-    license_id: Mapped[str] = mapped_column(String(100), nullable=False)   # "GPL-3.0", "MIT", etc.
-    risk: Mapped[str] = mapped_column(String(20), nullable=False)           # high|medium|low|allowed
+    license_id: Mapped[str] = mapped_column(String(100), nullable=False)  # "GPL-3.0", "MIT", etc.
+    risk: Mapped[str] = mapped_column(String(20), nullable=False)  # high|medium|low|allowed
     scanned_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
 
     __table_args__ = (

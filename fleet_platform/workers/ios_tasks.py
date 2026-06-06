@@ -1,4 +1,5 @@
 """Celery tasks for iOS fleet tracking."""
+
 import json
 import urllib.request
 from datetime import UTC, datetime

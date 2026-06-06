@@ -1,5 +1,6 @@
 # fleet_platform/services/baseline_loader.py
 """Load baseline YAML files and find applicable baselines for nodes."""
+
 import uuid
 from pathlib import Path
 
@@ -27,18 +28,14 @@ def validate_baseline(data: dict) -> list[str]:
         errors.append("missing required field: name")
     target_type = data.get("target_type", "global")
     if target_type not in _VALID_TARGET_TYPES:
-        errors.append(
-            f"target_type must be one of {sorted(_VALID_TARGET_TYPES)}, got '{target_type}'"
-        )
+        errors.append(f"target_type must be one of {sorted(_VALID_TARGET_TYPES)}, got '{target_type}'")
     has_content = any(k in data for k in ("packages", "services", "configs"))
     if not has_content:
         errors.append("baseline must define at least one of: packages, services, configs")
     return errors
 
 
-async def find_baseline_for_node(
-    node_id: uuid.UUID, db: AsyncSession
-) -> DesiredStateBaseline | None:
+async def find_baseline_for_node(node_id: uuid.UUID, db: AsyncSession) -> DesiredStateBaseline | None:
     """Return the most specific applicable baseline for a node.
 
     Priority: node-specific > group-specific > global
@@ -76,9 +73,7 @@ async def find_baseline_for_node(
     return result.scalar_one_or_none()
 
 
-def find_baseline_for_node_sync(
-    node_id: uuid.UUID, db: Session
-) -> DesiredStateBaseline | None:
+def find_baseline_for_node_sync(node_id: uuid.UUID, db: Session) -> DesiredStateBaseline | None:
     """Sync version of find_baseline_for_node for use in Celery workers."""
     baseline = db.execute(
         select(DesiredStateBaseline)

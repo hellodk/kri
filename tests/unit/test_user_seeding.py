@@ -47,9 +47,7 @@ async def test_seed_skips_when_user_exists():
 
     db = AsyncMock(spec=AsyncSession)
     exec_result = MagicMock()
-    exec_result.scalar_one_or_none.return_value = User(
-        email="admin@kri.local", password_hash="x", role="admin"
-    )
+    exec_result.scalar_one_or_none.return_value = User(email="admin@kri.local", password_hash="x", role="admin")
     db.execute.return_value = exec_result
 
     env = {

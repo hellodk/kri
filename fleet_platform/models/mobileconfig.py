@@ -1,4 +1,5 @@
 """macOS configuration profile models."""
+
 import uuid
 from datetime import datetime
 
@@ -12,9 +13,7 @@ from fleet_platform.models.base import Base
 class MobileconfigProfile(Base):
     __tablename__ = "mobileconfig_profiles"
 
-    id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
-    )
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     name: Mapped[str] = mapped_column(String(256), nullable=False)
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
     payload_xml: Mapped[str] = mapped_column(Text, nullable=False)
@@ -27,9 +26,7 @@ class MobileconfigProfile(Base):
 class ProfileGroupAssignment(Base):
     __tablename__ = "profile_group_assignments"
 
-    id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
-    )
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     profile_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True),
         ForeignKey("mobileconfig_profiles.id", ondelete="CASCADE"),
@@ -48,9 +45,7 @@ class ProfileGroupAssignment(Base):
 class ProfileDeploymentLog(Base):
     __tablename__ = "profile_deployment_logs"
 
-    id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
-    )
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     profile_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True),
         ForeignKey("mobileconfig_profiles.id", ondelete="CASCADE"),

@@ -46,7 +46,7 @@ class DriftRecordResponse(BaseModel):
 class BaselineCreate(BaseModel):
     name: str
     description: str | None = None
-    target_type: str = "global"   # global | group | node
+    target_type: str = "global"  # global | group | node
     target_id: uuid.UUID | None = None
     state_json: dict
     git_commit_sha: str = "manual"

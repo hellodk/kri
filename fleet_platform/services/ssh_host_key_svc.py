@@ -1,4 +1,5 @@
 """TOFU (Trust-On-First-Use) SSH host key management."""
+
 from __future__ import annotations
 
 import logging
@@ -53,10 +54,7 @@ async def verify_or_store_host_key(
         user_id=user_uuid,
         event_type="ssh_host_key_mismatch",
         severity="critical",
-        detail=(
-            f"Expected key: {node.ssh_host_key[:40]}... "
-            f"Got key: {host_key_b64[:40]}..."
-        ),
+        detail=(f"Expected key: {node.ssh_host_key[:40]}... Got key: {host_key_b64[:40]}..."),
         created_at=datetime.now(UTC),
     )
     db.add(event)

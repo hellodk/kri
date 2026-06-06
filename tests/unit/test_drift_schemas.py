@@ -44,7 +44,10 @@ def test_baseline_create_defaults():
 
 def test_execution_job_response():
     j = ExecutionJobResponse(
-        id=uuid.uuid4(), type="highstate", target_type="node",
-        triggered_by="salt", status="complete",
+        id=uuid.uuid4(),
+        type="highstate",
+        target_type="node",
+        triggered_by="salt",
+        status="complete",
     )
     assert j.status == "complete"

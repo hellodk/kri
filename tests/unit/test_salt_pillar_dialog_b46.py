@@ -1,4 +1,5 @@
 """Tests for #46: Salt pillar input dialog."""
+
 from pathlib import Path
 
 

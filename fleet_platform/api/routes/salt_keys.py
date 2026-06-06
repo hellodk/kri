@@ -7,7 +7,7 @@ from fastapi import APIRouter, Depends, HTTPException
 
 from fleet_platform.core.auth import get_current_user, require_role
 
-_MINION_ID_RE = re.compile(r'^[a-zA-Z0-9._-]+$')
+_MINION_ID_RE = re.compile(r"^[a-zA-Z0-9._-]+$")
 
 router = APIRouter(prefix="/api/v1/salt")
 

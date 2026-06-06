@@ -1,4 +1,5 @@
 """Add bootstrap fields to nodes and platform_settings table."""
+
 import sqlalchemy as sa
 from alembic import op
 
@@ -9,9 +10,7 @@ depends_on = None
 
 
 def upgrade():
-    op.add_column("nodes", sa.Column(
-        "bootstrap_status", sa.String(20), nullable=False, server_default="unregistered"
-    ))
+    op.add_column("nodes", sa.Column("bootstrap_status", sa.String(20), nullable=False, server_default="unregistered"))
     op.add_column("nodes", sa.Column("bootstrap_ip", sa.String(45), nullable=True))
     op.add_column("nodes", sa.Column("bootstrap_error", sa.Text, nullable=True))
 

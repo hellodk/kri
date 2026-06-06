@@ -4,6 +4,7 @@ Revision ID: 019
 Revises: 018
 Create Date: 2026-05-26
 """
+
 import sqlalchemy as sa
 from alembic import op
 from sqlalchemy.dialects import postgresql
@@ -17,13 +18,12 @@ depends_on = None
 def upgrade() -> None:
     op.create_table(
         "node_health_snapshots",
-        sa.Column("id", postgresql.UUID(as_uuid=True), primary_key=True,
-                  server_default=sa.text("gen_random_uuid()")),
-        sa.Column("node_id", postgresql.UUID(as_uuid=True),
-                  sa.ForeignKey("nodes.id", ondelete="CASCADE"), nullable=False),
+        sa.Column("id", postgresql.UUID(as_uuid=True), primary_key=True, server_default=sa.text("gen_random_uuid()")),
+        sa.Column(
+            "node_id", postgresql.UUID(as_uuid=True), sa.ForeignKey("nodes.id", ondelete="CASCADE"), nullable=False
+        ),
         sa.Column("minion_id", sa.String(255), nullable=False),
-        sa.Column("collected_at", sa.DateTime(timezone=True), nullable=False,
-                  server_default=sa.text("now()")),
+        sa.Column("collected_at", sa.DateTime(timezone=True), nullable=False, server_default=sa.text("now()")),
         sa.Column("disk_root_used_gb", sa.Numeric(10, 2), nullable=True),
         sa.Column("disk_root_total_gb", sa.Numeric(10, 2), nullable=True),
         sa.Column("disk_root_pct", sa.SmallInteger, nullable=True),

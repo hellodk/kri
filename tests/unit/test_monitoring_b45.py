@@ -1,4 +1,5 @@
 """Tests for #45: monitoring stats page."""
+
 from pathlib import Path
 
 

@@ -1,4 +1,5 @@
 """Unit tests for model_discovery service (Closes #245)."""
+
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest

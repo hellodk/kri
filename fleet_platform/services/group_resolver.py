@@ -18,9 +18,7 @@ def validate_predicate(predicate: dict) -> bool:
     return True
 
 
-async def resolve_dynamic_group(
-    predicate: dict, db: AsyncSession
-) -> list[uuid.UUID]:
+async def resolve_dynamic_group(predicate: dict, db: AsyncSession) -> list[uuid.UUID]:
     """Return node IDs matching all conditions in the predicate.
 
     Predicate format: {"and": [{"key": "env", "value": "prod"}, ...]}
@@ -31,12 +29,7 @@ async def resolve_dynamic_group(
 
     query = select(Node.id)
     for cond in predicate["and"]:
-        subq = (
-            select(Tag.node_id)
-            .where(Tag.key == cond["key"])
-            .where(Tag.value == cond["value"])
-            .scalar_subquery()
-        )
+        subq = select(Tag.node_id).where(Tag.key == cond["key"]).where(Tag.value == cond["value"]).scalar_subquery()
         query = query.where(Node.id.in_(subq))
 
     result = await db.execute(query)

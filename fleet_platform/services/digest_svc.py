@@ -23,9 +23,7 @@ from fleet_platform.services.platform_settings_svc import (
 
 def get_week_stats(db: Session) -> dict:
     since = datetime.now(UTC) - timedelta(days=7)
-    builds = db.execute(
-        select(JenkinsBuildEvent).where(JenkinsBuildEvent.started_at >= since)
-    ).scalars().all()
+    builds = db.execute(select(JenkinsBuildEvent).where(JenkinsBuildEvent.started_at >= since)).scalars().all()
 
     total = len(builds)
     passed = sum(1 for b in builds if b.result == "SUCCESS")
@@ -38,9 +36,7 @@ def get_week_stats(db: Session) -> dict:
     top_failing = sorted(fail_counts.items(), key=lambda x: x[1], reverse=True)[:5]
 
     total_nodes: int = db.execute(select(func.count(Node.id))).scalar_one()
-    online_nodes: int = db.execute(
-        select(func.count(Node.id)).where(Node.status == "online")
-    ).scalar_one()
+    online_nodes: int = db.execute(select(func.count(Node.id)).where(Node.status == "online")).scalar_one()
 
     return {
         "builds_total": total,
@@ -55,19 +51,18 @@ def get_week_stats(db: Session) -> dict:
 
 
 def render_html(stats: dict) -> str:
-    top_failing_rows = "".join(
-        f'<tr>'
-        f'<td style="padding:6px 12px;border-bottom:1px solid #E5E7EB;font-size:13px;color:#111827">{name}</td>'
-        f'<td style="padding:6px 12px;border-bottom:1px solid #E5E7EB;text-align:right;color:#DC2626;font-weight:600;font-size:13px">{count}</td>'
-        f'</tr>'
-        for name, count in stats["top_failing_jobs"]
-    ) or '<tr><td colspan="2" style="padding:8px 12px;font-size:13px;color:#6B7280">No failures this week</td></tr>'
-
-    pass_rate = (
-        round(stats["builds_passed"] / stats["builds_total"] * 100)
-        if stats["builds_total"] > 0
-        else 100
+    top_failing_rows = (
+        "".join(
+            f"<tr>"
+            f'<td style="padding:6px 12px;border-bottom:1px solid #E5E7EB;font-size:13px;color:#111827">{name}</td>'
+            f'<td style="padding:6px 12px;border-bottom:1px solid #E5E7EB;text-align:right;color:#DC2626;font-weight:600;font-size:13px">{count}</td>'
+            f"</tr>"
+            for name, count in stats["top_failing_jobs"]
+        )
+        or '<tr><td colspan="2" style="padding:8px 12px;font-size:13px;color:#6B7280">No failures this week</td></tr>'
     )
+
+    pass_rate = round(stats["builds_passed"] / stats["builds_total"] * 100) if stats["builds_total"] > 0 else 100
 
     fail_bg = "#FEF2F2" if stats["builds_failed"] > 0 else "#F9FAFB"
     fail_border = "#FECACA" if stats["builds_failed"] > 0 else "#E5E7EB"
@@ -85,7 +80,7 @@ def render_html(stats: dict) -> str:
     <tr><td style="background:#1D4ED8;padding:24px 32px">
       <p style="margin:0;font-size:12px;font-weight:600;color:#93C5FD;text-transform:uppercase;letter-spacing:0.05em">kri Fleet Platform</p>
       <h1 style="margin:6px 0 0;color:#FFFFFF;font-size:22px;font-weight:700">Weekly Fleet Digest</h1>
-      <p style="margin:4px 0 0;color:#BFDBFE;font-size:13px">{stats['period_start']} — {stats['period_end']}</p>
+      <p style="margin:4px 0 0;color:#BFDBFE;font-size:13px">{stats["period_start"]} — {stats["period_end"]}</p>
     </td></tr>
 
     <tr><td style="padding:24px 32px">
@@ -94,13 +89,13 @@ def render_html(stats: dict) -> str:
         <tr>
           <td width="50%" style="padding-right:8px">
             <div style="background:#F0FDF4;border:1px solid #BBF7D0;border-radius:8px;padding:16px;text-align:center">
-              <div style="font-size:32px;font-weight:700;color:#16A34A">{stats['online_nodes']}</div>
+              <div style="font-size:32px;font-weight:700;color:#16A34A">{stats["online_nodes"]}</div>
               <div style="font-size:12px;color:#4B5563;margin-top:4px">Nodes Online</div>
             </div>
           </td>
           <td width="50%" style="padding-left:8px">
             <div style="background:#F9FAFB;border:1px solid #E5E7EB;border-radius:8px;padding:16px;text-align:center">
-              <div style="font-size:32px;font-weight:700;color:#111827">{stats['total_nodes']}</div>
+              <div style="font-size:32px;font-weight:700;color:#111827">{stats["total_nodes"]}</div>
               <div style="font-size:12px;color:#4B5563;margin-top:4px">Total Nodes</div>
             </div>
           </td>
@@ -116,19 +111,19 @@ def render_html(stats: dict) -> str:
         <tr>
           <td width="33%" style="padding-right:6px">
             <div style="background:#F9FAFB;border:1px solid #E5E7EB;border-radius:8px;padding:16px;text-align:center">
-              <div style="font-size:32px;font-weight:700;color:#111827">{stats['builds_total']}</div>
+              <div style="font-size:32px;font-weight:700;color:#111827">{stats["builds_total"]}</div>
               <div style="font-size:12px;color:#4B5563;margin-top:4px">Total Builds</div>
             </div>
           </td>
           <td width="33%" style="padding:0 3px">
             <div style="background:#F0FDF4;border:1px solid #BBF7D0;border-radius:8px;padding:16px;text-align:center">
-              <div style="font-size:32px;font-weight:700;color:#16A34A">{stats['builds_passed']}</div>
+              <div style="font-size:32px;font-weight:700;color:#16A34A">{stats["builds_passed"]}</div>
               <div style="font-size:12px;color:#4B5563;margin-top:4px">Passed</div>
             </div>
           </td>
           <td width="33%" style="padding-left:6px">
             <div style="background:{fail_bg};border:1px solid {fail_border};border-radius:8px;padding:16px;text-align:center">
-              <div style="font-size:32px;font-weight:700;color:{fail_color}">{stats['builds_failed']}</div>
+              <div style="font-size:32px;font-weight:700;color:{fail_color}">{stats["builds_failed"]}</div>
               <div style="font-size:12px;color:#4B5563;margin-top:4px">Failed</div>
             </div>
           </td>
@@ -201,7 +196,7 @@ def send_digest(db: Session) -> dict:
 
 def send_alert_email(rule: object, alert_event: object) -> None:
     """Send a real-time alert email for a fired AlertEvent.
-    
+
     Called from alert_svc._maybe_send_alert_email when SMTP is configured.
     Reads SMTP config from platform_settings synchronously.
     """

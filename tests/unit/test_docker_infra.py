@@ -1,4 +1,5 @@
 """Unit tests for #123 (log limits) and #114 (DB rename)."""
+
 from pathlib import Path
 
 import yaml  # pyyaml is in dev deps
@@ -26,5 +27,6 @@ def test_database_not_named_fleet_demo():
 
 def test_config_default_database():
     from fleet_platform.core.config import Settings
+
     s = Settings(_env_file=None, jwt_secret="a" * 32)
     assert "fleet_demo" not in (s.database_url or ""), "Default database URL must not reference fleet_demo"
