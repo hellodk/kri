@@ -22,6 +22,7 @@ celery_app = Celery(
         "fleet_platform.workers.digest_tasks",
         "fleet_platform.workers.embedding_tasks",
         "fleet_platform.workers.mobileconfig_tasks",
+        "fleet_platform.workers.connectivity_tasks",
     ],
 )
 
@@ -101,6 +102,11 @@ celery_app.conf.update(
         "reindex-drift-history": {
             "task": "fleet_platform.workers.embedding_tasks.reindex_drift_history",
             "schedule": 300,  # every 5 min — tracks new drift records
+        },
+        "check-ssh-connectivity": {
+            "task": "fleet_platform.workers.connectivity_tasks.check_ssh_connectivity",
+            "schedule": 900,  # every 15 minutes — proactive SSH reachability sweep (#356)
+            "options": {"queue": "maintenance"},
         },
     },
 )

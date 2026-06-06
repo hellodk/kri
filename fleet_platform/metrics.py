@@ -66,3 +66,13 @@ celery_tasks_total = Counter(
     "Total Celery tasks dispatched",
     ["task_name", "status"],
 )
+
+# ---------------------------------------------------------------------------
+# SSH reachability metrics (issue #356)
+# ---------------------------------------------------------------------------
+
+node_ssh_reachable = Gauge(
+    "kri_node_ssh_reachable",
+    "1 if the node's SSH port is reachable (probed every 15 min by the connectivity worker), 0 otherwise",
+    ["minion_id"],
+)
