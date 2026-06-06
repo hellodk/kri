@@ -87,3 +87,52 @@ async def test_get_current_user_passes_when_jti_not_revoked():
 
     assert claims["sub"] == "u2"
     assert claims["type"] == "access"
+
+
+@pytest.mark.asyncio
+async def test_get_current_user_ws_rejects_missing_jti():
+    """WS auth must reject tokens with no jti claim."""
+    import time
+
+    import jwt as pyjwt
+
+    from fleet_platform.api.routes.webssh import get_current_user_ws
+    from fleet_platform.core.config import settings
+
+    token = pyjwt.encode(
+        {"type": "access", "sub": "user-id", "exp": int(time.time()) + 3600},
+        settings.jwt_secret,
+        algorithm=settings.jwt_algorithm,
+    )
+    with pytest.raises(ValueError, match="jti"):
+        await get_current_user_ws(token, redis=None)
+
+
+@pytest.mark.asyncio
+async def test_get_current_user_ws_rejects_revoked_token():
+    """WS auth must reject revoked tokens."""
+    from unittest.mock import AsyncMock
+
+    from fleet_platform.api.routes.webssh import get_current_user_ws
+
+    token = create_access_token(user_id="user-id", email="a@b.com", role="viewer")
+    mock_redis = AsyncMock()
+    mock_redis.exists = AsyncMock(return_value=1)  # simulates revoked
+    with pytest.raises(ValueError, match="revoked"):
+        await get_current_user_ws(token, redis=mock_redis)
+
+
+@pytest.mark.asyncio
+async def test_get_current_user_ws_accepts_valid_token():
+    """WS auth must accept a valid non-revoked token."""
+    from unittest.mock import AsyncMock
+
+    from fleet_platform.api.routes.webssh import get_current_user_ws
+
+    token = create_access_token(user_id="user-id", email="a@b.com", role="viewer")
+    mock_redis = AsyncMock()
+    mock_redis.exists = AsyncMock(return_value=0)  # not revoked
+    claims = await get_current_user_ws(token, redis=mock_redis)
+    assert claims["sub"] == "user-id"
+    assert claims["type"] == "access"
+    assert claims["jti"]

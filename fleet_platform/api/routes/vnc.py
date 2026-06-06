@@ -20,7 +20,7 @@ from fastapi import APIRouter, Depends, HTTPException, WebSocket, WebSocketDisco
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from fleet_platform.api.deps import get_db
+from fleet_platform.api.deps import get_db, get_redis
 from fleet_platform.core.audit import audit
 from fleet_platform.core.auth import get_current_user
 from fleet_platform.db.session import AsyncSessionLocal
@@ -177,7 +177,8 @@ async def vnc_session(
         if not token:
             await websocket.close(code=4001, reason="Missing auth token")
             return
-        claims = await get_current_user_ws(token)
+        redis = await get_redis()
+        claims = await get_current_user_ws(token, redis=redis)
         user_id = uuid.UUID(claims["sub"])
     except Exception:
         await websocket.close(code=4001, reason="Authentication failed")
