@@ -245,9 +245,18 @@ export function SettingsPage() {
       ? `http://${master}/api/v1/ingest/grains`
       : null
 
-  const TABS = ['General', 'Bootstrap', 'Remote Access', 'Integrations', 'Advanced', 'LLM', 'Notifications'] as const
+  const TABS = ['General', 'Automation', 'Remote Access', 'Integrations', 'LLM', 'Notifications'] as const
   type Tab = typeof TABS[number]
-  const [activeTab, setActiveTab] = useState<Tab>('General')
+
+  // Legacy tab-name mapping: stored/URL values 'Bootstrap' and 'Advanced' both
+  // map to the consolidated 'Automation' tab introduced in #391.
+  function normaliseLegacyTab(raw: string): Tab {
+    if (raw === 'Bootstrap' || raw === 'Advanced') return 'Automation'
+    if ((TABS as readonly string[]).includes(raw)) return raw as Tab
+    return 'General'
+  }
+
+  const [activeTab, setActiveTab] = useState<Tab>(() => normaliseLegacyTab('General'))
 
   if (isLoading) return <div className="p-6"><Skeleton rows={8} /></div>
 
@@ -377,10 +386,13 @@ export function SettingsPage() {
         </div>
       )}
 
-      {/* Bootstrap tab */}
-      {activeTab === 'Bootstrap' && (
+      {/* Automation tab — consolidates former Bootstrap + Advanced tabs (#391) */}
+      {activeTab === 'Automation' && (
         <div className="space-y-6">
-          {/* SSH Bootstrap credentials */}
+          {/* Credentials (formerly Advanced) */}
+          <CredentialsSection />
+
+          {/* Default SSH Bootstrap Credentials (formerly Bootstrap tab) */}
           <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-6 space-y-4">
             <div>
               <h2 className="text-base font-semibold text-gray-900">Default SSH Bootstrap Credentials</h2>
@@ -487,6 +499,13 @@ export function SettingsPage() {
               </p>
             </div>
           </div>
+
+          {/* Salt Allowlist / Denylist (formerly Advanced) */}
+          <SaltAllowlistSection />
+          <SaltDenylistSection />
+
+          {/* Playbook Sources (formerly Advanced) */}
+          <PlaybookSourcesSection />
         </div>
       )}
 
@@ -693,16 +712,6 @@ export function SettingsPage() {
                 placeholder="Leave blank to keep existing" className={inputClass} />
             </div>
           </div>
-        </div>
-      )}
-
-      {/* Advanced tab */}
-      {activeTab === 'Advanced' && (
-        <div className="space-y-6">
-          <CredentialsSection />
-          <SaltAllowlistSection />
-          <SaltDenylistSection />
-          <PlaybookSourcesSection />
         </div>
       )}
 
