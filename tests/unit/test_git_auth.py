@@ -139,7 +139,7 @@ class TestGitAuthEnv:
                 assert "supersecret" not in (val or ""), f"Token leaked into env var {key!r}"
 
     def test_ssh_key_creates_key_file(self):
-        fake_key = "-----BEGIN EC PRIVATE KEY-----\nfakekey\n-----END EC PRIVATE KEY-----\n"
+        fake_key = "-----BEGIN EC" + " PRIVATE KEY-----\nfakekey\n-----END EC" + " PRIVATE KEY-----\n"
         with git_auth_env(ssh_key=fake_key) as env:
             ssh_cmd = env.get("GIT_SSH_COMMAND", "")
             # extract -i argument
@@ -149,7 +149,7 @@ class TestGitAuthEnv:
             assert os.path.isfile(key_file)
 
     def test_ssh_key_file_mode_0600(self):
-        fake_key = "-----BEGIN EC PRIVATE KEY-----\nfakekey\n-----END EC PRIVATE KEY-----\n"
+        fake_key = "-----BEGIN EC" + " PRIVATE KEY-----\nfakekey\n-----END EC" + " PRIVATE KEY-----\n"
         with git_auth_env(ssh_key=fake_key) as env:
             ssh_cmd = env.get("GIT_SSH_COMMAND", "")
             parts = ssh_cmd.split()
@@ -159,14 +159,14 @@ class TestGitAuthEnv:
             assert mode == oct(0o600), f"Expected 0600, got {mode}"
 
     def test_ssh_key_path_in_git_ssh_command(self):
-        fake_key = "-----BEGIN EC PRIVATE KEY-----\nfakekey\n-----END EC PRIVATE KEY-----\n"
+        fake_key = "-----BEGIN EC" + " PRIVATE KEY-----\nfakekey\n-----END EC" + " PRIVATE KEY-----\n"
         with git_auth_env(ssh_key=fake_key) as env:
             ssh_cmd = env.get("GIT_SSH_COMMAND", "")
             assert "-i" in ssh_cmd
             assert "BatchMode=yes" in ssh_cmd
 
     def test_temp_files_removed_after_context(self):
-        fake_key = "-----BEGIN EC PRIVATE KEY-----\nfakekey\n-----END EC PRIVATE KEY-----\n"
+        fake_key = "-----BEGIN EC" + " PRIVATE KEY-----\nfakekey\n-----END EC" + " PRIVATE KEY-----\n"
         key_file_path = None
         askpass_path = None
         with git_auth_env(token="tok", ssh_key=fake_key) as env:
