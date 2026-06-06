@@ -41,3 +41,14 @@ def test_lockfile_resolves_react_and_react_dom_to_same_version():
         f"pnpm-lock resolves react@{react.group(1)} but react-dom@{react_dom.group(1)} "
         "— they must be identical (React #527)"
     )
+
+
+def test_react_family_declared_versions_aligned():
+    """react, react-dom and react-is should all track the same version.
+
+    react-is mismatch does not throw #527, but keeping the whole family in
+    lockstep avoids subtle behavioural drift across recharts / react-redux.
+    """
+    pkg = json.loads(PKG.read_text())
+    versions = {name: _declared(pkg, name) for name in ("react", "react-dom", "react-is")}
+    assert len(set(versions.values())) == 1, f"react family versions diverge: {versions}"
