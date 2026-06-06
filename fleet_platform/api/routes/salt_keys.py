@@ -30,15 +30,18 @@ def _dirs() -> dict[str, Path]:
 async def list_keys(_: dict = Depends(get_current_user)):
     """List all minion keys grouped by status."""
     result: dict[str, list[str]] = {}
+    degraded = False
+    degraded_reason: str | None = None
     for status, path in _dirs().items():
         try:
             result[status] = sorted(f.name for f in path.iterdir() if f.is_file()) if path.exists() else []
         except PermissionError:
-            # salt-master owns the PKI dir with mode 700; the API container may not
-            # have permission to traverse it right after a container restart.
-            # Gracefully return an empty list so the UI shows "no keys" instead of 500.
             result[status] = []
+            degraded = True
+            degraded_reason = "Cannot read Salt PKI directory — API container lacks permission"
     result["pending_count"] = len(result["pending"])  # type: ignore[assignment]
+    result["degraded"] = degraded  # type: ignore[assignment]
+    result["degraded_reason"] = degraded_reason  # type: ignore[assignment]
     return result
 
 
