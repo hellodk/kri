@@ -153,11 +153,59 @@ def _write_static_inventory(tmpdir: str, hosts: list[dict]) -> str:
 
 
 def _credential_source_banner(hosts: list[dict]) -> str:
-    """Human-readable summary of where each host's credentials came from (#279)."""
-    lines = ["Credentials resolved automatically (node → group → global):"]
+    """Summary of which credential source each host will be TRIED with (#279, #355).
+
+    Wording is 'Attempting', not 'resolved' — resolution only picks a source; whether
+    it works is unknown until Ansible connects. A confident 'resolved' banner above an
+    auth failure misled operators (#355)."""
+    lines = ["Attempting with credentials from (node → group → global):"]
     for h in hosts:
         lines.append(f"  {h['hostname']} ({h['ip']}) ← {_source_label(h['credential_source'])}")
     return "\n".join(lines)
+
+
+def _playbook_uses_collections(playbook_path: Path) -> bool:
+    """True if the playbook references an Ansible collection — a `collections:` key or
+    a fully-qualified collection name (namespace.collection.module). Builtin-only
+    playbooks (shell/copy/debug…) return False so the #357 pre-flight stays quiet."""
+    try:
+        text = playbook_path.read_text()
+    except OSError:
+        return False
+    if re.search(r"^\s*collections\s*:", text, re.M):
+        return True
+    # FQCN module usage, e.g. "community.general.foo:" — three dot-separated identifiers
+    return bool(re.search(r"\b[a-z0-9_]+\.[a-z0-9_]+\.[a-z0-9_]+\s*:", text))
+
+
+def _classify_failure(full_stdout: str, hosts: list[dict], last_task: str | None, rc: int | None, status: str) -> str:
+    """Build an operator-facing [DIAGNOSIS] block for a failed/timed-out run (#355/#358).
+
+    Ported and extended from ansible_tasks.py: classifies UNREACHABLE vs auth failure
+    (naming the credential source that was rejected, #355) vs task failure."""
+    host_label = hosts[0]["hostname"] if hosts else "target"
+    sources = ", ".join(sorted({_source_label(h["credential_source"]) for h in hosts})) or "unknown"
+
+    if status == "timeout":
+        tail = f" Last task: {last_task}." if last_task else ""
+        return f"\n[DIAGNOSIS] Run timed out before completion.{tail}"
+
+    if "UNREACHABLE" in full_stdout:
+        body = (
+            f"Host {host_label} is UNREACHABLE — check SSH connectivity (IP, port 22, "
+            f"firewall/Tailscale) and that the host is powered on."
+        )
+    elif "Authentication failure" in full_stdout or "Permission denied" in full_stdout:
+        body = (
+            f"SSH authentication to {host_label} FAILED — credentials from {sources} were "
+            f"REJECTED by the host. Check the key is in authorized_keys / the password is correct."
+        )
+    elif "Could not match supplied host pattern" in full_stdout:
+        body = "Inventory misconfiguration — the host pattern did not match any host."
+    else:
+        tail = f" (last task: {last_task})" if last_task else ""
+        body = f"Task failure{tail} — rc={rc} status={status}. See the Ansible output above for the failing task."
+    return f"\n[DIAGNOSIS] {body}"
 
 
 def _write_known_hosts(tmpdir: str, hosts: list[dict]) -> tuple[str, bool]:
@@ -342,6 +390,21 @@ def run_playbook(
             # Resolve playbook path across all configured sources (not just builtin)
             playbook_path, playbooks_dir = _resolve_playbook_path(job.playbook, db)
 
+            # #357: fail fast with a clear message if the playbook needs collections
+            # but the installed collections dir is missing — otherwise Ansible silently
+            # finds none and emits a confusing "couldn't resolve module/action".
+            _collections_dir = playbooks_dir / "collections" / "installed"
+            if not _collections_dir.is_dir() and _playbook_uses_collections(playbook_path):
+                job.status = "failed"
+                job.stdout = (
+                    f"[ERROR] This playbook uses Ansible collections but the collections "
+                    f"directory was not found at {_collections_dir}.\n"
+                    f"Run `ansible-galaxy collection install -r requirements.yml` first."
+                )
+                job.completed_at = datetime.now(UTC)
+                db.commit()
+                return {"status": "error", "reason": "collections_missing", "job_id": job_id}
+
         with get_sync_db() as db:
             job = db.execute(select(AnsibleJob).where(AnsibleJob.id == job_uuid)).scalar_one()
             hosts = _resolve_hosts(db, job, override)
@@ -503,17 +566,26 @@ def run_playbook(
 
         with get_sync_db() as db:
             job = db.execute(select(AnsibleJob).where(AnsibleJob.id == job_uuid)).scalar_one()
+            _last_task = _last_task_ref["task"]
             if final_status == "timeout":
                 job.status = "failed"
                 job.rc = final_rc
                 timeout_msg = (
                     f"\n\n[ERROR] playbook exceeded its {timeout}s timeout — ansible-runner terminated the subprocess."
                 )
-                job.stdout = ("\n".join(stdout_lines) or f"rc={final_rc} status={final_status}") + timeout_msg
+                job.stdout = (
+                    ("\n".join(stdout_lines) or f"rc={final_rc} status={final_status}")
+                    + timeout_msg
+                    + _classify_failure("\n".join(stdout_lines), hosts, _last_task, final_rc, final_status)
+                )
             else:
                 job.status = "completed" if final_status == "successful" and final_rc == 0 else "failed"
                 job.rc = final_rc
                 job.stdout = "\n".join(stdout_lines) or f"rc={final_rc} status={final_status}"
+                # #355/#358: on failure, append an operator-facing diagnosis identifying
+                # UNREACHABLE vs auth-rejection (naming the credential source) vs task failure.
+                if job.status == "failed":
+                    job.stdout += _classify_failure("\n".join(stdout_lines), hosts, _last_task, final_rc, final_status)
             job.completed_at = datetime.now(UTC)
             db.commit()
 
