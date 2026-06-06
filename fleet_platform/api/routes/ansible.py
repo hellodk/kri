@@ -223,23 +223,10 @@ async def bootstrap_logs(
     if not node:
         raise HTTPException(status_code=404, detail="Node not found")
 
-    # Read the Salt pillar file written before the Ansible run
-    pillar_content: str | None = None
-    pillar_path = Path("/srv/salt/pillar") / f"{node.minion_id}.sls"
-    if pillar_path.exists():
-        try:
-            pillar_content = pillar_path.read_text()
-        except Exception:
-            pillar_content = f"(could not read {pillar_path})"
-    else:
-        pillar_content = f"(pillar file not found at {pillar_path})"
-
     return {
         "node_id": str(node.id),
         "minion_id": node.minion_id,
         "bootstrap_status": node.bootstrap_status,
-        "pillar_path": str(pillar_path),
-        "pillar": pillar_content,
         "ansible_stdout": node.bootstrap_logs,
     }
 
@@ -1444,7 +1431,7 @@ async def get_playbook_file(
         target = Path(path).resolve()
 
     # Security: must be inside one of the allowed source dirs
-    if not any(str(target).startswith(r) for r in allowed_roots):
+    if not any(target.is_relative_to(Path(r)) for r in allowed_roots):
         raise HTTPException(status_code=400, detail="Path not in any configured playbook source")
     if not target.exists() or not target.is_file():
         raise HTTPException(status_code=404, detail="File not found")
@@ -1479,7 +1466,7 @@ async def update_playbook_file(
         target = Path(path).resolve()
 
     # Security: must be inside one of the allowed source dirs
-    if not any(str(target).startswith(r) for r in allowed_roots):
+    if not any(target.is_relative_to(Path(r)) for r in allowed_roots):
         raise HTTPException(status_code=400, detail="Path not in any configured playbook source")
     content = payload.get("content", "")
     if not isinstance(content, str):
