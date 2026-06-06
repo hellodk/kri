@@ -11,9 +11,11 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 import ansible_runner
+import redis as sync_redis
 from celery.exceptions import SoftTimeLimitExceeded
 from sqlalchemy import select
 
+from fleet_platform.core.config import settings
 from fleet_platform.db.session import get_sync_db
 from fleet_platform.models.ansible_job import AnsibleJob
 from fleet_platform.models.node import Node
@@ -28,6 +30,13 @@ _LOG_BATCH_INTERVAL = 5  # seconds between intermediate stdout DB flushes
 # Cap stored stdout so a runaway/verbose run can't grow the TEXT column unbounded (#369).
 _MAX_STDOUT_BYTES = 2 * 1024 * 1024
 _TRUNCATION_SENTINEL = "\n\n[output truncated at 2 MB — full log not retained]"
+# Window (seconds) used by the entry idempotency guard (#350).  Matches the task
+# hard time_limit so any live delivery of this job falls inside the window.
+_DUPLICATE_GUARD_SECONDS = 1860  # == time_limit on the @celery_app.task decorator
+# Per-target Redis advisory lock (#351): prevents two concurrent playbook runs against
+# the same node/group causing package-manager races or conflicting state mutations.
+_TARGET_LOCK_PREFIX = "kri:playbook-target-lock:"
+_TARGET_LOCK_TTL = 1920  # hard time_limit (1860) + buffer — self-expires if worker SIGKILLed
 
 
 def _append_capped(lines: list[str], msg: str, state: dict) -> None:
@@ -220,18 +229,65 @@ def _flush_stdout(job_uuid: _uuid.UUID, lines: list[str], last_task: str | None)
     queue="maintenance",
     soft_time_limit=1800,  # 30 min — real salt-master deploys can take 15-20 min
     time_limit=1860,  # 31 min hard kill
+    acks_late=False,  # ack BEFORE execution — a SIGKILLed run must NOT be redelivered
+    # and re-executed against the node (#350). Lost-on-crash jobs are
+    # marked failed by the orphan reaper instead.
 )
 def run_playbook(
     self, job_id: str, ssh_username: str | None = None, ssh_password: str | None = None, verbosity: int = 0
 ) -> dict:
     job_uuid = _uuid.UUID(job_id)
     stdout_lines: list[str] = []
+    lock = None  # per-target advisory lock (#351); initialised here so finally never NameErrors
 
     try:
         with get_sync_db() as db:
             job = db.execute(select(AnsibleJob).where(AnsibleJob.id == job_uuid)).scalar_one_or_none()
             if not job:
                 return {"status": "error", "reason": "job_not_found"}
+            # Defense-in-depth idempotency guard (#350): if the job is already
+            # 'running' and was started recently, this is a duplicate delivery of the
+            # same Celery message (e.g. SIGKILL redelivery despite acks_late=False
+            # on an older broker snapshot, or a manual re-queue).  Skip without
+            # mutating the record — mutating would clobber the live run's stdout/status.
+            # Truly-dead stale rows (status=running, old started_at) are reaped by
+            # maintenance.reap_orphaned_jobs (#352), not here.
+            # DESIGN NOTE: the issue's test sketch said 'mark failed immediately', but
+            # that clobbers a live run when the duplicate arrives while the original is
+            # alive — skipping without mutation is strictly safer.
+            if job.status == "running" and job.started_at is not None:
+                started = job.started_at if job.started_at.tzinfo else job.started_at.replace(tzinfo=UTC)
+                age = (datetime.now(UTC) - started).total_seconds()
+                if age < _DUPLICATE_GUARD_SECONDS:
+                    _log.warning(
+                        "playbook_tasks: job %s already running (started %ds ago) — duplicate delivery skipped (#350)",
+                        job_uuid,
+                        int(age),
+                    )
+                    return {"status": "duplicate-skipped", "job_id": job_id}
+            # Per-target advisory lock (#351): prevent two concurrent runs against the
+            # same node/group (package-manager races, conflicting state mutations).
+            # The lock is non-blocking — if it is already held, mark the job failed and
+            # return immediately rather than blocking the entire Celery worker queue.
+            # Advisory only: if Redis is unreachable we degrade open with a warning
+            # rather than blocking all playbook runs (the broker is likely also down).
+            try:
+                r = sync_redis.Redis.from_url(settings.redis_url)
+                lock = r.lock(
+                    f"{_TARGET_LOCK_PREFIX}{job.target_type}:{job.target_id}",
+                    timeout=_TARGET_LOCK_TTL,
+                    blocking=False,
+                )
+                if not lock.acquire(blocking=False):
+                    job.status = "failed"
+                    job.stdout = "Another run is in progress against this target — try again when it completes."
+                    job.completed_at = datetime.now(UTC)
+                    db.commit()
+                    return {"status": "target-locked", "job_id": job_id}
+            except sync_redis.RedisError as exc:
+                # Advisory lock only — degrade open if Redis is unreachable (#351)
+                _log.warning("playbook_tasks: target-lock unavailable (%s) — proceeding without lock", exc)
+                lock = None
             job.status = "running"
             job.started_at = datetime.now(UTC)
             db.commit()
@@ -408,3 +464,14 @@ def run_playbook(
                 job.completed_at = datetime.now(UTC)
                 db.commit()
         raise
+
+    finally:
+        # Release the per-target advisory lock (#351) regardless of outcome —
+        # success, failure, soft-timeout, hard-kill, or exception.
+        # TTL is the backstop: the lock self-expires if the worker is SIGKILLed
+        # before this finally block executes.
+        if lock is not None:
+            try:
+                lock.release()
+            except Exception:
+                pass  # already expired or not owned — TTL handles cleanup
