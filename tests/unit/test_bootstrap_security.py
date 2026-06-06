@@ -38,21 +38,26 @@ def test_time_based_log_batching_present():
 
 
 def test_bootstrap_db_session_count_low():
-    """bootstrap_node must use ≤ 7 get_sync_db() opens total.
+    """bootstrap_node must use ≤ 9 get_sync_db() opens total.
 
     Session breakdown (all error-path sessions are guarded, not on every run):
-      1. Load node + mark bootstrapping
-      2. Periodic log batch (inside ansible event loop, time-gated)
-      3. Write token hash + create BootstrapRun record
-      4. Finalise BootstrapRun + write terminal status (step 6, happy/failure path)
-      5. SoftTimeLimitExceeded handler (error path only)
-      6. except Exception handler (#509 — record terminal status on unexpected crash)
-      7. finally orphan-reaper (#445 Part A — only when step 6 did not complete)
+      1. Load node + mark bootstrapping (always)
+      2. Health gate — persist probe result (only when master status==unknown, #520)
+      3. Health gate — mark node failed and return early (only when master unreachable, #520)
+      4. Write token hash + create BootstrapRun record (always, after gate passes)
+      5. Periodic log batch (inside streaming loop, time-gated, #498)
+      6. Finalise BootstrapRun + write terminal status (step 6, happy/failure path)
+      7. SoftTimeLimitExceeded handler (error path only)
+      8. except Exception handler (#509 — record terminal status on unexpected crash)
+      9. finally orphan-reaper (#445 Part A — only when step 6 did not complete)
+
+    Sessions 2 and 3 are mutually exclusive (probe runs only once per bootstrap).
+    The maximum on any single execution path is ≤ 7 (gate-probe path hits 2+4+5+6+9 = 5 max).
     """
     # Count get_sync_db() calls in the bootstrap function body
     task_start = SRC.find("def bootstrap_node")
     # Find next top-level function after bootstrap_node
     next_fn = SRC.find("\ndef ", task_start + 20)
-    task_body = SRC[task_start : next_fn if next_fn > 0 else task_start + 8000]
+    task_body = SRC[task_start : next_fn if next_fn > 0 else task_start + 12000]
     count = task_body.count("get_sync_db()")
-    assert count <= 7, f"bootstrap_node opens {count} DB sessions, expected ≤ 7"
+    assert count <= 9, f"bootstrap_node opens {count} DB sessions, expected ≤ 9"

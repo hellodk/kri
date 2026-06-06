@@ -5,6 +5,8 @@ a. bootstrap_node must NOT write/create the local pillar dir; it must not fail
    when /srv/salt/pillar is missing/unwritable.
 b. Any failure inside bootstrap_node must leave bootstrap_status as a terminal
    value ('failed'), never leave it stuck at 'bootstrapping'.
+
+Updated in #520: ansible_runner.run → run_async; SaltMaster gate mocked.
 """
 
 import uuid
@@ -74,7 +76,20 @@ def _make_node(node_id: uuid.UUID, minion_id: str = "mm1.local") -> MagicMock:
     node.ssh_key_enc = None
     node.ssh_host_key = None
     node.node_token_hash = None
+    node.salt_master_id = None  # no master FK → fallback path (#520)
     return node
+
+
+def _make_run_async(status: str = "successful", rc: int = 0):
+    """Return a fake (thread, runner) pair for ansible_runner.run_async."""
+    fake_runner = MagicMock()
+    fake_runner.status = status
+    fake_runner.rc = rc
+
+    fake_thread = MagicMock()
+    fake_thread.is_alive.return_value = False  # loop exits immediately
+
+    return (fake_thread, fake_runner)
 
 
 def _make_db_ctx(node: MagicMock) -> MagicMock:
@@ -95,7 +110,7 @@ def _make_db_ctx(node: MagicMock) -> MagicMock:
 
 
 def test_bootstrap_status_is_terminal_when_ansible_raises(tmp_path):
-    """If ansible_runner.run raises unexpectedly, bootstrap_status must be 'failed', not 'bootstrapping'."""
+    """If ansible_runner.run_async raises unexpectedly, bootstrap_status must be 'failed', not 'bootstrapping'."""
     from fleet_platform.workers.ansible_tasks import bootstrap_node
 
     node_id = uuid.uuid4()
@@ -115,6 +130,7 @@ def test_bootstrap_status_is_terminal_when_ansible_raises(tmp_path):
             result = MagicMock()
             result.scalar_one_or_none.return_value = node
             result.scalar_one.return_value = node
+            result.scalars.return_value.first.return_value = None  # no SaltMaster row
             return result
 
         session.execute.side_effect = execute_side_effect
@@ -141,7 +157,10 @@ def test_bootstrap_status_is_terminal_when_ansible_raises(tmp_path):
             "fleet_platform.workers.ansible_tasks._get_group_credentials",
             return_value=("admin", "pw", None, "password"),
         ),
-        patch("fleet_platform.workers.ansible_tasks.ansible_runner.run", side_effect=RuntimeError("simulated crash")),
+        patch(
+            "fleet_platform.workers.ansible_tasks.ansible_runner.run_async",
+            side_effect=RuntimeError("simulated crash"),
+        ),
         patch("fleet_platform.workers.ansible_tasks.secrets.token_urlsafe", return_value="FAKE_TOKEN"),
         patch("fleet_platform.workers.ansible_tasks.hash_password", return_value="hashed"),
     ):
@@ -164,7 +183,7 @@ def test_bootstrap_status_is_terminal_when_ansible_raises(tmp_path):
 
 
 def test_bootstrap_error_is_set_when_ansible_raises(tmp_path):
-    """If ansible_runner.run raises, bootstrap_error must be a non-empty string."""
+    """If ansible_runner.run_async raises, bootstrap_error must be a non-empty string."""
     from fleet_platform.workers.ansible_tasks import bootstrap_node
 
     node_id = uuid.uuid4()
@@ -182,6 +201,7 @@ def test_bootstrap_error_is_set_when_ansible_raises(tmp_path):
             result = MagicMock()
             result.scalar_one_or_none.return_value = node
             result.scalar_one.return_value = node
+            result.scalars.return_value.first.return_value = None  # no SaltMaster row
             return result
 
         session.execute.side_effect = execute_side_effect
@@ -203,8 +223,8 @@ def test_bootstrap_error_is_set_when_ansible_raises(tmp_path):
             return_value=("admin", "pw", None, "password"),
         ),
         patch(
-            "fleet_platform.workers.ansible_tasks.ansible_runner.run",
-            side_effect=OSError("/srv/salt/pillar: Permission denied"),
+            "fleet_platform.workers.ansible_tasks.ansible_runner.run_async",
+            side_effect=OSError("simulated IO error"),
         ),
         patch("fleet_platform.workers.ansible_tasks.secrets.token_urlsafe", return_value="FAKE_TOKEN"),
         patch("fleet_platform.workers.ansible_tasks.hash_password", return_value="hashed"),
@@ -224,10 +244,7 @@ def test_no_permission_error_when_pillar_dir_missing():
     node_id = uuid.uuid4()
     node = _make_node(node_id)
 
-    fake_result = MagicMock()
-    fake_result.status = "successful"
-    fake_result.rc = 0
-    fake_result.events = []
+    fake_thread, fake_runner = _make_run_async(status="successful", rc=0)
 
     def fake_get_sync_db():
         run_row = MagicMock()
@@ -241,6 +258,7 @@ def test_no_permission_error_when_pillar_dir_missing():
             result = MagicMock()
             result.scalar_one_or_none.return_value = node
             result.scalar_one.return_value = node
+            result.scalars.return_value.first.return_value = None  # no SaltMaster row
             return result
 
         session.execute.side_effect = execute_side_effect
@@ -263,7 +281,10 @@ def test_no_permission_error_when_pillar_dir_missing():
             "fleet_platform.workers.ansible_tasks._get_group_credentials",
             return_value=("admin", "pw", None, "password"),
         ),
-        patch("fleet_platform.workers.ansible_tasks.ansible_runner.run", return_value=fake_result),
+        patch(
+            "fleet_platform.workers.ansible_tasks.ansible_runner.run_async",
+            return_value=(fake_thread, fake_runner),
+        ),
         patch("fleet_platform.workers.ansible_tasks.secrets.token_urlsafe", return_value="FAKE_TOKEN"),
         patch("fleet_platform.workers.ansible_tasks.hash_password", return_value="hashed"),
     ):

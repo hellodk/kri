@@ -1,10 +1,12 @@
 # fleet_platform/workers/ansible_tasks.py
 """Celery tasks for Ansible-based node bootstrap."""
 
+import asyncio
 import logging
 import re
 import secrets
 import tempfile
+import threading as _threading
 import time
 import uuid as _uuid
 from datetime import UTC, datetime
@@ -19,9 +21,12 @@ from fleet_platform.db.session import get_sync_db
 from fleet_platform.models.bootstrap_run import BootstrapRun
 from fleet_platform.models.node import Node
 from fleet_platform.models.platform_setting import PlatformSetting
+from fleet_platform.models.salt_master import SaltMaster
+from fleet_platform.services.salt_master_probe import run_probe
 from fleet_platform.services.ssh_keypair import get_controller_pubkey
 from fleet_platform.services.task_lock import unique_task
 from fleet_platform.workers.celery_app import celery_app
+from fleet_platform.workers.playbook_tasks import _append_capped
 
 logger = logging.getLogger(__name__)
 
@@ -29,6 +34,10 @@ _PLAYBOOKS_DIR = Path(__file__).parent.parent.parent / "playbooks"
 _DEFAULT_PILLAR_DIR = Path("/srv/salt/pillar")
 _DEFAULT_KRI_DIR = Path.home() / ".kri"
 _BOOTSTRAP_TIMEOUT_SECONDS = 600  # 10 minutes
+_LOG_BATCH_INTERVAL = 30  # seconds between incremental log DB writes during streaming (#498)
+# Cap stored bootstrap stdout at 2 MB — same limit as playbook_tasks (#369).
+_MAX_STDOUT_BYTES = 2 * 1024 * 1024
+_TRUNCATION_SENTINEL = "\n\n[output truncated at 2 MB — full log not retained]"
 
 _MINION_ID_RE = re.compile(r"^[a-zA-Z0-9._-]{1,128}$")
 
@@ -196,7 +205,28 @@ def bootstrap_node(self, node_id: str, target_ip: str, ssh_username: str | None 
         node.bootstrap_error = None
         db.commit()
 
-        salt_master, _settings_ssh_user, _settings_ssh_password, controller_pubkey = _get_bootstrap_settings(db)
+        salt_master_settings, _settings_ssh_user, _settings_ssh_password, controller_pubkey = _get_bootstrap_settings(
+            db
+        )
+
+        # A) Resolve the node's salt-master from the DB (#520, epic #523 phase 5).
+        # Priority: node.salt_master_id FK → default SaltMaster row → settings fallback.
+        master_obj: SaltMaster | None = None
+        if node.salt_master_id:
+            master_obj = db.execute(select(SaltMaster).where(SaltMaster.id == node.salt_master_id)).scalars().first()
+        if master_obj is None:
+            master_obj = db.execute(select(SaltMaster).where(SaltMaster.is_default.is_(True))).scalars().first()
+
+        # Capture attributes while in-session (expire_on_commit=False keeps them readable after).
+        if master_obj is not None:
+            master_address: str = master_obj.address
+            master_status: str = master_obj.status
+            master_name: str = master_obj.name
+        else:
+            # No SaltMaster row at all — fall back to the legacy platform setting.
+            master_address = salt_master_settings
+            master_status = "healthy"  # skip gate; preserve current behaviour
+            master_name = ""
 
         # Per-node stored credentials
         node_user, node_password, node_auth_mode = _get_node_credentials(node)
@@ -243,12 +273,52 @@ def bootstrap_node(self, node_id: str, target_ip: str, ssh_username: str | None 
         node_minion_id = node.minion_id
         node_ssh_host_key = node.ssh_host_key
 
+    # B) Health gate — run before spending any tokens or launching ansible (#520).
+    # Only applies when a SaltMaster row was resolved (master_obj is not None).
+    if master_obj is not None:
+        if master_status == "unknown":
+            # Never been polled — do a one-shot probe so we don't blindly launch ansible
+            # against an unverified master.
+            logger.info(
+                "bootstrap_node: probing master '%s' (status=unknown) before bootstrap node_id=%s",
+                master_name,
+                node_id,
+            )
+            probe_result = asyncio.run(run_probe(master_obj))
+            fresh_status = probe_result["status"]
+            # Persist the probe result back to the SaltMaster row.
+            with get_sync_db() as _mdb:
+                _m = _mdb.execute(select(SaltMaster).where(SaltMaster.id == master_obj.id)).scalars().first()
+                if _m:
+                    _m.status = fresh_status
+                    _m.last_checked_at = datetime.now(UTC)
+                    _m.last_error = (
+                        "; ".join(c["detail"] for c in probe_result["checks"] if c["status"] == "fail") or None
+                    )
+                    _m.checks = list(probe_result["checks"])  # type: ignore[assignment]
+                _mdb.commit()
+            master_status = fresh_status
+
+        if master_status == "unreachable":
+            _err = f"Salt-master '{master_name}' is unreachable — fix it in Settings → Salt Masters and retry."
+            logger.warning("bootstrap_node: %s node_id=%s", _err, node_id)
+            with get_sync_db() as _fdb:
+                _fn = _fdb.execute(select(Node).where(Node.id == node_uuid)).scalar_one_or_none()
+                if _fn:
+                    _fn.bootstrap_status = "failed"
+                    _fn.bootstrap_error = _err
+                # Finalise any running BootstrapRun created before this gate (none yet — gate
+                # runs before step 3 — so nothing to close; the finally block covers orphans).
+                _fdb.commit()
+            return {"status": "error", "reason": _err}
+        # healthy / degraded → proceed
+
     # 2. Generate fresh node token — delivered to the minion via ansible-runner extravars
     # (node_token + ingest_url).  The local salt-pillar write was removed in #509:
     # the salt-master moved native to mm1 and the shared salt-pillar Docker volume no
     # longer exists.  Token delivery via extravars was always the correct path.
     raw_token = secrets.token_urlsafe(32)
-    ingest_url = f"http://{salt_master}/api/v1/ingest"
+    ingest_url = f"http://{master_address}/api/v1/ingest"
 
     # 3. Update the stored token hash AND create a BootstrapRun record
     with get_sync_db() as db:
@@ -264,18 +334,16 @@ def bootstrap_node(self, node_id: str, target_ip: str, ssh_username: str | None 
         db.commit()
         run_id = run.id
 
-    # 4. Run Ansible with static inventory and capture stdout
+    # 4. Run Ansible with static inventory and capture stdout (streaming, #498)
     stdout_lines: list[str] = []
-    last_task: str = ""
-    result = None  # pre-initialise so SoftTimeLimitExceeded handler never NameErrors (#444)
+    _trunc_ref: dict = {"size": 0, "truncated": False}
+    _last_task_ref: dict = {"task": ""}
+    thread = None  # pre-initialise so SoftTimeLimitExceeded handler never NameErrors (#444)
+    runner = None  # same reason
     bootstrap_error: str | None = None
     rc_display: int | str = "N/A"
     full_stdout: str = ""
     # node_minion_id and node_ssh_host_key captured inside first db session above (#462)
-    # Time-based batching for incremental log DB writes (Issue #133).
-    # A single DB session is opened at most every 30 s during the event loop,
-    # rather than opening a new session per task or per N lines.
-    _LOG_BATCH_INTERVAL = 30  # seconds
     last_db_write: float = time.time()
     _wrote_terminal_bootstrap = False  # sentinel: did step 6 complete? (#445 orphan guard)
 
@@ -333,12 +401,31 @@ def bootstrap_node(self, node_id: str, target_ip: str, ssh_username: str | None 
                 password_extravars["ansible_ssh_pass"] = ssh_password
                 password_extravars["ansible_become_password"] = ssh_password
 
-            result = ansible_runner.run(
+            # C) Live log streaming via run_async + event_handler (#498).
+            # ansible-runner's runner.events generator BLOCKS until the run finishes,
+            # so polling it never streams mid-run.  run_async pushes events through
+            # event_handler on the runner thread; the main loop flushes to the DB
+            # every _LOG_BATCH_INTERVAL seconds so the UI sees logs grow live.
+            _buf_lock = _threading.Lock()
+
+            def _event_handler(event: dict) -> bool:
+                et = event.get("event", "")
+                if et in ("runner_on_start", "playbook_on_task_start"):
+                    t = event.get("event_data", {}).get("task", "") or event.get("event_data", {}).get("task_path", "")
+                    if t:
+                        _last_task_ref["task"] = t
+                msg = event.get("stdout", "")
+                if msg:
+                    with _buf_lock:
+                        _append_capped(stdout_lines, msg, _trunc_ref)
+                return True
+
+            thread, runner = ansible_runner.run_async(
                 private_data_dir=tmpdir,
                 playbook=str(_PLAYBOOKS_DIR / "bootstrap_mac_mini.yml"),
                 inventory=str(inv_path),
                 extravars={
-                    "salt_master_address": salt_master,
+                    "salt_master_address": master_address,
                     "minion_id": node_minion_id,
                     "controller_pubkey": controller_pubkey,
                     "ingest_url": ingest_url,
@@ -351,40 +438,27 @@ def bootstrap_node(self, node_id: str, target_ip: str, ssh_username: str | None 
                     # file is bind-mounted from the host with wrong ownership (UID mismatch
                     # between host user and container root causes "Bad owner or permissions")
                     "ANSIBLE_SSH_ARGS": ssh_args,
+                    # Force ANSI colour codes into event["stdout"] even without a TTY (#498).
+                    "ANSIBLE_FORCE_COLOR": "1",
+                    # Unbuffered subprocess output → events stream without buffering delay.
+                    "PYTHONUNBUFFERED": "1",
                 },
-                quiet=False,
-                rotate_artifacts=1,
+                event_handler=_event_handler,
+                quiet=True,  # DB is the sole sink — don't echo to worker stdout
+                rotate_artifacts=0,  # 0 disables rotation (None causes TypeError in runner)
                 timeout=_BOOTSTRAP_TIMEOUT_SECONDS,
             )
-            if known_hosts_file:
-                try:
-                    _os.unlink(known_hosts_file)
-                except OSError:
-                    pass
-            for event in result.events:
-                event_type = event.get("event", "")
-                logger.debug("bootstrap_node: ansible event type=%s node_id=%s", event_type, node_id)
 
-                # Track last executing task name for progress + failure diagnostics.
-                # Task name is stored in-memory; the single time-batched write below
-                # will flush it along with accumulated log lines (Issue #133: no
-                # extra DB session per task event).
-                if event_type in ("runner_on_start", "playbook_on_task_start"):
-                    event_data = event.get("event_data", {})
-                    task_name = event_data.get("task", "") or event_data.get("task_path", "")
-                    if task_name:
-                        last_task = task_name
-
-                msg = event.get("stdout", "")
-                if msg:
-                    stdout_lines.append(msg)
-
-                # Flush accumulated log lines to DB at most once every 30 seconds so
-                # the UI can poll for progress without exhausting the connection pool
-                # (Issue #133: replaces per-task and per-10-lines session opens).
+            # Non-blocking flush loop: event_handler fills stdout_lines on the runner
+            # thread; the main thread snapshots + flushes to DB every _LOG_BATCH_INTERVAL
+            # seconds so the UI streams mid-run (#498).  Does NOT touch runner.events.
+            while thread.is_alive():
                 now = time.time()
                 if now - last_db_write >= _LOG_BATCH_INTERVAL:
-                    joined = _scrub_token("\n".join(stdout_lines), raw_token)
+                    with _buf_lock:
+                        snapshot = list(stdout_lines)
+                    last_task = _last_task_ref["task"]
+                    joined = _scrub_token("\n".join(snapshot), raw_token)
                     with get_sync_db() as _db:
                         _n = _db.execute(select(Node).where(Node.id == node_uuid)).scalar_one_or_none()
                         _run = _db.execute(select(BootstrapRun).where(BootstrapRun.id == run_id)).scalar_one_or_none()
@@ -396,17 +470,27 @@ def bootstrap_node(self, node_id: str, target_ip: str, ssh_username: str | None 
                             _run.ansible_stdout = joined
                         _db.commit()
                     last_db_write = now
+                time.sleep(1)
+            thread.join()
+
+            if known_hosts_file:
+                try:
+                    _os.unlink(known_hosts_file)
+                except OSError:
+                    pass
 
         # 5. Detect common failure modes from stdout
         full_stdout = "\n".join(stdout_lines)
+        last_task = _last_task_ref["task"]
         # P3-2: guard rc=None so it never appears raw in error messages
-        rc_display = result.rc if result.rc is not None else "N/A"
+        rc_display = runner.rc if runner is not None and runner.rc is not None else "N/A"
+        final_status = runner.status if runner is not None else "error"
 
-        if result.status == "timeout":
+        if final_status == "timeout":
             bootstrap_error = (
                 f"Timed out after 10 minutes. Last task: {last_task}" if last_task else "Timed out after 10 minutes."
             )
-        elif result.status != "successful" or result.rc != 0:
+        elif final_status != "successful" or runner.rc != 0:
             if "UNREACHABLE" in full_stdout:
                 bootstrap_error = f"SSH unreachable: check IP {target_ip} and SSH credentials in Settings"
             elif "Authentication failure" in full_stdout or "Permission denied" in full_stdout:
@@ -416,12 +500,12 @@ def bootstrap_node(self, node_id: str, target_ip: str, ssh_username: str | None 
             elif "Could not match supplied host pattern" in full_stdout:
                 bootstrap_error = "Inventory misconfiguration — check minion ID format"
             else:
-                bootstrap_error = f"ansible rc={rc_display} status={result.status}"
+                bootstrap_error = f"ansible rc={rc_display} status={final_status}"
 
             logger.error(
                 "bootstrap_node: ansible failure rc=%s status=%s last_task=%r node_id=%s",
                 rc_display,
-                result.status,
+                final_status,
                 last_task,
                 node_id,
             )
@@ -429,20 +513,22 @@ def bootstrap_node(self, node_id: str, target_ip: str, ssh_username: str | None 
         # 6. Update bootstrap status + logs; finalize the BootstrapRun record
         with get_sync_db() as db:
             node = db.execute(select(Node).where(Node.id == node_uuid)).scalar_one()
-            if result.status == "successful" and result.rc == 0:
+            if final_status == "successful" and runner is not None and runner.rc == 0:
                 node.bootstrap_status = "completed"
                 node.bootstrap_error = None
             else:
                 node.bootstrap_status = "failed"
                 node.bootstrap_error = bootstrap_error
-            node.bootstrap_logs = _scrub_token(full_stdout, raw_token) or f"rc={rc_display} status={result.status}"
+            node.bootstrap_logs = _scrub_token(full_stdout, raw_token) or f"rc={rc_display} status={final_status}"
 
             run_record: BootstrapRun | None = db.execute(
                 select(BootstrapRun).where(BootstrapRun.id == run_id)
             ).scalar_one_or_none()
             if run_record:
                 run_record.finished_at = datetime.now(UTC)
-                run_record.status = "completed" if result.status == "successful" and result.rc == 0 else "failed"
+                run_record.status = (
+                    "completed" if final_status == "successful" and runner is not None and runner.rc == 0 else "failed"
+                )
                 run_record.ansible_stdout = node.bootstrap_logs
                 run_record.error = bootstrap_error
 
@@ -493,7 +579,7 @@ def bootstrap_node(self, node_id: str, target_ip: str, ssh_username: str | None 
                     _run.finished_at = datetime.now(UTC)
                 db.commit()
 
-    return {"status": result.status if result else "error", "rc": rc_display, "node_id": node_id}
+    return {"status": runner.status if runner is not None else "error", "rc": rc_display, "node_id": node_id}
 
 
 @celery_app.task(
