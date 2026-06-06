@@ -1,0 +1,67 @@
+import { api } from './client'
+
+/** Response — never includes api_password or api_password_enc. */
+export interface SaltMaster {
+  id: string
+  name: string
+  enabled: boolean
+  is_default: boolean
+  address: string
+  publish_port: number
+  ret_port: number
+  control_mode: string
+  api_url: string | null
+  api_user: string | null
+  /** api_password_enc intentionally excluded from response */
+  api_eauth: string | null
+  token_delivery: string
+  status: string
+  last_checked_at: string | null
+  last_error: string | null
+  checks: Record<string, unknown> | null
+  created_at: string
+  updated_at: string
+}
+
+/** Create payload — api_password is write-only plaintext. */
+export interface SaltMasterCreate {
+  name: string
+  address: string
+  enabled?: boolean
+  is_default?: boolean
+  publish_port?: number
+  ret_port?: number
+  control_mode?: string
+  api_url?: string | null
+  api_user?: string | null
+  /** Write-only: stored encrypted, never returned. */
+  api_password?: string | null
+  api_eauth?: string | null
+  token_delivery?: string
+}
+
+/** Update payload — all fields optional. */
+export interface SaltMasterUpdate {
+  name?: string
+  address?: string
+  enabled?: boolean
+  is_default?: boolean
+  publish_port?: number
+  ret_port?: number
+  control_mode?: string
+  api_url?: string | null
+  api_user?: string | null
+  /** Write-only: stored encrypted, never returned. */
+  api_password?: string | null
+  api_eauth?: string | null
+  token_delivery?: string
+}
+
+export const saltMastersApi = {
+  list: () => api.get<SaltMaster[]>('/api/v1/salt-masters'),
+  get: (id: string) => api.get<SaltMaster>(`/api/v1/salt-masters/${id}`),
+  create: (body: SaltMasterCreate) => api.post<SaltMaster>('/api/v1/salt-masters', body),
+  update: (id: string, body: SaltMasterUpdate) =>
+    api.patch<SaltMaster>(`/api/v1/salt-masters/${id}`, body),
+  remove: (id: string) => api.delete(`/api/v1/salt-masters/${id}`),
+}

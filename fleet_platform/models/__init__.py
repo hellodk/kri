@@ -26,6 +26,7 @@ from fleet_platform.models.pending_action import PendingAction
 from fleet_platform.models.platform_setting import PlatformSetting
 from fleet_platform.models.playbook_catalog import PlaybookCatalog, PlaybookFavorite
 from fleet_platform.models.provisioning import ProvisioningProfile
+from fleet_platform.models.salt_master import SaltMaster
 from fleet_platform.models.sbom import SBOMComponent, SBOMScan
 from fleet_platform.models.security import LicenseFinding, VulnerabilityFinding
 from fleet_platform.models.ssh_session import SecurityEvent, SessionRecording, SSHSession
@@ -75,4 +76,5 @@ __all__ = [
     "ProvisioningProfile",
     "VulnerabilityFinding",
     "LicenseFinding",
+    "SaltMaster",
 ]
