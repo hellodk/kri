@@ -59,14 +59,14 @@ repos:
 
       - id: tsc
         name: tsc type check (frontend)
-        entry: bash -c 'cd frontend && npx tsc -b --pretty false'
+        entry: bash -c 'cd frontend && pnpm exec tsc -b --pretty false'
         language: system
         files: ^frontend/src/
         pass_filenames: false
 
       - id: eslint
         name: eslint (frontend)
-        entry: bash -c 'cd frontend && npx eslint .'
+        entry: bash -c 'cd frontend && pnpm exec eslint .'
         language: system
         files: ^frontend/src/.*\.(ts|tsx)$
         pass_filenames: false
