@@ -1,0 +1,106 @@
+---
+# playbooks/install_salt_master_linux.yml
+#
+# Install salt-master natively on a Linux host (Debian/Ubuntu or RHEL/CentOS).
+# Installs via the official SaltProject apt/yum repository — requires internet
+# access on the target host (or a local mirror).
+#
+# ─── Usage ───────────────────────────────────────────────────────────────────
+#
+#   # Interactive (kri will prompt for target and detect OS):
+#   kri saltmaster install
+#
+#   # Direct:
+#   ansible-playbook playbooks/install_salt_master_linux.yml \
+#     -i <target-ip>, \
+#     -e "target_host=<target-ip>" \
+#     -e "ansible_user=dk" \
+#     -e "kri_salt_api_password=<secure-password>"
+#
+# ─── Variables ───────────────────────────────────────────────────────────────
+#
+#   target_host           (required) IP or hostname of the target Linux host
+#   ansible_user          SSH username on the target (default: dk)
+#   kri_salt_api_password Password for the krisalt PAM user (default: changeme)
+#   kri_ingest_base_url   kri API base URL for minion heartbeats
+#
+# ─── After running ───────────────────────────────────────────────────────────
+#
+#   1. Open the kri UI → Settings → Salt Masters and add the new master:
+#        URL:      https://<target_host>:8080
+#        User:     krisalt
+#        Password: <kri_salt_api_password>
+#
+#   2. Update minion configs on all fleet nodes (or re-run bootstrap):
+#        /etc/salt/minion → master: <target_host>
+#
+#   3. Accept minion keys once they reconnect:
+#        kri saltmaster keys
+#
+# ─────────────────────────────────────────────────────────────────────────────
+
+- name: Pre-flight — validate target host is defined
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  tasks:
+    - name: Fail if target_host not provided
+      fail:
+        msg: |
+          target_host is required.
+          Run:  ansible-playbook playbooks/install_salt_master_linux.yml -e target_host=<IP>
+          Or:   kri saltmaster install
+      when: target_host is not defined or target_host == ''
+
+
+- name: Install and configure salt-master on Linux
+  hosts: "{{ target_host }}"
+  gather_facts: true
+  become: true
+
+  vars:
+    ansible_user: "{{ ansible_user | default('dk') }}"
+    ansible_become_method: sudo
+    ansible_ssh_common_args: >-
+      -o StrictHostKeyChecking=no
+      -o ConnectTimeout=15
+      -o ServerAliveInterval=30
+      -o ServerAliveCountMax=6
+
+    # Salt-master listens on all interfaces — Tailscale overlay provides the security layer
+    salt_master_interface: "0.0.0.0"
+
+    # kri ingest URL: the kri API container's Tailscale IP
+    # Override with -e kri_ingest_base_url=http://<kri-server>/api/v1/ingest
+    kri_ingest_base_url: "http://100.89.50.27/api/v1/ingest"
+
+  roles:
+    - salt_master
+
+  post_tasks:
+    - name: Verify salt-master service is active
+      shell: systemctl is-active salt-master || true
+      register: salt_master_active
+      changed_when: false
+
+    - name: Print next steps
+      debug:
+        msg: |
+          ╔══════════════════════════════════════════════════════════════╗
+          ║  salt-master installed on {{ target_host }} (Linux)
+          ╠══════════════════════════════════════════════════════════════╣
+          ║
+          ║  1. Add this master in the kri UI:
+          ║       Settings → Salt Masters → Add
+          ║         URL:      https://{{ target_host }}:{{ salt_api_port | default(8080) }}
+          ║         User:     {{ salt_api_user | default('krisalt') }}
+          ║         Password: <kri_salt_api_password>
+          ║
+          ║  2. Update minion configs on ALL fleet nodes to point here:
+          ║       /etc/salt/minion → master: {{ target_host }}
+          ║     OR re-bootstrap each node (will pick up SALT_MASTER_ADDRESS).
+          ║
+          ║  3. Accept minion keys after they reconnect:
+          ║       kri saltmaster keys     (accept via kri UI)
+          ║
+          ╚══════════════════════════════════════════════════════════════╝
