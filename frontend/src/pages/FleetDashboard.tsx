@@ -7,6 +7,8 @@ import { api } from '../api/client'
 import { iosTrackingApi } from '../api/iosTracking'
 import { playbooksApi } from '../api/playbooks'
 import { ansibleApi } from '../api/ansible'
+import { saltMastersApi } from '../api/saltMasters'
+import { fleetActionsBlocked } from '../lib/saltMasterGuard'
 import { useAuthStore } from '../stores/authStore'
 import { useToastStore } from '../stores/toastStore'
 import { StatusBadge } from '../components/StatusBadge'
@@ -838,6 +840,14 @@ export function FleetDashboard() {
   const qc = useQueryClient()
   const toast = useToastStore((s) => s.add)
 
+  const { data: saltMasters } = useQuery({
+    queryKey: ['salt-masters'],
+    queryFn: saltMastersApi.list,
+    staleTime: 60_000,
+    refetchInterval: 120_000,
+  })
+  const mastersBlocked = fleetActionsBlocked(saltMasters)
+
   const { data: overview, isLoading: ovLoading } = useQuery({
     queryKey: ['fleet-overview'],
     queryFn: fleetApi.overview,
@@ -1023,7 +1033,9 @@ export function FleetDashboard() {
           )}
           <button
             onClick={() => setShowBootstrap(true)}
-            className="px-4 py-2 bg-brand-600 text-white text-sm font-medium rounded-lg hover:bg-brand-700 shadow-sm"
+            disabled={mastersBlocked}
+            title={mastersBlocked ? 'No enabled salt-master — configure one in Settings → Salt Masters' : undefined}
+            className="px-4 py-2 bg-brand-600 text-white text-sm font-medium rounded-lg hover:bg-brand-700 shadow-sm disabled:opacity-40 disabled:cursor-not-allowed"
           >
             + Bootstrap Node
           </button>
@@ -1215,12 +1227,21 @@ export function FleetDashboard() {
                 <p className="text-sm text-gray-500 max-w-sm mx-auto">
                   Bootstrap a Mac Mini to get started. Make sure Remote Login (SSH) is enabled on the device first.
                 </p>
-                <button
-                  onClick={() => setShowBootstrap(true)}
-                  className="px-6 py-2.5 bg-brand-600 text-white text-sm font-medium rounded-lg hover:bg-brand-700 shadow-sm"
-                >
-                  Bootstrap your first node →
-                </button>
+                {mastersBlocked ? (
+                  <Link
+                    to="/settings?tab=Salt Masters"
+                    className="inline-block px-6 py-2.5 bg-amber-700 text-white text-sm font-medium rounded-lg hover:bg-amber-800 shadow-sm"
+                  >
+                    Configure a salt-master first →
+                  </Link>
+                ) : (
+                  <button
+                    onClick={() => setShowBootstrap(true)}
+                    className="px-6 py-2.5 bg-brand-600 text-white text-sm font-medium rounded-lg hover:bg-brand-700 shadow-sm"
+                  >
+                    Bootstrap your first node →
+                  </button>
+                )}
               </div>
             ) : (
               <>
