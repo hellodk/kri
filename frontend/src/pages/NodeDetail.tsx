@@ -31,6 +31,7 @@ import { formatDistanceToNow, differenceInDays, parseISO } from 'date-fns'
 import { formatIST, formatISTDate, formatChartDate } from '../utils/time'
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts'
 import { useToastStore } from '../stores/toastStore'
+import { useAuthStore } from '../stores/authStore'
 import { api } from '../api/client'
 import { saltOpsApi } from '../api/saltOps'
 import type { Node } from '../types'
@@ -515,6 +516,8 @@ export function NodeDetail() {
   const [quickTaskOutput, setQuickTaskOutput] = useState<{ status: string; stdout?: string; stderr?: string; reason?: string } | null>(null)
   const qc = useQueryClient()
   const toast = useToastStore((s) => s.add)
+  const currentUser = useAuthStore((s) => s.user)
+  const isAdmin = currentUser?.role === 'admin'
 
   const { data: node, isLoading, isError, refetch } = useQuery({
     queryKey: ['node', nodeId],
@@ -837,6 +840,16 @@ export function NodeDetail() {
     onError: (e: Error) => toast(e.message, 'error'),
   })
 
+  // #560 — promote this node to salt-master
+  const promoteMutation = useMutation({
+    mutationFn: () => saltMastersApi.promoteFromNode(nodeId!),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['salt-masters'] })
+      toast('Node promoted to salt-master. Go to Settings → Salt Masters to provision it.', 'success')
+    },
+    onError: (e: Error) => toast(e.message, 'error'),
+  })
+
   async function checkJenkinsNow() {
     if (!nodeId) return
     setCheckingJenkins(true)
@@ -1109,6 +1122,21 @@ export function NodeDetail() {
               title={!node.bootstrap_ip ? 'Bootstrap node first to get its IP' : `VNC into ${node.hostname} (${node.status})`}
             >
               VNC
+            </button>
+          )}
+          {/* #560 — Promote to salt-master (admin only; hidden when already a master) */}
+          {isAdmin && !nodeMaster && (
+            <button
+              onClick={() => promoteMutation.mutate()}
+              disabled={promoteMutation.isPending || !node.bootstrap_ip}
+              title={
+                !node.bootstrap_ip
+                  ? 'Bootstrap the node first to obtain a reachable IP'
+                  : 'Promote this node to also act as a salt-master'
+              }
+              className="px-3 py-2 text-sm font-medium rounded-lg border border-indigo-300 bg-indigo-50 text-indigo-700 hover:bg-indigo-100 disabled:opacity-40 shadow-sm transition-colors"
+            >
+              {promoteMutation.isPending ? 'Promoting…' : '⬆ Promote to Master'}
             </button>
           )}
           <Link to="/fleet" className="text-sm text-brand-600 hover:underline">← Fleet</Link>
