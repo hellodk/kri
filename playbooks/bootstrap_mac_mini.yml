@@ -269,6 +269,12 @@
         group: wheel
         mode: "0644"
       become: true
+      # Pre-seed only when a master pubkey is supplied (#549). Omitted in
+      # multi-master HA: the minion TOFU-fetches each master's key on first
+      # connect and its key is accepted on the master (kri Salt Keys UI /
+      # salt-key -a / auto_accept). Without this the minion still installs,
+      # configures, and connects — it just pends for key acceptance.
+      when: salt_master_pub_key is defined
 
     # ── Start or restart salt-minion ─────────────────────────────────────────
     - name: Load salt-minion launchd service
