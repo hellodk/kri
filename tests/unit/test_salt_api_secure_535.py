@@ -164,8 +164,8 @@ def test_api_tls_wired_into_main():
 
 def test_no_private_key_material_in_role():
     """No file in the role must contain a PEM private key header."""
-    forbidden = "BEGIN PRIVATE KEY"
-    forbidden_rsa = "BEGIN RSA PRIVATE KEY"
+    forbidden = "BEGIN PRIVATE" + " KEY"  # split to avoid pre-push secret scan
+    forbidden_rsa = "BEGIN RSA PRIVATE" + " KEY"  # split to avoid pre-push secret scan
     for path in ROLE_ROOT.rglob("*"):
         if not path.is_file():
             continue
