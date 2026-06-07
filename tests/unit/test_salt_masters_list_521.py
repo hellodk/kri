@@ -36,6 +36,8 @@ def _make_master(**kwargs) -> SimpleNamespace:
         api_password_enc="$fernet$encrypted",
         api_eauth="pam",
         token_delivery="ingest",
+        tls_verify=False,
+        auto_accept=True,
         status="healthy",
         last_checked_at=datetime.now(UTC),
         last_error=None,

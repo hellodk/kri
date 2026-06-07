@@ -106,7 +106,9 @@ def _check_tcp(address: str, port: int, check_name: str) -> CheckResult:
         )
 
 
-def _check_salt_api_auth(api_url: str, api_user: str, api_password: str, api_eauth: str) -> CheckResult:
+def _check_salt_api_auth(
+    api_url: str, api_user: str, api_password: str, api_eauth: str, tls_verify: bool = False
+) -> CheckResult:
     """POST to salt-api /run with auth params; pass if 200 + token returned."""
     start = time.monotonic()
     try:
@@ -123,6 +125,7 @@ def _check_salt_api_auth(api_url: str, api_user: str, api_password: str, api_eau
             f"{api_url}/run",
             json=payload,
             timeout=_API_TIMEOUT,
+            verify=tls_verify,
         )
         if resp.status_code == 401:
             return CheckResult(
@@ -168,7 +171,9 @@ def _check_salt_api_auth(api_url: str, api_user: str, api_password: str, api_eau
         )
 
 
-def _check_key_store(api_url: str, api_user: str, api_password: str, api_eauth: str) -> CheckResult:
+def _check_key_store(
+    api_url: str, api_user: str, api_password: str, api_eauth: str, tls_verify: bool = False
+) -> CheckResult:
     """Run key.list_all via runner; distinguish permission errors from empty results."""
     start = time.monotonic()
     try:
@@ -185,6 +190,7 @@ def _check_key_store(api_url: str, api_user: str, api_password: str, api_eauth: 
             f"{api_url}/run",
             json=payload,
             timeout=_API_TIMEOUT,
+            verify=tls_verify,
         )
         if resp.status_code in (401, 403):
             return CheckResult(
@@ -235,7 +241,9 @@ def _check_key_store(api_url: str, api_user: str, api_password: str, api_eauth: 
         )
 
 
-def _check_version(api_url: str, api_user: str, api_password: str, api_eauth: str) -> CheckResult:
+def _check_version(
+    api_url: str, api_user: str, api_password: str, api_eauth: str, tls_verify: bool = False
+) -> CheckResult:
     start = time.monotonic()
     try:
         payload: list[dict[str, Any]] = [
@@ -251,6 +259,7 @@ def _check_version(api_url: str, api_user: str, api_password: str, api_eauth: st
             f"{api_url}/run",
             json=payload,
             timeout=_API_TIMEOUT,
+            verify=tls_verify,
         )
         resp.raise_for_status()
         data = resp.json()
@@ -278,7 +287,9 @@ def _check_version(api_url: str, api_user: str, api_password: str, api_eauth: st
         )
 
 
-def _check_minions_up(api_url: str, api_user: str, api_password: str, api_eauth: str) -> CheckResult:
+def _check_minions_up(
+    api_url: str, api_user: str, api_password: str, api_eauth: str, tls_verify: bool = False
+) -> CheckResult:
     start = time.monotonic()
     try:
         payload: list[dict[str, Any]] = [
@@ -294,6 +305,7 @@ def _check_minions_up(api_url: str, api_user: str, api_password: str, api_eauth:
             f"{api_url}/run",
             json=payload,
             timeout=_API_TIMEOUT,
+            verify=tls_verify,
         )
         resp.raise_for_status()
         data = resp.json()
@@ -396,6 +408,7 @@ async def run_probe(master: SaltMaster) -> ProbeResult:
     api_url: str = master.api_url or ""
     api_user: str = master.api_user or ""
     api_eauth: str = master.api_eauth or "pam"
+    tls_verify: bool = getattr(master, "tls_verify", False)
 
     checks: list[CheckResult] = []
 
@@ -408,7 +421,7 @@ async def run_probe(master: SaltMaster) -> ProbeResult:
 
     # 3. salt-api auth
     if api_url and api_user:
-        auth_result = _check_salt_api_auth(api_url, api_user, api_password, api_eauth)
+        auth_result = _check_salt_api_auth(api_url, api_user, api_password, api_eauth, tls_verify=tls_verify)
     else:
         auth_result = CheckResult(
             check="salt_api_auth",
@@ -445,9 +458,9 @@ async def run_probe(master: SaltMaster) -> ProbeResult:
             )
         )
     else:
-        checks.append(_check_key_store(api_url, api_user, api_password, api_eauth))
-        checks.append(_check_version(api_url, api_user, api_password, api_eauth))
-        checks.append(_check_minions_up(api_url, api_user, api_password, api_eauth))
+        checks.append(_check_key_store(api_url, api_user, api_password, api_eauth, tls_verify=tls_verify))
+        checks.append(_check_version(api_url, api_user, api_password, api_eauth, tls_verify=tls_verify))
+        checks.append(_check_minions_up(api_url, api_user, api_password, api_eauth, tls_verify=tls_verify))
 
     # 7. Token delivery
     checks.append(_check_token_delivery(master))

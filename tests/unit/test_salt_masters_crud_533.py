@@ -40,6 +40,8 @@ def _make_master(**kwargs) -> SimpleNamespace:
         api_password_enc=None,
         api_eauth="pam",
         token_delivery="ingest",
+        tls_verify=False,
+        auto_accept=True,
         status="unknown",
         last_checked_at=None,
         last_error=None,
