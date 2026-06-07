@@ -1,4 +1,7 @@
 # fleet_platform/api/routes/security.py
+import ipaddress
+import logging
+import urllib.parse
 import uuid
 
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -12,7 +15,69 @@ from fleet_platform.models.node import Node
 from fleet_platform.models.sbom import SBOMScan
 from fleet_platform.models.security import LicenseFinding, VulnerabilityFinding
 
+logger = logging.getLogger(__name__)
+
 router = APIRouter(prefix="/api/v1/security")
+
+# ---------------------------------------------------------------------------
+# SSRF guard for integration-status URL fetches
+# ---------------------------------------------------------------------------
+
+_ALLOWED_SCHEMES = {"https", "http"}
+
+
+def _ssrf_safe_url(url: str) -> None:
+    """Raise HTTPException(422) if *url* looks like an SSRF target.
+
+    Checks:
+    - Scheme must be http or https.
+    - Hostname must not resolve to a loopback / link-local / private address
+      or the cloud-metadata IP (169.254.169.254).
+
+    Note: this is a best-effort guard on the stored URL value.  It does not
+    prevent DNS rebinding (which requires network-level controls), but it
+    blocks the most common SSRF patterns.
+    """
+    try:
+        parsed = urllib.parse.urlparse(url)
+    except Exception:
+        raise HTTPException(status_code=422, detail=f"Malformed URL: {url!r}")
+
+    scheme = (parsed.scheme or "").lower()
+    if scheme not in _ALLOWED_SCHEMES:
+        raise HTTPException(
+            status_code=422,
+            detail=f"URL scheme {scheme!r} is not allowed. Only http/https are permitted.",
+        )
+
+    hostname = parsed.hostname or ""
+    if not hostname:
+        raise HTTPException(status_code=422, detail="URL has no hostname.")
+
+    # Reject numeric IPs that are loopback / link-local / private / metadata
+    try:
+        addr = ipaddress.ip_address(hostname)
+    except ValueError:
+        # Not a bare IP — hostname-based; we can't resolve here so allow it.
+        # Operators are responsible for not pointing these at internal services.
+        return
+
+    _BLOCKED_NETWORKS = [
+        ipaddress.ip_network("127.0.0.0/8"),  # loopback
+        ipaddress.ip_network("::1/128"),  # IPv6 loopback
+        ipaddress.ip_network("10.0.0.0/8"),  # RFC-1918 private
+        ipaddress.ip_network("172.16.0.0/12"),  # RFC-1918 private
+        ipaddress.ip_network("192.168.0.0/16"),  # RFC-1918 private
+        ipaddress.ip_network("169.254.0.0/16"),  # link-local / AWS metadata
+        ipaddress.ip_network("fc00::/7"),  # IPv6 ULA
+        ipaddress.ip_network("fe80::/10"),  # IPv6 link-local
+    ]
+    for net in _BLOCKED_NETWORKS:
+        if addr in net:
+            raise HTTPException(
+                status_code=422,
+                detail=f"URL target {hostname!r} resolves to a blocked/internal address range.",
+            )
 
 
 @router.get("/dashboard")
@@ -312,6 +377,7 @@ async def integration_status(
     cxone_url = await get_setting(db, CXONE_URL)
     cxone_ok = False
     if cxone_url:
+        _ssrf_safe_url(cxone_url)
         try:
             await asyncio.to_thread(
                 urllib.request.urlopen,
@@ -326,6 +392,7 @@ async def integration_status(
     sonar_url = await get_setting(db, SONARQUBE_URL)
     sonar_ok = False
     if sonar_url:
+        _ssrf_safe_url(sonar_url)
         try:
             await asyncio.to_thread(
                 urllib.request.urlopen,
