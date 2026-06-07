@@ -12,6 +12,14 @@ salt-api automatically after a successful bootstrap run).
 import sqlalchemy as sa
 from alembic import op
 
+# Alembic reads these MODULE-LEVEL identifiers (not the docstring) to build the
+# migration chain. Without them 042 is invisible and 043's down_revision="042"
+# cannot resolve, leaving the DB stuck at 041 (#571).
+revision = "042"
+down_revision = "041"
+branch_labels = None
+depends_on = None
+
 
 def upgrade() -> None:
     op.add_column(
