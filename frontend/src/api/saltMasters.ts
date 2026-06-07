@@ -154,7 +154,8 @@ export const saltMastersApi = {
   create: (body: SaltMasterCreate) => api.post<SaltMaster>('/api/v1/salt/masters', body),
   update: (id: string, body: SaltMasterUpdate) =>
     api.patch<SaltMaster>(`/api/v1/salt/masters/${id}`, body),
-  remove: (id: string) => api.delete(`/api/v1/salt/masters/${id}`),
+  remove: (id: string) =>
+    api.delete<{ nodes_reassigned: number; reassigned_to: string | null }>(`/api/v1/salt/masters/${id}`),
   test: (id: string) =>
     api.post<SaltMasterTestResponse>(`/api/v1/salt/masters/${id}/test`, {}),
   health: (id: string) =>
