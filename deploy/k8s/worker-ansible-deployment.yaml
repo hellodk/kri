@@ -1,0 +1,103 @@
+# Dedicated worker for long-running ansible jobs (#579) — run_playbook,
+# bootstrap_node, provision_master. Isolated from the control-plane worker so a
+# burst of 2h jobs can't starve poll_salt_masters / presence / reapers / health.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: kri-worker-ansible
+  namespace: kri
+  labels:
+    app: kri-worker-ansible
+    component: worker-ansible
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: kri-worker-ansible
+  template:
+    metadata:
+      labels:
+        app: kri-worker-ansible
+        component: worker-ansible
+    spec:
+      containers:
+        - name: worker-ansible
+          image: gitea.local/kri/kri-api:0.1.415
+          imagePullPolicy: IfNotPresent
+          command:
+            - uv
+            - run
+            - celery
+            - -A
+            - fleet_platform.workers.celery_app
+            - worker
+            - --queues=ansible
+            - --concurrency=2
+            - --loglevel=info
+          env:
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: kri-secrets
+                  key: POSTGRES_PASSWORD
+            - name: REDIS_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: kri-secrets
+                  key: REDIS_PASSWORD
+            - name: JWT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: kri-secrets
+                  key: JWT_SECRET
+            - name: FERNET_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: kri-secrets
+                  key: FERNET_KEY
+            - name: SALT_API_URL
+              valueFrom:
+                secretKeyRef:
+                  name: kri-secrets
+                  key: SALT_API_URL
+            - name: SALT_API_USER
+              valueFrom:
+                secretKeyRef:
+                  name: kri-secrets
+                  key: SALT_API_USER
+            - name: SALT_API_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: kri-secrets
+                  key: SALT_API_PASSWORD
+            - name: DATABASE_URL
+              value: "postgresql+psycopg://fleet:$(POSTGRES_PASSWORD)@postgres.utilities.svc.cluster.local:5432/fleet_platform"
+            - name: REDIS_URL
+              value: "redis://:$(REDIS_PASSWORD)@redis.utilities.svc.cluster.local:6379/0"
+          livenessProbe:
+            exec:
+              command:
+                - sh
+                - -c
+                - "python3 -c 'from fleet_platform.workers.celery_app import celery_app; i=celery_app.control.inspect(timeout=3); r=i.ping(); exit(0 if r else 1)' 2>/dev/null"
+            initialDelaySeconds: 60
+            periodSeconds: 60
+            timeoutSeconds: 15
+            failureThreshold: 3
+          readinessProbe:
+            exec:
+              command:
+                - sh
+                - -c
+                - "python3 -c 'from fleet_platform.workers.celery_app import celery_app; s=celery_app.backend; exit(0)' 2>/dev/null"
+            initialDelaySeconds: 30
+            periodSeconds: 30
+            timeoutSeconds: 10
+            failureThreshold: 3
+          resources:
+            requests:
+              cpu: "500m"
+              memory: "512Mi"
+            limits:
+              cpu: "2000m"
+              memory: "2Gi"

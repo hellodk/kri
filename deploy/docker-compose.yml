@@ -161,6 +161,56 @@ services:
           memory: 2G
     logging: *default-logging
 
+  # Dedicated worker for long-running ansible jobs (#579) — run_playbook,
+  # bootstrap_node, provision_master. Isolated from the control-plane worker so
+  # a burst of 2h jobs can't starve poll_salt_masters / presence / reapers / health.
+  worker-ansible:
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile.api
+    command: ["uv", "run", "celery", "-A", "fleet_platform.workers.celery_app", "worker", "--queues", "ansible", "--concurrency", "2", "--loglevel", "info"]
+    restart: unless-stopped
+    env_file: ../.env.docker
+    environment:
+      # Salt commands dispatch via Salt HTTP API — set SALT_API_URL, SALT_API_USER,
+      # SALT_API_PASSWORD in .env.docker (see .env.docker.example). Issue #82.
+      SALT_API_URL: "${SALT_API_URL:-}"
+      SALT_API_USER: "${SALT_API_USER:-}"
+      SALT_API_PASSWORD: "${SALT_API_PASSWORD:-}"
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    volumes:
+      # SSH keys for Ansible playbook execution.
+      # MUST be a dedicated service-account keypair — NOT your personal ~/.ssh.
+      # Create: ssh-keygen -t ed25519 -f deploy/ssh/id_ed25519 -N ""
+      # Then distribute deploy/ssh/id_ed25519.pub to target hosts.
+      # Set WORKER_SSH_DIR in .env.docker to override (default: ./ssh).
+      # Issue #91: operator personal ~/.ssh removed.
+      - ${WORKER_SSH_DIR:-./ssh}:/home/appuser/.ssh:ro
+      - ~/.kri:/home/appuser/.kri  # rw: worker needs to write id_rsa keypair (not :ro)
+      - git-repos-cache:/home/appuser/.kri/git-repos  # persist cloned git sources across redeploys
+      - ${PULSE_REPOS_DIR:-/home/dk/Documents/git/pulse}:/mnt/pulse:ro   # host playbook repos — override via PULSE_REPOS_DIR in .env.docker
+      # Mount playbooks/files so large binaries (salt .pkg, etc.) survive container rebuilds.
+      # These files are gitignored but required for air-gapped installs.
+      - ${PLAYBOOKS_FILES_DIR:-/home/dk/Documents/git/kri/playbooks/files}:/app/playbooks/files:ro
+      # Docker socket intentionally NOT mounted — container escape risk. Issue #82.
+      # Salt commands now use Salt HTTP API instead of docker exec.
+    healthcheck:
+      test: ["CMD-SHELL", "python3 -c 'import celery; from fleet_platform.workers.celery_app import celery_app; i=celery_app.control.inspect(timeout=3); r=i.ping(); exit(0 if r else 1)' 2>/dev/null || exit 1"]
+      interval: 60s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    deploy:
+      resources:
+        limits:
+          cpus: '2.0'
+          memory: 2G
+    logging: *default-logging
+
   # salt-master removed from Docker — runs natively on mm1 (100.102.68.75).
   # See playbooks/roles/salt_master and playbooks/setup_salt_master.yml.
   # This eliminates the PKI key rotation issue caused by container restarts.
