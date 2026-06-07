@@ -22,13 +22,14 @@ CASES = [
     ("integrations", "Integrations", "Integrations"),
     ("automation", "Automation", "Automation"),
     ("remote_access", "Remote Access", "Remote Access"),
-    ("salt_masters", "Salt Masters", "Salt Masters"),
     ("playbook_library", "Playbook Library", "Playbook Library"),
     ("llm", "LLM", "LLM"),
     ("notifications", "Notifications", "Notifications"),
     # Legacy aliases map to Automation
     ("legacy_bootstrap", "Bootstrap", "Automation"),
     ("legacy_advanced", "Advanced", "Automation"),
+    # 'Salt Masters' moved to the Overview hub (#589) — no longer a Settings tab
+    ("salt_masters_removed", "Salt Masters", "General"),
     # Unknown / empty values fall back to General
     ("unknown_tab", "NonExistent", "General"),
     ("empty_string", "", "General"),

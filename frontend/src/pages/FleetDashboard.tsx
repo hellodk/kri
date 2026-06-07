@@ -1041,7 +1041,7 @@ export function FleetDashboard() {
           <button
             onClick={() => setShowBootstrap(true)}
             disabled={mastersBlocked}
-            title={mastersBlocked ? 'No enabled salt-master — configure one in Settings → Salt Masters' : undefined}
+            title={mastersBlocked ? 'No enabled salt-master — configure one in Overview → Salt Masters' : undefined}
             className="px-4 py-2 bg-brand-600 text-white text-sm font-medium rounded-lg hover:bg-brand-700 shadow-sm disabled:opacity-40 disabled:cursor-not-allowed"
           >
             + Bootstrap Node
@@ -1236,7 +1236,7 @@ export function FleetDashboard() {
                 </p>
                 {mastersBlocked ? (
                   <Link
-                    to="/settings?tab=Salt Masters"
+                    to="/overview?tab=salt-masters"
                     className="inline-block px-6 py-2.5 bg-amber-700 text-white text-sm font-medium rounded-lg hover:bg-amber-800 shadow-sm"
                   >
                     Configure a salt-master first →

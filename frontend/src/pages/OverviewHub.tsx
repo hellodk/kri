@@ -5,6 +5,7 @@ import { FleetDashboard } from './FleetDashboard'
 import FleetHealthPage from './FleetHealthPage'
 import { MonitoringPage } from './MonitoringPage'
 import { GroupExplorer } from './GroupExplorer'
+import { SaltMastersTab } from './SaltMastersTab'
 
 function FleetHealthAndMonitoring() {
   return (
@@ -20,6 +21,7 @@ const TABS: HubTab[] = [
   { key: 'fleet',          label: 'Fleet',          icon: '⬡', component: FleetDashboard },
   { key: 'fleet-health',   label: 'Fleet Health',   icon: '♥', component: FleetHealthAndMonitoring },
   { key: 'groups',         label: 'Groups',         icon: '◫', component: GroupExplorer },
+  { key: 'salt-masters',   label: 'Salt Masters',   icon: '◆', component: SaltMastersTab },
 ]
 
 export function OverviewHub() {

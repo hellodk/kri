@@ -326,7 +326,7 @@ export function DashboardPage() {
               </h2>
             </div>
             <Link
-              to="/settings?tab=Salt Masters"
+              to="/overview?tab=salt-masters"
               className="text-xs text-brand-600 hover:underline font-medium"
             >
               Manage →

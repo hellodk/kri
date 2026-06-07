@@ -570,8 +570,8 @@ function SingleMode({ onClose }: { onClose: () => void }) {
           ) : enabledMasters.length === 0 ? (
             <p className="px-3 py-4 text-sm text-red-600 text-center">
               No salt-master configured —{' '}
-              <a href="/settings" className="underline text-red-700 hover:text-red-800">
-                add one in Settings → Salt Masters
+              <a href="/overview?tab=salt-masters" className="underline text-red-700 hover:text-red-800">
+                add one in Overview → Salt Masters
               </a>
             </p>
           ) : (
@@ -629,7 +629,7 @@ function SingleMode({ onClose }: { onClose: () => void }) {
           <button
             type="submit"
             disabled={!canSubmit}
-            title={enabledMasters.length === 0 ? 'Configure a salt-master first in Settings → Salt Masters' : undefined}
+            title={enabledMasters.length === 0 ? 'Configure a salt-master first in Overview → Salt Masters' : undefined}
             className="flex-1 py-2.5 bg-brand-600 text-white rounded-lg text-sm font-medium hover:bg-brand-700 disabled:opacity-50"
           >
             {bootstrapMutation.isPending ? 'Starting…' : 'Bootstrap'}

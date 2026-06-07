@@ -845,7 +845,7 @@ export function NodeDetail() {
     mutationFn: () => saltMastersApi.promoteFromNode(nodeId!),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['salt-masters'] })
-      toast('Node promoted to salt-master. Go to Settings → Salt Masters to provision it.', 'success')
+      toast('Node promoted to salt-master. Go to Overview → Salt Masters to provision it.', 'success')
     },
     onError: (e: Error) => toast(e.message, 'error'),
   })
@@ -1204,10 +1204,10 @@ export function NodeDetail() {
                       {badge.label}
                     </span>
                     <Link
-                      to="/settings?tab=Salt Masters"
+                      to="/overview?tab=salt-masters"
                       className="text-xs text-indigo-600 hover:text-indigo-800 font-medium underline underline-offset-2"
                     >
-                      Settings → Salt Masters →
+                      Overview → Salt Masters →
                     </Link>
                   </div>
                 </div>
