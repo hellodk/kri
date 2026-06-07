@@ -2,12 +2,15 @@
  * Salt Masters settings tab — issue #533, epic #537.
  *
  * Full CRUD: list + health/test (viewer+), create/edit/delete + set-default (admin).
+ * Provision / Reconfigure button + live LogPane added in #558 (master-lifecycle epic phase 3).
  */
 
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { saltMastersApi, type SaltMaster, type SaltMasterCreate, type SaltMasterUpdate } from '../api/saltMasters'
 import { saltMasterBadge } from '../lib/saltMasterHelpers'
+import { provisionRefetchInterval } from '../lib/provisionPolling'
+import { LogPane } from '../lib/LogPane'
 import { useToastStore } from '../stores/toastStore'
 import { Skeleton } from '../components/Skeleton'
 import { ErrorState } from '../components/ErrorState'
@@ -58,6 +61,22 @@ const checkStatusPill = (status: string) => {
       return 'bg-amber-100 text-amber-800 border border-amber-200'
     default:
       return 'bg-gray-100 text-gray-700 border border-gray-200'
+  }
+}
+
+function provisionStatusBadge(status: string): { bgClass: string; textClass: string; label: string } {
+  switch (status) {
+    case 'provisioned':
+      return { bgClass: 'bg-emerald-100', textClass: 'text-emerald-800', label: 'Provisioned' }
+    case 'provisioning':
+      return { bgClass: 'bg-blue-100', textClass: 'text-blue-800', label: 'Provisioning…' }
+    case 'failed':
+      return { bgClass: 'bg-red-100', textClass: 'text-red-800', label: 'Failed' }
+    case 'degraded':
+      return { bgClass: 'bg-amber-100', textClass: 'text-amber-800', label: 'Degraded' }
+    case 'unprovisioned':
+    default:
+      return { bgClass: 'bg-gray-100', textClass: 'text-gray-600', label: 'Unprovisioned' }
   }
 }
 
@@ -376,6 +395,90 @@ function MasterForm({ initial, title, submitLabel, isLoading, error, onSubmit, o
 }
 
 // ---------------------------------------------------------------------------
+// Per-master provision panel (LogPane + polling)
+// ---------------------------------------------------------------------------
+
+interface MasterProvisionPanelProps {
+  masterId: string
+  onRunStatusChange?: (status: string | undefined) => void
+}
+
+function MasterProvisionPanel({ masterId, onRunStatusChange }: MasterProvisionPanelProps) {
+  const { data: run } = useQuery({
+    queryKey: ['provision-status', masterId],
+    queryFn: () => saltMastersApi.provisionStatus(masterId),
+    refetchInterval: (query) => provisionRefetchInterval(query.state.data?.status),
+  })
+
+  // Notify parent of status changes for button disable state
+  const status = run?.status
+  if (onRunStatusChange) {
+    onRunStatusChange(status)
+  }
+
+  const isRunning = status === 'running'
+
+  return (
+    <div className="flex flex-col h-[24rem] border-t border-gray-100">
+      {/* Run header */}
+      {run && (
+        <div className="px-5 py-2.5 bg-gray-50 border-b border-gray-100 flex items-center gap-3 flex-wrap text-xs text-gray-600">
+          <span>
+            <span className="font-medium text-gray-700">Action:</span>{' '}
+            <span className="font-mono">{run.action}</span>
+          </span>
+          <span>
+            <span className="font-medium text-gray-700">Status:</span>{' '}
+            <span
+              className={`px-1.5 py-0.5 rounded font-semibold text-xs border ${
+                run.status === 'completed'
+                  ? 'bg-emerald-100 text-emerald-800 border-emerald-200'
+                  : run.status === 'running'
+                    ? 'bg-blue-100 text-blue-800 border-blue-200'
+                    : run.status === 'failed'
+                      ? 'bg-red-100 text-red-800 border-red-200'
+                      : 'bg-gray-100 text-gray-700 border-gray-200'
+              }`}
+            >
+              {run.status}
+            </span>
+          </span>
+          <span>
+            <span className="font-medium text-gray-700">Started:</span>{' '}
+            <span title={relativeTime(run.started_at)}>
+              {formatIst(run.started_at)}
+            </span>
+          </span>
+          {run.finished_at && (
+            <span>
+              <span className="font-medium text-gray-700">Finished:</span>{' '}
+              <span title={relativeTime(run.finished_at)}>
+                {formatIst(run.finished_at)}
+              </span>
+            </span>
+          )}
+          {run.error && (
+            <span className="text-red-700 font-mono truncate max-w-xs" title={run.error}>
+              {run.error}
+            </span>
+          )}
+        </div>
+      )}
+      {!run && (
+        <div className="px-5 py-2.5 bg-gray-50 border-b border-gray-100 text-xs text-gray-500 italic">
+          No provision runs yet. Click <strong>Provision / Reconfigure</strong> to start.
+        </div>
+      )}
+      <LogPane
+        raw={run?.ansible_stdout ?? ''}
+        isLive={isRunning}
+        emptyText="No output recorded yet."
+      />
+    </div>
+  )
+}
+
+// ---------------------------------------------------------------------------
 // Main component
 // ---------------------------------------------------------------------------
 
@@ -388,6 +491,10 @@ export function SaltMastersTab() {
   const [editMaster, setEditMaster] = useState<SaltMaster | null>(null)
   const [deleteMaster, setDeleteMaster] = useState<SaltMaster | null>(null)
   const [formError, setFormError] = useState<string | null>(null)
+  // Provision panel: which master has the LogPane open
+  const [provisionPanelId, setProvisionPanelId] = useState<string | null>(null)
+  // Track which master is currently being provisioned (for button disable state)
+  const [provisioningId, setProvisioningId] = useState<string | null>(null)
 
   const { data: masters, isLoading, isError, error, refetch } = useQuery({
     queryKey: ['salt-masters'],
@@ -402,6 +509,19 @@ export function SaltMastersTab() {
     },
     onError: (err: Error) => {
       toast(`Test failed: ${err.message}`, 'error')
+    },
+  })
+
+  const provisionMutation = useMutation({
+    mutationFn: (id: string) => saltMastersApi.provision(id),
+    onSuccess: (_data, id) => {
+      setProvisioningId(id)
+      setProvisionPanelId(id)
+      toast('Provision task queued', 'success')
+    },
+    onError: (err: Error) => {
+      setProvisioningId(null)
+      toast(`Provision failed: ${err.message}`, 'error')
     },
   })
 
@@ -538,6 +658,12 @@ export function SaltMastersTab() {
         {masters?.map((master) => {
           const badge = saltMasterBadge(master.status)
           const isPending = testMutation.isPending && testMutation.variables === master.id
+          const isProvisioning = provisioningId === master.id
+          const isProvisionBtnDisabled =
+            isProvisioning ||
+            (provisionMutation.isPending && provisionMutation.variables === master.id)
+          const provisionBadge = provisionStatusBadge(master.provision_status)
+          const isLogPanelOpen = provisionPanelId === master.id
 
           const checks = Array.isArray(master.checks)
             ? master.checks as Array<{ check: string; status: string; detail: string; latency_ms: number }>
@@ -572,6 +698,13 @@ export function SaltMastersTab() {
                     >
                       {badge.label}
                     </span>
+                    {/* Provision status badge */}
+                    <span
+                      className={`px-2 py-0.5 text-xs font-semibold rounded-full border border-transparent ${provisionBadge.bgClass} ${provisionBadge.textClass}`}
+                      title="Provision status"
+                    >
+                      {provisionBadge.label}
+                    </span>
                   </div>
                   <div className="mt-1 text-sm text-gray-600 font-mono truncate">
                     {master.address}
@@ -605,6 +738,27 @@ export function SaltMastersTab() {
                     title="Run a live connectivity probe against this salt-master"
                   >
                     {isPending ? 'Testing…' : 'Test connection'}
+                  </button>
+                  {/* Provision / Reconfigure button — admin only (backend enforces) */}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      provisionMutation.mutate(master.id)
+                    }}
+                    disabled={isProvisionBtnDisabled}
+                    className="px-3 py-1.5 text-xs font-medium border border-indigo-300 text-indigo-700 bg-indigo-50 hover:bg-indigo-100 rounded-lg disabled:opacity-50 transition-colors"
+                    title="Install or reconfigure salt-master on the SSH host"
+                  >
+                    {isProvisionBtnDisabled ? 'Provisioning…' : 'Provision / Reconfigure'}
+                  </button>
+                  {/* Toggle log panel */}
+                  <button
+                    type="button"
+                    onClick={() => setProvisionPanelId(isLogPanelOpen ? null : master.id)}
+                    className="px-3 py-1.5 text-xs font-medium border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
+                    title={isLogPanelOpen ? 'Hide provision log' : 'Show provision log'}
+                  >
+                    {isLogPanelOpen ? 'Hide log' : 'Provision log'}
                   </button>
                   <button
                     type="button"
@@ -647,6 +801,20 @@ export function SaltMastersTab() {
                   <span>
                     <span className="font-medium text-gray-700">API user:</span>{' '}
                     {master.api_user}
+                  </span>
+                )}
+                {master.salt_version && (
+                  <span>
+                    <span className="font-medium text-gray-700">Salt version:</span>{' '}
+                    <span className="font-mono">{master.salt_version}</span>
+                  </span>
+                )}
+                {master.last_provisioned_at && (
+                  <span>
+                    <span className="font-medium text-gray-700">Provisioned:</span>{' '}
+                    <span title={relativeTime(master.last_provisioned_at)}>
+                      {formatIst(master.last_provisioned_at)}
+                    </span>
                   </span>
                 )}
                 <span>
@@ -698,6 +866,19 @@ export function SaltMastersTab() {
                     </tbody>
                   </table>
                 </div>
+              )}
+
+              {/* Provision log panel — only shown when open */}
+              {isLogPanelOpen && (
+                <MasterProvisionPanel
+                  masterId={master.id}
+                  onRunStatusChange={(status) => {
+                    // When run finishes/fails, clear the provisioning lock
+                    if (status && status !== 'running' && provisioningId === master.id) {
+                      setProvisioningId(null)
+                    }
+                  }}
+                />
               )}
             </div>
           )

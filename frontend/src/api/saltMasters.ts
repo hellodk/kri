@@ -139,4 +139,10 @@ export const saltMastersApi = {
     api.post<SaltMasterTestResponse>(`/api/v1/salt/masters/${id}/test`, {}),
   health: (id: string) =>
     api.get<SaltMasterHealthResponse>(`/api/v1/salt/masters/${id}/health`),
+  /** Trigger a provision/reconfigure run on a master (admin only). */
+  provision: (id: string, action?: string) =>
+    api.post(`/api/v1/salt/masters/${id}/provision`, action ? { action } : {}),
+  /** Latest MasterProvisionRun for a master, or null if none. Viewer-accessible. */
+  provisionStatus: (id: string) =>
+    api.get<MasterProvisionRunResponse | null>(`/api/v1/salt/masters/${id}/provision-status`),
 }

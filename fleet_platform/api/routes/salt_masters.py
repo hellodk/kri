@@ -4,6 +4,7 @@ Provision lifecycle SSH cred encryption added in #556 (master-lifecycle epic).
 SSoT api_url derivation added in #562: api_url is computed from address + salt_api_port +
 use_tls on every create/update.  Client-supplied api_url is always ignored.
 provision_master trigger route added in #557 (master-lifecycle epic).
+provision-status read endpoint added in #558 (master-lifecycle epic phase 3).
 
 Endpoints:
     GET    /api/v1/salt/masters                     — list all masters (viewer+).
@@ -13,6 +14,7 @@ Endpoints:
     POST   /api/v1/salt/masters/{master_id}/test    — live probe (admin only).
     GET    /api/v1/salt/masters/{master_id}/health  — cached health (viewer+).
     POST   /api/v1/salt/masters/{master_id}/provision — trigger provision task (admin only).
+    GET    /api/v1/salt/masters/{master_id}/provision-status — latest provision run (viewer+).
 """
 
 import asyncio
@@ -27,9 +29,15 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from fleet_platform.api.deps import get_db
 from fleet_platform.core.auth import get_current_user, require_role
+from fleet_platform.models.master_provision_run import MasterProvisionRun
 from fleet_platform.models.node import Node
 from fleet_platform.models.salt_master import SaltMaster
-from fleet_platform.schemas.salt_master import SaltMasterCreate, SaltMasterResponse, SaltMasterUpdate
+from fleet_platform.schemas.salt_master import (
+    MasterProvisionRunResponse,
+    SaltMasterCreate,
+    SaltMasterResponse,
+    SaltMasterUpdate,
+)
 from fleet_platform.services.platform_settings_svc import encrypt_secret
 from fleet_platform.services.salt_master_probe import run_probe
 
@@ -361,3 +369,33 @@ async def trigger_provision_master(
         "action": action,
         "status": "queued",
     }
+
+
+@router.get("/masters/{master_id}/provision-status", response_model=Optional[MasterProvisionRunResponse])
+async def get_provision_status(
+    master_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+    _: dict = Depends(get_current_user),
+) -> Optional[MasterProvisionRunResponse]:
+    """Return the latest MasterProvisionRun for a SaltMaster, or null if none exists.
+
+    Returns the most recent run ordered by started_at descending.
+    Returns 404 if the master does not exist.
+    Accessible by any authenticated user (viewer role or above).
+    Added in #558 (master-lifecycle epic phase 3).
+    """
+    result = await db.execute(select(SaltMaster).where(SaltMaster.id == master_id))
+    master = result.scalar_one_or_none()
+    if master is None:
+        raise HTTPException(status_code=404, detail=f"SaltMaster {master_id} not found")
+
+    run_result = await db.execute(
+        select(MasterProvisionRun)
+        .where(MasterProvisionRun.salt_master_id == master_id)
+        .order_by(MasterProvisionRun.started_at.desc())
+        .limit(1)
+    )
+    run = run_result.scalar_one_or_none()
+    if run is None:
+        return None
+    return MasterProvisionRunResponse.model_validate(run)
