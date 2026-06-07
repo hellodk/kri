@@ -662,12 +662,29 @@ cmd_saltmaster() {
 
 cmd_saltmaster_install() {
     local target_ip="${1:-}"
+    local target_os=""   # "macos" | "linux" | "" (auto-detect)
+    local ssh_user=""    # SSH username for the target host
+
+    # Parse optional flags: --linux, --macos, --user=<name>
+    local remaining_args=()
+    for arg in "$@"; do
+        case "$arg" in
+            --linux)       target_os="linux" ;;
+            --macos)       target_os="macos" ;;
+            --user=*)      ssh_user="${arg#--user=}" ;;
+            *)             remaining_args+=("$arg") ;;
+        esac
+    done
+    set -- "${remaining_args[@]+"${remaining_args[@]}"}"
+
+    # Positional: first non-flag arg is target_ip, second is api_password
+    [[ -z "$target_ip" && ${#remaining_args[@]} -ge 1 ]] && target_ip="${remaining_args[0]}"
 
     # Interactive target selection if not provided
     if [[ -z "$target_ip" ]]; then
         header "Salt-master installation"
-        info "Salt-master handles minion authentication, state distribution, and key management."
-        info "Runs natively on a Mac Mini (launchd) — never in Docker."
+        info "Salt-master handles minion key management, state distribution, and salt-api."
+        info "Supports both macOS (air-gapped .pkg) and Linux (apt/yum via internet)."
         echo ""
 
         # Discover known nodes from DB if possible
@@ -695,24 +712,64 @@ cmd_saltmaster_install() {
         [[ -z "$api_password" ]] && error "salt-api password is required"
     fi
 
-    # Verify the bundled .pkg exists before doing anything
-    local pkg="$REPO_DIR/playbooks/files/salt-3007.14-py3-arm64.pkg"
-    if [[ ! -f "$pkg" ]]; then
-        error "Bundled installer missing: $pkg
-Download it (on a connected machine) and copy it to playbooks/files/:
-  curl -LO https://packages.broadcom.com/artifactory/saltproject-generic/onedir/3007.14/salt-3007.14-py3-arm64.pkg"
+    # Prompt for SSH user if not provided via --user=
+    if [[ -z "$ssh_user" ]]; then
+        _prompt_input "SSH username on target host" "dk"
+        ssh_user="${PROMPT_RESULT:-dk}"
     fi
 
-    header "Installing salt-master → $target_ip"
-    info "Package: $(basename "$pkg") ($(du -sh "$pkg" | cut -f1), air-gapped)"
-    info "This installs salt-master, configures launchd, and starts the service."
-    echo ""
+    # Auto-detect target OS via uname if not specified via flag
+    if [[ -z "$target_os" ]]; then
+        info "Detecting target OS (ssh ${ssh_user}@${target_ip} uname -s)…"
+        local uname_result
+        uname_result=$(ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 \
+            "${ssh_user}@${target_ip}" uname -s 2>/dev/null || echo "unknown")
+        case "$uname_result" in
+            Darwin)  target_os="macos" ;;
+            Linux)   target_os="linux" ;;
+            *)
+                warn "Could not detect OS (got: '${uname_result}'). Specify --linux or --macos."
+                _prompt_select "Target OS?" "macos — macOS / Mac Mini (air-gapped .pkg)" "linux — Linux / Debian / RHEL (apt/yum)"
+                [[ "$PROMPT_RESULT" == macos* ]] && target_os="macos" || target_os="linux"
+                ;;
+        esac
+        info "Detected: ${target_os}"
+    fi
 
-    local ansible_cmd="ansible-playbook $REPO_DIR/playbooks/install_salt_master.yml \
-        -i $target_ip, \
-        -e target_host=$target_ip \
-        -e kri_salt_api_password=$api_password \
-        -e ansible_user=dk"
+    # ── macOS path ──────────────────────────────────────────────────────────
+    if [[ "$target_os" == "macos" ]]; then
+        # Verify the bundled .pkg exists before doing anything
+        local pkg="$REPO_DIR/playbooks/files/salt-3007.14-py3-arm64.pkg"
+        if [[ ! -f "$pkg" ]]; then
+            error "Bundled installer missing: $pkg
+Download it (on a connected machine) and copy it to playbooks/files/:
+  curl -LO https://packages.broadcom.com/artifactory/saltproject-generic/onedir/3007.14/salt-3007.14-py3-arm64.pkg"
+        fi
+
+        header "Installing salt-master (macOS) → $target_ip"
+        info "Package: $(basename "$pkg") ($(du -sh "$pkg" | cut -f1), air-gapped)"
+        info "This installs salt-master, configures launchd, and starts the service."
+        echo ""
+
+        local ansible_cmd="ansible-playbook $REPO_DIR/playbooks/install_salt_master.yml \
+            -i $target_ip, \
+            -e target_host=$target_ip \
+            -e kri_salt_api_password=$api_password \
+            -e ansible_user=$ssh_user"
+
+    # ── Linux path ──────────────────────────────────────────────────────────
+    else
+        header "Installing salt-master (Linux) → $target_ip"
+        info "Installs via SaltProject apt/yum repo — target host needs internet access."
+        info "This installs salt-master + salt-api, configures systemd, and starts the service."
+        echo ""
+
+        local ansible_cmd="ansible-playbook $REPO_DIR/playbooks/install_salt_master_linux.yml \
+            -i $target_ip, \
+            -e target_host=$target_ip \
+            -e kri_salt_api_password=$api_password \
+            -e ansible_user=$ssh_user"
+    fi
 
     # Stream Ansible output
     if source "$VENV" 2>/dev/null; then
@@ -723,14 +780,15 @@ Download it (on a connected machine) and copy it to playbooks/files/:
     fi
 
     if [[ $rc -eq 0 ]]; then
-        success "Salt-master installed on $target_ip"
+        success "Salt-master installed on $target_ip ($target_os)"
         echo ""
         info "Next steps:"
-        info "  1. Add to .env.docker:  SALT_API_URL=http://${target_ip}:8080"
-        info "                          SALT_API_USER=krisalt"
-        info "                          SALT_API_PASSWORD=<the password you set>"
-        info "  2. Update minion configs: master: ${target_ip}"
-        info "  3. kri deploy api worker"
+        info "  1. Open kri UI → Settings → Salt Masters → Add"
+        info "       URL:      https://${target_ip}:8080"
+        info "       User:     krisalt"
+        info "       Password: <the password you set>"
+        info "  2. Update minion configs: /etc/salt/minion → master: ${target_ip}"
+        info "  3. kri saltmaster keys  (accept minion keys once they reconnect)"
     else
         error "Ansible playbook failed (rc=$rc) — check output above"
     fi
