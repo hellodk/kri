@@ -2,6 +2,7 @@
 """Salt state runner API — browse states, apply them, run ad-hoc commands."""
 
 import os
+import re
 from pathlib import Path
 
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -16,6 +17,31 @@ router = APIRouter(prefix="/api/v1/salt")
 
 # The salt/states directory is mounted at /srv/salt/states inside the container.
 _STATES_DIR = Path(os.environ.get("SALT_STATES_DIR", "/srv/salt/states"))
+
+# Allowlist regex for Salt state names: dotted identifiers only (e.g. "jenkins_slave.init").
+# Rejects shell metacharacters, path traversal, glob wildcards, and commas.
+_STATE_NAME_RE = re.compile(r"^[a-zA-Z0-9_][a-zA-Z0-9_.-]*$")
+
+# Allowlist regex for minion IDs — mirrors salt_keys.py _MINION_ID_RE.
+# Rejects * / globs / commas / shell metacharacters.
+_MINION_ID_RE = re.compile(r"^[a-zA-Z0-9._-]+$")
+
+
+def _validate_state_name(state: str) -> None:
+    if not _STATE_NAME_RE.match(state):
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=f"Invalid state name {state!r}. Only dotted identifiers are allowed (e.g. 'jenkins_slave.init').",
+        )
+
+
+def _validate_minion_ids(minion_ids: list[str]) -> None:
+    for mid in minion_ids:
+        if not _MINION_ID_RE.match(mid):
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail=f"Invalid minion_id {mid!r}. Globs, wildcards, and shell characters are not allowed.",
+            )
 
 
 def _scan_states(base: Path) -> list[dict]:
@@ -72,6 +98,8 @@ async def apply_state(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             detail="minion_ids must not be empty",
         )
+    _validate_state_name(payload.state)
+    _validate_minion_ids(payload.minion_ids)
     from fleet_platform.workers.salt_tasks import apply_salt_state
 
     task = apply_salt_state.delay(
@@ -131,6 +159,7 @@ async def run_cmd(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             detail="minion_ids must not be empty",
         )
+    _validate_minion_ids(payload.minion_ids)
     import json as _json
 
     from fleet_platform.services.platform_settings_svc import (
