@@ -20,7 +20,7 @@ _SOURCE = SETTINGS_PAGE.read_text()
 
 def test_tabs_literal_matches_ac():
     """TABS must be exactly the array defined in AC1, in that order.
-    Updated in #521 to include 'Salt Masters' after 'Integrations'.
+    Updated in #589 to remove 'Salt Masters' (moved to the Overview hub).
     """
     pattern = re.compile(
         r"const TABS\s*=\s*\["
@@ -28,7 +28,6 @@ def test_tabs_literal_matches_ac():
         r"['\"]Automation['\"],\s*"
         r"['\"]Remote Access['\"],\s*"
         r"['\"]Integrations['\"],\s*"
-        r"['\"]Salt Masters['\"],\s*"
         r"['\"]Playbook Library['\"],\s*"
         r"['\"]LLM['\"],\s*"
         r"['\"]Notifications['\"]"
@@ -37,7 +36,7 @@ def test_tabs_literal_matches_ac():
     assert pattern.search(_SOURCE), (
         "TABS literal does not match expected order. "
         "Expected: ['General', 'Automation', 'Remote Access', 'Integrations', "
-        "'Salt Masters', 'Playbook Library', 'LLM', 'Notifications']"
+        "'Playbook Library', 'LLM', 'Notifications']"
     )
 
 

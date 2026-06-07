@@ -95,7 +95,7 @@ function PlaybookRow({ p, badge, badgeClass, mastersBlocked, onRun, onFiles, onT
           <button
             onClick={() => onRun(p)}
             disabled={p.lint_errors.length > 0 || mastersBlocked}
-            title={mastersBlocked ? 'No enabled salt-master — configure one in Settings → Salt Masters' : undefined}
+            title={mastersBlocked ? 'No enabled salt-master — configure one in Overview → Salt Masters' : undefined}
             className="px-3 py-1.5 text-xs font-medium bg-brand-600 text-white rounded-lg hover:bg-brand-700 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
           >
             ▷ Run

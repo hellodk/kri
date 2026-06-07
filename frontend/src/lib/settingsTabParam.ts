@@ -15,7 +15,6 @@ export const SETTINGS_TABS = [
   'Automation',
   'Remote Access',
   'Integrations',
-  'Salt Masters',
   'Playbook Library',
   'LLM',
   'Notifications',

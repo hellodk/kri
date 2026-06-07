@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { useSearchParams } from 'react-router-dom'
+import { useSearchParams, useNavigate } from 'react-router-dom'
 import { resolveSettingsTab, type SettingsTab } from '../lib/settingsTabParam'
 import { Skeleton } from '../components/Skeleton'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
@@ -13,7 +13,6 @@ import { useToastStore } from '../stores/toastStore'
 import { api } from '../api/client'
 import { buildsApi } from '../api/builds'
 import { PlaybookLibraryTab } from './PlaybookLibraryTab'
-import { SaltMastersTab } from './SaltMastersTab'
 
 function UrlStatusPill({ status, checking }: { status?: { ok: boolean; latency_ms: number | null; error?: string } | null; checking: boolean }) {
   if (checking) return <span className="text-xs text-gray-400 flex items-center gap-1"><span className="inline-block animate-spin">⟳</span> Checking</span>
@@ -230,12 +229,22 @@ export function SettingsPage() {
     ? `${kriApiUrl.replace(/\/$/, '')}/api/v1/ingest/grains`
     : null
 
-  const TABS = ['General', 'Automation', 'Remote Access', 'Integrations', 'Salt Masters', 'Playbook Library', 'LLM', 'Notifications'] as const
+  const TABS = ['General', 'Automation', 'Remote Access', 'Integrations', 'Playbook Library', 'LLM', 'Notifications'] as const
   type Tab = SettingsTab
+
+  const navigate = useNavigate()
 
   const [activeTab, setActiveTab] = useState<Tab>(() =>
     resolveSettingsTab(searchParams.get('tab'))
   )
+
+  // #589: Salt Masters moved to the Overview hub. Redirect the legacy
+  // /settings?tab=Salt Masters deep-link to its new home so old bookmarks survive.
+  useEffect(() => {
+    if (searchParams.get('tab') === 'Salt Masters') {
+      navigate('/overview?tab=salt-masters', { replace: true })
+    }
+  }, [searchParams, navigate])
 
   // Sync active tab when the ?tab query param changes while SettingsPage stays mounted.
   // Guard against a loop: only call setActiveTab when the resolved value differs from
@@ -685,9 +694,6 @@ export function SettingsPage() {
         </div>
       )}
 
-      {/* Salt Masters tab */}
-      {activeTab === 'Salt Masters' && <SaltMastersTab />}
-
       {/* Playbook Library tab */}
       {activeTab === 'Playbook Library' && (
         <div className="space-y-4">
@@ -987,8 +993,8 @@ export function SettingsPage() {
         </div>
       )}
 
-      {/* Save button — visible for all tabs except LLM, Notifications, Playbook Library, and Salt Masters (which manage their own state) */}
-      {activeTab !== 'LLM' && activeTab !== 'Notifications' && activeTab !== 'Playbook Library' && activeTab !== 'Salt Masters' && (
+      {/* Save button — visible for all tabs except LLM, Notifications, and Playbook Library (which manage their own state) */}
+      {activeTab !== 'LLM' && activeTab !== 'Notifications' && activeTab !== 'Playbook Library' && (
         <div className="flex justify-end pt-2">
           <button
             onClick={() => saveMutation.mutate()}
