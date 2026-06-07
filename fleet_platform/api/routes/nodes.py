@@ -319,7 +319,7 @@ async def list_nodes(
 async def get_node(
     node_id: uuid.UUID,
     db: AsyncSession = Depends(get_db),
-    _: dict = Depends(get_current_user),
+    _: dict = Depends(require_role("viewer", "operator", "admin")),
 ):
     result = await db.execute(select(Node).options(selectinload(Node.tags)).where(Node.id == node_id))
     node = result.scalar_one_or_none()
@@ -332,7 +332,7 @@ async def get_node(
 async def get_node_facts(
     node_id: uuid.UUID,
     db: AsyncSession = Depends(get_db),
-    _: dict = Depends(get_current_user),
+    _: dict = Depends(require_role("viewer", "operator", "admin")),
 ):
     """Return the latest Salt grain snapshot for a node."""
     result = await db.execute(
@@ -346,7 +346,7 @@ async def get_node_facts(
 async def get_node_packages(
     node_id: uuid.UUID,
     db: AsyncSession = Depends(get_db),
-    _: dict = Depends(get_current_user),
+    _: dict = Depends(require_role("viewer", "operator", "admin")),
 ):
     """Return installed packages extracted from the latest Salt grain snapshot."""
     result = await db.execute(

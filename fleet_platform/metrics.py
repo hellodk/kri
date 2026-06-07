@@ -76,3 +76,14 @@ node_ssh_reachable = Gauge(
     "1 if the node's SSH port is reachable (probed every 15 min by the connectivity worker), 0 otherwise",
     ["minion_id"],
 )
+
+# ---------------------------------------------------------------------------
+# Celery beat dead-man heartbeat gauge (issue #576)
+# ---------------------------------------------------------------------------
+
+beat_last_run_timestamp_seconds = Gauge(
+    "kri_beat_last_run_timestamp_seconds",
+    "Unix timestamp (seconds) of the last successful Celery beat mark_stale_nodes run. "
+    "0 when the kri:maintenance:last_run Redis key is absent (beat is silent / dead). "
+    "Alert: time() - kri_beat_last_run_timestamp_seconds > 600",
+)
