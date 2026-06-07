@@ -1,0 +1,96 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: kri-api
+  namespace: kri
+  labels:
+    app: kri-api
+    component: api
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: kri-api
+  template:
+    metadata:
+      labels:
+        app: kri-api
+        component: api
+    spec:
+      containers:
+        - name: api
+          image: gitea.local/kri/kri-api:0.1.415
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: http
+              containerPort: 8000
+              protocol: TCP
+          command:
+            - sh
+            - -c
+            - "bash /app/deploy/migrate.sh && uv run uvicorn fleet_platform.api.main:app --host 0.0.0.0 --port 8000 --log-level info"
+          env:
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: kri-secrets
+                  key: POSTGRES_PASSWORD
+            - name: REDIS_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: kri-secrets
+                  key: REDIS_PASSWORD
+            - name: JWT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: kri-secrets
+                  key: JWT_SECRET
+            - name: FERNET_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: kri-secrets
+                  key: FERNET_KEY
+            - name: SALT_API_URL
+              valueFrom:
+                secretKeyRef:
+                  name: kri-secrets
+                  key: SALT_API_URL
+            - name: SALT_API_USER
+              valueFrom:
+                secretKeyRef:
+                  name: kri-secrets
+                  key: SALT_API_USER
+            - name: SALT_API_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: kri-secrets
+                  key: SALT_API_PASSWORD
+            - name: DATABASE_URL
+              value: "postgresql+psycopg://fleet:$(POSTGRES_PASSWORD)@postgres.utilities.svc.cluster.local:5432/fleet_platform"
+            - name: REDIS_URL
+              value: "redis://:$(REDIS_PASSWORD)@redis.utilities.svc.cluster.local:6379/0"
+            - name: LOG_LEVEL
+              value: "info"
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: 8000
+            initialDelaySeconds: 40
+            periodSeconds: 30
+            timeoutSeconds: 10
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: 8000
+            initialDelaySeconds: 10
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
+          resources:
+            requests:
+              cpu: "250m"
+              memory: "256Mi"
+            limits:
+              cpu: "1000m"
+              memory: "1Gi"

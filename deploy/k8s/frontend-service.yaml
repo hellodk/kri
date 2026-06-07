@@ -1,0 +1,17 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: kri-frontend
+  namespace: kri
+  labels:
+    app: kri-frontend
+    component: frontend
+spec:
+  selector:
+    app: kri-frontend
+  ports:
+    - name: http
+      port: 80
+      targetPort: 80
+      protocol: TCP
+  type: ClusterIP
