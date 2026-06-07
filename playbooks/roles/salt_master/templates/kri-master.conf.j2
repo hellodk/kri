@@ -14,7 +14,7 @@ file_roots:
   base:
     - {{ salt_states_dir }}
 
-# Listen on all interfaces so Tailscale-connected minions can reach this host
+# Listen on all interfaces so LAN-connected minions can reach this host
 interface: {{ salt_master_interface }}
 
 # Log to file (not stdout — native service, not Docker container)
@@ -31,10 +31,19 @@ reactor:
   - 'salt/minion/*/start':
     - salt://reactor/grain_report_on_start.sls
 
-# External auth for salt-api (kri workers authenticate as {{ salt_api_user }})
+# External auth for salt-api (kri workers authenticate as {{ salt_api_user }}).
+# Scoped to only what kri needs: test connectivity, manage minion keys,
+# and query fleet status runners. No wildcard ('.*') or bare runner/wheel access.
 external_auth:
   pam:
     {{ salt_api_user }}:
-      - '.*'
-      - '@runner'
-      - '@wheel'
+      - 'test.ping'
+      - '@wheel':
+        - 'key.list_all'
+        - 'key.accept'
+        - 'key.reject'
+        - 'key.delete'
+      - '@runner':
+        - 'manage.up'
+        - 'manage.versions'
+        - 'manage.status'

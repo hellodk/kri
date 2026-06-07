@@ -1,0 +1,38 @@
+---
+# tasks/api_tls.yml — generate a self-signed TLS cert/key for salt-api (rest_cherrypy)
+#
+# Works on macOS and Linux. Uses the `openssl` CLI (available on both) with a
+# `stat`/`creates:` guard so it is fully idempotent — the cert is only generated
+# once and never overwritten on subsequent playbook runs.
+#
+# Cert details: 2048-bit RSA, 3650-day validity (≈10 years), self-signed.
+# kri must connect with ssl_verify=False or import the cert into its trust store.
+
+- name: Create /etc/salt/pki/api directory
+  file:
+    path: /etc/salt/pki/api
+    state: directory
+    owner: root
+    group: "{{ 'wheel' if ansible_system == 'Darwin' else 'root' }}"
+    mode: "0700"
+  become: true
+
+- name: Generate self-signed TLS cert and key for salt-api (if absent)
+  command: >
+    openssl req -x509 -nodes -newkey rsa:2048
+    -keyout {{ salt_api_ssl_key }}
+    -out {{ salt_api_ssl_crt }}
+    -days 3650
+    -subj "/CN={{ inventory_hostname }}/O=kri-salt-api/C=IN"
+  args:
+    creates: "{{ salt_api_ssl_crt }}"
+  become: true
+  notify: Restart salt-api
+
+- name: Restrict permissions on salt-api private key
+  file:
+    path: "{{ salt_api_ssl_key }}"
+    owner: root
+    group: "{{ 'wheel' if ansible_system == 'Darwin' else 'root' }}"
+    mode: "0600"
+  become: true
