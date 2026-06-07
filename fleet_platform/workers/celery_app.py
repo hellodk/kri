@@ -95,6 +95,11 @@ celery_app.conf.update(
             "task": "fleet_platform.workers.maintenance.reap_orphaned_bootstraps",
             "schedule": crontab(minute="*/30"),  # every 30 minutes (#445)
         },
+        "reap-orphaned-master-provisions": {
+            "task": "fleet_platform.workers.maintenance.reap_orphaned_master_provisions",
+            "schedule": crontab(minute="*/30"),  # every 30 minutes — mirrors bootstrap reaper (#557)
+            "options": {"queue": "maintenance"},
+        },
         "reindex-nodes": {
             "task": "fleet_platform.workers.embedding_tasks.reindex_nodes",
             "schedule": 300,  # every 5 min — tracks node status changes

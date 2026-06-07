@@ -4,6 +4,7 @@
 import logging
 import re
 import secrets
+import subprocess
 import tempfile
 import threading as _threading
 import time
@@ -18,6 +19,7 @@ from sqlalchemy import select
 from fleet_platform.core.auth import hash_password
 from fleet_platform.db.session import get_sync_db
 from fleet_platform.models.bootstrap_run import BootstrapRun
+from fleet_platform.models.master_provision_run import MasterProvisionRun
 from fleet_platform.models.node import Node
 from fleet_platform.models.platform_setting import PlatformSetting
 from fleet_platform.models.salt_master import SaltMaster
@@ -807,3 +809,420 @@ def refresh_all_node_grains() -> dict:
         # Log + clean exit — no DB status to update for grain tasks (#471)
         logger.warning("refresh_all_node_grains: soft time limit exceeded — clean exit")
         return {"queued": 0, "status": "timeout"}
+
+
+# ---------------------------------------------------------------------------
+# provision_master — install/reconfigure salt-master on a host (#557)
+# ---------------------------------------------------------------------------
+
+_PROVISION_TIMEOUT_SECONDS = 1200  # 1200 s (twice the bootstrap) — salt-master install is heavier
+_SSH_OS_DETECT_TIMEOUT = 15  # seconds — quick uname check before playbook run
+
+# Playbook filenames; keys are canonical os_family values
+_MASTER_PLAYBOOKS: dict[str, str] = {
+    "Darwin": "install_salt_master.yml",
+    "Linux": "install_salt_master_linux.yml",
+}
+_DEFAULT_OS_FAMILY = "Linux"
+
+
+def _detect_os_family(ssh_host: str, ssh_user: str, ssh_args_extra: list[str]) -> str | None:
+    """Return 'Darwin' or 'Linux' by running `uname -s` over SSH.
+
+    Returns None when the host is unreachable or the command fails.
+    ``ssh_args_extra`` is a flat list of extra SSH option tokens (e.g.
+    ['-i', '/path/key', '-o', 'StrictHostKeyChecking=accept-new']).
+    """
+    cmd = [
+        "ssh",
+        "-F",
+        "/dev/null",
+        "-o",
+        f"ConnectTimeout={_SSH_OS_DETECT_TIMEOUT}",
+        "-o",
+        "BatchMode=yes",
+        *ssh_args_extra,
+        f"{ssh_user}@{ssh_host}",
+        "uname -s",
+    ]
+    try:
+        result = subprocess.run(cmd, capture_output=True, text=True, timeout=_SSH_OS_DETECT_TIMEOUT + 5)
+        if result.returncode == 0:
+            return result.stdout.strip()
+        logger.warning(
+            "_detect_os_family: uname failed rc=%s ssh_host=%s stderr=%r",
+            result.returncode,
+            ssh_host,
+            result.stderr[:200],
+        )
+        return None
+    except subprocess.TimeoutExpired:
+        logger.warning("_detect_os_family: SSH timed out to %s", ssh_host)
+        return None
+    except Exception as _exc:  # noqa: BLE001
+        logger.warning("_detect_os_family: unexpected error for %s: %s", ssh_host, _exc)
+        return None
+
+
+@celery_app.task(
+    name="fleet_platform.workers.ansible_tasks.provision_master",
+    bind=True,
+    max_retries=0,
+    queue="maintenance",
+    acks_late=False,
+)
+def provision_master(self, salt_master_id: str, action: str = "install") -> dict:
+    """Install or reconfigure salt-master + salt-api on a host.
+
+    Mirrors bootstrap_node's ansible_runner.run_async + event_handler streaming
+    pattern (#557, master-lifecycle epic).
+
+    The salt-master role is idempotent; action='reconfigure' is identical to
+    action='install' at playbook level — no special-casing needed.
+    """
+    from fleet_platform.services.platform_settings_svc import decrypt_secret
+    from fleet_platform.services.salt_master_probe import run_probe
+
+    master_uuid = _uuid.UUID(salt_master_id)
+    logger.info("provision_master starting: salt_master_id=%s action=%s", salt_master_id, action)
+
+    # ------------------------------------------------------------------
+    # 1. Load SaltMaster row + resolve SSH credentials
+    # ------------------------------------------------------------------
+    with get_sync_db() as db:
+        master = db.execute(select(SaltMaster).where(SaltMaster.id == master_uuid)).scalar_one_or_none()
+        if not master:
+            return {"status": "error", "reason": "master_not_found"}
+
+        # Resolve SSH host
+        ssh_host: str = master.ssh_host or master.address
+
+        # Global bootstrap credentials as fallback
+        _global_ssh_user, _global_ssh_password, _controller_pubkey = _get_bootstrap_settings(db)
+
+        # Priority: per-master creds > global settings
+        ssh_user: str = master.ssh_user or _global_ssh_user or "admin"
+
+        # Decrypt per-master SSH key / password
+        ssh_key: str | None = None
+        if master.ssh_key_enc:
+            try:
+                ssh_key = decrypt_secret(master.ssh_key_enc)
+            except Exception as _e:
+                logger.warning(
+                    "provision_master: cannot decrypt ssh_key_enc for master_id=%s: %s",
+                    salt_master_id,
+                    _e,
+                )
+
+        ssh_password: str | None = None
+        if master.ssh_password_enc:
+            try:
+                ssh_password = decrypt_secret(master.ssh_password_enc)
+            except Exception as _e:
+                logger.warning(
+                    "provision_master: cannot decrypt ssh_password_enc for master_id=%s: %s",
+                    salt_master_id,
+                    _e,
+                )
+
+        # Fall back to global password only when no per-master creds at all
+        if not ssh_key and not ssh_password:
+            ssh_password = _global_ssh_password
+
+        # Decrypt salt-api password (krisalt user)
+        api_password: str = ""
+        if master.api_password_enc:
+            try:
+                api_password = decrypt_secret(master.api_password_enc)
+            except Exception as _e:
+                logger.warning(
+                    "provision_master: cannot decrypt api_password_enc for master_id=%s: %s",
+                    salt_master_id,
+                    _e,
+                )
+
+        # ------------------------------------------------------------------
+        # 2. Create MasterProvisionRun + flip provision_status → provisioning
+        # ------------------------------------------------------------------
+        prun = MasterProvisionRun(
+            salt_master_id=master_uuid,
+            action=action,
+            status="running",
+            started_at=datetime.now(UTC),
+        )
+        db.add(prun)
+        master.provision_status = "provisioning"
+        master.provision_error = None
+        db.commit()
+        prun_id: _uuid.UUID = prun.id
+
+    # ------------------------------------------------------------------
+    # 3. Pre-flight: detect OS via SSH; bail on unreachable host
+    # ------------------------------------------------------------------
+    _wrote_terminal = False
+    provision_error: str | None = None
+    runner = None
+    thread = None
+    rc_display: int | str = "N/A"
+
+    try:
+        with tempfile.TemporaryDirectory(prefix="kri-provision-") as tmpdir:
+            # Write SSH key to temp file if using key auth
+            key_file_path: str | None = None
+            if ssh_key:
+                key_path = Path(tmpdir) / "id_provision"
+                key_path.write_text(ssh_key)
+                key_path.chmod(0o600)
+                key_file_path = str(key_path)
+
+            # Build SSH extra args for OS detect (no known_hosts for provision — TOFU)
+            _detect_extra: list[str] = ["-o", "StrictHostKeyChecking=accept-new"]
+            if key_file_path:
+                _detect_extra += ["-i", key_file_path]
+
+            uname_output = _detect_os_family(ssh_host, ssh_user, _detect_extra)
+            if uname_output is None:
+                # Host unreachable — fail immediately without running playbook
+                _err = (
+                    f"SSH pre-flight failed: cannot reach {ssh_user}@{ssh_host}. "
+                    "Check ssh_host, ssh_user, and SSH credentials on the master record."
+                )
+                logger.error("provision_master: %s master_id=%s", _err, salt_master_id)
+                with get_sync_db() as _db:
+                    _m = _db.execute(select(SaltMaster).where(SaltMaster.id == master_uuid)).scalar_one_or_none()
+                    _r = _db.execute(
+                        select(MasterProvisionRun).where(MasterProvisionRun.id == prun_id)
+                    ).scalar_one_or_none()
+                    if _m:
+                        _m.provision_status = "failed"
+                        _m.provision_error = _err
+                    if _r:
+                        _r.status = "failed"
+                        _r.finished_at = datetime.now(UTC)
+                        _r.error = _err
+                    _db.commit()
+                _wrote_terminal = True
+                return {"status": "failed", "reason": _err, "salt_master_id": salt_master_id}
+
+            # Map uname output to canonical os_family
+            os_family: str = "Darwin" if uname_output == "Darwin" else "Linux"
+            playbook_name = _MASTER_PLAYBOOKS[os_family]
+            logger.info(
+                "provision_master: detected os_family=%s → playbook=%s master_id=%s",
+                os_family,
+                playbook_name,
+                salt_master_id,
+            )
+
+            # ------------------------------------------------------------------
+            # 4. Build inventory + run Ansible with live streaming
+            # ------------------------------------------------------------------
+            inv_path = Path(tmpdir) / "inventory.ini"
+            if key_file_path:
+                inv_path.write_text(
+                    f"[targets]\n"
+                    f"{ssh_host} ansible_host={ssh_host} "
+                    f"ansible_user={ssh_user} "
+                    f"ansible_ssh_private_key_file={key_file_path}\n"
+                )
+            else:
+                inv_path.write_text(f"[targets]\n{ssh_host} ansible_host={ssh_host} ansible_user={ssh_user}\n")
+            inv_path.chmod(0o600)
+
+            password_extravars: dict[str, str] = {}
+            if not key_file_path and ssh_password:
+                password_extravars["ansible_ssh_pass"] = ssh_password
+                password_extravars["ansible_become_password"] = ssh_password
+
+            ssh_args = "-F /dev/null -o StrictHostKeyChecking=accept-new"
+            if key_file_path:
+                ssh_args += f" -i {key_file_path}"
+
+            stdout_lines: list[str] = []
+            _trunc_ref: dict = {"size": 0, "truncated": False}
+            _last_task_ref: dict = {"task": ""}
+            _buf_lock = _threading.Lock()
+            last_db_write: float = time.time()
+
+            def _event_handler(event: dict) -> bool:
+                et = event.get("event", "")
+                if et in ("runner_on_start", "playbook_on_task_start"):
+                    t = event.get("event_data", {}).get("task", "") or event.get("event_data", {}).get("task_path", "")
+                    if t:
+                        _last_task_ref["task"] = t
+                msg = event.get("stdout", "")
+                if msg:
+                    with _buf_lock:
+                        _append_capped(stdout_lines, msg, _trunc_ref)
+                return True
+
+            thread, runner = ansible_runner.run_async(
+                private_data_dir=tmpdir,
+                playbook=str(_PLAYBOOKS_DIR / playbook_name),
+                inventory=str(inv_path),
+                extravars={
+                    "target_host": ssh_host,
+                    "ansible_user": ssh_user,
+                    "kri_salt_api_password": api_password,
+                    **password_extravars,
+                },
+                envvars={
+                    "ANSIBLE_COLLECTIONS_PATH": str(_PLAYBOOKS_DIR / "collections" / "installed"),
+                    "ANSIBLE_SSH_ARGS": ssh_args,
+                    "ANSIBLE_FORCE_COLOR": "1",
+                    "PYTHONUNBUFFERED": "1",
+                },
+                event_handler=_event_handler,
+                quiet=True,
+                rotate_artifacts=0,
+                timeout=_PROVISION_TIMEOUT_SECONDS,
+            )
+
+            # Non-blocking flush loop: flush incremental logs every _LOG_BATCH_INTERVAL seconds
+            while thread.is_alive():
+                now = time.time()
+                if now - last_db_write >= _LOG_BATCH_INTERVAL:
+                    with _buf_lock:
+                        snapshot = list(stdout_lines)
+                    joined = "\n".join(snapshot)
+                    with get_sync_db() as _db:
+                        _r = _db.execute(
+                            select(MasterProvisionRun).where(MasterProvisionRun.id == prun_id)
+                        ).scalar_one_or_none()
+                        if _r:
+                            _r.ansible_stdout = joined
+                        _db.commit()
+                    last_db_write = now
+                time.sleep(1)
+            thread.join()
+
+        # ------------------------------------------------------------------
+        # 5. Classify outcome
+        # ------------------------------------------------------------------
+        full_stdout = "\n".join(stdout_lines)
+        last_task = _last_task_ref["task"]
+        rc_display = runner.rc if runner is not None and runner.rc is not None else "N/A"
+        final_status = runner.status if runner is not None else "error"
+
+        _prov_timeout_min = _PROVISION_TIMEOUT_SECONDS // 60
+        if final_status == "timeout":
+            provision_error = (
+                f"Timed out after {_prov_timeout_min} minutes. Last task: {last_task}"
+                if last_task
+                else f"Timed out after {_prov_timeout_min} minutes."
+            )
+        elif final_status != "successful" or runner.rc != 0:
+            if "UNREACHABLE" in full_stdout:
+                provision_error = f"SSH unreachable: check ssh_host ({ssh_host}) and SSH credentials"
+            elif "Authentication failure" in full_stdout or "Permission denied" in full_stdout:
+                provision_error = "SSH auth failed: check SSH username/password on the master record"
+            else:
+                provision_error = f"ansible rc={rc_display} status={final_status}"
+
+            logger.error(
+                "provision_master: ansible failure rc=%s status=%s last_task=%r master_id=%s",
+                rc_display,
+                final_status,
+                last_task,
+                salt_master_id,
+            )
+
+        # ------------------------------------------------------------------
+        # 6. Persist terminal state + optionally run probe on success
+        # ------------------------------------------------------------------
+        _succeeded = final_status == "successful" and runner is not None and runner.rc == 0
+
+        # Run post-provision probe on success to refresh status/checks
+        probe_result: "dict | None" = None
+        if _succeeded:
+            import asyncio
+
+            try:
+                with get_sync_db() as _pdb:
+                    _fresh_master = _pdb.execute(
+                        select(SaltMaster).where(SaltMaster.id == master_uuid)
+                    ).scalar_one_or_none()
+                    if _fresh_master:
+                        probe_result = dict(asyncio.run(run_probe(_fresh_master)))
+            except Exception as _pe:  # noqa: BLE001
+                logger.warning(
+                    "provision_master: probe after provision failed for master_id=%s: %s",
+                    salt_master_id,
+                    _pe,
+                )
+
+        with get_sync_db() as db:
+            _m = db.execute(select(SaltMaster).where(SaltMaster.id == master_uuid)).scalar_one_or_none()
+            _r = db.execute(select(MasterProvisionRun).where(MasterProvisionRun.id == prun_id)).scalar_one_or_none()
+
+            if _m:
+                if _succeeded:
+                    _m.provision_status = "provisioned"
+                    _m.provision_error = None
+                    _m.os_family = os_family
+                    _m.last_provisioned_at = datetime.now(UTC)
+                    # Update status from probe if available
+                    if probe_result:
+                        _m.status = probe_result.get("status", _m.status)
+                        _m.checks = probe_result.get("checks")  # type: ignore[assignment]
+                        _m.last_checked_at = datetime.now(UTC)
+                        failed_checks = [c for c in (probe_result.get("checks") or []) if c.get("status") == "fail"]
+                        _m.last_error = failed_checks[0]["detail"] if failed_checks else None
+                else:
+                    _m.provision_status = "failed"
+                    _m.provision_error = provision_error
+
+            if _r:
+                _r.finished_at = datetime.now(UTC)
+                _r.status = "completed" if _succeeded else "failed"
+                _r.ansible_stdout = full_stdout or f"rc={rc_display} status={final_status}"
+                _r.error = provision_error
+
+            db.commit()
+
+        _wrote_terminal = True
+
+    except SoftTimeLimitExceeded:
+        logger.warning("provision_master: soft time limit exceeded for master_id=%s", salt_master_id)
+        with get_sync_db() as db:
+            _m = db.execute(select(SaltMaster).where(SaltMaster.id == master_uuid)).scalar_one_or_none()
+            if _m and _m.provision_status == "provisioning":
+                _m.provision_status = "failed"
+                _m.provision_error = "Celery task soft time limit exceeded — provision was terminated."
+            db.commit()
+        raise
+
+    except Exception as _exc:
+        _err_msg = f"Unexpected error during provision: {type(_exc).__name__}: {_exc}"
+        logger.exception("provision_master: unhandled exception for master_id=%s", salt_master_id)
+        with get_sync_db() as db:
+            _m = db.execute(select(SaltMaster).where(SaltMaster.id == master_uuid)).scalar_one_or_none()
+            if _m and _m.provision_status == "provisioning":
+                _m.provision_status = "failed"
+                _m.provision_error = _err_msg
+            db.commit()
+        raise
+
+    finally:
+        if not _wrote_terminal:
+            # Any exception path that didn't set terminal status: finalize the run record
+            with get_sync_db() as db:
+                _r = db.execute(
+                    select(MasterProvisionRun)
+                    .where(MasterProvisionRun.salt_master_id == master_uuid)
+                    .where(MasterProvisionRun.status == "running")
+                    .order_by(MasterProvisionRun.started_at.desc())
+                ).scalar_one_or_none()
+                if _r:
+                    _r.status = "failed"
+                    _r.finished_at = datetime.now(UTC)
+                db.commit()
+
+    return {
+        "status": runner.status if runner is not None else "error",
+        "rc": rc_display,
+        "salt_master_id": salt_master_id,
+        "action": action,
+        "os_family": os_family if uname_output is not None else "unknown",
+    }

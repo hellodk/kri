@@ -8,6 +8,7 @@ from fleet_platform.core.config import settings
 from fleet_platform.db.session import get_sync_db
 from fleet_platform.models.ansible_job import AnsibleJob
 from fleet_platform.models.bootstrap_run import BootstrapRun
+from fleet_platform.models.master_provision_run import MasterProvisionRun
 from fleet_platform.models.node import Node
 from fleet_platform.models.platform_setting import PlatformSetting
 from fleet_platform.models.salt_master import SaltMaster
@@ -286,3 +287,53 @@ def poll_salt_masters() -> dict:
         pass
 
     return {"polled": polled, "skipped": skipped}
+
+
+_PROVISION_ORPHAN_MINUTES = 90  # provisions running > 90 min are considered orphaned
+
+
+@celery_app.task(
+    name="fleet_platform.workers.maintenance.reap_orphaned_master_provisions",
+    queue="maintenance",
+)
+def reap_orphaned_master_provisions() -> dict:
+    """Mark MasterProvisionRun rows stuck in 'running' as failed (#557).
+
+    Mirrors reap_orphaned_bootstraps.  Any provision that has been running
+    longer than _PROVISION_ORPHAN_MINUTES is considered orphaned (worker restart
+    mid-run).  The owning SaltMaster.provision_status is flipped to 'failed' if
+    it is still 'provisioning'.
+    """
+    now = datetime.now(UTC)
+    cutoff = now - timedelta(minutes=_PROVISION_ORPHAN_MINUTES)
+
+    with get_sync_db() as db:
+        # Collect master IDs for orphaned runs before bulk-updating them
+        stuck_master_ids = (
+            db.execute(
+                select(MasterProvisionRun.salt_master_id)
+                .where(MasterProvisionRun.status == "running")
+                .where(MasterProvisionRun.started_at < cutoff)
+            )
+            .scalars()
+            .all()
+        )
+
+        result = db.execute(
+            update(MasterProvisionRun)
+            .where(MasterProvisionRun.status == "running")
+            .where(MasterProvisionRun.started_at < cutoff)
+            .values(status="failed", finished_at=now)
+        )
+
+        if stuck_master_ids:
+            db.execute(
+                update(SaltMaster)
+                .where(SaltMaster.id.in_(stuck_master_ids))
+                .where(SaltMaster.provision_status == "provisioning")
+                .values(provision_status="failed")
+            )
+
+        db.commit()
+
+    return {"reaped": result.rowcount}  # type: ignore[attr-defined]
