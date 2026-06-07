@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
+import { resolveSettingsTab, type SettingsTab } from '../lib/settingsTabParam'
 import { Skeleton } from '../components/Skeleton'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { ansibleApi } from '../api/ansible'
@@ -253,19 +254,25 @@ export function SettingsPage() {
       : null
 
   const TABS = ['General', 'Automation', 'Remote Access', 'Integrations', 'Salt Masters', 'Playbook Library', 'LLM', 'Notifications'] as const
-  type Tab = typeof TABS[number]
-
-  // Legacy tab-name mapping: stored/URL values 'Bootstrap' and 'Advanced' both
-  // map to the consolidated 'Automation' tab introduced in #391.
-  function normaliseLegacyTab(raw: string): Tab {
-    if (raw === 'Bootstrap' || raw === 'Advanced') return 'Automation'
-    if ((TABS as readonly string[]).includes(raw)) return raw as Tab
-    return 'General'
-  }
+  type Tab = SettingsTab
 
   const [activeTab, setActiveTab] = useState<Tab>(() =>
-    normaliseLegacyTab(searchParams.get('tab') ?? 'General')
+    resolveSettingsTab(searchParams.get('tab'))
   )
+
+  // Sync active tab when the ?tab query param changes while SettingsPage stays mounted.
+  // Guard against a loop: only call setActiveTab when the resolved value differs from
+  // the current tab (handleTabChange already sets both state + URL, so this only fires
+  // for external navigation — back/forward, links, programmatic pushes).
+  // Legacy aliases 'Bootstrap' and 'Advanced' are mapped to 'Automation' by resolveSettingsTab.
+  useEffect(() => {
+    const resolved = resolveSettingsTab(searchParams.get('tab'))
+    if (resolved !== activeTab) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- syncing derived tab state from URL search params (external navigation source); guard prevents loop
+      setActiveTab(resolved)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchParams])
 
   const handleTabChange = (tab: Tab) => {
     setActiveTab(tab)
