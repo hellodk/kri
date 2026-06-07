@@ -1,7 +1,6 @@
 # fleet_platform/workers/ansible_tasks.py
 """Celery tasks for Ansible-based node bootstrap."""
 
-import asyncio
 import logging
 import re
 import secrets
@@ -22,7 +21,6 @@ from fleet_platform.models.bootstrap_run import BootstrapRun
 from fleet_platform.models.node import Node
 from fleet_platform.models.platform_setting import PlatformSetting
 from fleet_platform.models.salt_master import SaltMaster
-from fleet_platform.services.salt_master_probe import run_probe
 from fleet_platform.services.ssh_keypair import get_controller_pubkey
 from fleet_platform.services.task_lock import unique_task
 from fleet_platform.workers.celery_app import celery_app
@@ -181,8 +179,19 @@ def _get_pillar_dir(db) -> Path:
     queue="maintenance",
     acks_late=False,  # prevent double-bootstrap on SIGKILL (#444)
 )
-def bootstrap_node(self, node_id: str, target_ip: str, ssh_username: str | None = None) -> dict:
-    """Run bootstrap_mac_mini.yml against a single Mac Mini."""
+def bootstrap_node(
+    self,
+    node_id: str,
+    target_ip: str,
+    ssh_username: str | None = None,
+    salt_master_ids: list[str] | None = None,
+) -> dict:
+    """Run bootstrap_mac_mini.yml against a single Mac Mini.
+
+    salt_master_ids — optional list of SaltMaster UUIDs to use for this bootstrap.
+    When None (default), all *enabled* SaltMaster rows are used (HA failover).
+    An empty resolved list is a hard failure; an unreachable master is a warning only.
+    """
     node_uuid = _uuid.UUID(node_id)
     logger.info("bootstrap_node starting: node_id=%s target_ip=%s", node_id, target_ip)
 
@@ -209,24 +218,27 @@ def bootstrap_node(self, node_id: str, target_ip: str, ssh_username: str | None 
             db
         )
 
-        # A) Resolve the node's salt-master from the DB (#520, epic #523 phase 5).
-        # Priority: node.salt_master_id FK → default SaltMaster row → settings fallback.
-        master_obj: SaltMaster | None = None
-        if node.salt_master_id:
-            master_obj = db.execute(select(SaltMaster).where(SaltMaster.id == node.salt_master_id)).scalars().first()
-        if master_obj is None:
-            master_obj = db.execute(select(SaltMaster).where(SaltMaster.is_default.is_(True))).scalars().first()
+        # A) Resolve the multi-master list (#534, epic #537).
+        # If salt_master_ids given → load exactly those rows.
+        # Otherwise → all enabled SaltMaster rows (HA: every master gets listed).
+        master_objs: list[SaltMaster]
+        if salt_master_ids:
+            import uuid as _uuid_mod
 
-        # Capture attributes while in-session (expire_on_commit=False keeps them readable after).
-        if master_obj is not None:
-            master_address: str = master_obj.address
-            master_status: str = master_obj.status
-            master_name: str = master_obj.name
+            master_objs = list(
+                db.execute(
+                    select(SaltMaster).where(SaltMaster.id.in_([_uuid_mod.UUID(mid) for mid in salt_master_ids]))
+                )
+                .scalars()
+                .all()
+            )
         else:
-            # No SaltMaster row at all — fall back to the legacy platform setting.
-            master_address = salt_master_settings
-            master_status = "healthy"  # skip gate; preserve current behaviour
-            master_name = ""
+            master_objs = list(db.execute(select(SaltMaster).where(SaltMaster.enabled.is_(True))).scalars().all())
+
+        # Capture attributes while in-session (avoids DetachedInstanceError after commit)
+        master_addresses: list[str] = [m.address for m in master_objs]
+        master_statuses: dict[str, str] = {m.address: m.status for m in master_objs}
+        master_names: dict[str, str] = {m.address: m.name for m in master_objs}
 
         # Per-node stored credentials
         node_user, node_password, node_auth_mode = _get_node_credentials(node)
@@ -273,52 +285,50 @@ def bootstrap_node(self, node_id: str, target_ip: str, ssh_username: str | None 
         node_minion_id = node.minion_id
         node_ssh_host_key = node.ssh_host_key
 
-    # B) Health gate — run before spending any tokens or launching ansible (#520).
-    # Only applies when a SaltMaster row was resolved (master_obj is not None).
-    if master_obj is not None:
-        if master_status == "unknown":
-            # Never been polled — do a one-shot probe so we don't blindly launch ansible
-            # against an unverified master.
-            logger.info(
-                "bootstrap_node: probing master '%s' (status=unknown) before bootstrap node_id=%s",
-                master_name,
-                node_id,
-            )
-            probe_result = asyncio.run(run_probe(master_obj))
-            fresh_status = probe_result["status"]
-            # Persist the probe result back to the SaltMaster row.
-            with get_sync_db() as _mdb:
-                _m = _mdb.execute(select(SaltMaster).where(SaltMaster.id == master_obj.id)).scalars().first()
-                if _m:
-                    _m.status = fresh_status
-                    _m.last_checked_at = datetime.now(UTC)
-                    _m.last_error = (
-                        "; ".join(c["detail"] for c in probe_result["checks"] if c["status"] == "fail") or None
-                    )
-                    _m.checks = list(probe_result["checks"])  # type: ignore[assignment]
-                _mdb.commit()
-            master_status = fresh_status
+    # B) Mandatory gate: no masters configured at all → hard fail.
+    # This replaces the single-master mandatory check with multi-master awareness.
+    if not master_addresses:
+        _err = "No salt-master configured — add one in Settings → Salt Masters."
+        logger.warning("bootstrap_node: %s node_id=%s", _err, node_id)
+        with get_sync_db() as _fdb:
+            _fn = _fdb.execute(select(Node).where(Node.id == node_uuid)).scalar_one_or_none()
+            if _fn:
+                _fn.bootstrap_status = "failed"
+                _fn.bootstrap_error = _err
+            # Finalise any running BootstrapRun (none yet at this stage, but guard anyway)
+            _run = _fdb.execute(
+                select(BootstrapRun)
+                .where(BootstrapRun.node_id == node_uuid)
+                .where(BootstrapRun.status == "running")
+                .order_by(BootstrapRun.started_at.desc())
+            ).scalar_one_or_none()
+            if _run:
+                _run.status = "failed"
+                _run.finished_at = datetime.now(UTC)
+                _run.error = _err
+            _fdb.commit()
+        return {"status": "error", "reason": _err}
 
-        if master_status == "unreachable":
-            _err = f"Salt-master '{master_name}' is unreachable — fix it in Settings → Salt Masters and retry."
-            logger.warning("bootstrap_node: %s node_id=%s", _err, node_id)
-            with get_sync_db() as _fdb:
-                _fn = _fdb.execute(select(Node).where(Node.id == node_uuid)).scalar_one_or_none()
-                if _fn:
-                    _fn.bootstrap_status = "failed"
-                    _fn.bootstrap_error = _err
-                # Finalise any running BootstrapRun created before this gate (none yet — gate
-                # runs before step 3 — so nothing to close; the finally block covers orphans).
-                _fdb.commit()
-            return {"status": "error", "reason": _err}
-        # healthy / degraded → proceed
+    # C) Health warning (not a hard block): log unreachable masters but proceed (#534).
+    unreachable = [addr for addr, st in master_statuses.items() if st == "unreachable"]
+    if unreachable:
+        _warn_names = [master_names.get(addr, addr) for addr in unreachable]
+        logger.warning(
+            "bootstrap_node: %d master(s) unreachable %r — proceeding with %d master(s) in HA list node_id=%s",
+            len(unreachable),
+            _warn_names,
+            len(master_addresses),
+            node_id,
+        )
 
     # 2. Generate fresh node token — delivered to the minion via ansible-runner extravars
     # (node_token + ingest_url).  The local salt-pillar write was removed in #509:
     # the salt-master moved native to mm1 and the shared salt-pillar Docker volume no
     # longer exists.  Token delivery via extravars was always the correct path.
     raw_token = secrets.token_urlsafe(32)
-    ingest_url = f"http://{master_address}/api/v1/ingest"
+    # Use the first master for the ingest URL (primary); others are HA failover only.
+    first_master_address: str = master_addresses[0]
+    ingest_url = f"http://{first_master_address}/api/v1/ingest"
 
     # 3. Update the stored token hash AND create a BootstrapRun record
     with get_sync_db() as db:
@@ -425,7 +435,11 @@ def bootstrap_node(self, node_id: str, target_ip: str, ssh_username: str | None 
                 playbook=str(_PLAYBOOKS_DIR / "bootstrap_mac_mini.yml"),
                 inventory=str(inv_path),
                 extravars={
-                    "salt_master_address": master_address,
+                    # Multi-master HA list (#534): playbook renders master: [list] + failover settings.
+                    "salt_masters": master_addresses,
+                    # Back-compat: single-value alias (first master) for any downstream that may
+                    # still reference salt_master_address.
+                    "salt_master_address": first_master_address,
                     "minion_id": node_minion_id,
                     "controller_pubkey": controller_pubkey,
                     "ingest_url": ingest_url,

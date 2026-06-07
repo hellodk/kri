@@ -137,12 +137,19 @@ export const ansibleApi = {
     // RAG embedding
     llm_embed_base_url?: string
   }) => api.put<PlatformSettings>('/api/v1/settings', payload),
-  bootstrap: (minion_id: string, target_ip: string, sshUsername?: string, sshPassword?: string) =>
+  bootstrap: (
+    minion_id: string,
+    target_ip: string,
+    sshUsername?: string,
+    sshPassword?: string,
+    saltMasterIds?: string[],
+  ) =>
     api.post<BootstrapResponse>('/api/v1/ansible/bootstrap', {
       minion_id,
       target_ip,
       ssh_username: sshUsername || undefined,
       ssh_password: sshPassword || undefined,
+      salt_master_ids: saltMasterIds && saltMasterIds.length > 0 ? saltMasterIds : undefined,
     }),
   bootstrapStatus: (nodeId: string) =>
     api.get<BootstrapStatus>(`/api/v1/ansible/bootstrap/${nodeId}/status`),

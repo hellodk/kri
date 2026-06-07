@@ -36,7 +36,20 @@ export function saltMasterBadge(status: SaltMasterStatus): StatusBadge {
  * default salt-master is known to be unreachable.
  *
  * Only blocks on 'unreachable' — unknown/degraded/healthy all allow proceeding.
+ *
+ * @deprecated since #534 — health is now a WARNING, not a gate.  Use canBootstrap()
+ * to check the new multi-master submit condition.  Kept for badge-style usage.
  */
 export function isBootstrapBlocked(status: SaltMasterStatus | null | undefined): boolean {
   return status === 'unreachable'
+}
+
+/**
+ * Returns true when at least one master is selected, allowing the bootstrap
+ * form to submit.  An empty selection (0 selected masters) is the only hard gate.
+ *
+ * Health (reachability) is a WARNING — it does not block submit (#534, epic #537).
+ */
+export function canBootstrap(selectedMasterCount: number): boolean {
+  return selectedMasterCount >= 1
 }
