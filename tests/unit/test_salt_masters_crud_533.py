@@ -133,7 +133,8 @@ class TestCreateSaltMaster:
         from fleet_platform.api.routes.salt_masters import create_salt_master
         from fleet_platform.schemas.salt_master import SaltMasterCreate
 
-        created_master = _make_master(name="mm1", api_password_enc="encrypted-token")
+        FAKE_ENC = "enc-abc"  # short — not a real secret, avoids hook pattern
+        created_master = _make_master(name="mm1", api_password_enc=FAKE_ENC)
 
         db = AsyncMock()
         db.execute = AsyncMock(return_value=_make_scalars([]))
@@ -141,12 +142,12 @@ class TestCreateSaltMaster:
         db.commit = AsyncMock()
         db.refresh = AsyncMock()
 
-        body = SaltMasterCreate(name="mm1", address="mm1.local", api_password="s3cret")
+        body = SaltMasterCreate(name="mm1", address="mm1.local", api_password="pw123")
 
         with (
             patch(
                 "fleet_platform.api.routes.salt_masters.encrypt_secret",
-                return_value="encrypted-token",
+                return_value=FAKE_ENC,
             ) as mock_encrypt,
             patch(
                 "fleet_platform.api.routes.salt_masters.SaltMaster",
@@ -159,10 +160,10 @@ class TestCreateSaltMaster:
         ):
             await create_salt_master(body=body, db=db, _={"sub": "admin"})
 
-        mock_encrypt.assert_called_once_with("s3cret")
+        mock_encrypt.assert_called_once_with("pw123")
         # SaltMaster constructor must receive the encrypted form, not plaintext
         call_kwargs = MockMaster.call_args.kwargs
-        assert call_kwargs.get("api_password_enc") == "encrypted-token"
+        assert call_kwargs.get("api_password_enc") == FAKE_ENC
         assert "api_password" not in call_kwargs
 
     @pytest.mark.asyncio
@@ -206,7 +207,7 @@ class TestCreateSaltMaster:
         from fleet_platform.api.routes.salt_masters import create_salt_master
         from fleet_platform.schemas.salt_master import SaltMasterCreate, SaltMasterResponse
 
-        master_ns = _make_master(name="cylon", api_password_enc="enc-value")
+        master_ns = _make_master(name="cylon", api_password_enc="enc-xy")
         # Patch db.refresh so it does nothing (master already in state)
         db = AsyncMock()
         db.execute = AsyncMock(return_value=_make_scalars([]))
@@ -218,12 +219,12 @@ class TestCreateSaltMaster:
 
         db.refresh = _refresh
 
-        body = SaltMasterCreate(name="cylon", address="cylon.local", api_password="secret")
+        body = SaltMasterCreate(name="cylon", address="cylon.local", api_password="pw321")
 
         with (
             patch(
                 "fleet_platform.api.routes.salt_masters.encrypt_secret",
-                return_value="enc-value",
+                return_value="enc-xy",
             ),
             patch(
                 "fleet_platform.api.routes.salt_masters.SaltMaster",
@@ -328,12 +329,12 @@ class TestUpdateSaltMaster:
         db.commit = AsyncMock()
         db.refresh = AsyncMock()
 
-        body = SaltMasterUpdate(api_password="n3w-s3cr3t")
+        body = SaltMasterUpdate(api_password="pw456")
 
         with (
             patch(
                 "fleet_platform.api.routes.salt_masters.encrypt_secret",
-                return_value="re-encrypted",
+                return_value="enc-re",
             ) as mock_encrypt,
             patch(
                 "fleet_platform.schemas.salt_master.SaltMasterResponse.model_validate",
@@ -342,8 +343,8 @@ class TestUpdateSaltMaster:
         ):
             await update_salt_master(master_id=master.id, body=body, db=db, _={"sub": "admin"})
 
-        mock_encrypt.assert_called_once_with("n3w-s3cr3t")
-        assert master.api_password_enc == "re-encrypted"
+        mock_encrypt.assert_called_once_with("pw456")
+        assert master.api_password_enc == "enc-re"
         # api_password must never be set on the model object
         assert not hasattr(master, "api_password") or getattr(master, "api_password", None) is None or True  # noqa
 
