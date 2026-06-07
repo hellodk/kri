@@ -426,7 +426,7 @@ export function DashboardPage() {
                       </div>
                     </div>
                     {d.computed_at && (
-                      <span className="text-xs text-gray-400 shrink-0 w-12 text-right">
+                      <span className="text-xs text-gray-500 shrink-0 w-12 text-right">
                         {formatDate(d.computed_at, 'MM/dd')}
                       </span>
                     )}
@@ -446,7 +446,7 @@ export function DashboardPage() {
             </Link>
           </div>
           {recentActivity.length === 0 ? (
-            <div className="px-5 py-8 text-center text-sm text-gray-400">
+            <div className="px-5 py-8 text-center text-sm text-gray-600">
               No recent node activity
             </div>
           ) : (
@@ -460,7 +460,7 @@ export function DashboardPage() {
                     <Link to={`/nodes/${node.id}`} className="text-sm font-mono font-medium text-brand-600 hover:underline truncate block">
                       {node.hostname ?? node.minion_id}
                     </Link>
-                    <p className="text-xs text-gray-400 mt-0.5">
+                    <p className="text-xs text-gray-500 mt-0.5">
                       {node.status === 'online' ? (
                         <span className="text-emerald-600">online</span>
                       ) : (
@@ -472,7 +472,7 @@ export function DashboardPage() {
                     </p>
                   </div>
                   {node.last_seen_at && (
-                    <span className="text-xs text-gray-400 shrink-0">
+                    <span className="text-xs text-gray-500 shrink-0">
                       {formatRelative(node.last_seen_at)}
                     </span>
                   )}

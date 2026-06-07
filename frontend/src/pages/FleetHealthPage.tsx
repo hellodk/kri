@@ -4,7 +4,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
   LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid,
 } from 'recharts'
-import { format, parseISO } from 'date-fns'
+import { formatIST, formatChartDate } from '../utils/time'
 import {
   fleetHealthApi, type NodeHealthSnapshot, formatUptime, formatPower, thermalColor,
 } from '../api/fleetHealth'
@@ -112,8 +112,8 @@ function NodeCard({
           <span>{formatUptime(snap.uptime_seconds)}</span>
         </div>
 
-        <div className="text-gray-400 text-right">
-          {format(parseISO(snap.collected_at), 'MMM d, HH:mm')}
+        <div className="text-gray-500 text-right">
+          {formatIST(snap.collected_at)}
         </div>
 
         {snap.error && (
@@ -137,7 +137,7 @@ function HistoryPanel({ nodeId, hostname }: { nodeId: string; hostname: string |
   if (history.length === 0) return <div className="p-6 text-sm text-gray-500">No history in the last 24h.</div>
 
   const chartData = history.map(s => ({
-    time: format(parseISO(s.collected_at), 'HH:mm'),
+    time: formatChartDate(s.collected_at),
     disk: s.disk_root_pct,
     mem: s.mem_used_pct,
     cpu1: s.cpu_load_1m != null ? Number(Number(s.cpu_load_1m).toFixed(2)) : null,
