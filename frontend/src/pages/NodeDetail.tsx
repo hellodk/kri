@@ -32,7 +32,7 @@ import { useToastStore } from '../stores/toastStore'
 import { api } from '../api/client'
 import { saltOpsApi } from '../api/saltOps'
 import type { Node } from '../types'
-import { AnsiText } from '../lib/AnsiText'
+import { LogPane } from '../lib/LogPane'
 import { bootstrapRefetchInterval } from '../lib/bootstrapRefetchInterval'
 
 function isMacOSNode(node: Node): boolean {
@@ -1239,16 +1239,18 @@ export function NodeDetail() {
                   {node.bootstrap_error}
                 </div>
               )}
-              {node.bootstrap_logs && (
-                <details className="group" open={node.bootstrap_status === 'bootstrapping'}>
-                  <summary className="text-xs text-gray-500 cursor-pointer hover:text-gray-700 select-none">
-                    View Ansible output
-                  </summary>
-                  <pre className="mt-2 text-xs font-mono bg-gray-900 text-gray-100 rounded-lg p-3 overflow-auto max-h-48 whitespace-pre-wrap">
-                    <AnsiText raw={node.bootstrap_logs} />
-                  </pre>
-                </details>
-              )}
+              <details className="group" open={node.bootstrap_status === 'bootstrapping'}>
+                <summary className="text-xs text-gray-500 cursor-pointer hover:text-gray-700 select-none">
+                  View Ansible output
+                </summary>
+                <div className="flex flex-col h-[28rem] mt-2">
+                  <LogPane
+                    raw={node.bootstrap_logs ?? ''}
+                    isLive={node.bootstrap_status === 'bootstrapping'}
+                    emptyText="No bootstrap output yet."
+                  />
+                </div>
+              </details>
 
               {/* Grain collection task status */}
               {grainTaskId && grainTaskStatus && (() => {
@@ -2348,9 +2350,13 @@ export function NodeDetail() {
                     )}
                     {run.has_stdout ? (
                       expandedRun?.id === run.id ? (
-                        <pre className="text-xs font-mono bg-gray-900 text-gray-100 rounded-lg p-3 overflow-auto max-h-96 whitespace-pre-wrap">
-                          {expandedRun.ansible_stdout}
-                        </pre>
+                        <div className="flex flex-col h-96">
+                          <LogPane
+                            raw={expandedRun.ansible_stdout ?? ''}
+                            isLive={false}
+                            emptyText="No stdout captured for this run."
+                          />
+                        </div>
                       ) : (
                         <p className="text-xs text-gray-400 italic">Loading logs…</p>
                       )
