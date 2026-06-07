@@ -51,8 +51,10 @@ def _post(master: SaltMaster, lowstate: list[dict]) -> Any:
     # Inject credentials into every lowstate item
     enriched = [{**item, "username": api_user, "password": api_password, "eauth": api_eauth} for item in lowstate]
 
+    tls_verify: bool = getattr(master, "tls_verify", False)
+
     try:
-        resp = requests.post(f"{api_url}/run", json=enriched, timeout=_API_TIMEOUT)
+        resp = requests.post(f"{api_url}/run", json=enriched, timeout=_API_TIMEOUT, verify=tls_verify)
     except requests.ConnectionError as exc:
         raise SaltApiError(f"Cannot reach salt-api at {api_url}: {exc}") from exc
     except requests.Timeout:

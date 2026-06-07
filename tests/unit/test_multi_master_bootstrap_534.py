@@ -14,6 +14,9 @@ def _make_master(address: str, status: str = "healthy", enabled: bool = True, na
     m.status = status
     m.name = name or address
     m.enabled = enabled
+    # Disable auto-accept in existing multi-master tests — they don't test that path
+    # and don't set up db.execute calls for the extra key.accept log writes.
+    m.auto_accept = False
     return m
 
 

@@ -24,6 +24,8 @@ class SaltMasterCreate(BaseModel):
     api_password: str | None = Field(default=None, description="Plaintext password — stored encrypted")
     api_eauth: str | None = None
     token_delivery: str = Field(default="ingest", description="'ingest' or 'direct'")
+    tls_verify: bool = False
+    auto_accept: bool = True
 
 
 class SaltMasterUpdate(BaseModel):
@@ -39,6 +41,8 @@ class SaltMasterUpdate(BaseModel):
     api_password: str | None = Field(default=None, description="Plaintext password — stored encrypted")
     api_eauth: str | None = None
     token_delivery: str | None = None
+    tls_verify: bool | None = None
+    auto_accept: bool | None = None
 
 
 class SaltMasterResponse(BaseModel):
@@ -55,6 +59,8 @@ class SaltMasterResponse(BaseModel):
     # api_password_enc intentionally excluded — never returned to clients
     api_eauth: str | None
     token_delivery: str
+    tls_verify: bool
+    auto_accept: bool
     status: str
     last_checked_at: datetime | None
     last_error: str | None

@@ -82,6 +82,8 @@ async def create_salt_master(
         api_password_enc=api_password_enc,
         api_eauth=body.api_eauth,
         token_delivery=body.token_delivery,
+        tls_verify=body.tls_verify,
+        auto_accept=body.auto_accept,
     )
     db.add(master)
     await db.commit()

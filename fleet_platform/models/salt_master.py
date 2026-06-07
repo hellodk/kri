@@ -40,6 +40,10 @@ class SaltMaster(Base, TimestampMixin):
     # Token delivery strategy: 'ingest' | 'direct'
     token_delivery: Mapped[str] = mapped_column(String(50), nullable=False, default="ingest")
 
+    # TLS + key-acceptance flags (#555)
+    tls_verify: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    auto_accept: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+
     # Health tracking
     status: Mapped[str] = mapped_column(String(20), nullable=False, default="unknown")
     last_checked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
