@@ -1,0 +1,13 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: kri-config
+  namespace: kri
+data:
+  # Database — point at shared cluster postgres in utilities namespace
+  DATABASE_URL: "postgresql+psycopg://fleet:$(POSTGRES_PASSWORD)@postgres.utilities.svc.cluster.local:5432/fleet_platform"
+  # Redis — point at shared cluster redis in utilities namespace (or override via SealedSecret)
+  REDIS_URL: "redis://:$(REDIS_PASSWORD)@redis.utilities.svc.cluster.local:6379/0"
+  # Application
+  LOG_LEVEL: "info"
+  APP_ENV: "production"
