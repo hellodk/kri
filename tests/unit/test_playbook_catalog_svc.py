@@ -135,6 +135,43 @@ async def test_auto_disable_missing_marks_gone_rows(mock_db):
 
 
 @pytest.mark.asyncio
+async def test_enable_playbook_is_idempotent(mock_db):
+    """Calling enable_playbook twice for the same (source_key, filename) must not raise.
+
+    The ON CONFLICT DO UPDATE upsert semantics mean the second call simply
+    updates the row — no duplicate-key error, no exception (#505).
+    """
+    existing = MagicMock()
+    existing.enabled = True
+    existing.id = uuid.uuid4()
+
+    mock_result = MagicMock()
+    mock_result.scalar_one.return_value = existing
+    mock_db.execute.return_value = mock_result
+
+    kwargs = dict(
+        source_key="https://git.example.com/pulse.git",
+        source_label="pulse",
+        filename="bootstrap_mac.yml",
+        entry_type="playbook",
+        actor="admin@kri.local",
+    )
+
+    # First call
+    result1 = await enable_playbook(mock_db, **kwargs)
+    assert result1.enabled is True
+
+    # Second call — must not raise
+    result2 = await enable_playbook(mock_db, **kwargs)
+    assert result2.enabled is True
+
+    # Both calls use a single execute() each (upsert, not separate SELECT+INSERT)
+    assert mock_db.execute.call_count == 2
+    # Service still must NOT commit
+    mock_db.commit.assert_not_called()
+
+
+@pytest.mark.asyncio
 async def test_auto_disable_missing_skips_still_present(mock_db):
     """auto_disable_missing does not touch rows whose files still exist."""
     mock_row = MagicMock()

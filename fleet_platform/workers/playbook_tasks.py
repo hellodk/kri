@@ -347,6 +347,8 @@ def run_playbook(self, job_id: str, ssh_username: str | None = None, verbosity: 
             # that clobbers a live run when the duplicate arrives while the original is
             # alive — skipping without mutation is strictly safer.
             if job.status == "running" and job.started_at is not None:
+                # timestamptz always returns tz-aware datetimes; the replace() fallback
+                # is a belt-and-suspenders guard for any naive datetime that slips through (#471)
                 started = job.started_at if job.started_at.tzinfo else job.started_at.replace(tzinfo=UTC)
                 age = (datetime.now(UTC) - started).total_seconds()
                 if age < _DUPLICATE_GUARD_SECONDS:
@@ -602,7 +604,7 @@ def run_playbook(self, job_id: str, ssh_username: str | None = None, verbosity: 
                 thread.join(timeout=5)
         except Exception:
             _log.warning("playbook_tasks: best-effort runner cancel failed", exc_info=True)
-        elapsed = int(time.time() - job_start_time)
+        elapsed = int(time.time() - job_start_time) if job_start_time else 0  # guard falsy pre-init (#478)
         _flush_stdout(job_uuid, stdout_lines, f"TIMED OUT after {elapsed}s elapsed")
         with get_sync_db() as db:
             job = db.execute(select(AnsibleJob).where(AnsibleJob.id == job_uuid)).scalar_one_or_none()

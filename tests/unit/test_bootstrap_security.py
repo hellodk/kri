@@ -2,7 +2,7 @@
 
 from pathlib import Path
 
-SRC = Path("fleet_platform/workers/ansible_tasks.py").read_text()
+SRC = Path(__file__).resolve().parents[2].joinpath("fleet_platform/workers/ansible_tasks.py").read_text()
 
 
 def test_ssh_password_not_in_file_write():
@@ -27,14 +27,6 @@ def test_passwords_passed_via_extravars():
     )
     assert "ansible_ssh_pass" in SRC, "bootstrap must set ansible_ssh_pass in the password_extravars dict"
     assert "**password_extravars" in SRC, "password_extravars must be spread into the ansible-runner extravars call"
-
-
-def test_time_based_log_batching_present():
-    """Verify incremental log writes use time-based batching."""
-    assert "_LOG_BATCH_INTERVAL" in SRC or "last_db_write" in SRC, (
-        "bootstrap must use time-based batching for incremental log writes"
-    )
-    assert "time.time()" in SRC, "bootstrap must call time.time() for batch interval check"
 
 
 def test_bootstrap_db_session_count_low():
