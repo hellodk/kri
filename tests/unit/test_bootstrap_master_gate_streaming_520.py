@@ -129,7 +129,7 @@ def test_master_resolution_single_enabled_master():
         patch("fleet_platform.workers.ansible_tasks.get_sync_db", new=fake_sync_db),
         patch(
             "fleet_platform.workers.ansible_tasks._get_bootstrap_settings",
-            return_value=("old-salt.local", "admin", "pw", "pubkey"),
+            return_value=("admin", "pw", "pubkey"),
         ),
         patch("fleet_platform.workers.ansible_tasks._get_node_credentials", return_value=("admin", "pw", "password")),
         patch("fleet_platform.workers.ansible_tasks._get_group_credentials", return_value=("", "", "", "password")),
@@ -176,7 +176,7 @@ def test_master_resolution_two_enabled_masters():
         patch("fleet_platform.workers.ansible_tasks.get_sync_db", new=fake_sync_db),
         patch(
             "fleet_platform.workers.ansible_tasks._get_bootstrap_settings",
-            return_value=("old-salt.local", "admin", "pw", "pubkey"),
+            return_value=("admin", "pw", "pubkey"),
         ),
         patch("fleet_platform.workers.ansible_tasks._get_node_credentials", return_value=("admin", "pw", "password")),
         patch("fleet_platform.workers.ansible_tasks._get_group_credentials", return_value=("", "", "", "password")),
@@ -211,7 +211,7 @@ def test_master_resolution_no_masters_fails():
         patch("fleet_platform.workers.ansible_tasks.get_sync_db", new=fake_sync_db),
         patch(
             "fleet_platform.workers.ansible_tasks._get_bootstrap_settings",
-            return_value=("legacy-salt.local", "admin", "pw", "pubkey"),
+            return_value=("admin", "pw", "pubkey"),
         ),
         patch("fleet_platform.workers.ansible_tasks._get_node_credentials", return_value=("admin", "pw", "password")),
         patch("fleet_platform.workers.ansible_tasks._get_group_credentials", return_value=("", "", "", "password")),
@@ -260,7 +260,7 @@ def test_gate_unreachable_master_warns_but_proceeds():
         patch("fleet_platform.workers.ansible_tasks.get_sync_db", new=fake_sync_db),
         patch(
             "fleet_platform.workers.ansible_tasks._get_bootstrap_settings",
-            return_value=("salt.local", "admin", "pw", "pubkey"),
+            return_value=("admin", "pw", "pubkey"),
         ),
         patch("fleet_platform.workers.ansible_tasks._get_node_credentials", return_value=("admin", "pw", "password")),
         patch("fleet_platform.workers.ansible_tasks._get_group_credentials", return_value=("", "", "", "password")),
@@ -300,7 +300,7 @@ def test_gate_unknown_master_triggers_probe_then_proceeds():
         patch("fleet_platform.workers.ansible_tasks.get_sync_db", new=fake_sync_db),
         patch(
             "fleet_platform.workers.ansible_tasks._get_bootstrap_settings",
-            return_value=("salt.local", "admin", "pw", "pubkey"),
+            return_value=("admin", "pw", "pubkey"),
         ),
         patch("fleet_platform.workers.ansible_tasks._get_node_credentials", return_value=("admin", "pw", "password")),
         patch("fleet_platform.workers.ansible_tasks._get_group_credentials", return_value=("", "", "", "password")),
@@ -337,7 +337,7 @@ def test_gate_unknown_master_probe_returns_unreachable_blocks_ansible():
         patch("fleet_platform.workers.ansible_tasks.get_sync_db", new=fake_sync_db),
         patch(
             "fleet_platform.workers.ansible_tasks._get_bootstrap_settings",
-            return_value=("salt.local", "admin", "pw", "pubkey"),
+            return_value=("admin", "pw", "pubkey"),
         ),
         patch("fleet_platform.workers.ansible_tasks._get_node_credentials", return_value=("admin", "pw", "password")),
         patch("fleet_platform.workers.ansible_tasks._get_group_credentials", return_value=("", "", "", "password")),
@@ -373,7 +373,7 @@ def test_gate_skipped_when_no_master_row():
         patch("fleet_platform.workers.ansible_tasks.get_sync_db", new=fake_sync_db),
         patch(
             "fleet_platform.workers.ansible_tasks._get_bootstrap_settings",
-            return_value=("fallback.local", "admin", "pw", "pubkey"),
+            return_value=("admin", "pw", "pubkey"),
         ),
         patch("fleet_platform.workers.ansible_tasks._get_node_credentials", return_value=("admin", "pw", "password")),
         patch("fleet_platform.workers.ansible_tasks._get_group_credentials", return_value=("", "", "", "password")),
@@ -441,7 +441,7 @@ def test_streaming_logs_flushed_during_run():
         patch("fleet_platform.workers.ansible_tasks.get_sync_db", new=fake_sync_db),
         patch(
             "fleet_platform.workers.ansible_tasks._get_bootstrap_settings",
-            return_value=("salt.local", "admin", "pw", "pubkey"),
+            return_value=("admin", "pw", "pubkey"),
         ),
         patch("fleet_platform.workers.ansible_tasks._get_node_credentials", return_value=("admin", "pw", "password")),
         patch("fleet_platform.workers.ansible_tasks._get_group_credentials", return_value=("", "", "", "password")),
@@ -490,7 +490,7 @@ def test_stdout_cap_honoured():
         patch("fleet_platform.workers.ansible_tasks.get_sync_db", new=fake_sync_db),
         patch(
             "fleet_platform.workers.ansible_tasks._get_bootstrap_settings",
-            return_value=("salt.local", "admin", "pw", "pubkey"),
+            return_value=("admin", "pw", "pubkey"),
         ),
         patch("fleet_platform.workers.ansible_tasks._get_node_credentials", return_value=("admin", "pw", "password")),
         patch("fleet_platform.workers.ansible_tasks._get_group_credentials", return_value=("", "", "", "password")),
@@ -541,7 +541,7 @@ def test_ansi_codes_preserved_in_stored_logs():
         patch("fleet_platform.workers.ansible_tasks.get_sync_db", new=fake_sync_db),
         patch(
             "fleet_platform.workers.ansible_tasks._get_bootstrap_settings",
-            return_value=("salt.local", "admin", "pw", "pubkey"),
+            return_value=("admin", "pw", "pubkey"),
         ),
         patch("fleet_platform.workers.ansible_tasks._get_node_credentials", return_value=("admin", "pw", "password")),
         patch("fleet_platform.workers.ansible_tasks._get_group_credentials", return_value=("", "", "", "password")),
@@ -579,7 +579,7 @@ def test_successful_run_sets_completed_status():
         patch("fleet_platform.workers.ansible_tasks.get_sync_db", new=fake_sync_db),
         patch(
             "fleet_platform.workers.ansible_tasks._get_bootstrap_settings",
-            return_value=("salt.local", "admin", "pw", "pubkey"),
+            return_value=("admin", "pw", "pubkey"),
         ),
         patch("fleet_platform.workers.ansible_tasks._get_node_credentials", return_value=("admin", "pw", "password")),
         patch("fleet_platform.workers.ansible_tasks._get_group_credentials", return_value=("", "", "", "password")),
@@ -614,7 +614,7 @@ def test_exception_hits_finally_and_sets_failed():
         patch("fleet_platform.workers.ansible_tasks.get_sync_db", new=fake_sync_db),
         patch(
             "fleet_platform.workers.ansible_tasks._get_bootstrap_settings",
-            return_value=("salt.local", "admin", "pw", "pubkey"),
+            return_value=("admin", "pw", "pubkey"),
         ),
         patch("fleet_platform.workers.ansible_tasks._get_node_credentials", return_value=("admin", "pw", "password")),
         patch("fleet_platform.workers.ansible_tasks._get_group_credentials", return_value=("", "", "", "password")),

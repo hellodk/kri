@@ -2,6 +2,7 @@
 
 Designed for N masters per fleet; nodes reference one via salt_master_id FK.
 Provision lifecycle columns added in #556 (master-lifecycle epic).
+SSoT api_url derivation added in #562: api_url is computed from address + salt_api_port + use_tls.
 """
 
 import uuid
@@ -29,16 +30,22 @@ class SaltMaster(Base, TimestampMixin):
     publish_port: Mapped[int] = mapped_column(Integer, nullable=False, default=4505)
     ret_port: Mapped[int] = mapped_column(Integer, nullable=False, default=4506)
 
-    # Control mode: 'salt_api' | 'cli' | etc.
+    # SSoT api_url fields (#562): api_url is DERIVED from these — never store free-text api_url.
+    salt_api_port: Mapped[int] = mapped_column(Integer, nullable=False, default=8080)
+    use_tls: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+
+    # Control mode: 'salt_api' | 'cli' | etc. — not user-editable (server default)
     control_mode: Mapped[str] = mapped_column(String(50), nullable=False, default="salt_api")
 
     # Salt API credentials (all optional — only used when control_mode='salt_api')
+    # api_url is a DERIVED column — computed from address + salt_api_port + use_tls (#562)
     api_url: Mapped[str | None] = mapped_column(Text, nullable=True)
     api_user: Mapped[str | None] = mapped_column(String(255), nullable=True)
     api_password_enc: Mapped[str | None] = mapped_column(Text, nullable=True)  # Fernet-encrypted
+    # api_eauth: not user-editable; defaults to 'pam' on create
     api_eauth: Mapped[str | None] = mapped_column(String(50), nullable=True)
 
-    # Token delivery strategy: 'ingest' | 'direct'
+    # Token delivery strategy: 'ingest' | 'direct' — not user-editable (server default)
     token_delivery: Mapped[str] = mapped_column(String(50), nullable=False, default="ingest")
 
     # TLS + key-acceptance flags (#555)

@@ -3,6 +3,8 @@ import { api } from './client'
 /**
  * Response — never includes api_password_enc, ssh_key_enc, or ssh_password_enc.
  * Provision lifecycle fields added in #556 (master-lifecycle epic).
+ * SSoT api_url derivation added in #562: api_url is read-only/computed from
+ * address + salt_api_port + use_tls.
  */
 export interface SaltMaster {
   id: string
@@ -12,10 +14,15 @@ export interface SaltMaster {
   address: string
   publish_port: number
   ret_port: number
-  control_mode: string
+  /** SSoT fields (#562) — api_url is derived from these */
+  salt_api_port: number
+  use_tls: boolean
+  /** Read-only derived field — computed server-side from address + salt_api_port + use_tls */
   api_url: string | null
   api_user: string | null
   /** api_password_enc intentionally excluded from response */
+  /** control_mode / api_eauth / token_delivery are server-defaults; visible but not editable */
+  control_mode: string
   api_eauth: string | null
   token_delivery: string
   tls_verify: boolean
@@ -38,7 +45,10 @@ export interface SaltMaster {
   updated_at: string
 }
 
-/** Create payload — api_password, ssh_key, ssh_password are write-only plaintext. */
+/**
+ * Create payload — api_url is NOT accepted (derived server-side).
+ * control_mode / api_eauth / token_delivery are NOT accepted (server-defaults).
+ */
 export interface SaltMasterCreate {
   name: string
   address: string
@@ -46,13 +56,12 @@ export interface SaltMasterCreate {
   is_default?: boolean
   publish_port?: number
   ret_port?: number
-  control_mode?: string
-  api_url?: string | null
+  /** SSoT fields — api_url is DERIVED from these; never send api_url directly */
+  salt_api_port?: number
+  use_tls?: boolean
   api_user?: string | null
   /** Write-only: stored encrypted, never returned. */
   api_password?: string | null
-  api_eauth?: string | null
-  token_delivery?: string
   tls_verify?: boolean
   auto_accept?: boolean
   /** SSH creds for provisioning (write-only — stored encrypted). */
@@ -65,7 +74,11 @@ export interface SaltMasterCreate {
   node_id?: string | null
 }
 
-/** Update payload — all fields optional. */
+/**
+ * Update payload — all fields optional.
+ * api_url is NOT accepted (derived server-side).
+ * control_mode / api_eauth / token_delivery are NOT accepted (server-defaults).
+ */
 export interface SaltMasterUpdate {
   name?: string
   address?: string
@@ -73,13 +86,12 @@ export interface SaltMasterUpdate {
   is_default?: boolean
   publish_port?: number
   ret_port?: number
-  control_mode?: string
-  api_url?: string | null
+  /** SSoT fields — api_url is DERIVED from these; never send api_url directly */
+  salt_api_port?: number
+  use_tls?: boolean
   api_user?: string | null
   /** Write-only: stored encrypted, never returned. */
   api_password?: string | null
-  api_eauth?: string | null
-  token_delivery?: string
   tls_verify?: boolean
   auto_accept?: boolean
   /** SSH creds for provisioning (write-only — stored encrypted). */

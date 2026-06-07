@@ -36,7 +36,6 @@ export function SettingsPage() {
   const qc = useQueryClient()
   const toast = useToastStore((s) => s.add)
   const [searchParams, setSearchParams] = useSearchParams()
-  const [master, setMaster] = useState('')
   const [kriApiUrl, setKriApiUrl] = useState('')
   const [username, setUsername] = useState('')
   const [password, setPassword] = useState('')
@@ -73,9 +72,6 @@ export function SettingsPage() {
   const [embedUrlStatus, setEmbedUrlStatus] = useState<{ ok: boolean; latency_ms: number | null; error?: string } | null>(null)
   const [embedUrlChecking, setEmbedUrlChecking] = useState(false)
   const embedDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
-  const [saltMasterStatus, setSaltMasterStatus] = useState<{ ok: boolean; latency_ms: number | null; error?: string } | null>(null)
-  const [saltMasterChecking, setSaltMasterChecking] = useState(false)
-  const saltMasterDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const [ansibleStatus, setAnsibleStatus] = useState<{ ok: boolean; latency_ms: number | null; error?: string } | null>(null)
   const [ansibleChecking, setAnsibleChecking] = useState(false)
   const ansibleDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -94,7 +90,6 @@ export function SettingsPage() {
   useEffect(() => {
     if (data) {
       // eslint-disable-next-line react-hooks/set-state-in-effect -- populating form fields from saved settings on load; refactor tracked in #380 follow-up
-      if (data.salt_master_address) setMaster(data.salt_master_address)
       if (data.kri_api_url) setKriApiUrl(data.kri_api_url)
       if (data.ssh_bootstrap_username) setUsername(data.ssh_bootstrap_username)
       if (data.ansible_endpoint_url) setAnsibleEndpoint(data.ansible_endpoint_url)
@@ -114,7 +109,6 @@ export function SettingsPage() {
       if (data.smtp_from) setSmtpFrom(data.smtp_from)
       if (data.digest_recipients) setDigestRecipients(data.digest_recipients)
       if (data.llm_embed_base_url) setLlmEmbedBaseUrl(data.llm_embed_base_url)
-      if (data.salt_master_address) checkSaltMaster(data.salt_master_address)
       if (data.ansible_endpoint_url) checkAnsible(data.ansible_endpoint_url)
       if (data.sonarqube_url) checkSonar(data.sonarqube_url)
       if (data.cxone_url) checkCxone(data.cxone_url)
@@ -151,20 +145,6 @@ export function SettingsPage() {
     if (llmEmbedBaseUrl) checkEmbedUrl(llmEmbedBaseUrl)
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [llmEmbedBaseUrl])
-
-  async function checkSaltMaster(address?: string) {
-    const target = (address ?? master).trim()
-    if (!target) { setSaltMasterStatus(null); return }
-    setSaltMasterChecking(true)
-    try {
-      const r = await probe(target, 8080)
-      setSaltMasterStatus({ ok: r.ok, latency_ms: r.latency_ms })
-    } catch {
-      setSaltMasterStatus({ ok: false, latency_ms: null, error: 'Unreachable' })
-    } finally {
-      setSaltMasterChecking(false)
-    }
-  }
 
   async function checkAnsible(url?: string) {
     const target = (url ?? ansibleEndpoint).trim()
@@ -210,7 +190,6 @@ export function SettingsPage() {
 
   const saveMutation = useMutation({
     mutationFn: () => ansibleApi.updateSettings({
-      salt_master_address: master || undefined,
       kri_api_url: kriApiUrl || undefined,
       ssh_bootstrap_username: username || undefined,
       ssh_bootstrap_password: password || undefined,
@@ -249,9 +228,7 @@ export function SettingsPage() {
 
   const computedIngestUrl = kriApiUrl
     ? `${kriApiUrl.replace(/\/$/, '')}/api/v1/ingest/grains`
-    : master
-      ? `http://${master}/api/v1/ingest/grains`
-      : null
+    : null
 
   const TABS = ['General', 'Automation', 'Remote Access', 'Integrations', 'Salt Masters', 'Playbook Library', 'LLM', 'Notifications'] as const
   type Tab = SettingsTab
@@ -336,34 +313,6 @@ export function SettingsPage() {
                 <code className="text-xs font-mono text-brand-700 truncate">{computedIngestUrl}</code>
               </div>
             )}
-          </div>
-
-          {/* Salt Master */}
-          <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-6 space-y-4">
-            <div>
-              <h2 className="text-base font-semibold text-gray-900">Salt Master</h2>
-              <p className="text-sm text-gray-500 mt-1">
-                Hostname or IP of the Salt master. Written into <code className="text-xs bg-gray-100 px-1 rounded">/etc/salt/minion</code> on each node during bootstrap.
-              </p>
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Master address (IP or DNS, no port)</label>
-              <div className="flex items-center gap-2">
-                <input
-                  type="text"
-                  value={master}
-                  onChange={(e) => {
-                    setMaster(e.target.value)
-                    if (saltMasterDebounceRef.current) clearTimeout(saltMasterDebounceRef.current)
-                    saltMasterDebounceRef.current = setTimeout(() => checkSaltMaster(e.target.value), 1000)
-                  }}
-                  placeholder="100.89.50.27  or  salt.fleet.local"
-                  className={`${monoInputClass} flex-1`}
-                />
-                <UrlStatusPill status={saltMasterStatus} checking={saltMasterChecking} />
-              </div>
-              <p className="text-xs text-gray-400 mt-1">Salt minions connect to this on port 4505/4506.</p>
-            </div>
           </div>
 
           {/* Display Timezone */}

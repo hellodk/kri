@@ -119,7 +119,7 @@ def test_two_masters_extravar_is_list_and_failover():
 
     with (
         patch("fleet_platform.workers.ansible_tasks.get_sync_db", new=_sync_db),
-        patch("fleet_platform.workers.ansible_tasks._get_bootstrap_settings", return_value=("", "admin", "secret", "")),
+        patch("fleet_platform.workers.ansible_tasks._get_bootstrap_settings", return_value=("admin", "secret", "")),
         patch(
             "fleet_platform.workers.ansible_tasks._get_node_credentials", return_value=("admin", "secret", "password")
         ),
@@ -166,7 +166,7 @@ def test_zero_masters_refuses_bootstrap():
 
     with (
         patch("fleet_platform.workers.ansible_tasks.get_sync_db", new=_sync_db),
-        patch("fleet_platform.workers.ansible_tasks._get_bootstrap_settings", return_value=("", "admin", "secret", "")),
+        patch("fleet_platform.workers.ansible_tasks._get_bootstrap_settings", return_value=("admin", "secret", "")),
         patch(
             "fleet_platform.workers.ansible_tasks._get_node_credentials", return_value=("admin", "secret", "password")
         ),
@@ -223,7 +223,7 @@ def test_unreachable_master_logs_warning_and_proceeds():
 
     with (
         patch("fleet_platform.workers.ansible_tasks.get_sync_db", new=_sync_db),
-        patch("fleet_platform.workers.ansible_tasks._get_bootstrap_settings", return_value=("", "admin", "secret", "")),
+        patch("fleet_platform.workers.ansible_tasks._get_bootstrap_settings", return_value=("admin", "secret", "")),
         patch(
             "fleet_platform.workers.ansible_tasks._get_node_credentials", return_value=("admin", "secret", "password")
         ),

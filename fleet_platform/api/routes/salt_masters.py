@@ -1,6 +1,8 @@
 """Routes for SaltMaster management — issue #517, #519, #521, #533, epic #523, #537.
 
 Provision lifecycle SSH cred encryption added in #556 (master-lifecycle epic).
+SSoT api_url derivation added in #562: api_url is computed from address + salt_api_port +
+use_tls on every create/update.  Client-supplied api_url is always ignored.
 
 Endpoints:
     GET    /api/v1/salt/masters                     — list all masters (viewer+).
@@ -31,6 +33,12 @@ from fleet_platform.services.salt_master_probe import run_probe
 router = APIRouter(prefix="/api/v1/salt")
 
 _PROBE_TIMEOUT_SECONDS = 30
+
+
+def _derive_api_url(address: str, salt_api_port: int, use_tls: bool) -> str:
+    """Compute api_url from the SSoT fields — the single source of truth (#562)."""
+    scheme = "https" if use_tls else "http"
+    return f"{scheme}://{address}:{salt_api_port}"
 
 
 @router.get("/masters", response_model=List[SaltMasterResponse])
@@ -78,6 +86,9 @@ async def create_salt_master(
     if body.ssh_password:
         ssh_password_enc = encrypt_secret(body.ssh_password)
 
+    # Derive api_url from SSoT fields — any client-supplied api_url is ignored (#562)
+    derived_api_url = _derive_api_url(body.address, body.salt_api_port, body.use_tls)
+
     master = SaltMaster(
         name=body.name,
         address=body.address,
@@ -85,12 +96,13 @@ async def create_salt_master(
         is_default=body.is_default,
         publish_port=body.publish_port,
         ret_port=body.ret_port,
-        control_mode=body.control_mode,
-        api_url=body.api_url,
+        salt_api_port=body.salt_api_port,
+        use_tls=body.use_tls,
+        # control_mode / api_eauth / token_delivery use ORM defaults (server-side)
+        api_url=derived_api_url,
         api_user=body.api_user,
         api_password_enc=api_password_enc,
-        api_eauth=body.api_eauth,
-        token_delivery=body.token_delivery,
+        api_eauth="pam",  # server-side default; not user-editable
         tls_verify=body.tls_verify,
         auto_accept=body.auto_accept,
         ssh_host=body.ssh_host,
@@ -127,6 +139,9 @@ async def update_salt_master(
 
     update_data = body.model_dump(exclude_unset=True)
 
+    # Drop any client-supplied api_url — it is always derived (#562)
+    update_data.pop("api_url", None)
+
     # Guard: disabling the last enabled master is not allowed.
     if update_data.get("enabled") is False and master.enabled:
         count_result = await db.execute(
@@ -162,6 +177,9 @@ async def update_salt_master(
 
     for field, value in update_data.items():
         setattr(master, field, value)
+
+    # Recompute api_url after all field updates — keeps SSoT consistent (#562)
+    master.api_url = _derive_api_url(master.address, master.salt_api_port, master.use_tls)
 
     await db.commit()
     await db.refresh(master)
