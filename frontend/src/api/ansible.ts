@@ -154,7 +154,7 @@ export const ansibleApi = {
   bootstrapStatus: (nodeId: string) =>
     api.get<BootstrapStatus>(`/api/v1/ansible/bootstrap/${nodeId}/status`),
   bootstrapLogs: (nodeId: string) =>
-    api.get<{ node_id: string; minion_id: string; bootstrap_status: string; pillar_path: string; pillar: string | null; ansible_stdout: string | null }>(`/api/v1/ansible/bootstrap/${nodeId}/logs`),
+    api.get<{ node_id: string; minion_id: string; bootstrap_status: string; ansible_stdout: string | null }>(`/api/v1/ansible/bootstrap/${nodeId}/logs`),
   cancelBootstrap: (nodeId: string) =>
     api.post<{ node_id: string; bootstrap_status: string; message: string }>(`/api/v1/ansible/bootstrap/${nodeId}/cancel`, {}),
   bootstrapHistory: (nodeId: string, page = 1, perPage = 20) =>

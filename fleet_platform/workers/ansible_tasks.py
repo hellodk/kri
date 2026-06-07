@@ -32,7 +32,7 @@ _PLAYBOOKS_DIR = Path(__file__).parent.parent.parent / "playbooks"
 _DEFAULT_PILLAR_DIR = Path("/srv/salt/pillar")
 _DEFAULT_KRI_DIR = Path.home() / ".kri"
 _BOOTSTRAP_TIMEOUT_SECONDS = 600  # 10 minutes
-_LOG_BATCH_INTERVAL = 30  # seconds between incremental log DB writes during streaming (#498)
+_LOG_BATCH_INTERVAL = 5  # match run_playbook for live bootstrap logs (#544)
 # Cap stored bootstrap stdout at 2 MB — same limit as playbook_tasks (#369).
 _MAX_STDOUT_BYTES = 2 * 1024 * 1024
 _TRUNCATION_SENTINEL = "\n\n[output truncated at 2 MB — full log not retained]"
