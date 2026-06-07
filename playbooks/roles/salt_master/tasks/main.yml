@@ -48,6 +48,7 @@
 - import_tasks: pillar.yml
 - import_tasks: states.yml
 - import_tasks: api_user.yml
+- import_tasks: api_tls.yml
 
 - name: Configure service (macOS launchctl)
   include_tasks: service_macos.yml
