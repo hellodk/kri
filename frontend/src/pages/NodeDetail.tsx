@@ -32,6 +32,8 @@ import { useToastStore } from '../stores/toastStore'
 import { api } from '../api/client'
 import { saltOpsApi } from '../api/saltOps'
 import type { Node } from '../types'
+import { AnsiText } from '../lib/AnsiText'
+import { bootstrapRefetchInterval } from '../lib/bootstrapRefetchInterval'
 
 function isMacOSNode(node: Node): boolean {
   return !!(node.macos_version || node.xcode_version)
@@ -517,6 +519,7 @@ export function NodeDetail() {
     queryFn: () => fleetApi.node(nodeId!),
     staleTime: 60_000,
     enabled: !!nodeId,
+    refetchInterval: (q) => bootstrapRefetchInterval(q.state.data?.bootstrap_status),
   })
 
   const { data: latestDrift } = useQuery({
@@ -1237,12 +1240,12 @@ export function NodeDetail() {
                 </div>
               )}
               {node.bootstrap_logs && (
-                <details className="group">
+                <details className="group" open={node.bootstrap_status === 'bootstrapping'}>
                   <summary className="text-xs text-gray-500 cursor-pointer hover:text-gray-700 select-none">
                     View Ansible output
                   </summary>
                   <pre className="mt-2 text-xs font-mono bg-gray-900 text-gray-100 rounded-lg p-3 overflow-auto max-h-48 whitespace-pre-wrap">
-                    {node.bootstrap_logs}
+                    <AnsiText raw={node.bootstrap_logs} />
                   </pre>
                 </details>
               )}

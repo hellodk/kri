@@ -10,7 +10,6 @@ import { canBootstrap, saltMasterBadge } from '../lib/saltMasterHelpers'
 import { useToastStore } from '../stores/toastStore'
 import type { Node } from '../types'
 
-type LogTab = 'pillar' | 'ansible'
 
 interface Props {
   onClose: () => void
@@ -215,7 +214,6 @@ function SingleMode({ onClose }: { onClose: () => void }) {
   const { label, colour } = STATUS_LABEL[status ?? 'pending'] ?? STATUS_LABEL.pending
 
   const [showLogs, setShowLogs] = useState(false)
-  const [logTab, setLogTab] = useState<LogTab>('ansible')
 
   const { data: logsData } = useQuery({
     queryKey: ['bootstrap-logs', nodeId],
@@ -691,45 +689,30 @@ function SingleMode({ onClose }: { onClose: () => void }) {
 
       {showLogs && logsData && (
         <div className="rounded-xl border border-gray-200 overflow-hidden">
-          {/* Tabs */}
+          {/* Ansible output header */}
           <div className="flex border-b border-gray-200 bg-gray-50">
-            {(['ansible', 'pillar'] as LogTab[]).map((t) => (
-              <button key={t} onClick={() => setLogTab(t)}
-                className={`px-4 py-2 text-xs font-medium border-b-2 transition-colors ${
-                  logTab === t
-                    ? 'border-brand-600 text-brand-700 bg-white'
-                    : 'border-transparent text-gray-500 hover:text-gray-700'
-                }`}>
-                {t === 'ansible' ? (
-                  <span className="flex items-center gap-1.5">
-                    Ansible output
-                    {(status === 'pending' || status === 'bootstrapping') && (
-                      <span className="relative flex h-2 w-2">
-                        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75" />
-                        <span className="relative inline-flex rounded-full h-2 w-2 bg-green-500" />
-                      </span>
-                    )}
+            <div className="px-4 py-2 text-xs font-medium border-b-2 border-brand-600 text-brand-700 bg-white">
+              <span className="flex items-center gap-1.5">
+                Ansible output
+                {(status === 'pending' || status === 'bootstrapping') && (
+                  <span className="relative flex h-2 w-2">
+                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75" />
+                    <span className="relative inline-flex rounded-full h-2 w-2 bg-green-500" />
                   </span>
-                ) : `Salt pillar (${logsData.pillar_path?.split('/').pop()})`}
-              </button>
-            ))}
+                )}
+              </span>
+            </div>
           </div>
           {/* Content */}
-          {logTab === 'ansible' ? (
-            <pre
-              ref={preRef}
-              className="text-xs font-mono bg-gray-900 p-3 overflow-auto max-h-[42rem] whitespace-pre-wrap"
-              dangerouslySetInnerHTML={{
-                __html: (localLogs ?? logsData.ansible_stdout)
-                  ? colorizeAnsibleLog(localLogs ?? logsData.ansible_stdout ?? '')
-                  : '<span class="text-gray-500">(no output captured yet — run in progress or not started)</span>',
-              }}
-            />
-          ) : (
-            <pre className="text-xs font-mono bg-gray-900 text-gray-100 p-3 overflow-auto max-h-[42rem] whitespace-pre-wrap">
-              {logsData.pillar || '(pillar file not found)'}
-            </pre>
-          )}
+          <pre
+            ref={preRef}
+            className="text-xs font-mono bg-gray-900 p-3 overflow-auto max-h-[42rem] whitespace-pre-wrap"
+            dangerouslySetInnerHTML={{
+              __html: (localLogs ?? logsData.ansible_stdout)
+                ? colorizeAnsibleLog(localLogs ?? logsData.ansible_stdout ?? '')
+                : '<span class="text-gray-500">(no output captured yet — run in progress or not started)</span>',
+            }}
+          />
         </div>
       )}
 
