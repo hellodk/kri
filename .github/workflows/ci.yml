@@ -194,8 +194,19 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
-      - name: Build API image
-        run: docker build -f deploy/Dockerfile.api -t kri-api:ci .
+      - name: Log in to Docker Hub
+        if: ${{ secrets.DOCKERHUB_USERNAME != '' }}
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+      - name: Build API image (with retry for transient pull timeouts)
+        uses: nick-fields/retry@v3
+        with:
+          timeout_minutes: 10
+          max_attempts: 3
+          retry_wait_seconds: 15
+          command: docker build -f deploy/Dockerfile.api -t kri-api:ci .
       - name: Scan for HIGH/CRITICAL CVEs
         uses: aquasecurity/trivy-action@v0.36.0
         with:

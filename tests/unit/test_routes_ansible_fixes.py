@@ -2,7 +2,8 @@
 
 from pathlib import Path
 
-_SRC = Path("fleet_platform/api/routes/ansible.py").read_text()
+_WORKTREE = Path(__file__).resolve().parents[2]
+_SRC = (_WORKTREE / "fleet_platform/api/routes/ansible.py").read_text()
 
 
 def test_extravars_scrub_helper_exists():

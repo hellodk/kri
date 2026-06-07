@@ -723,8 +723,9 @@ def collect_node_grains(self, node_id: str) -> dict:
         except subprocess.TimeoutExpired:
             return {"status": "error", "reason": "ssh timeout"}
         except SoftTimeLimitExceeded:
-            logger.warning("grain collection timed out for node %s", node_id)
-            raise
+            # Log + clean exit — no DB status to update for grain tasks (#471)
+            logger.warning("collect_node_grains: soft time limit exceeded for node_id=%s — clean exit", node_id)
+            return {"status": "timeout", "node_id": node_id}
         except Exception as e:
             return {"status": "error", "reason": str(e)[:200]}
         finally:
@@ -752,5 +753,6 @@ def refresh_all_node_grains() -> dict:
 
         return {"queued": len(node_ids)}
     except SoftTimeLimitExceeded:
-        logger.warning("grain collection timed out for node refresh_all_node_grains")
-        raise
+        # Log + clean exit — no DB status to update for grain tasks (#471)
+        logger.warning("refresh_all_node_grains: soft time limit exceeded — clean exit")
+        return {"queued": 0, "status": "timeout"}
