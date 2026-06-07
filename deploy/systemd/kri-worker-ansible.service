@@ -1,0 +1,21 @@
+[Unit]
+Description=kri Fleet Platform — Celery Worker (ansible long-job queue, #579)
+# Dedicated worker for long-running ansible jobs — run_playbook, bootstrap_node,
+# provision_master. Isolated from kri-worker so a burst of 2h jobs can't starve
+# the control-plane queue (poll_salt_masters, presence sync, reapers, health).
+After=network-online.target postgresql.service redis-server.service
+Wants=network-online.target
+
+[Service]
+User=kri
+Group=kri
+WorkingDirectory=/opt/kri
+EnvironmentFile=/etc/kri/kri.env
+ExecStart=/usr/bin/uv run celery -A fleet_platform.workers.celery_app worker --queues ansible --concurrency 2 --loglevel info
+Restart=on-failure
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target

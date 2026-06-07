@@ -223,6 +223,19 @@ async def delete_salt_master(
     if master is None:
         raise HTTPException(status_code=404, detail=f"SaltMaster {master_id} not found")
 
+    # Invariant 0 (#579): cannot remove the DEFAULT master. Deleting it would leave
+    # salt_keys._get_default_master() returning None — all key accept/list/reject
+    # break and onboarding halts. Caller must promote another enabled master to
+    # default (PATCH is_default=true) before deleting this one.
+    if master.is_default:
+        raise HTTPException(
+            status_code=409,
+            detail=(
+                f"Cannot delete the default salt master '{master.name}'. "
+                "Promote another enabled master to default first, then delete this one."
+            ),
+        )
+
     # Invariant 1: cannot remove the last enabled master.
     if master.enabled:
         count_result = await db.execute(

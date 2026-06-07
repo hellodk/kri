@@ -316,7 +316,7 @@ def _flush_stdout(job_uuid: _uuid.UUID, lines: list[str], last_task: str | None)
     name="fleet_platform.workers.playbook_tasks.run_playbook",
     bind=True,
     max_retries=0,
-    queue="maintenance",
+    queue="ansible",  # dedicated long-job queue — isolates from control plane (#579)
     soft_time_limit=7200,  # 2h ceiling — per-job timeout_seconds is the real limit (#348); this is the absolute max
     time_limit=7260,  # 2h + 60s hard kill
     acks_late=False,  # ack BEFORE execution — a SIGKILLed run must NOT be redelivered

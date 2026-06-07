@@ -8,7 +8,7 @@ SSoT api_url derivation added in #562: api_url is computed from address + salt_a
 import uuid
 from datetime import datetime
 
-from sqlalchemy import Boolean, DateTime, ForeignKey, Index, Integer, String, Text, UniqueConstraint
+from sqlalchemy import Boolean, DateTime, ForeignKey, Index, Integer, String, Text, UniqueConstraint, text
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -84,4 +84,12 @@ class SaltMaster(Base, TimestampMixin):
         UniqueConstraint("name", name="uq_salt_masters_name"),
         Index("idx_salt_masters_enabled", "enabled"),
         Index("idx_salt_masters_is_default", "is_default"),
+        # At most one default master (#579). Partial-unique so the many
+        # is_default=false rows don't collide; only the single true row is unique.
+        Index(
+            "uq_salt_masters_one_default",
+            "is_default",
+            unique=True,
+            postgresql_where=text("is_default"),
+        ),
     )

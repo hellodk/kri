@@ -53,6 +53,7 @@ Key variables to set:
 ```bash
 sudo cp /opt/kri/deploy/systemd/kri-api.service    /etc/systemd/system/
 sudo cp /opt/kri/deploy/systemd/kri-worker.service /etc/systemd/system/
+sudo cp /opt/kri/deploy/systemd/kri-worker-ansible.service /etc/systemd/system/
 sudo cp /opt/kri/deploy/systemd/kri-beat.service   /etc/systemd/system/
 sudo systemctl daemon-reload
 ```
@@ -60,8 +61,13 @@ sudo systemctl daemon-reload
 ### 5. Enable and start services
 
 ```bash
-sudo systemctl enable --now kri-api kri-worker kri-beat
+sudo systemctl enable --now kri-api kri-worker kri-worker-ansible kri-beat
 ```
+
+`kri-worker` consumes the fast control-plane queues (`default,maintenance,drift,sbom`);
+`kri-worker-ansible` is a dedicated worker for the long-running `ansible` queue
+(run_playbook, bootstrap_node, provision_master) so 2h jobs can't starve the
+control plane (#579).
 
 The `kri-api` unit runs `deploy/migrate.sh` (Alembic migrations) before starting uvicorn.
 Migrations are advisory-lock-protected — safe to run with the service restart cycle.
@@ -69,7 +75,7 @@ Migrations are advisory-lock-protected — safe to run with the service restart 
 ### 6. Verify
 
 ```bash
-sudo systemctl status kri-api kri-worker kri-beat
+sudo systemctl status kri-api kri-worker kri-worker-ansible kri-beat
 journalctl -u kri-api -f
 journalctl -u kri-worker -f
 ```
@@ -84,7 +90,7 @@ curl http://localhost:8000/health/ready
 
 ```bash
 # Restart all three
-sudo systemctl restart kri-api kri-worker kri-beat
+sudo systemctl restart kri-api kri-worker kri-worker-ansible kri-beat
 
 # View logs (last 100 lines)
 journalctl -u kri-api -n 100
@@ -92,7 +98,7 @@ journalctl -u kri-worker -n 100
 journalctl -u kri-beat -n 100
 
 # Disable on boot (without stopping)
-sudo systemctl disable kri-api kri-worker kri-beat
+sudo systemctl disable kri-api kri-worker kri-worker-ansible kri-beat
 ```
 
 ## Updating kri
@@ -101,7 +107,7 @@ sudo systemctl disable kri-api kri-worker kri-beat
 cd /opt/kri
 sudo -u kri git pull
 sudo -u kri uv sync --frozen
-sudo systemctl restart kri-api kri-worker kri-beat
+sudo systemctl restart kri-api kri-worker kri-worker-ansible kri-beat
 # kri-api's ExecStartPre will run migrations automatically on restart
 ```
 

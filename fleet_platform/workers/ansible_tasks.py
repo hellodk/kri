@@ -182,7 +182,7 @@ def _get_pillar_dir(db) -> Path:
     name="fleet_platform.workers.ansible_tasks.bootstrap_node",
     bind=True,
     max_retries=0,
-    queue="maintenance",
+    queue="ansible",  # dedicated long-job queue — isolates from control plane (#579)
     acks_late=False,  # prevent double-bootstrap on SIGKILL (#444)
 )
 def bootstrap_node(
@@ -868,7 +868,7 @@ def _detect_os_family(ssh_host: str, ssh_user: str, ssh_args_extra: list[str]) -
     name="fleet_platform.workers.ansible_tasks.provision_master",
     bind=True,
     max_retries=0,
-    queue="maintenance",
+    queue="ansible",  # dedicated long-job queue — isolates from control plane (#579)
     acks_late=False,
 )
 def provision_master(self, salt_master_id: str, action: str = "install") -> dict:

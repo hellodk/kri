@@ -49,6 +49,16 @@ celery_app.conf.update(
         # (--queues default,maintenance,drift,sbom) never consumes → embeddings
         # were never (re)built.
         "fleet_platform.workers.embedding_tasks.*": {"queue": "maintenance"},
+        # Long-running ansible jobs (#579) get a DEDICATED queue, consumed by a
+        # separate worker, so a burst of 2h playbook/bootstrap/provision runs can
+        # never starve the fast control-plane "maintenance" queue (poll_salt_masters,
+        # presence sync, reapers, health). Routed by exact task name — the other
+        # tasks in these modules (collect_node_grains, refresh_all_node_grains)
+        # stay on the control-plane queue. The decorator queue= on each task is
+        # also "ansible" so apply_async options can't override this back.
+        "fleet_platform.workers.playbook_tasks.run_playbook": {"queue": "ansible"},
+        "fleet_platform.workers.ansible_tasks.bootstrap_node": {"queue": "ansible"},
+        "fleet_platform.workers.ansible_tasks.provision_master": {"queue": "ansible"},
     },
     beat_schedule={
         "mark-stale-nodes": {
