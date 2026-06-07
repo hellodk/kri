@@ -128,6 +128,26 @@ export interface MasterProvisionRunResponse {
   error: string | null
 }
 
+/** Slim node item returned by the /minions endpoint (#560). */
+export interface MasterMinionItem {
+  id: string
+  minion_id: string
+  hostname: string | null
+  status: string
+  drift_score: number
+  ip_address: string | null
+  os_version: string | null
+  hardware_model: string | null
+  cpu_usage_pct: number | null
+  mem_usage_pct: number | null
+  last_seen_at: string | null
+  tags: Array<{ key: string; value: string; source: string }>
+  maintenance_mode: boolean
+  xcode_version: string | null
+  macos_version: string | null
+  group_count: number
+}
+
 export const saltMastersApi = {
   list: () => api.get<SaltMaster[]>('/api/v1/salt/masters'),
   get: (id: string) => api.get<SaltMaster>(`/api/v1/salt/masters/${id}`),
@@ -145,4 +165,18 @@ export const saltMastersApi = {
   /** Latest MasterProvisionRun for a master, or null if none. Viewer-accessible. */
   provisionStatus: (id: string) =>
     api.get<MasterProvisionRunResponse | null>(`/api/v1/salt/masters/${id}/provision-status`),
+  /**
+   * Promote an existing fleet node to also act as a salt-master (admin only).
+   * Returns the newly created SaltMaster. 409 if already promoted; 422 if no IP.
+   * Added in #560 (master-lifecycle epic phase 5).
+   */
+  promoteFromNode: (nodeId: string) =>
+    api.post<SaltMaster>(`/api/v1/salt/masters/from-node/${nodeId}`, {}),
+  /**
+   * Return the list of nodes (minions) assigned to this master.
+   * Returns [] when none are assigned. 404 if master unknown. Viewer-accessible.
+   * Added in #560 (master-lifecycle epic phase 5).
+   */
+  minions: (masterId: string) =>
+    api.get<MasterMinionItem[]>(`/api/v1/salt/masters/${masterId}/minions`),
 }

@@ -7,7 +7,7 @@
 
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { saltMastersApi, type SaltMaster, type SaltMasterCreate, type SaltMasterUpdate } from '../api/saltMasters'
+import { saltMastersApi, type SaltMaster, type SaltMasterCreate, type SaltMasterUpdate, type MasterMinionItem } from '../api/saltMasters'
 import { saltMasterBadge } from '../lib/saltMasterHelpers'
 import { provisionRefetchInterval } from '../lib/provisionPolling'
 import { LogPane } from '../lib/LogPane'
@@ -390,6 +390,107 @@ function MasterForm({ initial, title, submitLabel, isLoading, error, onSubmit, o
           </div>
         </form>
       </div>
+    </div>
+  )
+}
+
+// ---------------------------------------------------------------------------
+// Per-master minions section (#560)
+// ---------------------------------------------------------------------------
+
+function minionStatusBadge(status: string): { bg: string; text: string } {
+  switch (status) {
+    case 'active':
+    case 'online':
+      return { bg: 'bg-emerald-100', text: 'text-emerald-800' }
+    case 'offline':
+      return { bg: 'bg-red-100', text: 'text-red-800' }
+    case 'maintenance':
+      return { bg: 'bg-amber-100', text: 'text-amber-800' }
+    default:
+      return { bg: 'bg-gray-100', text: 'text-gray-600' }
+  }
+}
+
+interface MasterMinionsSectionProps {
+  masterId: string
+}
+
+function MasterMinionsSection({ masterId }: MasterMinionsSectionProps) {
+  const { data: minions, isLoading } = useQuery({
+    queryKey: ['master-minions', masterId],
+    queryFn: () => saltMastersApi.minions(masterId),
+    staleTime: 30_000,
+    refetchInterval: 60_000,
+  })
+
+  if (isLoading) {
+    return (
+      <div className="border-t border-gray-100 px-5 py-3 text-xs text-gray-400 italic">
+        Loading minions…
+      </div>
+    )
+  }
+
+  const list = minions ?? []
+
+  return (
+    <div className="border-t border-gray-100">
+      <div className="px-5 py-2.5 bg-gray-50 flex items-center gap-2">
+        <svg
+          width="14"
+          height="14"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="2"
+          className="text-gray-500 flex-shrink-0"
+          aria-hidden="true"
+        >
+          <rect x="2" y="3" width="20" height="14" rx="2" />
+          <path d="M8 21h8M12 17v4" />
+        </svg>
+        <span className="text-xs font-semibold text-gray-700">
+          Minions
+        </span>
+        <span className="ml-1 px-1.5 py-0.5 rounded-full bg-gray-200 text-gray-700 text-xs font-medium">
+          {list.length}
+        </span>
+      </div>
+
+      {list.length === 0 ? (
+        <div className="px-5 py-3 text-xs text-gray-500 italic">
+          No nodes are currently assigned to this master.
+        </div>
+      ) : (
+        <div className="divide-y divide-gray-100">
+          {list.map((m: MasterMinionItem) => {
+            const badge = minionStatusBadge(m.status)
+            return (
+              <div
+                key={m.id}
+                className="px-5 py-2.5 flex items-center justify-between gap-4 hover:bg-gray-50 transition-colors"
+              >
+                <div className="flex items-center gap-2 min-w-0">
+                  <span className="text-sm font-medium text-gray-900 truncate">
+                    {m.hostname ?? m.minion_id}
+                  </span>
+                  {m.hostname && (
+                    <span className="text-xs text-gray-400 font-mono truncate hidden sm:block">
+                      {m.minion_id}
+                    </span>
+                  )}
+                </div>
+                <span
+                  className={`shrink-0 px-2 py-0.5 rounded-full text-xs font-semibold border border-transparent ${badge.bg} ${badge.text}`}
+                >
+                  {m.status}
+                </span>
+              </div>
+            )
+          })}
+        </div>
+      )}
     </div>
   )
 }
@@ -880,6 +981,9 @@ export function SaltMastersTab() {
                   }}
                 />
               )}
+
+              {/* Minions topology — always visible (#560) */}
+              <MasterMinionsSection masterId={master.id} />
             </div>
           )
         })}
