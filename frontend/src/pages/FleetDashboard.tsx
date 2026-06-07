@@ -9,6 +9,7 @@ import { playbooksApi } from '../api/playbooks'
 import { ansibleApi } from '../api/ansible'
 import { saltMastersApi } from '../api/saltMasters'
 import { fleetActionsBlocked } from '../lib/saltMasterGuard'
+import { mastersByNodeId } from '../lib/masterNodes'
 import { useAuthStore } from '../stores/authStore'
 import { useToastStore } from '../stores/toastStore'
 import { StatusBadge } from '../components/StatusBadge'
@@ -848,6 +849,12 @@ export function FleetDashboard() {
   })
   const mastersBlocked = fleetActionsBlocked(saltMasters)
 
+  // Build set of node IDs that are salt-masters — used for MASTER badge in the node table
+  const masterNodeIds = useMemo(
+    () => mastersByNodeId(saltMasters ?? []),
+    [saltMasters],
+  )
+
   const { data: overview, isLoading: ovLoading } = useQuery({
     queryKey: ['fleet-overview'],
     queryFn: fleetApi.overview,
@@ -1338,9 +1345,19 @@ export function FleetDashboard() {
                           </td>
                         )}
                         <td className="px-4 py-3 font-medium font-mono text-xs">
-                          <Link to={`/nodes/${node.id}`} className="text-brand-600 hover:text-brand-700 hover:underline">
-                            {node.hostname ?? node.minion_id}
-                          </Link>
+                          <div className="flex items-center gap-1.5 flex-wrap">
+                            <Link to={`/nodes/${node.id}`} className="text-brand-600 hover:text-brand-700 hover:underline">
+                              {node.hostname ?? node.minion_id}
+                            </Link>
+                            {masterNodeIds.has(node.id) && (
+                              <span
+                                className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold uppercase tracking-wide bg-indigo-600 text-white border border-indigo-700"
+                                title="This node runs a salt-master"
+                              >
+                                Master
+                              </span>
+                            )}
+                          </div>
                           {(node.ip_address ?? node.bootstrap_ip) && (
                             <p className="text-gray-400 font-normal mt-0.5">{node.ip_address ?? node.bootstrap_ip}</p>
                           )}

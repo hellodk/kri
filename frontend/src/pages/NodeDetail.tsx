@@ -14,6 +14,8 @@ import {
   type AddCertBody,
 } from '../api/iosTracking'
 import { vmsApi } from '../api/vms'
+import { saltMastersApi, type SaltMaster } from '../api/saltMasters'
+import { saltMasterBadge } from '../lib/saltMasterHelpers'
 import { StatusBadge } from '../components/StatusBadge'
 import { DriftBadge } from '../components/DriftBadge'
 import { formatGrainKey } from './DriftExplorer'
@@ -695,6 +697,18 @@ export function NodeDetail() {
   })
   const vncEnabled = platformSettings?.vnc_enabled ?? false
 
+  // Fetch all salt-masters — lightweight, 60s stale — to find if this node runs one
+  const { data: saltMasters } = useQuery({
+    queryKey: ['salt-masters'],
+    queryFn: saltMastersApi.list,
+    staleTime: 60_000,
+    enabled: !!nodeId,
+  })
+  // The salt-master record linked to this node (if any)
+  const nodeMaster: SaltMaster | undefined = (saltMasters ?? []).find(
+    (m) => m.node_id === nodeId,
+  )
+
   const { data: nodeSecrets } = useQuery({
     queryKey: ['node-secrets', nodeId],
     queryFn: () => nodeSecretsApi.list(nodeId!),
@@ -1119,6 +1133,60 @@ export function NodeDetail() {
 
       {tab === 'overview' && (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          {/* Salt-master panel — only shown when this node runs a master */}
+          {nodeMaster && (() => {
+            const badge = saltMasterBadge(nodeMaster.status)
+            return (
+              <div className="md:col-span-2 bg-indigo-50 border border-indigo-200 rounded-lg p-4">
+                <div className="flex items-start justify-between gap-4">
+                  <div className="flex items-center gap-2.5">
+                    {/* Indigo server icon */}
+                    <svg className="w-5 h-5 text-indigo-600 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M5 12h14M5 12a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v4a2 2 0 01-2 2M5 12a2 2 0 00-2 2v4a2 2 0 002 2h14a2 2 0 002-2v-4a2 2 0 00-2-2m-2-4h.01M17 16h.01" />
+                    </svg>
+                    <div>
+                      <p className="text-sm font-semibold text-indigo-900">
+                        Runs Salt Master
+                        <span className="ml-2 text-xs font-normal text-indigo-600">
+                          {nodeMaster.name}
+                        </span>
+                      </p>
+                      <p className="text-xs text-indigo-600 mt-0.5">
+                        {nodeMaster.address}
+                        {nodeMaster.salt_version && (
+                          <span className="ml-2 font-mono">v{nodeMaster.salt_version}</span>
+                        )}
+                      </p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-3 flex-shrink-0">
+                    {/* Health badge — label + color (not color-only) */}
+                    <span
+                      className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-semibold ${badge.bgClass} ${badge.textClass} border border-current/20`}
+                      aria-label={`Salt-master health: ${badge.label}`}
+                    >
+                      <span
+                        className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${
+                          nodeMaster.status === 'healthy' ? 'bg-emerald-600' :
+                          nodeMaster.status === 'degraded' ? 'bg-amber-600' :
+                          nodeMaster.status === 'unreachable' ? 'bg-red-600' : 'bg-gray-500'
+                        }`}
+                        aria-hidden="true"
+                      />
+                      {badge.label}
+                    </span>
+                    <Link
+                      to="/settings?tab=Salt Masters"
+                      className="text-xs text-indigo-600 hover:text-indigo-800 font-medium underline underline-offset-2"
+                    >
+                      Settings → Salt Masters →
+                    </Link>
+                  </div>
+                </div>
+              </div>
+            )
+          })()}
+
           <div className="bg-white rounded-lg border border-gray-200 p-4 space-y-3">
             <h3 className="font-semibold text-gray-700">Hardware</h3>
             <dl className="space-y-1 text-sm">
