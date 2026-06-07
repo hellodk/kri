@@ -10,7 +10,7 @@ from slowapi.errors import RateLimitExceeded
 from starlette.responses import Response
 
 from fleet_platform.api.limiter import limiter
-from fleet_platform.api.metrics_collectors import refresh_ssh_reachability_gauge
+from fleet_platform.api.metrics_collectors import refresh_all_gauges
 from fleet_platform.api.routes import (
     ansible,
     auth,
@@ -168,11 +168,12 @@ def create_app() -> FastAPI:
     async def metrics_endpoint():
         """Prometheus scrape endpoint — returns metrics in text/plain exposition format.
 
-        Refreshes Redis-backed gauges (e.g. kri_node_ssh_reachable) before
-        generating output so that each scrape reflects the latest worker results
-        without any cross-process registry sharing (#356).
+        Refreshes Redis-backed gauges (e.g. kri_node_ssh_reachable) and DB-backed
+        gauges (node counts, beat heartbeat) before generating output so that each
+        scrape reflects the latest state without any cross-process registry sharing
+        (#356, #576).
         """
-        refresh_ssh_reachability_gauge()
+        refresh_all_gauges()
         return Response(generate_latest(), media_type=CONTENT_TYPE_LATEST)
 
     @app.exception_handler(Exception)

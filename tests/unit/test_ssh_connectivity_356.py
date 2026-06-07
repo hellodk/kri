@@ -322,13 +322,22 @@ def test_gauge_name_defined_in_metrics_module():
 
 
 def test_metrics_endpoint_refreshes_ssh_gauge():
-    """main.py /metrics endpoint must call refresh_ssh_reachability_gauge before generate_latest."""
+    """main.py /metrics endpoint must refresh SSH (and all other) gauges before generate_latest.
+
+    Updated (#576): refresh_ssh_reachability_gauge is now called internally by
+    refresh_all_gauges, which is the single entry point used by the /metrics handler.
+    """
     import pathlib
 
     src = (pathlib.Path(__file__).parent.parent.parent / "fleet_platform/api/main.py").read_text()
-    assert "refresh_ssh_reachability_gauge" in src, (
-        "main.py does not call refresh_ssh_reachability_gauge — /metrics will not expose SSH gauge"
+    # refresh_all_gauges delegates to refresh_ssh_reachability_gauge — verify the wrapper is called
+    assert "refresh_all_gauges" in src, (
+        "main.py /metrics handler must call refresh_all_gauges() which includes SSH gauge refresh (#576)"
     )
+    # The SSH helper itself must still exist in metrics_collectors
+    from fleet_platform.api.metrics_collectors import refresh_ssh_reachability_gauge  # noqa: F401
+
+    assert callable(refresh_ssh_reachability_gauge)
 
 
 def test_metrics_endpoint_imports_refresh():
