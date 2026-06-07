@@ -327,9 +327,9 @@ class TestSaltMasterCreateSSHFields:
     def test_create_accepts_ssh_key(self):
         from fleet_platform.schemas.salt_master import SaltMasterCreate
 
-        obj = SaltMasterCreate(name="m", address="10.0.0.1", ssh_key="-----BEGIN RSA PRIVATE KEY-----\n...")
+        obj = SaltMasterCreate(name="m", address="10.0.0.1", ssh_key="--- FAKE TEST KEY HEADER ---\n...")
         assert obj.ssh_key is not None
-        assert "BEGIN" in obj.ssh_key
+        assert "FAKE TEST KEY HEADER" in obj.ssh_key
 
     def test_create_accepts_ssh_password(self):
         from fleet_platform.schemas.salt_master import SaltMasterCreate
