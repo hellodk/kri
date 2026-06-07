@@ -27,7 +27,7 @@ from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
-from sqlalchemy import func, select
+from sqlalchemy import func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from fleet_platform.api.deps import get_db
@@ -201,21 +201,27 @@ async def update_salt_master(
     return SaltMasterResponse.model_validate(master)
 
 
-@router.delete("/masters/{master_id}", status_code=204)
+@router.delete("/masters/{master_id}", status_code=200)
 async def delete_salt_master(
     master_id: uuid.UUID,
     db: AsyncSession = Depends(get_db),
     _: dict = Depends(require_role("admin")),
-) -> None:
+) -> dict:
     """Delete a SaltMaster.
 
+    Nodes assigned to the deleted master are automatically reassigned to the
+    current default master.  If no default master exists and nodes are present,
+    deletion is blocked with 409.
+
     Invariants checked before deletion:
+    - Cannot delete if it is the default master (promote another first).
     - Cannot delete if it is the only enabled master (would leave 0 enabled).
-    - Cannot delete if any nodes reference this master via ``salt_master_id``
-      (operator must reassign the nodes first).
+    - Cannot delete if nodes are assigned and there is no default master to
+      receive them.
 
     Returns 404 if the master does not exist.
     Returns 409 with a clear message if an invariant is violated.
+    Returns 200 with ``{"nodes_reassigned": N, "reassigned_to": name|null}``.
     Requires admin role.
     """
     result = await db.execute(select(SaltMaster).where(SaltMaster.id == master_id))
@@ -248,20 +254,33 @@ async def delete_salt_master(
                 detail="Cannot delete the last enabled salt master — at least one must remain enabled.",
             )
 
-    # Invariant 2: cannot remove a master that nodes are still assigned to.
+    # Auto-reassign nodes to the default master before deletion.
     node_count_result = await db.execute(select(func.count()).select_from(Node).where(Node.salt_master_id == master_id))
     node_count = node_count_result.scalar_one()
+    nodes_reassigned = 0
+    reassigned_to: str | None = None
+
     if node_count > 0:
-        raise HTTPException(
-            status_code=409,
-            detail=(
-                f"Cannot delete salt master '{master.name}': {node_count} node(s) are still assigned to it. "
-                "Reassign the nodes to a different master first."
-            ),
+        default_result = await db.execute(
+            select(SaltMaster).where(SaltMaster.is_default.is_(True), SaltMaster.id != master_id)
         )
+        default_master = default_result.scalar_one_or_none()
+        if default_master is None:
+            raise HTTPException(
+                status_code=409,
+                detail=(
+                    f"Cannot delete salt master '{master.name}': {node_count} node(s) are assigned "
+                    "and there is no default master to reassign them to. "
+                    "Create or promote another master as default first."
+                ),
+            )
+        await db.execute(update(Node).where(Node.salt_master_id == master_id).values(salt_master_id=default_master.id))
+        nodes_reassigned = node_count
+        reassigned_to = default_master.name
 
     await db.delete(master)
     await db.commit()
+    return {"nodes_reassigned": nodes_reassigned, "reassigned_to": reassigned_to}
 
 
 @router.post("/masters/{master_id}/test")

@@ -469,13 +469,29 @@ class TestDeleteSaltMaster:
         assert "last enabled" in exc_info.value.detail.lower()
 
     @pytest.mark.asyncio
-    async def test_delete_in_use_raises_409(self):
-        """Deleting a master referenced by nodes must raise 409 with node count."""
+    async def test_delete_default_master_raises_409(self):
+        """Deleting the default master must raise 409."""
         from fastapi import HTTPException
 
         from fleet_platform.api.routes.salt_masters import delete_salt_master
 
-        master = _make_master(enabled=True)
+        master = _make_master(enabled=True, is_default=True)
+        db = AsyncMock()
+        db.execute = AsyncMock(return_value=_make_scalar_one_or_none(master))
+
+        with pytest.raises(HTTPException) as exc_info:
+            await delete_salt_master(master_id=master.id, db=db, _={"sub": "admin"})
+
+        assert exc_info.value.status_code == 409
+        assert "default" in exc_info.value.detail.lower()
+
+    @pytest.mark.asyncio
+    async def test_delete_auto_reassigns_nodes_to_default(self):
+        """Deleting a non-default master with nodes auto-reassigns them to the default."""
+        from fleet_platform.api.routes.salt_masters import delete_salt_master
+
+        master = _make_master(enabled=True, is_default=False)
+        default_master = _make_master(name="cylon", is_default=True)
         call_count = 0
 
         async def _execute(stmt):
@@ -484,10 +500,45 @@ class TestDeleteSaltMaster:
             if call_count == 1:
                 return _make_scalar_one_or_none(master)
             if call_count == 2:
-                # Count enabled masters — more than 1 so deletion is OK from that side
-                return _make_scalar_one(2)
-            # Third call: count nodes referencing this master → 3
-            return _make_scalar_one(3)
+                return _make_scalar_one(2)  # 2 enabled masters
+            if call_count == 3:
+                return _make_scalar_one(4)  # 4 nodes assigned
+            if call_count == 4:
+                return _make_scalar_one_or_none(default_master)  # default master exists
+            return MagicMock()  # update(Node) result
+
+        db = AsyncMock()
+        db.execute = _execute
+        db.delete = AsyncMock()
+        db.commit = AsyncMock()
+
+        result = await delete_salt_master(master_id=master.id, db=db, _={"sub": "admin"})
+
+        assert result["nodes_reassigned"] == 4
+        assert result["reassigned_to"] == "cylon"
+        db.delete.assert_awaited_once_with(master)
+        db.commit.assert_awaited_once()
+
+    @pytest.mark.asyncio
+    async def test_delete_no_default_master_with_nodes_raises_409(self):
+        """Deleting a non-default master with nodes when no default exists raises 409."""
+        from fastapi import HTTPException
+
+        from fleet_platform.api.routes.salt_masters import delete_salt_master
+
+        master = _make_master(enabled=True, is_default=False)
+        call_count = 0
+
+        async def _execute(stmt):
+            nonlocal call_count
+            call_count += 1
+            if call_count == 1:
+                return _make_scalar_one_or_none(master)
+            if call_count == 2:
+                return _make_scalar_one(2)  # 2 enabled masters
+            if call_count == 3:
+                return _make_scalar_one(3)  # 3 nodes assigned
+            return _make_scalar_one_or_none(None)  # no default master
 
         db = AsyncMock()
         db.execute = _execute
@@ -496,8 +547,7 @@ class TestDeleteSaltMaster:
             await delete_salt_master(master_id=master.id, db=db, _={"sub": "admin"})
 
         assert exc_info.value.status_code == 409
-        assert "3" in exc_info.value.detail
-        assert "node" in exc_info.value.detail.lower()
+        assert "default" in exc_info.value.detail.lower()
 
     @pytest.mark.asyncio
     async def test_delete_not_found_raises_404(self):
@@ -515,11 +565,11 @@ class TestDeleteSaltMaster:
         assert exc_info.value.status_code == 404
 
     @pytest.mark.asyncio
-    async def test_delete_success_calls_db_delete_and_commit(self):
-        """A valid delete must call db.delete and db.commit."""
+    async def test_delete_success_no_nodes_returns_zero_reassigned(self):
+        """Deleting a master with no assigned nodes returns nodes_reassigned=0."""
         from fleet_platform.api.routes.salt_masters import delete_salt_master
 
-        master = _make_master(enabled=True)
+        master = _make_master(enabled=True, is_default=False)
         call_count = 0
 
         async def _execute(stmt):
@@ -529,15 +579,17 @@ class TestDeleteSaltMaster:
                 return _make_scalar_one_or_none(master)
             if call_count == 2:
                 return _make_scalar_one(2)  # 2 enabled — safe to delete
-            return _make_scalar_one(0)  # 0 nodes referencing
+            return _make_scalar_one(0)  # 0 nodes — no reassignment needed
 
         db = AsyncMock()
         db.execute = _execute
         db.delete = AsyncMock()
         db.commit = AsyncMock()
 
-        await delete_salt_master(master_id=master.id, db=db, _={"sub": "admin"})
+        result = await delete_salt_master(master_id=master.id, db=db, _={"sub": "admin"})
 
+        assert result["nodes_reassigned"] == 0
+        assert result["reassigned_to"] is None
         db.delete.assert_awaited_once_with(master)
         db.commit.assert_awaited_once()
 
@@ -562,9 +614,9 @@ class TestDeleteSaltMaster:
         db.delete = AsyncMock()
         db.commit = AsyncMock()
 
-        # Should succeed without 409
-        await delete_salt_master(master_id=master.id, db=db, _={"sub": "admin"})
+        result = await delete_salt_master(master_id=master.id, db=db, _={"sub": "admin"})
 
+        assert result["nodes_reassigned"] == 0
         db.delete.assert_awaited_once_with(master)
 
 

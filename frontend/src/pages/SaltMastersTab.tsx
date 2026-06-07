@@ -655,9 +655,13 @@ export function SaltMastersTab() {
 
   const deleteMutation = useMutation({
     mutationFn: (id: string) => saltMastersApi.remove(id),
-    onSuccess: () => {
+    onSuccess: (data) => {
       qc.invalidateQueries({ queryKey: ['salt-masters'] })
-      toast('Salt master deleted', 'success')
+      const msg =
+        data?.nodes_reassigned > 0
+          ? `Salt master deleted (${data.nodes_reassigned} node${data.nodes_reassigned === 1 ? '' : 's'} reassigned to "${data.reassigned_to}")`
+          : 'Salt master deleted'
+      toast(msg, 'success')
       setDeleteMaster(null)
     },
     onError: (err: Error) => {
@@ -1019,7 +1023,7 @@ export function SaltMastersTab() {
       {deleteMaster && (
         <ConfirmDialog
           title={`Delete "${deleteMaster.name}"?`}
-          message={`This will permanently remove the salt master "${deleteMaster.name}". Nodes assigned to it will need to be reassigned. This action cannot be undone.`}
+          message={`This will permanently remove the salt master "${deleteMaster.name}". Any nodes assigned to it will be automatically reassigned to the default master. This action cannot be undone.`}
           confirmLabel="Delete"
           destructive
           onConfirm={() => deleteMutation.mutate(deleteMaster.id)}
