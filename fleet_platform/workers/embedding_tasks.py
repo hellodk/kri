@@ -6,9 +6,12 @@ Schedule:
   reindex_drift_history  — every 5 min (new drift records)
 """
 
+import logging
 from pathlib import Path
 
 from fleet_platform.workers.celery_app import celery_app
+
+logger = logging.getLogger(__name__)
 
 
 @celery_app.task(name="fleet_platform.workers.embedding_tasks.reindex_nodes")
@@ -45,7 +48,11 @@ def reindex_nodes() -> dict:
             membership = (
                 await db.execute(select(GroupMember.node_id, Group.name).join(Group, Group.id == GroupMember.group_id))
             ).all()
-            node_group = {str(r.node_id): r.name for r in membership}
+            # Aggregate ALL groups per node — a single-value dict comprehension
+            # keeps only the last group for multi-group nodes (#580).
+            node_groups: dict[str, list[str]] = {}
+            for r in membership:
+                node_groups.setdefault(str(r.node_id), []).append(r.name)
 
             all_chunks = []
             for node in nodes:
@@ -54,7 +61,7 @@ def reindex_nodes() -> dict:
                     hostname=node.hostname or node.minion_id or "",
                     ip=node.ip_address or "",
                     status=node.status or "unknown",
-                    group=node_group.get(str(node.id), ""),
+                    group=", ".join(node_groups.get(str(node.id), [])),
                     os_info="",
                     last_seen=_format_last_seen(node.last_seen_at),
                     include_ips=include_ips,
@@ -103,7 +110,8 @@ def reindex_playbooks() -> dict:
                     content = yml_path.read_text()
                     rel = str(yml_path.relative_to(playbooks_dir))
                     all_chunks.extend(chunk_playbook(f"playbooks/{rel}", content))
-                except Exception:
+                except Exception as exc:
+                    logger.warning("reindex_playbooks: skipping %s — %s", yml_path, exc)
                     continue
 
             upserted = await upsert_chunks(db, all_chunks, embed_url)

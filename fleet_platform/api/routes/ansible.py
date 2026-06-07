@@ -14,7 +14,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from fleet_platform.api.deps import get_db
 from fleet_platform.api.limiter import limiter
 from fleet_platform.core.audit import audit
-from fleet_platform.core.auth import get_current_user, hash_password, require_role
+from fleet_platform.core.auth import hash_password, require_role
 from fleet_platform.models.ansible_job import AnsibleJob
 from fleet_platform.models.node import Node
 from fleet_platform.models.platform_setting import PlatformSetting
@@ -1249,9 +1249,20 @@ async def run_playbook_endpoint(
     db: AsyncSession = Depends(get_db),
     claims: dict = Depends(require_role("operator", "admin")),
 ):
-    # Use discover_all as the authoritative allowlist — only known playbooks/roles can run
-    entries = discover_all(_PLAYBOOKS_DIR)
-    entry = next((e for e in entries if e.filename == payload.playbook), None)
+    # Use discover_all across ALL configured sources — only known playbooks/roles can run.
+    # Previously only checked the builtin _PLAYBOOKS_DIR, causing external-source playbooks
+    # to always 404 (#580).  Now uses the same resolver as the worker.
+
+    _sources_setting = await db.execute(select(PlatformSetting).where(PlatformSetting.key == "playbook_sources"))
+    _sources_row = _sources_setting.scalar_one_or_none()
+    _sources_json = _sources_row.value if _sources_row else None
+    _all_dirs = get_all_playbook_dirs(_sources_json, _PLAYBOOKS_DIR)
+    entry = None
+    for _dir in _all_dirs:
+        _found = next((e for e in discover_all(_dir) if e.filename == payload.playbook), None)
+        if _found:
+            entry = _found
+            break
     if not entry:
         raise HTTPException(status_code=404, detail="Playbook not found")
     safe_name = entry.filename  # trusted — came from filesystem scan, not user input
@@ -1657,7 +1668,7 @@ async def playbook_stats(
 @router.get("/tasks/{task_id}")
 async def get_task_status(
     task_id: str,
-    _: dict = Depends(get_current_user),
+    _: dict = Depends(require_role("viewer", "operator", "admin")),
 ):
     """Return Celery task state + result for any queued task."""
     from celery.result import AsyncResult
