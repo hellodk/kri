@@ -83,6 +83,8 @@ interface FormState {
   api_password: string
   api_eauth: string
   token_delivery: string
+  tls_verify: boolean
+  auto_accept: boolean
 }
 
 const EMPTY_FORM: FormState = {
@@ -98,6 +100,8 @@ const EMPTY_FORM: FormState = {
   api_password: '',
   api_eauth: '',
   token_delivery: 'ingest',
+  tls_verify: false,
+  auto_accept: true,
 }
 
 function masterToForm(m: SaltMaster): FormState {
@@ -114,6 +118,8 @@ function masterToForm(m: SaltMaster): FormState {
     api_password: '', // never pre-filled — write-only
     api_eauth: m.api_eauth ?? '',
     token_delivery: m.token_delivery,
+    tls_verify: m.tls_verify,
+    auto_accept: m.auto_accept,
   }
 }
 
@@ -302,7 +308,7 @@ function MasterForm({ initial, title, submitLabel, isLoading, error, onSubmit, o
           </div>
 
           {/* Flags */}
-          <div className="flex gap-6">
+          <div className="flex gap-6 flex-wrap">
             <label className="flex items-center gap-2 text-sm text-gray-700 cursor-pointer select-none">
               <input
                 type="checkbox"
@@ -320,6 +326,39 @@ function MasterForm({ initial, title, submitLabel, isLoading, error, onSubmit, o
                 className="rounded border-gray-300 text-brand-600 focus:ring-brand-600"
               />
               Set as default
+            </label>
+          </div>
+
+          {/* TLS + auto-accept */}
+          <div className="rounded-lg border border-gray-200 bg-gray-50 px-4 py-3 space-y-3">
+            <p className="text-xs font-semibold text-gray-700 uppercase tracking-wide">Security</p>
+            <label className="flex items-start gap-3 cursor-pointer select-none">
+              <input
+                type="checkbox"
+                checked={form.tls_verify}
+                onChange={(e) => set('tls_verify', e.target.checked)}
+                className="mt-0.5 rounded border-gray-300 text-brand-600 focus:ring-brand-600"
+              />
+              <span>
+                <span className="text-sm font-medium text-gray-900">Verify TLS certificate</span>
+                <span className="block text-xs text-gray-600 mt-0.5">
+                  Leave off for self-signed certs or plain HTTP salt-api endpoints.
+                </span>
+              </span>
+            </label>
+            <label className="flex items-start gap-3 cursor-pointer select-none">
+              <input
+                type="checkbox"
+                checked={form.auto_accept}
+                onChange={(e) => set('auto_accept', e.target.checked)}
+                className="mt-0.5 rounded border-gray-300 text-brand-600 focus:ring-brand-600"
+              />
+              <span>
+                <span className="text-sm font-medium text-gray-900">Auto-accept minion key on bootstrap</span>
+                <span className="block text-xs text-gray-600 mt-0.5">
+                  kri calls <code className="font-mono bg-gray-100 px-1 rounded">key.accept</code> via salt-api after a successful bootstrap run.
+                </span>
+              </span>
             </label>
           </div>
 
@@ -435,6 +474,8 @@ export function SaltMastersTab() {
       api_password: form.api_password || null,
       api_eauth: form.api_eauth.trim() || null,
       token_delivery: form.token_delivery,
+      tls_verify: form.tls_verify,
+      auto_accept: form.auto_accept,
     }
     createMutation.mutate(body)
   }
@@ -456,6 +497,8 @@ export function SaltMastersTab() {
       ...(form.api_password ? { api_password: form.api_password } : {}),
       api_eauth: form.api_eauth.trim() || null,
       token_delivery: form.token_delivery,
+      tls_verify: form.tls_verify,
+      auto_accept: form.auto_accept,
     }
     updateMutation.mutate({ id: editMaster.id, body })
   }

@@ -239,6 +239,10 @@ def bootstrap_node(
         master_addresses: list[str] = [m.address for m in master_objs]
         master_statuses: dict[str, str] = {m.address: m.status for m in master_objs}
         master_names: dict[str, str] = {m.address: m.name for m in master_objs}
+        # (#555) capture auto_accept + enough info for key.accept call after bootstrap
+        master_auto_accept_info: list[dict] = [
+            {"master": m, "auto_accept": getattr(m, "auto_accept", True), "name": m.name} for m in master_objs
+        ]
 
         # Per-node stored credentials
         node_user, node_password, node_auth_mode = _get_node_credentials(node)
@@ -525,9 +529,10 @@ def bootstrap_node(
             )
 
         # 6. Update bootstrap status + logs; finalize the BootstrapRun record
+        _bootstrap_succeeded = final_status == "successful" and runner is not None and runner.rc == 0
         with get_sync_db() as db:
             node = db.execute(select(Node).where(Node.id == node_uuid)).scalar_one()
-            if final_status == "successful" and runner is not None and runner.rc == 0:
+            if _bootstrap_succeeded:
                 node.bootstrap_status = "completed"
                 node.bootstrap_error = None
             else:
@@ -540,13 +545,58 @@ def bootstrap_node(
             ).scalar_one_or_none()
             if run_record:
                 run_record.finished_at = datetime.now(UTC)
-                run_record.status = (
-                    "completed" if final_status == "successful" and runner is not None and runner.rc == 0 else "failed"
-                )
+                run_record.status = "completed" if _bootstrap_succeeded else "failed"
                 run_record.ansible_stdout = node.bootstrap_logs
                 run_record.error = bootstrap_error
 
             db.commit()
+
+        # 6a. (#555) Auto-accept minion key on each master that has auto_accept=True.
+        # Runs only on successful bootstrap; never blocks or fails the overall task.
+        if _bootstrap_succeeded:
+            from fleet_platform.services.salt_api_client import SaltApiError, run_wheel
+
+            auto_accept_notes: list[str] = []
+            for info in master_auto_accept_info:
+                if not info["auto_accept"]:
+                    continue
+                master_obj = info["master"]
+                master_name = info["name"]
+                try:
+                    run_wheel(master_obj, "key.accept", match=node_minion_id)
+                    note = f"minion key auto-accepted on {master_name}"
+                    logger.info("bootstrap_node: %s node_id=%s minion_id=%s", note, node_id, node_minion_id)
+                    auto_accept_notes.append(note)
+                except SaltApiError as exc:
+                    note = f"key auto-accept failed on {master_name}; accept manually ({exc.reason})"
+                    logger.warning(
+                        "bootstrap_node: salt-api key.accept failed master=%s node_id=%s: %s",
+                        master_name,
+                        node_id,
+                        exc.reason,
+                    )
+                    auto_accept_notes.append(note)
+                except Exception as exc:  # noqa: BLE001
+                    note = f"key auto-accept failed on {master_name}; accept manually ({exc})"
+                    logger.warning(
+                        "bootstrap_node: key.accept unexpected error master=%s node_id=%s: %s",
+                        master_name,
+                        node_id,
+                        exc,
+                    )
+                    auto_accept_notes.append(note)
+
+            if auto_accept_notes:
+                extra = "\n".join(f"[kri] {n}" for n in auto_accept_notes)
+                with get_sync_db() as db:
+                    _n = db.execute(select(Node).where(Node.id == node_uuid)).scalar_one_or_none()
+                    if _n:
+                        _n.bootstrap_logs = (_n.bootstrap_logs or "") + "\n" + extra
+                    _run2 = db.execute(select(BootstrapRun).where(BootstrapRun.id == run_id)).scalar_one_or_none()
+                    if _run2:
+                        _run2.ansible_stdout = (_run2.ansible_stdout or "") + "\n" + extra
+                    db.commit()
+
         _wrote_terminal_bootstrap = True
 
     except SoftTimeLimitExceeded:

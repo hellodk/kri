@@ -15,6 +15,8 @@ export interface SaltMaster {
   /** api_password_enc intentionally excluded from response */
   api_eauth: string | null
   token_delivery: string
+  tls_verify: boolean
+  auto_accept: boolean
   status: string
   last_checked_at: string | null
   last_error: string | null
@@ -38,6 +40,8 @@ export interface SaltMasterCreate {
   api_password?: string | null
   api_eauth?: string | null
   token_delivery?: string
+  tls_verify?: boolean
+  auto_accept?: boolean
 }
 
 /** Update payload — all fields optional. */
@@ -55,6 +59,8 @@ export interface SaltMasterUpdate {
   api_password?: string | null
   api_eauth?: string | null
   token_delivery?: string
+  tls_verify?: boolean
+  auto_accept?: boolean
 }
 
 export interface SaltMasterHealthResponse {

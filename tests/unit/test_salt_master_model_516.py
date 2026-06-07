@@ -142,6 +142,8 @@ class TestSaltMasterResponseSchema:
             ret_port=4506,
             control_mode="salt_api",
             token_delivery="ingest",
+            tls_verify=False,
+            auto_accept=True,
             status="unknown",
             created_at=now,
             updated_at=now,
