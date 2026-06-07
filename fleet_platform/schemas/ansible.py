@@ -10,6 +10,7 @@ class BootstrapRequest(BaseModel):
     ssh_username: str | None = None  # overrides platform setting ssh_bootstrap_username
     ssh_password: str | None = None  # overrides platform setting ssh_bootstrap_password
     ssh_key: str | None = None  # plaintext private key for key-based auth
+    salt_master_ids: list[str] | None = None  # HA: specific master IDs to use; None → all enabled
 
 
 class BootstrapResponse(BaseModel):

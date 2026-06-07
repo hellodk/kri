@@ -152,6 +152,7 @@ async def bootstrap(
         str(node.id),
         payload.target_ip,
         ssh_username=payload.ssh_username,
+        salt_master_ids=payload.salt_master_ids,
     )
 
     return BootstrapResponse(
