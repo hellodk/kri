@@ -265,7 +265,7 @@ function IOSTabPanel({
             </div>
           </dl>
         ) : (
-          <p className="text-sm text-gray-400">No Jenkins agent configured. Click "Configure" to set one up.</p>
+          <p className="text-sm text-gray-600">No Jenkins agent configured. Click "Configure" to set one up.</p>
         )}
       </div>
 
@@ -291,7 +291,7 @@ function IOSTabPanel({
         )}
 
         {certs.length === 0 ? (
-          <p className="text-sm text-gray-400">No certificates tracked for this node.</p>
+          <p className="text-sm text-gray-600">No certificates tracked for this node.</p>
         ) : (
           <div className="overflow-hidden rounded-lg border border-gray-200">
             <table className="w-full text-sm">
@@ -323,7 +323,7 @@ function IOSTabPanel({
                         {d < 60 && d >= 0 && <span className="ml-1">({d}d)</span>}
                         {d < 0 && <span className="ml-1">(expired)</span>}
                       </td>
-                      <td className="px-4 py-2 font-mono text-xs text-gray-400 max-w-[120px] truncate" title={cert.fingerprint ?? ''}>
+                      <td className="px-4 py-2 font-mono text-xs text-gray-500 max-w-[120px] truncate" title={cert.fingerprint ?? ''}>
                         {cert.fingerprint ? cert.fingerprint.slice(0, 16) + '…' : '—'}
                       </td>
                       <td className="px-4 py-2 text-right">
@@ -447,7 +447,7 @@ function AiRecommendationPanel({ text }: { text: string }) {
   return (
     <div className="bg-white rounded-lg border border-blue-100 p-4 space-y-0.5">
       {lines.map((line, idx) => renderLine(line, idx))}
-      <p className="text-xs text-gray-400 mt-3 pt-2 border-t border-gray-100">
+      <p className="text-xs text-gray-500 mt-3 pt-2 border-t border-gray-100">
         AI-generated — verify before acting. Actions require approval.
       </p>
     </div>
@@ -1788,7 +1788,7 @@ export function NodeDetail() {
                             <td className="px-4 py-2 font-mono font-medium text-gray-900">{pkg.name}</td>
                             <td className="px-4 py-2 font-mono text-amber-700">{pkg.actual ?? '—'}</td>
                             <td className="px-4 py-2 font-mono text-gray-600">{pkg.expected ?? '—'}</td>
-                            <td className="px-4 py-2 text-xs text-gray-400 font-mono">
+                            <td className="px-4 py-2 text-xs text-gray-500 font-mono">
                               {pkg.actual && pkg.expected ? `${pkg.actual} → ${pkg.expected}` : '—'}
                             </td>
                           </tr>
@@ -1819,7 +1819,7 @@ export function NodeDetail() {
                           <tr key={i} className="hover:bg-blue-50/30">
                             <td className="px-4 py-2 font-mono font-medium text-gray-900">{pkg.name}</td>
                             <td className="px-4 py-2 font-mono text-gray-600">{pkg.installed_version ?? '—'}</td>
-                            <td className="px-4 py-2 text-xs text-gray-400">not in baseline</td>
+                            <td className="px-4 py-2 text-xs text-gray-600">not in baseline</td>
                           </tr>
                         ))}
                       </tbody>
@@ -2235,10 +2235,10 @@ export function NodeDetail() {
           <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
             <div className="px-4 py-3 border-b border-gray-200">
               <p className="text-sm font-semibold text-gray-700">Stored Secrets</p>
-              <p className="text-xs text-gray-400 mt-0.5">Values are write-only and never displayed.</p>
+              <p className="text-xs text-gray-500 mt-0.5">Values are write-only and never displayed.</p>
             </div>
             {!nodeSecrets || nodeSecrets.length === 0 ? (
-              <div className="px-4 py-8 text-center text-gray-400 text-sm">No secrets stored for this node.</div>
+              <div className="px-4 py-8 text-center text-gray-600 text-sm">No secrets stored for this node.</div>
             ) : (
               <table className="w-full text-sm">
                 <thead>
@@ -2254,8 +2254,8 @@ export function NodeDetail() {
                     <tr key={s.key} className="hover:bg-gray-50">
                       <td className="px-4 py-3 font-mono font-medium text-gray-900">{s.key}</td>
                       <td className="px-4 py-3 text-gray-500 text-xs">{s.description ?? '—'}</td>
-                      <td className="px-4 py-3 text-gray-400 text-xs">
-                        {new Date(s.updated_at).toLocaleString()}
+                      <td className="px-4 py-3 text-gray-500 text-xs">
+                        {formatIST(s.updated_at)}
                       </td>
                       <td className="px-4 py-3 text-right">
                         <button
@@ -2454,10 +2454,10 @@ export function NodeDetail() {
                           />
                         </div>
                       ) : (
-                        <p className="text-xs text-gray-400 italic">Loading logs…</p>
+                        <p className="text-xs text-gray-500 italic">Loading logs…</p>
                       )
                     ) : (
-                      <p className="text-xs text-gray-400 italic">No stdout captured for this run.</p>
+                      <p className="text-xs text-gray-500 italic">No stdout captured for this run.</p>
                     )}
                   </div>
                 )}
@@ -2520,7 +2520,7 @@ export function NodeDetail() {
                     ))
                   : (
                       <tr>
-                        <td colSpan={3} className="py-8 text-center text-sm text-gray-400">
+                        <td colSpan={3} className="py-8 text-center text-sm text-gray-600">
                           {servicesPolling ? (
                             <span>Fetching service list…</span>
                           ) : (
@@ -2656,7 +2656,7 @@ export function NodeDetail() {
           </div>
 
           {metricsLoading ? (
-            <div className="flex items-center justify-center py-16 text-sm text-gray-400">
+            <div className="flex items-center justify-center py-16 text-sm text-gray-500" role="status" aria-live="polite">
               <div className="w-5 h-5 border-2 border-brand-500 border-t-transparent rounded-full animate-spin mr-2" />
               Querying Prometheus…
             </div>
@@ -2699,7 +2699,7 @@ export function NodeDetail() {
             </div>
           )}
 
-          <p className="text-xs text-gray-400 text-center">
+          <p className="text-xs text-gray-500 text-center">
             Source: Prometheus ({metricsData?.instance}) · Refreshes every 30s
           </p>
 

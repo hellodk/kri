@@ -7,6 +7,7 @@ import { Skeleton } from '../components/Skeleton'
 import { ErrorState } from '../components/ErrorState'
 import { Pagination } from '../components/Pagination'
 import { formatDistanceToNow, formatDuration, intervalToDuration } from 'date-fns'
+import { formatIST } from '../utils/time'
 import { useFilterStore } from '../stores/filterStore'
 
 function jobDuration(job: { started_at: string | null; completed_at: string | null }): string {
@@ -178,7 +179,9 @@ export function ExecutionHistory() {
                       </span>
                     </td>
                     <td className="px-4 py-3 text-gray-500 text-xs">
-                      {j.started_at ? formatDistanceToNow(new Date(j.started_at), { addSuffix: true }) : '—'}
+                      <span title={j.started_at ? formatIST(j.started_at) : undefined}>
+                        {j.started_at ? formatDistanceToNow(new Date(j.started_at), { addSuffix: true }) : '—'}
+                      </span>
                     </td>
                     <td className="px-4 py-3 text-gray-500 text-xs">{jobDuration(j)}</td>
                     <td className="px-4 py-3 text-gray-500 text-xs font-mono">
@@ -272,7 +275,9 @@ export function ExecutionHistory() {
                       </td>
                       <td className="px-4 py-3 text-gray-600 text-xs">{j.triggered_by}</td>
                       <td className="px-4 py-3 text-gray-500 text-xs">
-                        {j.started_at ? formatDistanceToNow(new Date(j.started_at), { addSuffix: true }) : '—'}
+                        <span title={j.started_at ? formatIST(j.started_at) : undefined}>
+                          {j.started_at ? formatDistanceToNow(new Date(j.started_at), { addSuffix: true }) : '—'}
+                        </span>
                       </td>
                       <td className="px-4 py-3 text-gray-500 text-xs">{jobDuration(j)}</td>
                     </tr>

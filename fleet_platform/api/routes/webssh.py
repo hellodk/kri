@@ -61,8 +61,16 @@ async def get_current_user_ws(token: str, redis: aioredis.Redis | None = None) -
                 raise ValueError("Token has been revoked")
         except ValueError:
             raise
-        except Exception:
-            pass  # Redis unavailable — degrade open, log
+        except Exception as exc:
+            # Fail closed: any error querying the revocation store must reject the
+            # connection.  Degrading open would allow revoked tokens to reconnect
+            # whenever Redis is unavailable.
+            logger.warning(
+                "get_current_user_ws: revocation check failed for jti=%r — rejecting (fail-closed): %s",
+                jti,
+                exc,
+            )
+            raise ValueError("Token revocation check unavailable — connection rejected") from exc
     return claims
 
 

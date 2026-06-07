@@ -5,6 +5,7 @@ import { playbooksApi, type AnsibleJob } from '../api/playbooks'
 import { PlaybookRunModal } from './PlaybookRunModal'
 import { LogPane } from '../lib/LogPane'
 import { formatDistanceToNow, formatDuration, intervalToDuration } from 'date-fns'
+import { formatIST } from '../utils/time'
 
 function statusBadge(status: string) {
   const cls =
@@ -210,7 +211,7 @@ export function PlaybookJobDetail() {
             )}
             <div className="text-right text-sm text-gray-500 space-y-0.5">
               {job.started_at && (
-                <p>{formatDistanceToNow(new Date(job.started_at), { addSuffix: true })}</p>
+                <p title={formatIST(job.started_at)}>{formatDistanceToNow(new Date(job.started_at), { addSuffix: true })}</p>
               )}
               <p className="font-mono">{jobDuration(job)}</p>
               {typeof job.rc === 'number' && (
