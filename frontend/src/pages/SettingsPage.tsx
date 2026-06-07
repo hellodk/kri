@@ -648,7 +648,7 @@ export function SettingsPage() {
               </div>
             )}
             {!oidcEnabled && (
-              <p className="text-sm text-gray-400">Enable OIDC to configure single sign-on via Keycloak.</p>
+              <p className="text-sm text-gray-600">Enable OIDC to configure single sign-on via Keycloak.</p>
             )}
           </div>
 

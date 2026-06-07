@@ -426,7 +426,7 @@ function MasterMinionsSection({ masterId }: MasterMinionsSectionProps) {
 
   if (isLoading) {
     return (
-      <div className="border-t border-gray-100 px-5 py-3 text-xs text-gray-400 italic">
+      <div className="border-t border-gray-100 px-5 py-3 text-xs text-gray-500 italic" role="status" aria-live="polite">
         Loading minions…
       </div>
     )
