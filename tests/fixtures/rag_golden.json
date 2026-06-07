@@ -1,0 +1,54 @@
+{
+  "corpus": [
+    {
+      "source_id": "node-mm1",
+      "chunk_text": "[src: node/mm1] Node: mm1 Status: online Group: build OS: macOS Sonoma Last seen: 2m ago"
+    },
+    {
+      "source_id": "node-mm2",
+      "chunk_text": "[src: node/mm2] Node: mm2 Status: offline Group: test OS: Ubuntu Linux Last seen: 5d ago"
+    },
+    {
+      "source_id": "playbook/bootstrap.yml:play_0",
+      "chunk_text": "[src: playbook/bootstrap.yml:play_0] Playbook bootstrap install homebrew configure salt minion on macmini hosts"
+    },
+    {
+      "source_id": "playbook/nginx.yml:play_0",
+      "chunk_text": "[src: playbook/nginx.yml:play_0] Playbook nginx install webserver reverse proxy configure tls certificate"
+    },
+    {
+      "source_id": "drift:abc",
+      "chunk_text": "[src: drift:abc] Drift report for mm2 score 42 missing nginx missing curl extra telnet version mismatch openssl"
+    },
+    {
+      "source_id": "salt/redis.sls:redis_running",
+      "chunk_text": "[src: salt/redis.sls:redis_running] Salt state redis service running enable cache datastore"
+    }
+  ],
+  "queries": [
+    {
+      "query": "which node is offline in the test group",
+      "expected_source_ids": ["node-mm2"]
+    },
+    {
+      "query": "playbook to install homebrew and salt on a mac mini",
+      "expected_source_ids": ["playbook/bootstrap.yml:play_0"]
+    },
+    {
+      "query": "how do I install nginx as a reverse proxy with tls",
+      "expected_source_ids": ["playbook/nginx.yml:play_0"]
+    },
+    {
+      "query": "what packages are missing on mm2 drift",
+      "expected_source_ids": ["drift:abc"]
+    },
+    {
+      "query": "salt state to run the redis cache service",
+      "expected_source_ids": ["salt/redis.sls:redis_running"]
+    },
+    {
+      "query": "mm1 build node macos status",
+      "expected_source_ids": ["node-mm1"]
+    }
+  ]
+}

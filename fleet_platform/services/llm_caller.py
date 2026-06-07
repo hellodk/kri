@@ -31,6 +31,39 @@ def normalize_openai_base_url(base_url: str) -> str:
     return cleaned.rstrip("/")
 
 
+# Anchor marking the start of the pinned tail (Rules + grounding rules). The
+# context builder always emits these as the final block, and they must survive
+# truncation on small-context endpoints (#575).
+_GROUNDING_ANCHOR = "## Rules"
+_TRUNCATION_MARKER = "\n[context truncated for model capacity]\n"
+
+
+def _truncate_system_prompt(system_prompt: str, max_system_chars: int) -> str:
+    """Truncate the MIDDLE of the system prompt, never the grounding-rules tail (#575).
+
+    The anti-hallucination grounding rules are emitted as the final block of the
+    prompt. The previous implementation truncated from the tail, so on a
+    small-context endpoint the grounding rules were cut first. This preserves the
+    head (role + fleet snapshot) and the entire pinned tail (Rules + grounding),
+    dropping only the middle (retrieved chunks / node records) when over budget.
+    """
+    if len(system_prompt) <= max_system_chars:
+        return system_prompt
+
+    anchor = system_prompt.rfind(_GROUNDING_ANCHOR)
+    tail = system_prompt[anchor:] if anchor != -1 else ""
+
+    head_budget = max_system_chars - len(tail) - len(_TRUNCATION_MARKER)
+    if head_budget <= 0:
+        # The pinned tail alone exceeds the budget — keep the grounding rules
+        # (the most important part) by retaining the final max_system_chars.
+        if tail:
+            return (_TRUNCATION_MARKER + tail)[-max_system_chars:]
+        return system_prompt[:max_system_chars] + _TRUNCATION_MARKER
+
+    return system_prompt[:head_budget] + _TRUNCATION_MARKER + tail
+
+
 async def call_openai_compat(
     *,
     base_url: str,
@@ -70,8 +103,7 @@ async def call_openai_compat(
     # Budget the system prompt so it fits in the context window.
     # Reserve max_tokens chars for output; allow the rest (≈ 4 chars/token).
     max_system_chars = max(1000, (ctx - max_tokens) * 4 - 200)
-    if len(system_prompt) > max_system_chars:
-        system_prompt = system_prompt[:max_system_chars] + "\n[context truncated for model capacity]"
+    system_prompt = _truncate_system_prompt(system_prompt, max_system_chars)
 
     messages: list[dict] = [{"role": "system", "content": system_prompt}]
     if history:

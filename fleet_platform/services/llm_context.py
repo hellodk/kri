@@ -77,6 +77,7 @@ def build_static_context(
     playbooks_dir: str,
     node_records: list[dict] | None = None,
     retrieved_chunks: str | None = None,
+    task_addendum: str | None = None,
 ) -> str:
     group_line = ", ".join(groups) if groups else "(none)"
     parts = [
@@ -106,6 +107,11 @@ def build_static_context(
     # RAG knowledge-plane slot — inserted before Rules so grounding rules are always last
     if retrieved_chunks:
         parts.append(f"\n{retrieved_chunks}\n")
+
+    # Task addendum goes BEFORE the Rules block so the grounding rules remain the
+    # very last text in the prompt and are never displaced by the task (#575).
+    if task_addendum:
+        parts.append(f"\n## Your Task\n{task_addendum}\n")
 
     # _GROUNDING_RULES is always last and is never conditional — must not be truncated
     parts.append(
@@ -204,7 +210,11 @@ async def build_fleet_context(db: AsyncSession, intent: str, query: str = "") ->
         except Exception:
             pass  # RAG failure is non-fatal
 
-    base = build_static_context(
+    addendum = INTENT_ADDENDUM.get(intent, INTENT_ADDENDUM["fleet_query"])
+    # Pass the task addendum INTO the builder so the grounding rules stay the
+    # last text in the prompt (previously the addendum was appended after the
+    # rules, displacing them as the truncation tail) (#575).
+    context = build_static_context(
         node_count=node_count,
         online_count=online_count,
         groups=groups,
@@ -212,8 +222,7 @@ async def build_fleet_context(db: AsyncSession, intent: str, query: str = "") ->
         playbooks_dir=playbooks_dir,
         node_records=node_records,
         retrieved_chunks=retrieved_chunks_text,
+        task_addendum=addendum,
     )
-    addendum = INTENT_ADDENDUM.get(intent, INTENT_ADDENDUM["fleet_query"])
-    context = f"{base}\n## Your Task\n{addendum}"
 
     return _redact_sensitive_data(context, include_ips=include_ips)
