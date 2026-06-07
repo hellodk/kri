@@ -30,6 +30,8 @@ def _make_master(**kwargs) -> SimpleNamespace:
         address="salt.prod.local",
         publish_port=4505,
         ret_port=4506,
+        salt_api_port=8080,
+        use_tls=False,
         control_mode="salt_api",
         api_url="http://salt.prod.local:8080",
         api_user="saltadmin",

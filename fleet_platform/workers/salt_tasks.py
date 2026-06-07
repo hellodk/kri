@@ -3,51 +3,79 @@
 
 Security note (issue #82): The Docker socket is NOT mounted into the worker
 container. Salt commands are dispatched via the Salt HTTP API (salt-api)
-running in the salt-master container.  Set the following environment variables:
+running in the salt-master container.
 
-    SALT_API_URL      URL of salt-api, e.g. http://salt-master:8080
-    SALT_API_USER     Username for salt-api (eauth: pam or auto)
-    SALT_API_PASSWORD Password for salt-api user
+Credentials are resolved from the default SaltMaster row in the DB (#562).
+The legacy SALT_API_URL / SALT_API_USER / SALT_API_PASSWORD env vars are
+retired — configure a salt master in Settings → Salt Masters instead.
 
-If SALT_API_URL is not set the tasks will return an error explaining the
-required setup — no silent fallback to docker exec is provided.
+If no default SaltMaster row exists the tasks return an error explaining the
+required setup — no silent fallback is provided.
 """
 
 import logging
-import os
 from typing import Any
 
 import requests
+from sqlalchemy import select
 
-from fleet_platform.services.platform_settings_svc import get_allowed_salt_functions_sync
+from fleet_platform.models.salt_master import SaltMaster
+from fleet_platform.services.platform_settings_svc import (
+    decrypt_secret,
+    get_allowed_salt_functions_sync,
+)
 from fleet_platform.workers.celery_app import celery_app
 
 logger = logging.getLogger(__name__)
 
 
-def _get_salt_api_url() -> str:
-    """Read SALT_API_URL at call time so env changes after import are reflected (#469)."""
-    return os.environ.get("SALT_API_URL", "").rstrip("/")
+def _get_default_master():
+    """Return the default SaltMaster ORM row (or None) from the DB.
+
+    Looks for the row where is_default=True.  If none is default, returns the
+    single enabled master.  Returns None when no master is configured at all.
+    """
+    from fleet_platform.db.session import get_sync_db
+
+    with get_sync_db() as db:
+        # Prefer explicit default
+        row = db.execute(
+            select(SaltMaster).where(SaltMaster.is_default.is_(True)).where(SaltMaster.enabled.is_(True)).limit(1)
+        ).scalar_one_or_none()
+        if row is not None:
+            return _extract_master_creds(row)
+
+        # Fall back to any single enabled master
+        row = db.execute(select(SaltMaster).where(SaltMaster.enabled.is_(True)).limit(1)).scalar_one_or_none()
+        if row is not None:
+            return _extract_master_creds(row)
+
+        return None
 
 
-def _get_salt_api_user() -> str:
-    return os.environ.get("SALT_API_USER", "")
+def _extract_master_creds(master: SaltMaster) -> dict:
+    """Extract the fields needed by _run_salt_api from an ORM row (while in-session)."""
+    password = ""
+    if master.api_password_enc:
+        try:
+            password = decrypt_secret(master.api_password_enc)
+        except Exception:
+            logger.warning("salt_tasks: failed to decrypt api_password_enc for master %s", master.id)
 
-
-def _get_salt_api_password() -> str:
-    return os.environ.get("SALT_API_PASSWORD", "")
-
-
-def _get_salt_api_eauth() -> str:
-    return os.environ.get("SALT_API_EAUTH", "pam")
+    return {
+        "api_url": master.api_url or "",
+        "api_user": master.api_user or "",
+        "api_password": password,
+        "api_eauth": master.api_eauth or "pam",
+        "tls_verify": master.tls_verify,
+    }
 
 
 def _salt_api_not_configured_error() -> dict:
     return {
         "status": "error",
         "reason": (
-            "Salt API is not configured. Set SALT_API_URL, SALT_API_USER, and "
-            "SALT_API_PASSWORD environment variables on the worker. "
+            "No salt-master configured — add one in Settings → Salt Masters. "
             "The Docker socket is intentionally not mounted (security issue #82). "
             "To enable salt-api on the salt-master container, add the rest_cherrypy "
             "netapi module and configure it in salt-master.conf."
@@ -64,21 +92,22 @@ def _run_salt_api(
 ) -> dict:
     """Execute a Salt function via the HTTP API.
 
-    Dispatches a single command using the salt-api /run endpoint (no session
-    persistence needed — credentials are passed inline for simplicity).
+    Resolves credentials from the default SaltMaster DB row (#562).
     """
-    _url = _get_salt_api_url()
-    if not _url:
+    creds = _get_default_master()
+    if creds is None or not creds.get("api_url"):
         return _salt_api_not_configured_error()
+
+    _url = creds["api_url"].rstrip("/")
 
     payload: dict[str, Any] = {
         "client": "local",
         "tgt": target,
         "tgt_type": "list",
         "fun": function,
-        "username": _get_salt_api_user(),
-        "password": _get_salt_api_password(),
-        "eauth": _get_salt_api_eauth(),
+        "username": creds["api_user"],
+        "password": creds["api_password"],
+        "eauth": creds["api_eauth"],
     }
     if args:
         payload["arg"] = args
@@ -90,6 +119,7 @@ def _run_salt_api(
             f"{_url}/run",
             json=payload,
             timeout=timeout,
+            verify=creds["tls_verify"],
         )
         resp.raise_for_status()
         result = resp.json().get("return", [{}])
@@ -116,8 +146,8 @@ def _run_salt_api(
             "status": "error",
             "reason": (
                 f"Cannot reach salt-api at {_url}: {exc}. "
-                "Check that SALT_API_URL is correct and the salt-master container "
-                "is running the rest_cherrypy or rest_tornado netapi module."
+                "Check that the salt-master is configured in Settings → Salt Masters "
+                "and the salt-api service is running."
             ),
         }
     except Exception as exc:
@@ -138,10 +168,11 @@ def apply_salt_state(
 ) -> dict:
     """Run: salt -L '{minion1,minion2}' state.apply {state_name} [pillar={...}]
 
-    Dispatches via Salt HTTP API (salt-api).  Requires SALT_API_URL,
-    SALT_API_USER, and SALT_API_PASSWORD to be set on the worker.
+    Dispatches via Salt HTTP API (salt-api).  Requires a default SaltMaster row
+    with api_url / api_user / api_password_enc to be configured in the DB.
     """
-    if not _get_salt_api_url():
+    creds = _get_default_master()
+    if creds is None or not creds.get("api_url"):
         return _salt_api_not_configured_error()
 
     target = ",".join(target_minions)
@@ -187,7 +218,8 @@ def run_salt_cmd(
             "reason": f"Function '{function}' is not in the allowlist. Allowed functions: {sorted(allowed)}",
         }
 
-    if not _get_salt_api_url():
+    creds = _get_default_master()
+    if creds is None or not creds.get("api_url"):
         return _salt_api_not_configured_error()
 
     target = ",".join(target_minions)

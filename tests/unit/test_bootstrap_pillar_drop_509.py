@@ -150,7 +150,7 @@ def test_bootstrap_status_is_terminal_when_ansible_raises(tmp_path):
         patch("fleet_platform.workers.ansible_tasks.get_sync_db", side_effect=fake_get_sync_db),
         patch(
             "fleet_platform.workers.ansible_tasks._get_bootstrap_settings",
-            return_value=("salt.local", "admin", "pw", "pubkey"),
+            return_value=("admin", "pw", "pubkey"),
         ),
         patch("fleet_platform.workers.ansible_tasks._get_node_credentials", return_value=("admin", "pw", "password")),
         patch(
@@ -215,7 +215,7 @@ def test_bootstrap_error_is_set_when_ansible_raises(tmp_path):
         patch("fleet_platform.workers.ansible_tasks.get_sync_db", side_effect=fake_get_sync_db),
         patch(
             "fleet_platform.workers.ansible_tasks._get_bootstrap_settings",
-            return_value=("salt.local", "admin", "pw", "pubkey"),
+            return_value=("admin", "pw", "pubkey"),
         ),
         patch("fleet_platform.workers.ansible_tasks._get_node_credentials", return_value=("admin", "pw", "password")),
         patch(
@@ -274,7 +274,7 @@ def test_no_permission_error_when_pillar_dir_missing():
         patch("fleet_platform.workers.ansible_tasks.get_sync_db", side_effect=fake_get_sync_db),
         patch(
             "fleet_platform.workers.ansible_tasks._get_bootstrap_settings",
-            return_value=("salt.local", "admin", "pw", "pubkey"),
+            return_value=("admin", "pw", "pubkey"),
         ),
         patch("fleet_platform.workers.ansible_tasks._get_node_credentials", return_value=("admin", "pw", "password")),
         patch(

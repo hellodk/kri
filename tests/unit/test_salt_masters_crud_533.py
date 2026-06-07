@@ -34,6 +34,8 @@ def _make_master(**kwargs) -> SimpleNamespace:
         address="salt.test.local",
         publish_port=4505,
         ret_port=4506,
+        salt_api_port=8080,
+        use_tls=False,
         control_mode="salt_api",
         api_url="http://salt.test.local:8080",
         api_user="saltadmin",
@@ -109,8 +111,9 @@ class TestSaltMasterSchemas:
         assert obj.is_default is False
         assert obj.publish_port == 4505
         assert obj.ret_port == 4506
-        assert obj.control_mode == "salt_api"
-        assert obj.token_delivery == "ingest"
+        # control_mode / token_delivery removed from Create schema in #562 (server defaults)
+        assert obj.salt_api_port == 8080
+        assert obj.use_tls is True
         assert obj.api_password is None
 
     def test_update_schema_all_optional(self):

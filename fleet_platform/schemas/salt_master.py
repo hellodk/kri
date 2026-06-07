@@ -3,6 +3,8 @@
 Response schema never exposes api_password_enc, ssh_key_enc, ssh_password_enc, or any secret.
 Create/Update schemas accept api_password, ssh_key, ssh_password as write-only plaintext.
 Provision lifecycle fields added in #556 (master-lifecycle epic).
+SSoT api_url derivation added in #562: api_url is read-only/computed; control_mode,
+api_eauth, and token_delivery removed from Create/Update inputs (server-defaults only).
 """
 
 import uuid
@@ -19,12 +21,12 @@ class SaltMasterCreate(BaseModel):
     is_default: bool = False
     publish_port: int = Field(default=4505, ge=1, le=65535)
     ret_port: int = Field(default=4506, ge=1, le=65535)
-    control_mode: str = Field(default="salt_api", description="'salt_api' or 'cli'")
-    api_url: str | None = None
+    # SSoT fields — api_url is DERIVED from these; never accepted directly from client (#562)
+    salt_api_port: int = Field(default=8080, ge=1, le=65535)
+    use_tls: bool = True
+    # control_mode, api_eauth, token_delivery are NOT user-inputs — server-defaults only
     api_user: str | None = None
     api_password: str | None = Field(default=None, description="Plaintext password — stored encrypted")
-    api_eauth: str | None = None
-    token_delivery: str = Field(default="ingest", description="'ingest' or 'direct'")
     tls_verify: bool = False
     auto_accept: bool = True
     # SSH creds for provisioning (write-only plaintext — stored encrypted)
@@ -42,12 +44,12 @@ class SaltMasterUpdate(BaseModel):
     is_default: bool | None = None
     publish_port: int | None = Field(default=None, ge=1, le=65535)
     ret_port: int | None = Field(default=None, ge=1, le=65535)
-    control_mode: str | None = None
-    api_url: str | None = None
+    # SSoT fields — api_url is DERIVED; never accepted directly from client (#562)
+    salt_api_port: int | None = Field(default=None, ge=1, le=65535)
+    use_tls: bool | None = None
+    # control_mode, api_eauth, token_delivery are NOT user-inputs — server-defaults only
     api_user: str | None = None
     api_password: str | None = Field(default=None, description="Plaintext password — stored encrypted")
-    api_eauth: str | None = None
-    token_delivery: str | None = None
     tls_verify: bool | None = None
     auto_accept: bool | None = None
     # SSH creds for provisioning (write-only plaintext — stored encrypted)
@@ -66,10 +68,15 @@ class SaltMasterResponse(BaseModel):
     address: str
     publish_port: int
     ret_port: int
-    control_mode: str
+    # SSoT fields (#562)
+    salt_api_port: int
+    use_tls: bool
+    # api_url is read-only derived — always consistent with address + salt_api_port + use_tls
     api_url: str | None
     api_user: str | None
     # api_password_enc intentionally excluded — never returned to clients
+    # control_mode / api_eauth / token_delivery are server-defaults; still visible in response
+    control_mode: str
     api_eauth: str | None
     token_delivery: str
     tls_verify: bool
@@ -113,6 +120,22 @@ class SaltMasterResponse(BaseModel):
         """Coerce None to the default value — ORM objects return None before DB flush."""
         if v is None:
             return "unprovisioned"
+        return v
+
+    @field_validator("salt_api_port", mode="before")
+    @classmethod
+    def coerce_salt_api_port(cls, v: Any) -> Any:
+        """Coerce None to default — ORM objects on pre-migration rows return None."""
+        if v is None:
+            return 8080
+        return v
+
+    @field_validator("use_tls", mode="before")
+    @classmethod
+    def coerce_use_tls(cls, v: Any) -> Any:
+        """Coerce None to default — ORM objects on pre-migration rows return None."""
+        if v is None:
+            return True
         return v
 
 

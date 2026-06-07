@@ -176,17 +176,19 @@ class TestSaltMasterCreateSchema:
         assert obj.name == "prod"
         assert obj.address == "salt.prod.local"
 
-    def test_create_defaults_control_mode(self):
+    def test_create_defaults_salt_api_port(self):
+        """After #562: control_mode/token_delivery removed; salt_api_port defaults to 8080."""
         from fleet_platform.schemas.salt_master import SaltMasterCreate
 
         obj = SaltMasterCreate(name="prod", address="salt.prod.local")
-        assert obj.control_mode == "salt_api"
+        assert obj.salt_api_port == 8080
 
-    def test_create_defaults_token_delivery(self):
+    def test_create_defaults_use_tls(self):
+        """After #562: use_tls defaults to True."""
         from fleet_platform.schemas.salt_master import SaltMasterCreate
 
         obj = SaltMasterCreate(name="prod", address="salt.prod.local")
-        assert obj.token_delivery == "ingest"
+        assert obj.use_tls is True
 
     def test_create_accepts_api_password(self):
         from fleet_platform.schemas.salt_master import SaltMasterCreate

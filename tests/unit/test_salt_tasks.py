@@ -83,11 +83,21 @@ def test_default_allowlist_contains_expected_safe_functions():
     )
 
 
-# ── SALT_API_URL not configured error ─────────────────────────────────────────
+# ── No DB-configured master error ────────────────────────────────────────────
+
+# Helper: a DB-derived creds dict as returned by _get_default_master()
+_FAKE_CREDS = {
+    "api_url": "http://salt-master:8080",
+    "api_user": "saltuser",
+    "api_password": "secret",
+    "api_eauth": "pam",
+    "tls_verify": False,
+}
 
 
 def test_run_salt_cmd_returns_error_when_api_not_configured():
-    """Without SALT_API_URL set, run_salt_cmd returns a clear error."""
+    """When no SaltMaster row exists, run_salt_cmd returns a clear error (#562)."""
+    from fleet_platform.workers import salt_tasks as _st
     from fleet_platform.workers.salt_tasks import run_salt_cmd
 
     with (
@@ -96,26 +106,27 @@ def test_run_salt_cmd_returns_error_when_api_not_configured():
             "fleet_platform.workers.salt_tasks.get_allowed_salt_functions_sync",
             return_value=_default_allowed(),
         ),
-        patch("fleet_platform.workers.salt_tasks._get_salt_api_url", return_value=""),
+        patch.object(_st, "_get_default_master", return_value=None),
     ):
         result = run_salt_cmd.run(function="test.ping", target_minions=["minion1"])
 
     assert result["status"] == "error"
-    assert "SALT_API_URL" in result["reason"]
+    assert "Settings → Salt Masters" in result["reason"]
 
 
 def test_apply_salt_state_returns_error_when_api_not_configured():
-    """Without SALT_API_URL set, apply_salt_state returns a clear error."""
+    """When no SaltMaster row exists, apply_salt_state returns a clear error (#562)."""
+    from fleet_platform.workers import salt_tasks as _st
     from fleet_platform.workers.salt_tasks import apply_salt_state
 
-    with patch("fleet_platform.workers.salt_tasks._get_salt_api_url", return_value=""):
+    with patch.object(_st, "_get_default_master", return_value=None):
         result = apply_salt_state.run(
             state_name="kri.init",
             target_minions=["minion1"],
         )
 
     assert result["status"] == "error"
-    assert "SALT_API_URL" in result["reason"]
+    assert "Settings → Salt Masters" in result["reason"]
 
 
 # ── HTTP API dispatch ─────────────────────────────────────────────────────────
@@ -123,6 +134,7 @@ def test_apply_salt_state_returns_error_when_api_not_configured():
 
 def test_run_salt_cmd_dispatches_via_http_api():
     """An allowlisted function triggers a POST to the salt-api /run endpoint."""
+    from fleet_platform.workers import salt_tasks as _st
     from fleet_platform.workers.salt_tasks import run_salt_cmd
 
     fake_response = MagicMock()
@@ -135,9 +147,7 @@ def test_run_salt_cmd_dispatches_via_http_api():
             "fleet_platform.workers.salt_tasks.get_allowed_salt_functions_sync",
             return_value=_default_allowed(),
         ),
-        patch("fleet_platform.workers.salt_tasks._get_salt_api_url", return_value="http://salt-master:8080"),
-        patch("fleet_platform.workers.salt_tasks._get_salt_api_user", return_value="saltuser"),
-        patch("fleet_platform.workers.salt_tasks._get_salt_api_password", return_value="secret"),
+        patch.object(_st, "_get_default_master", return_value=_FAKE_CREDS),
         patch("fleet_platform.workers.salt_tasks.requests.post", return_value=fake_response) as mock_post,
     ):
         result = run_salt_cmd.run(function="test.ping", target_minions=["minion1"])
@@ -155,6 +165,7 @@ def test_run_salt_cmd_dispatches_via_http_api():
 
 def test_apply_salt_state_dispatches_via_http_api():
     """apply_salt_state sends state name and optional pillar to salt-api."""
+    from fleet_platform.workers import salt_tasks as _st
     from fleet_platform.workers.salt_tasks import apply_salt_state
 
     fake_response = MagicMock()
@@ -162,9 +173,7 @@ def test_apply_salt_state_dispatches_via_http_api():
     fake_response.json.return_value = {"return": [{"minion1": {"state.apply": True}}]}
 
     with (
-        patch("fleet_platform.workers.salt_tasks._get_salt_api_url", return_value="http://salt-master:8080"),
-        patch("fleet_platform.workers.salt_tasks._get_salt_api_user", return_value="saltuser"),
-        patch("fleet_platform.workers.salt_tasks._get_salt_api_password", return_value="secret"),
+        patch.object(_st, "_get_default_master", return_value=_FAKE_CREDS),
         patch("fleet_platform.workers.salt_tasks.requests.post", return_value=fake_response) as mock_post,
     ):
         result = apply_salt_state.run(
@@ -186,6 +195,7 @@ def test_run_salt_api_handles_connection_error():
     """A ConnectionError to salt-api returns a descriptive error dict."""
     import requests
 
+    from fleet_platform.workers import salt_tasks as _st
     from fleet_platform.workers.salt_tasks import run_salt_cmd
 
     with (
@@ -194,9 +204,7 @@ def test_run_salt_api_handles_connection_error():
             "fleet_platform.workers.salt_tasks.get_allowed_salt_functions_sync",
             return_value=_default_allowed(),
         ),
-        patch("fleet_platform.workers.salt_tasks._get_salt_api_url", return_value="http://salt-master:8080"),
-        patch("fleet_platform.workers.salt_tasks._get_salt_api_user", return_value="u"),
-        patch("fleet_platform.workers.salt_tasks._get_salt_api_password", return_value="p"),
+        patch.object(_st, "_get_default_master", return_value=_FAKE_CREDS),
         patch(
             "fleet_platform.workers.salt_tasks.requests.post",
             side_effect=requests.ConnectionError("Connection refused"),

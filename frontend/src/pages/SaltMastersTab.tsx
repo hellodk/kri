@@ -77,12 +77,11 @@ interface FormState {
   is_default: boolean
   publish_port: string
   ret_port: string
-  control_mode: string
-  api_url: string
+  /** SSoT fields (#562): api_url is derived from these; not a form input */
+  salt_api_port: string
+  use_tls: boolean
   api_user: string
   api_password: string
-  api_eauth: string
-  token_delivery: string
   tls_verify: boolean
   auto_accept: boolean
 }
@@ -94,12 +93,10 @@ const EMPTY_FORM: FormState = {
   is_default: false,
   publish_port: '4505',
   ret_port: '4506',
-  control_mode: 'salt_api',
-  api_url: '',
+  salt_api_port: '8080',
+  use_tls: true,
   api_user: '',
   api_password: '',
-  api_eauth: '',
-  token_delivery: 'ingest',
   tls_verify: false,
   auto_accept: true,
 }
@@ -112,15 +109,21 @@ function masterToForm(m: SaltMaster): FormState {
     is_default: m.is_default,
     publish_port: String(m.publish_port),
     ret_port: String(m.ret_port),
-    control_mode: m.control_mode,
-    api_url: m.api_url ?? '',
+    salt_api_port: String(m.salt_api_port),
+    use_tls: m.use_tls,
     api_user: m.api_user ?? '',
     api_password: '', // never pre-filled — write-only
-    api_eauth: m.api_eauth ?? '',
-    token_delivery: m.token_delivery,
     tls_verify: m.tls_verify,
     auto_accept: m.auto_accept,
   }
+}
+
+/** Derive api_url preview from form fields — mirrors server logic (#562). */
+function deriveApiUrl(address: string, saltApiPort: string, useTls: boolean): string {
+  const scheme = useTls ? 'https' : 'http'
+  const port = saltApiPort || '8080'
+  const addr = address.trim() || '<address>'
+  return `${scheme}://${addr}:${port}`
 }
 
 // ---------------------------------------------------------------------------
@@ -225,71 +228,54 @@ function MasterForm({ initial, title, submitLabel, isLoading, error, onSubmit, o
             </div>
           </div>
 
-          {/* Control mode + Token delivery */}
+          {/* Salt API port + use_tls (SSoT fields #562) */}
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className={labelClass} htmlFor="sm-control-mode">Control Mode</label>
-              <select
-                id="sm-control-mode"
-                value={form.control_mode}
-                onChange={(e) => set('control_mode', e.target.value)}
-                className={inputClass}
-              >
-                <option value="salt_api">salt_api</option>
-                <option value="cli">cli</option>
-              </select>
+              <label className={labelClass} htmlFor="sm-salt-api-port">Salt API Port</label>
+              <input
+                id="sm-salt-api-port"
+                type="number"
+                min={1}
+                max={65535}
+                value={form.salt_api_port}
+                onChange={(e) => set('salt_api_port', e.target.value)}
+                className={inputClass + ' font-mono'}
+              />
             </div>
-            <div>
-              <label className={labelClass} htmlFor="sm-token-delivery">Token Delivery</label>
-              <select
-                id="sm-token-delivery"
-                value={form.token_delivery}
-                onChange={(e) => set('token_delivery', e.target.value)}
-                className={inputClass}
-              >
-                <option value="ingest">ingest</option>
-                <option value="direct">direct</option>
-              </select>
+            <div className="flex flex-col justify-end pb-0.5">
+              <label className="flex items-center gap-2 text-sm text-gray-700 cursor-pointer select-none">
+                <input
+                  type="checkbox"
+                  checked={form.use_tls}
+                  onChange={(e) => set('use_tls', e.target.checked)}
+                  className="rounded border-gray-300 text-brand-600 focus:ring-brand-600"
+                />
+                <span>
+                  <span className="font-medium">salt-api uses HTTPS</span>
+                </span>
+              </label>
             </div>
           </div>
 
-          {/* API URL */}
+          {/* Derived api_url preview — read-only */}
           <div>
-            <label className={labelClass} htmlFor="sm-api-url">API URL</label>
-            <input
-              id="sm-api-url"
-              type="url"
-              value={form.api_url}
-              onChange={(e) => set('api_url', e.target.value)}
-              placeholder="https://salt.local:8080"
-              className={inputClass + ' font-mono'}
-            />
+            <label className={labelClass}>API URL <span className="font-normal text-gray-400">(derived — read-only)</span></label>
+            <div className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm font-mono text-gray-600 bg-gray-50">
+              {deriveApiUrl(form.address, form.salt_api_port, form.use_tls)}
+            </div>
           </div>
 
-          {/* API user + eAuth */}
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className={labelClass} htmlFor="sm-api-user">API User</label>
-              <input
-                id="sm-api-user"
-                type="text"
-                value={form.api_user}
-                onChange={(e) => set('api_user', e.target.value)}
-                placeholder="saltadmin"
-                className={inputClass}
-              />
-            </div>
-            <div>
-              <label className={labelClass} htmlFor="sm-api-eauth">eAuth</label>
-              <input
-                id="sm-api-eauth"
-                type="text"
-                value={form.api_eauth}
-                onChange={(e) => set('api_eauth', e.target.value)}
-                placeholder="pam"
-                className={inputClass}
-              />
-            </div>
+          {/* API user */}
+          <div>
+            <label className={labelClass} htmlFor="sm-api-user">API User</label>
+            <input
+              id="sm-api-user"
+              type="text"
+              value={form.api_user}
+              onChange={(e) => set('api_user', e.target.value)}
+              placeholder="saltadmin"
+              className={inputClass}
+            />
           </div>
 
           {/* API Password — write-only, never pre-filled */}
@@ -342,7 +328,7 @@ function MasterForm({ initial, title, submitLabel, isLoading, error, onSubmit, o
               <span>
                 <span className="text-sm font-medium text-gray-900">Verify TLS certificate</span>
                 <span className="block text-xs text-gray-600 mt-0.5">
-                  Leave off for self-signed certs or plain HTTP salt-api endpoints.
+                  Leave off for self-signed certs. The <em>salt-api uses HTTPS</em> toggle above controls the URL scheme; this controls whether the cert is validated.
                 </span>
               </span>
             </label>
@@ -468,12 +454,11 @@ export function SaltMastersTab() {
       is_default: form.is_default,
       publish_port: parseInt(form.publish_port, 10),
       ret_port: parseInt(form.ret_port, 10),
-      control_mode: form.control_mode,
-      api_url: form.api_url.trim() || null,
+      // SSoT fields (#562): api_url is derived server-side; never sent
+      salt_api_port: parseInt(form.salt_api_port, 10) || 8080,
+      use_tls: form.use_tls,
       api_user: form.api_user.trim() || null,
       api_password: form.api_password || null,
-      api_eauth: form.api_eauth.trim() || null,
-      token_delivery: form.token_delivery,
       tls_verify: form.tls_verify,
       auto_accept: form.auto_accept,
     }
@@ -490,13 +475,12 @@ export function SaltMastersTab() {
       is_default: form.is_default,
       publish_port: parseInt(form.publish_port, 10),
       ret_port: parseInt(form.ret_port, 10),
-      control_mode: form.control_mode,
-      api_url: form.api_url.trim() || null,
+      // SSoT fields (#562): api_url is derived server-side; never sent
+      salt_api_port: parseInt(form.salt_api_port, 10) || 8080,
+      use_tls: form.use_tls,
       api_user: form.api_user.trim() || null,
       // Only send api_password if the operator typed something new
       ...(form.api_password ? { api_password: form.api_password } : {}),
-      api_eauth: form.api_eauth.trim() || null,
-      token_delivery: form.token_delivery,
       tls_verify: form.tls_verify,
       auto_accept: form.auto_accept,
     }
@@ -592,8 +576,9 @@ export function SaltMastersTab() {
                   <div className="mt-1 text-sm text-gray-600 font-mono truncate">
                     {master.address}
                     {master.api_url && (
-                      <span className="ml-2 text-gray-400 non-mono font-sans">
-                        · {master.api_url}
+                      <span className="ml-2 text-gray-400 font-sans text-xs">
+                        · <span className="font-mono">{master.api_url}</span>
+                        <span className="ml-1 text-gray-400 italic">(derived)</span>
                       </span>
                     )}
                   </div>
@@ -643,14 +628,6 @@ export function SaltMastersTab() {
               {/* Meta row */}
               <div className="px-5 py-3 bg-gray-50 border-t border-gray-100 flex flex-wrap gap-x-6 gap-y-1.5 text-xs text-gray-600">
                 <span>
-                  <span className="font-medium text-gray-700">Mode:</span>{' '}
-                  {master.control_mode}
-                </span>
-                <span>
-                  <span className="font-medium text-gray-700">Token delivery:</span>{' '}
-                  {master.token_delivery}
-                </span>
-                <span>
                   <span className="font-medium text-gray-700">Publish port:</span>{' '}
                   {master.publish_port}
                 </span>
@@ -658,16 +635,18 @@ export function SaltMastersTab() {
                   <span className="font-medium text-gray-700">Return port:</span>{' '}
                   {master.ret_port}
                 </span>
+                <span>
+                  <span className="font-medium text-gray-700">API port:</span>{' '}
+                  {master.salt_api_port}
+                </span>
+                <span>
+                  <span className="font-medium text-gray-700">HTTPS:</span>{' '}
+                  {master.use_tls ? 'yes' : 'no'}
+                </span>
                 {master.api_user && (
                   <span>
                     <span className="font-medium text-gray-700">API user:</span>{' '}
                     {master.api_user}
-                  </span>
-                )}
-                {master.api_eauth && (
-                  <span>
-                    <span className="font-medium text-gray-700">eAuth:</span>{' '}
-                    {master.api_eauth}
                   </span>
                 )}
                 <span>

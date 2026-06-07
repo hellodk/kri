@@ -54,11 +54,16 @@ def _validate_minion_id(minion_id: str) -> str:
     return minion_id
 
 
-def _get_bootstrap_settings(db) -> tuple[str, str, str, str]:
-    """Returns (salt_master, ssh_user, ssh_password, controller_pubkey)."""
+def _get_bootstrap_settings(db) -> tuple[str, str, str]:
+    """Returns (ssh_user, ssh_password, controller_pubkey).
+
+    The legacy salt_master address has been removed from this tuple (#562).
+    Master addresses are resolved exclusively from SaltMaster rows.
+    The SALT_MASTER platform setting key is still defined (migration 041 references it)
+    but is no longer read at runtime.
+    """
     from fleet_platform.services.platform_settings_svc import (
         CONTROLLER_PUBKEY_PATH,
-        SALT_MASTER,
         SSH_PASSWORD,
         SSH_USERNAME,
         _fernet,
@@ -80,12 +85,11 @@ def _get_bootstrap_settings(db) -> tuple[str, str, str, str]:
                 return ""
         return row.value or ""
 
-    salt_master = _get(SALT_MASTER) or "localhost"
     ssh_user = _get(SSH_USERNAME) or "admin"
     ssh_password = _get(SSH_PASSWORD)
     pub_path = _get(CONTROLLER_PUBKEY_PATH) or str(_DEFAULT_KRI_DIR / "id_rsa.pub")
     pubkey = get_controller_pubkey(pub_path) or ""
-    return salt_master, ssh_user, ssh_password, pubkey
+    return ssh_user, ssh_password, pubkey
 
 
 def _get_node_credentials(node) -> tuple[str, str, str]:
@@ -214,9 +218,7 @@ def bootstrap_node(
         node.bootstrap_error = None
         db.commit()
 
-        salt_master_settings, _settings_ssh_user, _settings_ssh_password, controller_pubkey = _get_bootstrap_settings(
-            db
-        )
+        _settings_ssh_user, _settings_ssh_password, controller_pubkey = _get_bootstrap_settings(db)
 
         # A) Resolve the multi-master list (#534, epic #537).
         # If salt_master_ids given → load exactly those rows.
@@ -664,13 +666,12 @@ def collect_node_grains(self, node_id: str) -> dict:
             return {"status": "error", "reason": "node_not_found"}
 
         target_ip = node.bootstrap_ip
-        salt_master, _, _, _ = _get_bootstrap_settings(db)
         node_user, node_password, node_auth_mode = _get_node_credentials(node)
         ssh_user = node_user or "admin"
         minion_id = node.minion_id
         pillar_dir = _get_pillar_dir(db)
 
-        # Prefer kri_api_url for ingest; fall back to salt_master
+        # Prefer kri_api_url for ingest; no salt_master address fallback (#562)
         from fleet_platform.services.platform_settings_svc import KRI_API_URL
 
         kri_api_url = ""
@@ -681,7 +682,7 @@ def collect_node_grains(self, node_id: str) -> dict:
         except Exception:
             pass
 
-    ingest_base = kri_api_url or (f"http://{salt_master}" if salt_master else "http://localhost")
+    ingest_base = kri_api_url or "http://localhost"
     ingest_url = f"{ingest_base}/api/v1/ingest"
 
     # Controller private key — deployed to every bootstrapped node
