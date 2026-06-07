@@ -4,6 +4,8 @@ import { useNavigate } from 'react-router-dom'
 import { playbooksApi } from '../api/playbooks'
 import { ansibleApi } from '../api/ansible'
 import { libraryApi } from '../api/playbookLibrary'
+import { saltMastersApi } from '../api/saltMasters'
+import { fleetActionsBlocked } from '../lib/saltMasterGuard'
 import type { PlaybookEntry } from '../api/playbooks'
 import { Skeleton } from '../components/Skeleton'
 import { ErrorState } from '../components/ErrorState'
@@ -26,13 +28,14 @@ interface PlaybookRowProps {
   p: PlaybookEntry
   badge: string
   badgeClass: string
+  mastersBlocked: boolean
   onRun: (p: PlaybookEntry) => void
   onFiles: (p: PlaybookEntry) => void
   onToggleFavorite: (p: PlaybookEntry) => void
   isFavPending: (catalogId: string | null) => boolean
 }
 
-function PlaybookRow({ p, badge, badgeClass, onRun, onFiles, onToggleFavorite, isFavPending }: PlaybookRowProps) {
+function PlaybookRow({ p, badge, badgeClass, mastersBlocked, onRun, onFiles, onToggleFavorite, isFavPending }: PlaybookRowProps) {
   const isFav = !!p.is_favorite
   return (
     <tr className="border-b border-gray-50 hover:bg-gray-50 transition-colors last:border-0">
@@ -91,7 +94,8 @@ function PlaybookRow({ p, badge, badgeClass, onRun, onFiles, onToggleFavorite, i
           </button>
           <button
             onClick={() => onRun(p)}
-            disabled={p.lint_errors.length > 0}
+            disabled={p.lint_errors.length > 0 || mastersBlocked}
+            title={mastersBlocked ? 'No enabled salt-master — configure one in Settings → Salt Masters' : undefined}
             className="px-3 py-1.5 text-xs font-medium bg-brand-600 text-white rounded-lg hover:bg-brand-700 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
           >
             ▷ Run
@@ -109,6 +113,7 @@ interface EntriesTableProps {
   search: string
   entryType: 'playbook' | 'role'
   amberBg?: boolean
+  mastersBlocked: boolean
   onRun: (p: PlaybookEntry) => void
   onFiles: (p: PlaybookEntry) => void
   onToggleFavorite: (p: PlaybookEntry) => void
@@ -122,6 +127,7 @@ function EntriesTable({
   search,
   entryType,
   amberBg = false,
+  mastersBlocked,
   onRun,
   onFiles,
   onToggleFavorite,
@@ -165,6 +171,7 @@ function EntriesTable({
               p={p}
               badge={badge}
               badgeClass={badgeClass}
+              mastersBlocked={mastersBlocked}
               onRun={onRun}
               onFiles={onFiles}
               onToggleFavorite={onToggleFavorite}
@@ -205,6 +212,14 @@ export function PlaybooksPage() {
     queryFn: libraryApi.list,
     staleTime: 60_000,
   })
+
+  const { data: saltMasters } = useQuery({
+    queryKey: ['salt-masters'],
+    queryFn: saltMastersApi.list,
+    staleTime: 60_000,
+    refetchInterval: 120_000,
+  })
+  const mastersBlocked = fleetActionsBlocked(saltMasters)
 
   const favMutation = useMutation<void, Error, { catalogId: string; isFav: boolean }>({
     mutationFn: async ({ catalogId, isFav }) => {
@@ -381,6 +396,7 @@ export function PlaybooksPage() {
                       p={p}
                       badge="▤"
                       badgeClass="bg-brand-50 text-brand-700"
+                      mastersBlocked={mastersBlocked}
                       onRun={setPendingRun}
                       onFiles={setOpenPlaybook}
                       onToggleFavorite={toggleFavorite}
@@ -393,6 +409,7 @@ export function PlaybooksPage() {
                       p={r}
                       badge="⊡"
                       badgeClass="bg-gray-100 text-gray-600"
+                      mastersBlocked={mastersBlocked}
                       onRun={setPendingRun}
                       onFiles={setOpenPlaybook}
                       onToggleFavorite={toggleFavorite}
@@ -412,6 +429,7 @@ export function PlaybooksPage() {
               allCount={nonFavPlaybooks.length}
               search={search}
               entryType="playbook"
+              mastersBlocked={mastersBlocked}
               onRun={setPendingRun}
               onFiles={setOpenPlaybook}
               onToggleFavorite={toggleFavorite}
@@ -427,6 +445,7 @@ export function PlaybooksPage() {
               allCount={nonFavRoles.length}
               search={search}
               entryType="role"
+              mastersBlocked={mastersBlocked}
               onRun={setPendingRun}
               onFiles={setOpenPlaybook}
               onToggleFavorite={toggleFavorite}
