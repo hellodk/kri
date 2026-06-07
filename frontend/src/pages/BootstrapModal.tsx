@@ -6,7 +6,7 @@ import { searchApi } from '../api/search'
 import { fleetApi } from '../api/fleet'
 import { groupsApi } from '../api/groups'
 import { saltMastersApi } from '../api/saltMasters'
-import { isBootstrapBlocked } from '../lib/saltMasterHelpers'
+import { canBootstrap, saltMasterBadge } from '../lib/saltMasterHelpers'
 import { useToastStore } from '../stores/toastStore'
 import type { Node } from '../types'
 
@@ -182,7 +182,13 @@ function SingleMode({ onClose }: { onClose: () => void }) {
   const [localLogs, setLocalLogs] = useState<string | null>(null)
 
   const bootstrapMutation = useMutation({
-    mutationFn: () => ansibleApi.bootstrap(minionId, targetIp, sshUsername || undefined, sshPassword || undefined),
+    mutationFn: () => ansibleApi.bootstrap(
+      minionId,
+      targetIp,
+      sshUsername || undefined,
+      sshPassword || undefined,
+      selectedMasterIds.size > 0 ? Array.from(selectedMasterIds) : undefined,
+    ),
     onMutate: () => { setLocalLogs('') },
     onSuccess: (data) => { setNodeId(data.node_id); setShowLogs(true); toast('Bootstrap started') },
     onError: (e: Error) => { setLocalLogs(null); toast(e.message, 'error') },
@@ -246,15 +252,23 @@ function SingleMode({ onClose }: { onClose: () => void }) {
     }
   }, [localLogs])
 
-  // Salt-master health gate — fetch the default master's status to block bootstrap
-  // when the master is unreachable (#521).  staleTime keeps it cached across re-renders.
+  // Multi-master selection (#534) — fetch all enabled masters, pre-check all of them.
+  // Health is a WARNING (badge only), not a gate — canBootstrap requires ≥1 selected.
   const { data: saltMasters } = useQuery({
     queryKey: ['salt-masters'],
     queryFn: saltMastersApi.list,
     staleTime: 30_000,
   })
-  const defaultMasterStatus = saltMasters?.find((m) => m.is_default)?.status ?? saltMasters?.[0]?.status ?? null
-  const saltMasterBlocked = isBootstrapBlocked(defaultMasterStatus)
+  const enabledMasters = (saltMasters ?? []).filter((m) => m.enabled)
+  const [selectedMasterIds, setSelectedMasterIds] = useState<Set<string>>(new Set())
+
+  // Pre-select all enabled masters whenever the list first loads
+  useEffect(() => {
+    if (enabledMasters.length > 0 && selectedMasterIds.size === 0) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- initialising master selection from loaded list; single-direction sync
+      setSelectedMasterIds(new Set(enabledMasters.map((m) => m.id)))
+    }
+  }, [saltMasters]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Detect stuck bootstrap — only if bootstrap_status is returned by backend
   const isStuckBootstrap = !nodeId &&
@@ -317,7 +331,7 @@ function SingleMode({ onClose }: { onClose: () => void }) {
     const canSubmit = !!minionId && !!targetIp && !!sshUsername &&
       (!(!sshPassword && !hasSavedPassword)) &&
       !bootstrapMutation.isPending &&
-      !saltMasterBlocked
+      canBootstrap(selectedMasterIds.size)
 
     return (
       <form onSubmit={(e) => { e.preventDefault(); bootstrapMutation.mutate() }} className="space-y-4">
@@ -536,14 +550,79 @@ function SingleMode({ onClose }: { onClose: () => void }) {
           )}
         </div>
 
+        {/* Salt Masters multi-select (#534) ─ health is a warning badge, not a gate */}
+        <div className="border border-gray-200 rounded-xl overflow-hidden">
+          <div className="bg-gray-50 px-3 py-2 border-b border-gray-200 flex items-center justify-between">
+            <span className="text-xs font-semibold text-gray-600 uppercase tracking-wide">Salt Masters</span>
+            <div className="flex gap-2">
+              <button type="button"
+                onClick={() => setSelectedMasterIds(new Set(enabledMasters.map((m) => m.id)))}
+                className="text-xs text-brand-600 hover:text-brand-700 font-medium">
+                All
+              </button>
+              <button type="button"
+                onClick={() => setSelectedMasterIds(new Set())}
+                className="text-xs text-gray-500 hover:text-gray-700 font-medium">
+                None
+              </button>
+            </div>
+          </div>
+          {saltMasters === undefined ? (
+            <p className="px-3 py-4 text-sm text-gray-400 text-center">Loading masters…</p>
+          ) : enabledMasters.length === 0 ? (
+            <p className="px-3 py-4 text-sm text-red-600 text-center">
+              No salt-master configured —{' '}
+              <a href="/settings" className="underline text-red-700 hover:text-red-800">
+                add one in Settings → Salt Masters
+              </a>
+            </p>
+          ) : (
+            <div className="divide-y divide-gray-100">
+              {enabledMasters.map((m) => {
+                const badge = saltMasterBadge(m.status)
+                const checked = selectedMasterIds.has(m.id)
+                return (
+                  <label key={m.id}
+                    className="flex items-center gap-3 px-3 py-2 hover:bg-gray-50 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={checked}
+                      onChange={(e) => {
+                        const next = new Set(selectedMasterIds)
+                        if (e.target.checked) { next.add(m.id) } else { next.delete(m.id) }
+                        setSelectedMasterIds(next)
+                      }}
+                      className="rounded"
+                    />
+                    <span className="flex-1 text-sm font-medium text-gray-900">{m.name}</span>
+                    <span className="text-xs text-gray-400 font-mono">{m.address}</span>
+                    <span className={`text-xs px-1.5 py-0.5 rounded-full font-medium ${badge.bgClass} ${badge.textClass}`}>
+                      {badge.label}
+                    </span>
+                  </label>
+                )
+              })}
+            </div>
+          )}
+          {enabledMasters.length > 0 && selectedMasterIds.size === 0 && (
+            <p className="px-3 py-2 text-xs text-red-600 bg-red-50 border-t border-red-100">
+              Select at least one master to bootstrap.
+            </p>
+          )}
+          {enabledMasters.length > 0 && selectedMasterIds.size > 0 &&
+            Array.from(selectedMasterIds).some((id) => {
+              const m = enabledMasters.find((x) => x.id === id)
+              return m?.status === 'unreachable'
+            }) && (
+            <p className="px-3 py-2 text-xs text-amber-700 bg-amber-50 border-t border-amber-100">
+              Warning: one or more selected masters are unreachable. Bootstrap will proceed — the minion will failover to reachable masters.
+            </p>
+          )}
+        </div>
+
         <p className="text-xs text-gray-500 bg-amber-50 border border-amber-200 rounded-lg p-3">
           Make sure Remote Login (SSH) is enabled before bootstrapping.
         </p>
-        {saltMasterBlocked && (
-          <p className="text-xs text-red-700 bg-red-50 border border-red-200 rounded-lg p-3">
-            Salt-master unreachable — check Settings → Salt Masters before bootstrapping.
-          </p>
-        )}
         <div className="flex gap-3 pt-2">
           <button type="button" onClick={onClose}
             className="flex-1 py-2.5 border border-gray-300 text-gray-700 rounded-lg text-sm font-medium hover:bg-gray-50">
@@ -552,7 +631,7 @@ function SingleMode({ onClose }: { onClose: () => void }) {
           <button
             type="submit"
             disabled={!canSubmit}
-            title={saltMasterBlocked ? 'Salt-master unreachable — check Settings → Salt Masters' : undefined}
+            title={enabledMasters.length === 0 ? 'Configure a salt-master first in Settings → Salt Masters' : undefined}
             className="flex-1 py-2.5 bg-brand-600 text-white rounded-lg text-sm font-medium hover:bg-brand-700 disabled:opacity-50"
           >
             {bootstrapMutation.isPending ? 'Starting…' : 'Bootstrap'}

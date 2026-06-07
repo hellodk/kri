@@ -3,7 +3,9 @@
 # Bootstraps a Mac Mini into the kri fleet.
 #
 # Required variables (set in host_vars or pass -e):
-#   salt_master_address    — Tailscale IP / hostname of the kri salt-master
+#   salt_masters           — List of Salt master addresses (Tailscale IP / hostname).
+#                            Must contain at least one entry. When multiple are supplied
+#                            the minion is configured for HA failover (master_type: failover).
 #   salt_master_pub_key    — Contents of deploy/salt-pki/master.pub (never changes)
 #   minion_id              — Salt minion ID (e.g. mm1)
 #   ingest_url             — kri ingest API base (e.g. http://100.89.50.27/api/v1/ingest)
@@ -203,11 +205,16 @@
         group: wheel
         mode: "0644"
         content: |
-          master: {{ salt_master_address }}
+          master:
+          {% for m in salt_masters %}    - {{ m }}
+          {% endfor %}
+          master_type: failover
+          master_alive_interval: 60
+          master_tries: -1
+          master_shuffle: True
           id: {{ minion_id }}
           log_level: info
           log_file: /var/log/salt/minion
-          # Encryption algorithm — must match master
           encryption_algorithm: oaep
       become: true
 
