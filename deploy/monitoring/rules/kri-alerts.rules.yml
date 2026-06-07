@@ -25,3 +25,103 @@ groups:
             than 30 minutes. Indicates a network issue, crashed SSH daemon, or
             misconfigured firewall. Investigate before any playbook/provisioning
             run against this node.
+
+  - name: kri.availability
+    interval: 30s
+    rules:
+      - alert: KriAPIDown
+        # Fires when Prometheus cannot scrape the kri API /metrics endpoint.
+        # This covers both the API container being down and the ingress being broken.
+        # Issue #576.
+        expr: up{job="kri-api"} == 0
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "kri API is down"
+          description: >
+            The kri Fleet Platform API (/metrics endpoint, job=kri-api) has been
+            unreachable for more than 2 minutes. All fleet management operations
+            are unavailable. Check pod logs and ingress status immediately.
+
+      - alert: KriWorkerDown
+        # Fires when the Celery worker is no longer emitting heartbeats to Redis.
+        # kri_beat_last_run_timestamp_seconds is set to 0 when the Redis key
+        # kri:maintenance:last_run is absent (TTL 600 s). If the worker has been
+        # silent for >10 min the key expires and the gauge drops to 0. Issue #576.
+        expr: kri_beat_last_run_timestamp_seconds == 0
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "kri Celery worker / beat is down"
+          description: >
+            The kri Celery beat worker has not updated its heartbeat for more
+            than 10 minutes (kri:maintenance:last_run Redis key is absent).
+            Node status transitions (stale → offline), SSH reachability probes,
+            and maintenance tasks are not running. Check celery-worker and
+            celery-beat pod logs.
+
+      - alert: KriBeatHeartbeatExpired
+        # Secondary alert: the key exists but the timestamp is stale (beat is
+        # running but mark_stale_nodes is silently failing). Complements
+        # KriWorkerDown which only fires when the key is 0. Issue #576.
+        expr: >
+          kri_beat_last_run_timestamp_seconds > 0
+          and (time() - kri_beat_last_run_timestamp_seconds) > 600
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "kri beat heartbeat is stale (mark_stale_nodes not running)"
+          description: >
+            kri_beat_last_run_timestamp_seconds was last updated more than 10 minutes
+            ago, meaning mark_stale_nodes has not completed successfully in the
+            expected window. Node status and fleet health data may be outdated.
+            Check celery-beat logs for errors in the maintenance task.
+
+  - name: kri.error_rate
+    interval: 1m
+    rules:
+      - alert: KriAPIErrorRateHigh
+        # Fires when more than 5 % of requests over the last 5 minutes return 5xx.
+        # Requires kri_http_requests_total (populated by PrometheusMiddleware).
+        # Issue #576.
+        expr: >
+          (
+            sum(rate(kri_http_requests_total{status_code=~"5.."}[5m]))
+            /
+            sum(rate(kri_http_requests_total[5m]))
+          ) > 0.05
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "kri API 5xx error rate > 5 %"
+          description: >
+            The kri API is returning 5xx errors for more than 5 % of requests
+            over the last 5 minutes. Current rate: {{ $value | humanizePercentage }}.
+            Check API logs for unhandled exceptions and DB/Redis connectivity.
+
+  - name: kri.latency
+    interval: 1m
+    rules:
+      - alert: KriAPILatencyP99High
+        # Fires when the p99 request latency exceeds 5 seconds over the last 10 min.
+        # Requires kri_http_request_duration_seconds (populated by PrometheusMiddleware).
+        # Issue #576.
+        expr: >
+          histogram_quantile(
+            0.99,
+            sum by (le) (rate(kri_http_request_duration_seconds_bucket[10m]))
+          ) > 5
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "kri API p99 latency > 5 s"
+          description: >
+            The p99 request latency for the kri API has exceeded 5 seconds for
+            the last 10 minutes. Current p99: {{ $value | humanizeDuration }}.
+            Check for slow DB queries, Salt timeouts, or CPU/memory pressure on
+            the API pod.
