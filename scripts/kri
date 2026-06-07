@@ -736,6 +736,10 @@ cmd_saltmaster_install() {
         info "Detected: ${target_os}"
     fi
 
+    # Shared playbooks — SSoT (#561): these are the same playbooks run by
+    # the provision_master Celery task (#557) when provisioning via the UI.
+    # macOS → install_salt_master.yml  / Linux → install_salt_master_linux.yml
+
     # ── macOS path ──────────────────────────────────────────────────────────
     if [[ "$target_os" == "macos" ]]; then
         # Verify the bundled .pkg exists before doing anything
@@ -783,10 +787,13 @@ Download it (on a connected machine) and copy it to playbooks/files/:
         success "Salt-master installed on $target_ip ($target_os)"
         echo ""
         info "Next steps:"
-        info "  1. Open kri UI → Settings → Salt Masters → Add"
-        info "       URL:      https://${target_ip}:8080"
+        info "  1. kri UI → Settings → Salt Masters → Add master record"
+        info "       Address:  ${target_ip}"
+        info "       API URL:  https://${target_ip}:8080"
         info "       User:     krisalt"
-        info "       Password: <the password you set>"
+        info "       Password: <the api_password you entered above>"
+        info "     kri manages master connectivity and credentials from Settings → Salt Masters."
+        info "     No manual environment variable changes are required."
         info "  2. Update minion configs: /etc/salt/minion → master: ${target_ip}"
         info "  3. kri saltmaster keys  (accept minion keys once they reconnect)"
     else
