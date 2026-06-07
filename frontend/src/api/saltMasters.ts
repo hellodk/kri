@@ -1,6 +1,9 @@
 import { api } from './client'
 
-/** Response — never includes api_password or api_password_enc. */
+/**
+ * Response — never includes api_password_enc, ssh_key_enc, or ssh_password_enc.
+ * Provision lifecycle fields added in #556 (master-lifecycle epic).
+ */
 export interface SaltMaster {
   id: string
   name: string
@@ -21,11 +24,21 @@ export interface SaltMaster {
   last_checked_at: string | null
   last_error: string | null
   checks: Array<{ check: string; status: string; detail: string; latency_ms: number }> | null
+  /** Provision lifecycle (#556) */
+  provision_status: string
+  os_family: string | null
+  salt_version: string | null
+  last_provisioned_at: string | null
+  provision_error: string | null
+  /** SSH host/user readable; ssh_key_enc/ssh_password_enc intentionally excluded */
+  ssh_host: string | null
+  ssh_user: string | null
+  node_id: string | null
   created_at: string
   updated_at: string
 }
 
-/** Create payload — api_password is write-only plaintext. */
+/** Create payload — api_password, ssh_key, ssh_password are write-only plaintext. */
 export interface SaltMasterCreate {
   name: string
   address: string
@@ -42,6 +55,14 @@ export interface SaltMasterCreate {
   token_delivery?: string
   tls_verify?: boolean
   auto_accept?: boolean
+  /** SSH creds for provisioning (write-only — stored encrypted). */
+  ssh_host?: string | null
+  ssh_user?: string | null
+  /** Write-only: stored encrypted, never returned. */
+  ssh_key?: string | null
+  /** Write-only: stored encrypted, never returned. */
+  ssh_password?: string | null
+  node_id?: string | null
 }
 
 /** Update payload — all fields optional. */
@@ -61,6 +82,14 @@ export interface SaltMasterUpdate {
   token_delivery?: string
   tls_verify?: boolean
   auto_accept?: boolean
+  /** SSH creds for provisioning (write-only — stored encrypted). */
+  ssh_host?: string | null
+  ssh_user?: string | null
+  /** Write-only: stored encrypted, never returned. */
+  ssh_key?: string | null
+  /** Write-only: stored encrypted, never returned. */
+  ssh_password?: string | null
+  node_id?: string | null
 }
 
 export interface SaltMasterHealthResponse {
@@ -73,6 +102,18 @@ export interface SaltMasterHealthResponse {
 export interface SaltMasterTestResponse {
   status: string
   checks: Array<{ check: string; status: string; detail: string; latency_ms: number }>
+}
+
+/** Response for a single master_provision_run record. */
+export interface MasterProvisionRunResponse {
+  id: string
+  salt_master_id: string
+  action: string
+  status: string
+  started_at: string
+  finished_at: string | null
+  ansible_stdout: string | null
+  error: string | null
 }
 
 export const saltMastersApi = {

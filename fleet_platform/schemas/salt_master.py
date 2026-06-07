@@ -1,7 +1,8 @@
 """Pydantic schemas for the SaltMaster entity (#516, epic #523).
 
-Response schema never exposes api_password_enc or any secret.
-Create/Update schemas accept api_password as write-only plaintext.
+Response schema never exposes api_password_enc, ssh_key_enc, ssh_password_enc, or any secret.
+Create/Update schemas accept api_password, ssh_key, ssh_password as write-only plaintext.
+Provision lifecycle fields added in #556 (master-lifecycle epic).
 """
 
 import uuid
@@ -26,6 +27,12 @@ class SaltMasterCreate(BaseModel):
     token_delivery: str = Field(default="ingest", description="'ingest' or 'direct'")
     tls_verify: bool = False
     auto_accept: bool = True
+    # SSH creds for provisioning (write-only plaintext — stored encrypted)
+    ssh_host: str | None = Field(default=None, description="SSH host; defaults to address at provision time")
+    ssh_user: str | None = Field(default=None, description="SSH username; defaults to global bootstrap user")
+    ssh_key: str | None = Field(default=None, description="Plaintext SSH private key — stored encrypted")
+    ssh_password: str | None = Field(default=None, description="Plaintext SSH password — stored encrypted")
+    node_id: uuid.UUID | None = Field(default=None, description="Optional link to an existing node record")
 
 
 class SaltMasterUpdate(BaseModel):
@@ -43,6 +50,12 @@ class SaltMasterUpdate(BaseModel):
     token_delivery: str | None = None
     tls_verify: bool | None = None
     auto_accept: bool | None = None
+    # SSH creds for provisioning (write-only plaintext — stored encrypted)
+    ssh_host: str | None = None
+    ssh_user: str | None = None
+    ssh_key: str | None = Field(default=None, description="Plaintext SSH private key — stored encrypted")
+    ssh_password: str | None = Field(default=None, description="Plaintext SSH password — stored encrypted")
+    node_id: uuid.UUID | None = None
 
 
 class SaltMasterResponse(BaseModel):
@@ -66,6 +79,17 @@ class SaltMasterResponse(BaseModel):
     last_error: str | None
     # checks is a JSON list of per-check result objects (or None if never probed)
     checks: list[Any] | None
+    # Provision lifecycle (#556)
+    provision_status: str = "unprovisioned"
+    os_family: str | None = None
+    salt_version: str | None = None
+    last_provisioned_at: datetime | None = None
+    provision_error: str | None = None
+    # SSH host/user readable (key/password are write-only — never returned)
+    ssh_host: str | None = None
+    ssh_user: str | None = None
+    # ssh_key_enc / ssh_password_enc intentionally excluded — never returned to clients
+    node_id: uuid.UUID | None = None
     created_at: datetime
     updated_at: datetime
 
@@ -82,3 +106,24 @@ class SaltMasterResponse(BaseModel):
         if isinstance(v, dict):
             return list(v.values())
         return v
+
+    @field_validator("provision_status", mode="before")
+    @classmethod
+    def coerce_provision_status(cls, v: Any) -> Any:
+        """Coerce None to the default value — ORM objects return None before DB flush."""
+        if v is None:
+            return "unprovisioned"
+        return v
+
+
+class MasterProvisionRunResponse(BaseModel):
+    id: uuid.UUID
+    salt_master_id: uuid.UUID
+    action: str
+    status: str
+    started_at: datetime
+    finished_at: datetime | None
+    ansible_stdout: str | None
+    error: str | None
+
+    model_config = {"from_attributes": True}

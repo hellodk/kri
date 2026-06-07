@@ -1,5 +1,7 @@
 """Routes for SaltMaster management — issue #517, #519, #521, #533, epic #523, #537.
 
+Provision lifecycle SSH cred encryption added in #556 (master-lifecycle epic).
+
 Endpoints:
     GET    /api/v1/salt/masters                     — list all masters (viewer+).
     POST   /api/v1/salt/masters                     — create master (admin only).
@@ -39,7 +41,7 @@ async def list_salt_masters(
     """Return all configured SaltMasters, default first then alphabetically by name.
 
     Accessible by any authenticated user (viewer role or above).
-    Never exposes api_password or api_password_enc.
+    Never exposes api_password, ssh_key_enc, or ssh_password_enc.
     """
     result = await db.execute(select(SaltMaster).order_by(SaltMaster.is_default.desc(), SaltMaster.name))
     return [SaltMasterResponse.model_validate(m) for m in result.scalars().all()]
@@ -54,10 +56,9 @@ async def create_salt_master(
     """Create a new SaltMaster.
 
     If ``api_password`` is provided it is encrypted at rest; the plaintext is
-    never persisted.  If ``is_default=True`` all other masters are cleared
-    first.  Raises 409 if enabling this master would leave 0 enabled masters
-    (impossible on create — a new enabled master always keeps count ≥ 1).
-    Requires admin role.
+    never persisted.  SSH credentials (``ssh_key``, ``ssh_password``) are likewise
+    encrypted if provided.  If ``is_default=True`` all other masters are cleared
+    first.  Requires admin role.
     """
     # If setting as default, clear is_default on all existing masters first.
     if body.is_default:
@@ -68,6 +69,14 @@ async def create_salt_master(
     api_password_enc: str | None = None
     if body.api_password:
         api_password_enc = encrypt_secret(body.api_password)
+
+    ssh_key_enc: str | None = None
+    if body.ssh_key:
+        ssh_key_enc = encrypt_secret(body.ssh_key)
+
+    ssh_password_enc: str | None = None
+    if body.ssh_password:
+        ssh_password_enc = encrypt_secret(body.ssh_password)
 
     master = SaltMaster(
         name=body.name,
@@ -84,6 +93,11 @@ async def create_salt_master(
         token_delivery=body.token_delivery,
         tls_verify=body.tls_verify,
         auto_accept=body.auto_accept,
+        ssh_host=body.ssh_host,
+        ssh_user=body.ssh_user,
+        ssh_key_enc=ssh_key_enc,
+        ssh_password_enc=ssh_password_enc,
+        node_id=body.node_id,
     )
     db.add(master)
     await db.commit()
@@ -100,11 +114,11 @@ async def update_salt_master(
 ) -> SaltMasterResponse:
     """Partially update a SaltMaster.
 
-    Only fields explicitly provided (non-None) are applied.  ``api_password``
-    is re-encrypted if provided.  Setting ``enabled=False`` on the last enabled
-    master raises 409.  Setting ``is_default=True`` clears the flag on all
-    other masters.  Returns 404 if the master does not exist.
-    Requires admin role.
+    Only fields explicitly provided (non-None) are applied.  ``api_password``,
+    ``ssh_key``, and ``ssh_password`` are re-encrypted if provided.  Setting
+    ``enabled=False`` on the last enabled master raises 409.  Setting
+    ``is_default=True`` clears the flag on all other masters.  Returns 404 if
+    the master does not exist.  Requires admin role.
     """
     result = await db.execute(select(SaltMaster).where(SaltMaster.id == master_id))
     master = result.scalar_one_or_none()
@@ -135,6 +149,16 @@ async def update_salt_master(
     if "api_password" in update_data:
         raw = update_data.pop("api_password")
         update_data["api_password_enc"] = encrypt_secret(raw) if raw else None
+
+    # Re-encrypt SSH key if provided.
+    if "ssh_key" in update_data:
+        raw = update_data.pop("ssh_key")
+        update_data["ssh_key_enc"] = encrypt_secret(raw) if raw else None
+
+    # Re-encrypt SSH password if provided.
+    if "ssh_password" in update_data:
+        raw = update_data.pop("ssh_password")
+        update_data["ssh_password_enc"] = encrypt_secret(raw) if raw else None
 
     for field, value in update_data.items():
         setattr(master, field, value)

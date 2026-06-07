@@ -1,12 +1,13 @@
 """SaltMaster model — first-class DB entity for salt-master decoupling epic (#523).
 
 Designed for N masters per fleet; nodes reference one via salt_master_id FK.
+Provision lifecycle columns added in #556 (master-lifecycle epic).
 """
 
 import uuid
 from datetime import datetime
 
-from sqlalchemy import Boolean, DateTime, Index, Integer, String, Text, UniqueConstraint
+from sqlalchemy import Boolean, DateTime, ForeignKey, Index, Integer, String, Text, UniqueConstraint
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -49,6 +50,28 @@ class SaltMaster(Base, TimestampMixin):
     last_checked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     last_error: Mapped[str | None] = mapped_column(Text, nullable=True)
     checks: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
+
+    # Provision lifecycle (#556, master-lifecycle epic)
+    provision_status: Mapped[str] = mapped_column(String(20), nullable=False, default="unprovisioned")
+    os_family: Mapped[str | None] = mapped_column(String(20), nullable=True)
+    salt_version: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    last_provisioned_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    provision_error: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+    # SSH credentials for provisioning (stored encrypted; resolution falls back to
+    # global bootstrap creds at provision time — #557)
+    ssh_host: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    ssh_user: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    ssh_key_enc: Mapped[str | None] = mapped_column(Text, nullable=True)  # Fernet-encrypted
+    ssh_password_enc: Mapped[str | None] = mapped_column(Text, nullable=True)  # Fernet-encrypted
+
+    # Optional link to a node record (SET NULL on node deletion)
+    node_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("nodes.id", ondelete="SET NULL", name="fk_salt_masters_node_id"),
+        nullable=True,
+        index=True,
+    )
 
     __table_args__ = (
         UniqueConstraint("name", name="uq_salt_masters_name"),
