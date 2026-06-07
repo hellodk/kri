@@ -31,6 +31,18 @@ reactor:
   - 'salt/minion/*/start':
     - salt://reactor/grain_report_on_start.sls
 
+# Salt 3006+ disables all netapi clients by default (salt-api returns
+# "400 Client disabled" otherwise). Enable exactly the clients kri uses:
+#   local / local_async — fleet exec commands on minions
+#   runner             — manage.* fleet status
+#   wheel              — key.* minion-key management
+# The external_auth ACL below still scopes which functions each may call.
+netapi_enable_clients:
+  - local
+  - local_async
+  - runner
+  - wheel
+
 # External auth for salt-api (kri workers authenticate as {{ salt_api_user }}).
 # Scoped to only what kri needs: test connectivity, manage minion keys,
 # and query fleet status runners. No wildcard ('.*') or bare runner/wheel access.
