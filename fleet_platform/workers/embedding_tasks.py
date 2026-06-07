@@ -21,19 +21,25 @@ def reindex_nodes() -> dict:
     from fleet_platform.db.session import AsyncSessionLocal as async_session_factory
     from fleet_platform.models.group import Group, GroupMember
     from fleet_platform.models.node import Node
-    from fleet_platform.services.embedding_svc import chunk_node, upsert_chunks
+    from fleet_platform.services.embedding_svc import (
+        chunk_node,
+        sweep_deleted_sources,
+        upsert_chunks,
+    )
     from fleet_platform.services.llm_context import _format_last_seen
     from fleet_platform.services.platform_settings_svc import (
         LLM_EMBED_BASE_URL,
+        LLM_INCLUDE_NODE_IPS,
         get_settings_bulk,
     )
 
     async def _run():
         async with async_session_factory() as db:
-            settings = await get_settings_bulk(db, [LLM_EMBED_BASE_URL])
+            settings = await get_settings_bulk(db, [LLM_EMBED_BASE_URL, LLM_INCLUDE_NODE_IPS])
             embed_url = settings.get(LLM_EMBED_BASE_URL) or ""
             if not embed_url:
                 return {"skipped": "no embed_base_url configured"}
+            include_ips = (settings.get(LLM_INCLUDE_NODE_IPS) or "true").lower() != "false"
 
             nodes = (await db.execute(select(Node))).scalars().all()
             membership = (
@@ -51,11 +57,14 @@ def reindex_nodes() -> dict:
                     group=node_group.get(str(node.id), ""),
                     os_info="",
                     last_seen=_format_last_seen(node.last_seen_at),
+                    include_ips=include_ips,
                 )
                 all_chunks.extend(chunks)
 
             upserted = await upsert_chunks(db, all_chunks, embed_url)
-            return {"upserted": upserted, "total": len(all_chunks)}
+            # Remove embeddings for nodes that no longer exist (#573).
+            swept = await sweep_deleted_sources(db, "node", [str(n.id) for n in nodes])
+            return {"upserted": upserted, "total": len(all_chunks), "swept": swept}
 
     return asyncio.run(_run())
 
@@ -66,7 +75,11 @@ def reindex_playbooks() -> dict:
     import asyncio
 
     from fleet_platform.db.session import AsyncSessionLocal as async_session_factory
-    from fleet_platform.services.embedding_svc import chunk_playbook, upsert_chunks
+    from fleet_platform.services.embedding_svc import (
+        chunk_playbook,
+        sweep_deleted_sources,
+        upsert_chunks,
+    )
     from fleet_platform.services.platform_settings_svc import (
         LLM_EMBED_BASE_URL,
         get_settings_bulk,
@@ -94,7 +107,9 @@ def reindex_playbooks() -> dict:
                     continue
 
             upserted = await upsert_chunks(db, all_chunks, embed_url)
-            return {"upserted": upserted, "total": len(all_chunks)}
+            # Remove embeddings for playbook plays that no longer exist (#573).
+            swept = await sweep_deleted_sources(db, "playbook", [c["source_id"] for c in all_chunks])
+            return {"upserted": upserted, "total": len(all_chunks), "swept": swept}
 
     return asyncio.run(_run())
 

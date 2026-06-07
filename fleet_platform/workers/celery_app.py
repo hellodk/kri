@@ -44,6 +44,11 @@ celery_app.conf.update(
         "fleet_platform.workers.sbom_tasks.*": {"queue": "sbom"},
         "fleet_platform.workers.maintenance.*": {"queue": "maintenance"},
         "fleet_platform.workers.health_tasks.*": {"queue": "maintenance"},
+        # RAG reindex tasks must land on a worker-consumed queue (#573). Without
+        # this they fell through to the default "celery" queue, which the worker
+        # (--queues default,maintenance,drift,sbom) never consumes → embeddings
+        # were never (re)built.
+        "fleet_platform.workers.embedding_tasks.*": {"queue": "maintenance"},
     },
     beat_schedule={
         "mark-stale-nodes": {
