@@ -3,6 +3,7 @@
 Provision lifecycle SSH cred encryption added in #556 (master-lifecycle epic).
 SSoT api_url derivation added in #562: api_url is computed from address + salt_api_port +
 use_tls on every create/update.  Client-supplied api_url is always ignored.
+provision_master trigger route added in #557 (master-lifecycle epic).
 
 Endpoints:
     GET    /api/v1/salt/masters                     — list all masters (viewer+).
@@ -11,14 +12,16 @@ Endpoints:
     DELETE /api/v1/salt/masters/{master_id}         — delete master (admin only).
     POST   /api/v1/salt/masters/{master_id}/test    — live probe (admin only).
     GET    /api/v1/salt/masters/{master_id}/health  — cached health (viewer+).
+    POST   /api/v1/salt/masters/{master_id}/provision — trigger provision task (admin only).
 """
 
 import asyncio
 import uuid
 from datetime import UTC, datetime
-from typing import List
+from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException
+from pydantic import BaseModel
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -318,4 +321,43 @@ async def get_salt_master_health(
         "last_checked_at": master.last_checked_at.isoformat() if master.last_checked_at else None,
         "last_error": master.last_error,
         "checks": master.checks,
+    }
+
+
+class ProvisionRequest(BaseModel):
+    """Optional body for the provision endpoint."""
+
+    action: Optional[str] = "install"
+
+
+@router.post("/masters/{master_id}/provision", status_code=202)
+async def trigger_provision_master(
+    master_id: uuid.UUID,
+    body: Optional[ProvisionRequest] = None,
+    db: AsyncSession = Depends(get_db),
+    _: dict = Depends(require_role("admin")),
+):
+    """Trigger a provision_master Celery task for a SaltMaster.
+
+    Installs or reconfigures salt-master + salt-api on the master's SSH host.
+    The task runs asynchronously; the caller receives 202 with the task/run id.
+    Returns 404 if the master does not exist.
+    Requires admin role.
+    """
+    from fleet_platform.workers.ansible_tasks import provision_master
+
+    result = await db.execute(select(SaltMaster).where(SaltMaster.id == master_id))
+    master = result.scalar_one_or_none()
+    if master is None:
+        raise HTTPException(status_code=404, detail=f"SaltMaster {master_id} not found")
+
+    action = (body.action if body and body.action else None) or "install"
+
+    task = provision_master.delay(str(master_id), action)
+
+    return {
+        "task_id": task.id,
+        "salt_master_id": str(master_id),
+        "action": action,
+        "status": "queued",
     }
