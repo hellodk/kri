@@ -3,6 +3,8 @@ import { Link } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { api } from '../api/client'
 import { fleetApi } from '../api/fleet'
+import { saltMastersApi } from '../api/saltMasters'
+import { masterHealthSummary } from '../lib/masterNodes'
 import { useSaltKeysStore } from '../stores/saltKeysStore'
 import { formatRelative, formatDate } from '../utils/dateFormat'
 import type { Paginated, Node } from '../types'
@@ -156,6 +158,14 @@ export function DashboardPage() {
   // Read from the store — SaltKeyWatcher in App.tsx already polls this every 30s
   const pendingKeys = useSaltKeysStore((s) => s.pendingCount)
 
+  const { data: saltMasters } = useQuery({
+    queryKey: ['salt-masters'],
+    queryFn: saltMastersApi.list,
+    staleTime: 60_000,
+    refetchInterval: 120_000,
+  })
+  const mastersHealth = masterHealthSummary(saltMasters ?? [])
+
   const { data: driftData, isFetching: driftFetching } = useQuery({
     queryKey: ['dashboard-drift'],
     queryFn: () => api.get<Paginated<DriftSummaryItem>>('/api/v1/drift?sort=drift_score:desc&per_page=5'),
@@ -298,6 +308,73 @@ export function DashboardPage() {
           total={totalNodes}
         />
       </div>
+
+      {/* Salt Masters health widget — only rendered when at least one master exists */}
+      {mastersHealth.total > 0 && (
+        <div className="bg-white rounded-xl border border-gray-200 shadow-sm px-5 py-4">
+          <div className="flex items-center justify-between mb-3">
+            <div className="flex items-center gap-2">
+              {/* Server icon */}
+              <svg className="w-4 h-4 text-indigo-600 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M5 12h14M5 12a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v4a2 2 0 01-2 2M5 12a2 2 0 00-2 2v4a2 2 0 002 2h14a2 2 0 002-2v-4a2 2 0 00-2-2m-2-4h.01M17 16h.01" />
+              </svg>
+              <h2 className="text-sm font-semibold text-gray-800">
+                Salt Masters
+                <span className="ml-2 text-xs font-normal text-gray-500">
+                  {mastersHealth.total} registered
+                </span>
+              </h2>
+            </div>
+            <Link
+              to="/settings?tab=Salt Masters"
+              className="text-xs text-brand-600 hover:underline font-medium"
+            >
+              Manage →
+            </Link>
+          </div>
+          {/* Counts row — label + count, not color-only */}
+          <div className="flex flex-wrap gap-4">
+            {mastersHealth.healthy > 0 && (
+              <span className="flex items-center gap-1.5 text-sm">
+                <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 flex-shrink-0" aria-hidden="true" />
+                <span className="font-semibold text-emerald-700 tabular-nums">{mastersHealth.healthy}</span>
+                <span className="text-gray-500">Healthy</span>
+              </span>
+            )}
+            {mastersHealth.degraded > 0 && (
+              <span className="flex items-center gap-1.5 text-sm">
+                <span className="w-2.5 h-2.5 rounded-full bg-amber-500 flex-shrink-0" aria-hidden="true" />
+                <span className="font-semibold text-amber-700 tabular-nums">{mastersHealth.degraded}</span>
+                <span className="text-gray-500">Degraded</span>
+              </span>
+            )}
+            {mastersHealth.unreachable > 0 && (
+              <span className="flex items-center gap-1.5 text-sm">
+                <span className="w-2.5 h-2.5 rounded-full bg-red-500 flex-shrink-0" aria-hidden="true" />
+                <span className="font-semibold text-red-700 tabular-nums">{mastersHealth.unreachable}</span>
+                <span className="text-gray-500">Unreachable</span>
+              </span>
+            )}
+            {mastersHealth.unknown > 0 && (
+              <span className="flex items-center gap-1.5 text-sm">
+                <span className="w-2.5 h-2.5 rounded-full bg-gray-400 flex-shrink-0" aria-hidden="true" />
+                <span className="font-semibold text-gray-700 tabular-nums">{mastersHealth.unknown}</span>
+                <span className="text-gray-500">Unknown</span>
+              </span>
+            )}
+            {/* All healthy summary */}
+            {mastersHealth.healthy === mastersHealth.total && (
+              <span className="ml-auto text-xs text-emerald-600 font-medium">All healthy ✓</span>
+            )}
+            {/* Alert label when any are unreachable */}
+            {mastersHealth.unreachable > 0 && (
+              <span className="ml-auto text-xs text-red-600 font-semibold">
+                {mastersHealth.unreachable} unreachable — check Salt Masters
+              </span>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* Two-column lists */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
