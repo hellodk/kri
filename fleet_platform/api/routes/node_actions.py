@@ -1,5 +1,6 @@
 """HTTP endpoints for destructive node action approval gate (#291)."""
 
+import json
 import re
 import uuid
 from datetime import UTC, datetime
@@ -60,6 +61,32 @@ def _validate_action_params(action_type: str, params: dict) -> None:
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail=f"{svc!r} is a protected service and cannot be controlled remotely.",
             )
+
+
+def _build_salt_invocation(action_type: str, params: dict) -> tuple[str, list[str]]:
+    """Map an approved action to (salt_function, args).
+
+    Raises HTTPException(400) if the action_type is unsupported or unmappable.
+    Nodes are macOS (Darwin): SIGTERM=15, SIGSTOP=17, SIGCONT=19.
+    """
+    if action_type.startswith("process_"):
+        pid = str(params.get("pid", ""))
+        sig = {"process_stop": "15", "process_suspend": "17", "process_resume": "19"}.get(action_type)
+        if not sig:
+            raise HTTPException(status_code=400, detail=f"Unsupported process action {action_type!r}")
+        return "ps.kill_pid", [pid, f"signal={sig}"]
+    if action_type.startswith("service_"):
+        svc = str(params.get("service", ""))
+        fn = {
+            "service_stop": "service.stop",
+            "service_disable": "service.disable",
+            "service_start": "service.start",
+            "service_restart": "service.restart",
+        }.get(action_type)
+        if not fn:
+            raise HTTPException(status_code=400, detail=f"Unsupported service action {action_type!r}")
+        return fn, [svc]
+    raise HTTPException(status_code=400, detail=f"Unsupported action {action_type!r}")
 
 
 class NodeActionRequest(BaseModel):
@@ -449,8 +476,36 @@ async def approve_action(token: str, db: AsyncSession = Depends(get_db)):
     if action.status == "expired":
         return {"status": "expired", "message": "This approval link has expired."}
     if action.status == "approved":
-        # TODO: dispatch actual Salt execution
-        return {"status": "approved", "message": f"Action '{action.action_type}' approved and queued."}
+        params = json.loads(action.params or "{}")
+        # Defense-in-depth: re-enforce denylist at execution time (#615 guards at request time)
+        target = params.get("name") or params.get("process_name") or params.get("service")
+        if target and PendingAction.is_protected_target(str(target)):
+            action.status = "failed"
+            await db.commit()
+            raise HTTPException(
+                status_code=403,
+                detail=f"{target!r} is a protected target; execution refused.",
+            )
+        node = (await db.execute(select(Node).where(Node.id == action.node_id))).scalar_one_or_none()
+        if not node:
+            action.status = "failed"
+            await db.commit()
+            raise HTTPException(status_code=404, detail="Node not found")
+        function, args = _build_salt_invocation(action.action_type, params)
+        from fleet_platform.workers.salt_tasks import run_salt_cmd
+
+        run_salt_cmd.delay(function=function, target_minions=[node.minion_id], args=args)
+        action.status = "executed"
+        await db.commit()
+        await audit(
+            db,
+            actor="approval-link",
+            action=f"{action.action_type}_executed",
+            resource_type="node",
+            resource_id=action.node_id,
+            new_value={"action_id": str(action.id), "function": function, "args": args},
+        )
+        return {"status": "executed", "message": f"Action '{action.action_type}' approved and dispatched."}
     return {"status": action.status}
 
 
@@ -461,4 +516,12 @@ async def reject_action(token: str, db: AsyncSession = Depends(get_db)):
     if not action:
         raise HTTPException(status_code=404, detail="Action not found")
     action = await pending_action_svc.reject(db, action)
+    await audit(
+        db,
+        actor="approval-link",
+        action=f"{action.action_type}_rejected",
+        resource_type="node",
+        resource_id=action.node_id,
+        new_value={"action_id": str(action.id)},
+    )
     return {"status": "rejected", "message": "Action rejected."}
