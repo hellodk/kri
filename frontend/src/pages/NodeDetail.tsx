@@ -895,12 +895,12 @@ export function NodeDetail() {
     }
   }
 
-  async function requestProcessAction(pid: string, actionType: 'process_stop' | 'process_suspend' | 'process_resume') {
+  async function requestProcessAction(pid: string, name: string, actionType: 'process_stop' | 'process_suspend' | 'process_resume') {
     if (!nodeId) return
     try {
       const resp = await api.post<{status: string; message: string}>(`/api/v1/nodes/${nodeId}/actions`, {
         action_type: actionType,
-        params: { pid, minion_id: node?.minion_id },
+        params: { pid, name, minion_id: node?.minion_id },
       })
       toast(resp.message || `${actionType} requested`)
     } catch (e: unknown) {
@@ -2586,13 +2586,13 @@ export function NodeDetail() {
                         </td>
                         <td className="py-2 px-3">
                           <div className="flex items-center justify-center gap-1">
-                            <button onClick={() => requestProcessAction(String(p.pid), 'process_stop')}
+                            <button onClick={() => requestProcessAction(String(p.pid), p.name, 'process_stop')}
                               className="px-2 py-0.5 text-xs bg-amber-50 border border-amber-200 text-amber-700 rounded hover:bg-amber-100"
                               title="Stop (SIGTERM) — requires email approval">Stop</button>
-                            <button onClick={() => requestProcessAction(String(p.pid), 'process_suspend')}
+                            <button onClick={() => requestProcessAction(String(p.pid), p.name, 'process_suspend')}
                               className="px-2 py-0.5 text-xs bg-gray-50 border border-gray-200 text-gray-700 rounded hover:bg-gray-100"
                               title="Suspend (SIGSTOP) — requires email approval">Suspend</button>
-                            <button onClick={() => requestProcessAction(String(p.pid), 'process_resume')}
+                            <button onClick={() => requestProcessAction(String(p.pid), p.name, 'process_resume')}
                               className="px-2 py-0.5 text-xs bg-emerald-50 border border-emerald-200 text-emerald-700 rounded hover:bg-emerald-100"
                               title="Resume (SIGCONT)">Resume</button>
                           </div>
