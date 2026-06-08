@@ -1,6 +1,7 @@
 # fleet_platform/api/routes/ingest.py
 import asyncio
 import ipaddress as _ipaddress
+import logging
 import os
 import tempfile
 from datetime import UTC, datetime
@@ -17,10 +18,17 @@ from fleet_platform.core.config import settings
 from fleet_platform.models.execution import ExecutionJob, ExecutionResult
 from fleet_platform.models.facts import NodeFact
 from fleet_platform.models.node import Node, Tag
-from fleet_platform.schemas.ingest import ExecutionIngestPayload, GrainIngestPayload
+from fleet_platform.schemas.ingest import (
+    ExecutionIngestPayload,
+    GrainIngestPayload,
+    ProcessStatsIngestPayload,
+)
 from fleet_platform.services.node_status import verify_node_token
+from fleet_platform.services.process_stats_svc import persist_process_stats
 from fleet_platform.workers.drift_tasks import compute_drift
 from fleet_platform.workers.sbom_tasks import index_sbom, index_sbom_from_grains
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/v1/ingest")
 
@@ -336,6 +344,40 @@ async def ingest_executions(
         return {"status": "ok", "job_id": str(existing_job.id)}
 
     return {"status": "ok", "job_id": str(job.id)}
+
+
+@router.post("/process_stats")
+@limiter.limit("120/minute")
+async def ingest_process_stats(
+    request: Request,
+    payload: ProcessStatsIngestPayload,
+    x_node_token: str | None = Header(alias="X-Node-Token", default=None),
+    db: AsyncSession = Depends(get_db),
+):
+    if not x_node_token:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Missing X-Node-Token")
+
+    node = await _resolve_node(payload.minion_id, x_node_token, db)
+    if not _check_ingest_rate_limit(str(node.id)):
+        raise HTTPException(
+            status_code=429,
+            detail="Rate limit exceeded -- max 10 ingest requests per minute per node",
+        )
+
+    collected_at = payload.collected_at or datetime.now(UTC)
+
+    # Cap rows per payload; drop + log overflow rather than silently truncating.
+    processes, dropped = payload.capped_processes()
+    if dropped:
+        logger.warning(
+            "process_stats payload from node %s exceeded cap: dropped %d of %d processes",
+            node.id,
+            dropped,
+            len(payload.processes),
+        )
+
+    rows = await persist_process_stats(db, node, processes, collected_at)
+    return {"status": "ok", "rows": rows}
 
 
 @router.post("/sbom/{minion_id}", status_code=status.HTTP_202_ACCEPTED)

@@ -22,6 +22,7 @@ from fleet_platform.models.mobileconfig import (
 )
 from fleet_platform.models.node import Node, Tag
 from fleet_platform.models.node_health_snapshot import NodeHealthSnapshot
+from fleet_platform.models.node_process_stat import NodeProcessStat
 from fleet_platform.models.node_secret import NodeSecret
 from fleet_platform.models.pending_action import PendingAction
 from fleet_platform.models.platform_setting import PlatformSetting
@@ -59,6 +60,7 @@ __all__ = [
     "LLMEndpoint",
     "LLMQueryLog",
     "NodeHealthSnapshot",
+    "NodeProcessStat",
     "JenkinsBuildEvent",
     "PendingAction",
     "FleetEmbedding",
