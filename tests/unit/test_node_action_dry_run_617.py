@@ -56,8 +56,10 @@ def test_node_actions_py_has_dry_run_branch():
 
 def test_node_actions_py_dry_run_after_validate_and_404():
     """dry_run branch appears after _validate_action_params and node 404 check, before destructive check."""
-    with open("/home/dk/Documents/git/kri/fleet_platform/api/routes/node_actions.py") as f:
-        source = f.read()
+    from pathlib import Path
+
+    src_path = Path(__file__).resolve().parents[2] / "fleet_platform" / "api" / "routes" / "node_actions.py"
+    source = src_path.read_text()
 
     validate_idx = source.find("_validate_action_params(")
     node_404_idx = source.find('raise HTTPException(status_code=404, detail="Node not found")')
