@@ -508,20 +508,26 @@ async def approve_action(request: Request, token: str, db: AsyncSession = Depend
             await db.commit()
             raise HTTPException(status_code=404, detail="Node not found")
         function, args = _build_salt_invocation(action.action_type, params)
-        from fleet_platform.workers.salt_tasks import run_salt_cmd
+        from fleet_platform.workers.salt_tasks import finalize_node_action, run_salt_cmd
 
-        run_salt_cmd.delay(function=function, target_minions=[node.minion_id], args=args)
-        action.status = "executed"
+        run_salt_cmd.apply_async(
+            kwargs={"function": function, "target_minions": [node.minion_id], "args": args},
+            link=finalize_node_action.s(str(action.id)),
+        )
+        action.status = "executing"  # finalize_node_action sets executed/failed on completion
         await db.commit()
         await audit(
             db,
             actor="approval-link",
-            action=f"{action.action_type}_executed",
+            action=f"{action.action_type}_dispatched",
             resource_type="node",
             resource_id=action.node_id,
             new_value={"action_id": str(action.id), "function": function, "args": args},
         )
-        return {"status": "executed", "message": f"Action '{action.action_type}' approved and dispatched."}
+        return {
+            "status": "executing",
+            "message": f"Action '{action.action_type}' approved and dispatched; awaiting result.",
+        }
     return {"status": action.status}
 
 
