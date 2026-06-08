@@ -1,9 +1,10 @@
 """HTTP endpoints for destructive node action approval gate (#291)."""
 
+import re
 import uuid
 from datetime import UTC, datetime
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -17,6 +18,48 @@ from fleet_platform.services import pending_action_svc
 
 router = APIRouter(prefix="/api/v1/nodes", tags=["node-actions"])
 actions_router = APIRouter(prefix="/api/v1/actions", tags=["node-actions"])
+
+# Safe charset for process/service names and launchd labels (mirrors salt_ops.py minion-id pattern)
+_NAME_RE = re.compile(r"^[A-Za-z0-9._-]+$")
+_PID_RE = re.compile(r"^\d+$")
+
+
+def _validate_action_params(action_type: str, params: dict) -> None:
+    """Validate params by action_type and enforce the protected-target denylist.
+
+    Raises HTTPException 422 for malformed inputs, 403 for protected targets.
+    """
+    if action_type.startswith("process_"):
+        pid = str(params.get("pid", ""))
+        if not _PID_RE.match(pid):
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail=f"Invalid pid {pid!r}; digits only.",
+            )
+        name = params.get("name") or params.get("process_name")
+        if name is not None:
+            if not _NAME_RE.match(str(name)):
+                raise HTTPException(
+                    status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                    detail=f"Invalid process name {name!r}.",
+                )
+            if PendingAction.is_protected_target(str(name)):
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail=f"{name!r} is a protected process and cannot be controlled remotely.",
+                )
+    elif action_type.startswith("service_"):
+        svc = str(params.get("service", ""))
+        if not _NAME_RE.match(svc):
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail=f"Invalid service name {svc!r}.",
+            )
+        if PendingAction.is_protected_target(svc):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail=f"{svc!r} is a protected service and cannot be controlled remotely.",
+            )
 
 
 class NodeActionRequest(BaseModel):
@@ -51,6 +94,8 @@ async def request_node_action(
                 "Remote force-kill is disabled for safety. Use the service manager or SSH."
             ),
         )
+
+    _validate_action_params(payload.action_type, payload.params)
 
     node_result = await db.execute(select(Node).where(Node.id == node_id))
     node = node_result.scalar_one_or_none()
