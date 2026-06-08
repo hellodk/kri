@@ -93,6 +93,7 @@ def _build_salt_invocation(action_type: str, params: dict) -> tuple[str, list[st
 class NodeActionRequest(BaseModel):
     action_type: str
     params: dict = {}
+    dry_run: bool = False
 
 
 class PendingActionResponse(BaseModel):
@@ -131,6 +132,17 @@ async def request_node_action(
     node = node_result.scalar_one_or_none()
     if not node:
         raise HTTPException(status_code=404, detail="Node not found")
+
+    if payload.dry_run:
+        would = "require email approval" if PendingAction.is_destructive(payload.action_type) else "execute immediately"
+        return PendingActionResponse(
+            id=uuid.uuid4(),
+            node_id=node_id,
+            action_type=payload.action_type,
+            status="dry_run",
+            expires_at=datetime.now(UTC),
+            message=f"Dry run: '{payload.action_type}' is valid and would {would}. No action created, no email sent.",
+        )
 
     if not PendingAction.is_destructive(payload.action_type):
         # Non-destructive: execute immediately (placeholder — actual Salt call TBD)
