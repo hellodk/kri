@@ -5,12 +5,13 @@ import re
 import uuid
 from datetime import UTC, datetime
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from fleet_platform.api.deps import get_db
+from fleet_platform.api.limiter import limiter
 from fleet_platform.core.audit import audit
 from fleet_platform.core.auth import require_role
 from fleet_platform.models.node import Node
@@ -106,7 +107,9 @@ class PendingActionResponse(BaseModel):
 
 
 @router.post("/{node_id}/actions", response_model=PendingActionResponse, status_code=202)
+@limiter.limit("5/minute")
 async def request_node_action(
+    request: Request,
     node_id: uuid.UUID,
     payload: NodeActionRequest,
     db: AsyncSession = Depends(get_db),
@@ -461,7 +464,8 @@ async def get_node_metrics(
 
 
 @actions_router.get("/{token}/approve")
-async def approve_action(token: str, db: AsyncSession = Depends(get_db)):
+@limiter.limit("20/minute")
+async def approve_action(request: Request, token: str, db: AsyncSession = Depends(get_db)):
     """Approve a pending destructive action via the emailed approval link.
 
     Security: no session auth required — the token (secrets.token_urlsafe(32),
@@ -510,7 +514,8 @@ async def approve_action(token: str, db: AsyncSession = Depends(get_db)):
 
 
 @actions_router.get("/{token}/reject")
-async def reject_action(token: str, db: AsyncSession = Depends(get_db)):
+@limiter.limit("20/minute")
+async def reject_action(request: Request, token: str, db: AsyncSession = Depends(get_db)):
     """Reject a pending destructive action via the emailed rejection link."""
     action = await pending_action_svc.get_by_token(db, token)
     if not action:
