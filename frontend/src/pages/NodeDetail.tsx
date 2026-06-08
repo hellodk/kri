@@ -42,6 +42,14 @@ function isMacOSNode(node: Node): boolean {
   return !!(node.macos_version || node.xcode_version)
 }
 
+function fmtBytes(n: number | null): string {
+  if (n == null) return '—'
+  if (n >= 1_073_741_824) return (n / 1_073_741_824).toFixed(1) + ' GB'
+  if (n >= 1_048_576)     return (n / 1_048_576).toFixed(1) + ' MB'
+  if (n >= 1_024)         return (n / 1_024).toFixed(1) + ' KB'
+  return n + ' B'
+}
+
 const CERT_TYPES = ['code_signing', 'provisioning', 'distribution', 'other']
 
 // ── iOS Tab Panel ──────────────────────────────────────────────────────────────
@@ -495,10 +503,6 @@ export function NodeDetail() {
   const [servicesPolling, setServicesPolling] = useState(false)
   const [serviceList, setServiceList] = useState<Array<{name: string; running: boolean}>>([])
   // Process Manager state
-  const [processLoading, setProcessLoading] = useState(false)
-  const [processTaskId, setProcessTaskId] = useState<string | null>(null)
-  const [processPolling, setProcessPolling] = useState(false)
-  const [processes, setProcesses] = useState<Array<{pid: string; name: string; cpu_percent: number; mem_percent: number; username: string; status: string}>>([])
   const [processSort, setProcessSort] = useState<'cpu' | 'mem' | 'name'>('cpu')
   // Resource profiling tab state
   const [metricsRange, setMetricsRange] = useState<'15m' | '1h' | '6h' | '24h'>('1h')
@@ -598,42 +602,14 @@ export function NodeDetail() {
     },
   })
 
-  const { data: processTaskResult } = useQuery({
-    queryKey: ['process-task', processTaskId],
-    queryFn: () => api.get<{task_id: string; state: string; result?: unknown}>(
-      `/api/v1/ansible/tasks/${processTaskId}`
-    ),
-    enabled: !!processTaskId && processPolling,
-    refetchInterval: (q) => {
-      const s = q.state.data?.state
-      return (s === 'PENDING' || s === 'STARTED') ? 2000 : false
-    },
+  const procSortParam = processSort === 'cpu' ? 'cpu_pct' : 'mem_rss_bytes'
+  const { data: processData, isFetching: processFetching, refetch: refetchProcesses } = useQuery({
+    queryKey: ['process-stats', nodeId, procSortParam],
+    queryFn: () => fleetApi.processStats(nodeId!, { sort: procSortParam as 'cpu_pct' | 'mem_rss_bytes', limit: 250 }),
+    enabled: !!nodeId && tab === 'processes',
+    refetchInterval: tab === 'processes' ? 30_000 : false,
   })
-
-  useEffect(() => {
-    if (!processTaskResult || processTaskResult.state !== 'SUCCESS') return
-    // eslint-disable-next-line react-hooks/set-state-in-effect -- updating process list from polled task result; refactor tracked in #380 follow-up
-    setProcessPolling(false)
-    try {
-      type ProcessData = { name?: string; cmdline?: string[]; cpu_percent?: number; memory_percent?: number; mem_percent?: number; username?: string; status?: string }
-      const ret = (processTaskResult.result as { return?: [Record<string, Record<string, ProcessData>>] })?.return?.[0]
-      if (!ret) return
-      // Prefer the known minion_id key; fall back to first value for resilience
-      const minionData = (node?.minion_id && ret[node.minion_id])
-        ? ret[node.minion_id] as Record<string, ProcessData>
-        : Object.values(ret)[0] as Record<string, ProcessData>
-      if (!minionData) return
-      const list = Object.entries(minionData).map(([pid, p]: [string, ProcessData]) => ({
-        pid,
-        name: p.name ?? p.cmdline?.[0]?.split('/').pop() ?? pid,
-        cpu_percent: Number(p.cpu_percent ?? 0),
-        mem_percent: Number(p.memory_percent ?? p.mem_percent ?? 0),
-        username: p.username ?? '—',
-        status: p.status ?? 'running',
-      }))
-      setProcesses(list)
-    } catch { /* parse error — keep empty */ }
-  }, [processTaskResult])
+  const processes = processData?.processes ?? []
 
   const { data: serviceTaskResult } = useQuery({
     queryKey: ['service-task', servicesTaskId],
@@ -916,21 +892,6 @@ export function NodeDetail() {
       toast(e instanceof Error ? e.message : 'Failed to fetch services', 'error')
     } finally {
       setServicesLoading(false)
-    }
-  }
-
-  async function fetchProcesses() {
-    if (!nodeId) return
-    setProcessLoading(true)
-    try {
-      const resp = await api.get<{task_id: string}>(`/api/v1/nodes/${nodeId}/processes`)
-      setProcessTaskId(resp.task_id)
-      setProcessPolling(true)
-      toast('Process list queued')
-    } catch (e: unknown) {
-      toast(e instanceof Error ? e.message : 'Failed to fetch processes', 'error')
-    } finally {
-      setProcessLoading(false)
     }
   }
 
@@ -2545,7 +2506,19 @@ export function NodeDetail() {
       {tab === 'processes' && (
         <div className="bg-white border border-gray-200 rounded-xl p-5">
           <div className="flex items-center justify-between mb-4">
-            <h3 className="text-sm font-semibold text-gray-900">Processes</h3>
+            <div className="flex items-center gap-3">
+              <h3 className="text-sm font-semibold text-gray-900">Processes</h3>
+              {processData?.collected_at && (
+                <span className="text-xs text-gray-500">
+                  as of {new Date(processData.collected_at).toLocaleString('en-IN', {
+                    timeZone: 'Asia/Kolkata',
+                    day: '2-digit', month: 'short', year: 'numeric',
+                    hour: '2-digit', minute: '2-digit', second: '2-digit',
+                    hour12: false,
+                  })} IST
+                </span>
+              )}
+            </div>
             <div className="flex items-center gap-2">
               <select
                 value={processSort}
@@ -2557,11 +2530,16 @@ export function NodeDetail() {
                 <option value="name">Sort: Name</option>
               </select>
               <button
-                onClick={fetchProcesses}
-                disabled={processLoading || processPolling}
-                className="px-3 py-1.5 text-xs font-medium bg-white border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 disabled:opacity-50"
+                onClick={() => refetchProcesses()}
+                disabled={processFetching}
+                className="px-3 py-1.5 text-xs font-medium bg-white border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 disabled:opacity-50 flex items-center gap-1"
               >
-                {processLoading ? 'Loading…' : processPolling ? '⟳ Fetching…' : processes.length > 0 ? '↺ Refresh' : '↺ Load'}
+                {processFetching ? (
+                  <>
+                    <span className="w-3 h-3 border border-gray-400 border-t-transparent rounded-full animate-spin" />
+                    Refreshing…
+                  </>
+                ) : '↺ Refresh'}
               </button>
             </div>
           </div>
@@ -2575,38 +2553,46 @@ export function NodeDetail() {
                     <th className="text-left py-2.5 px-3 text-gray-500 font-medium">Name</th>
                     <th className="text-left py-2.5 px-3 text-gray-500 font-medium w-24">User</th>
                     <th className="text-right py-2.5 px-3 text-gray-500 font-medium w-16">CPU%</th>
-                    <th className="text-right py-2.5 px-3 text-gray-500 font-medium w-16">Mem%</th>
+                    <th className="text-right py-2.5 px-3 text-gray-500 font-medium w-20">Mem%</th>
+                    <th className="text-right py-2.5 px-3 text-gray-500 font-medium w-24">Mem (RSS)</th>
                     <th className="text-center py-2.5 px-3 text-gray-500 font-medium w-40">Actions</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-100">
                   {[...processes]
                     .sort((a, b) =>
-                      processSort === 'cpu' ? b.cpu_percent - a.cpu_percent :
-                      processSort === 'mem' ? b.mem_percent - a.mem_percent :
-                      a.name.localeCompare(b.name)
+                      processSort === 'name' ? a.name.localeCompare(b.name) :
+                      processSort === 'cpu' ? (b.cpu_pct ?? -1) - (a.cpu_pct ?? -1) :
+                      (b.mem_rss_bytes ?? -1) - (a.mem_rss_bytes ?? -1)
                     )
-                    .slice(0, 60)
                     .map(p => (
-                      <tr key={p.pid} className="hover:bg-gray-50">
+                      <tr key={p.pid} className={`hover:bg-gray-50 ${p.is_llm ? 'bg-indigo-50' : ''}`}>
                         <td className="py-2 px-3 font-mono text-gray-500">{p.pid}</td>
-                        <td className="py-2 px-3 font-medium text-gray-900 max-w-[200px] truncate" title={p.name}>{p.name}</td>
-                        <td className="py-2 px-3 text-gray-500 truncate max-w-[80px]">{p.username}</td>
-                        <td className={`py-2 px-3 text-right font-mono ${p.cpu_percent > 50 ? 'text-red-600 font-semibold' : p.cpu_percent > 20 ? 'text-amber-600' : 'text-gray-700'}`}>
-                          {p.cpu_percent.toFixed(1)}
+                        <td className="py-2 px-3 font-medium text-gray-900 max-w-[200px] truncate" title={p.cmdline ?? p.name}>
+                          {p.name}
+                          {p.is_llm && (
+                            <span className="ml-1.5 px-1.5 py-0.5 text-[10px] rounded bg-indigo-100 text-indigo-700 font-semibold">LLM</span>
+                          )}
                         </td>
-                        <td className={`py-2 px-3 text-right font-mono ${p.mem_percent > 20 ? 'text-red-600 font-semibold' : p.mem_percent > 5 ? 'text-amber-600' : 'text-gray-700'}`}>
-                          {p.mem_percent.toFixed(1)}
+                        <td className="py-2 px-3 text-gray-500 truncate max-w-[80px]">{p.username ?? '—'}</td>
+                        <td className={`py-2 px-3 text-right font-mono ${(p.cpu_pct ?? 0) > 50 ? 'text-red-600 font-semibold' : (p.cpu_pct ?? 0) > 20 ? 'text-amber-600' : 'text-gray-700'}`}>
+                          {(p.cpu_pct ?? 0).toFixed(1)}
+                        </td>
+                        <td className={`py-2 px-3 text-right font-mono ${(p.mem_pct ?? 0) > 20 ? 'text-red-600 font-semibold' : (p.mem_pct ?? 0) > 5 ? 'text-amber-600' : 'text-gray-700'}`}>
+                          {(p.mem_pct ?? 0).toFixed(1)}
+                        </td>
+                        <td className="py-2 px-3 text-right font-mono text-gray-600">
+                          {fmtBytes(p.mem_rss_bytes)}
                         </td>
                         <td className="py-2 px-3">
                           <div className="flex items-center justify-center gap-1">
-                            <button onClick={() => requestProcessAction(p.pid, 'process_stop')}
+                            <button onClick={() => requestProcessAction(String(p.pid), 'process_stop')}
                               className="px-2 py-0.5 text-xs bg-amber-50 border border-amber-200 text-amber-700 rounded hover:bg-amber-100"
                               title="Stop (SIGTERM) — requires email approval">Stop</button>
-                            <button onClick={() => requestProcessAction(p.pid, 'process_suspend')}
+                            <button onClick={() => requestProcessAction(String(p.pid), 'process_suspend')}
                               className="px-2 py-0.5 text-xs bg-gray-50 border border-gray-200 text-gray-700 rounded hover:bg-gray-100"
                               title="Suspend (SIGSTOP) — requires email approval">Suspend</button>
-                            <button onClick={() => requestProcessAction(p.pid, 'process_resume')}
+                            <button onClick={() => requestProcessAction(String(p.pid), 'process_resume')}
                               className="px-2 py-0.5 text-xs bg-emerald-50 border border-emerald-200 text-emerald-700 rounded hover:bg-emerald-100"
                               title="Resume (SIGCONT)">Resume</button>
                           </div>
@@ -2621,13 +2607,13 @@ export function NodeDetail() {
             </div>
           ) : (
             <div className="text-center py-10 text-gray-400">
-              {processPolling ? (
+              {processFetching ? (
                 <div className="space-y-2">
                   <div className="w-5 h-5 border-2 border-brand-500 border-t-transparent rounded-full animate-spin mx-auto" />
-                  <p className="text-sm">Fetching process list from node…</p>
+                  <p className="text-sm">Loading process list…</p>
                 </div>
               ) : (
-                <p className="text-sm">Click Load to fetch the process list via Salt.<br/>
+                <p className="text-sm">No process telemetry yet — the node collector reports every ~30s.<br/>
                   <span className="text-xs">Stop/Suspend require email approval. Kill (SIGKILL) is disabled.</span>
                 </p>
               )}
