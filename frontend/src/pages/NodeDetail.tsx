@@ -38,6 +38,20 @@ import type { Node } from '../types'
 import { LogPane } from '../lib/LogPane'
 import { bootstrapRefetchInterval } from '../lib/bootstrapRefetchInterval'
 
+// Mirror of PendingAction.PROTECTED_TARGETS (fleet_platform/models/pending_action.py).
+// Kept in sync by tests/unit/test_protected_targets_ui_629.py.
+const PROTECTED_TARGETS = new Set([
+  'salt-minion', 'salt-master', 'sshd', 'mdnsresponder', 'configd', 'powerd',
+  'securityd', 'trustd', 'opendirectoryd', 'syslogd', 'networkd', 'launchd',
+  'kernel_task', 'windowserver', 'exo',
+])
+function isProtectedTarget(name: string): boolean {
+  if (!name) return false
+  const n = name.trim().toLowerCase()
+  const bare = n.includes('.') ? n.split('.').pop()! : n
+  return PROTECTED_TARGETS.has(n) || PROTECTED_TARGETS.has(bare)
+}
+
 function isMacOSNode(node: Node): boolean {
   return !!(node.macos_version || node.xcode_version)
 }
@@ -908,7 +922,7 @@ export function NodeDetail() {
     }
   }
 
-  async function requestServiceAction(svcName: string, actionType: 'service_start' | 'service_stop' | 'service_restart' | 'service_disable') {
+  async function requestServiceAction(svcName: string, actionType: 'service_start' | 'service_stop' | 'service_restart' | 'service_disable' | 'service_enable') {
     if (!nodeId) return
     try {
       const resp = await api.post<{status: string; message: string}>(`/api/v1/nodes/${nodeId}/actions`, {
@@ -2459,7 +2473,9 @@ export function NodeDetail() {
               </thead>
               <tbody>
                 {serviceList.length > 0
-                  ? serviceList.map(svc => (
+                  ? serviceList.map(svc => {
+                      const prot = isProtectedTarget(svc.name)
+                      return (
                       <tr key={svc.name} className="border-b border-gray-100 last:border-0 hover:bg-gray-50">
                         <td className="py-2 px-3 text-gray-700 font-mono text-xs truncate max-w-[200px]">{svc.name}</td>
                         <td className="py-2 px-3 text-center">
@@ -2472,13 +2488,20 @@ export function NodeDetail() {
                             <button onClick={() => requestServiceAction(svc.name, 'service_restart')}
                               className="px-2 py-0.5 text-xs bg-white border border-gray-300 rounded hover:bg-gray-50">Restart</button>
                             <button onClick={() => requestServiceAction(svc.name, 'service_stop')}
-                              className="px-2 py-0.5 text-xs bg-white border border-red-200 text-red-600 rounded hover:bg-red-50">Stop</button>
+                              disabled={prot}
+                              title={prot ? 'Protected service — cannot be controlled remotely' : undefined}
+                              className="px-2 py-0.5 text-xs bg-white border border-red-200 text-red-600 rounded hover:bg-red-50 disabled:opacity-40 disabled:cursor-not-allowed">Stop</button>
                             <button onClick={() => requestServiceAction(svc.name, 'service_disable')}
-                              className="px-2 py-0.5 text-xs bg-white border border-red-200 text-red-600 rounded hover:bg-red-50">Disable</button>
+                              disabled={prot}
+                              title={prot ? 'Protected service — cannot be controlled remotely' : undefined}
+                              className="px-2 py-0.5 text-xs bg-white border border-red-200 text-red-600 rounded hover:bg-red-50 disabled:opacity-40 disabled:cursor-not-allowed">Disable</button>
+                            <button onClick={() => requestServiceAction(svc.name, 'service_enable')}
+                              className="px-2 py-0.5 text-xs bg-white border border-emerald-200 text-emerald-700 rounded hover:bg-emerald-50">Enable</button>
                           </div>
                         </td>
                       </tr>
-                    ))
+                      )
+                    })
                   : (
                       <tr>
                         <td colSpan={3} className="py-8 text-center text-sm text-gray-600">
@@ -2565,7 +2588,9 @@ export function NodeDetail() {
                       processSort === 'cpu' ? (b.cpu_pct ?? -1) - (a.cpu_pct ?? -1) :
                       (b.mem_rss_bytes ?? -1) - (a.mem_rss_bytes ?? -1)
                     )
-                    .map(p => (
+                    .map(p => {
+                      const prot = isProtectedTarget(p.name)
+                      return (
                       <tr key={p.pid} className={`hover:bg-gray-50 ${p.is_llm ? 'bg-indigo-50' : ''}`}>
                         <td className="py-2 px-3 font-mono text-gray-500">{p.pid}</td>
                         <td className="py-2 px-3 font-medium text-gray-900 max-w-[200px] truncate" title={p.cmdline ?? p.name}>
@@ -2587,18 +2612,21 @@ export function NodeDetail() {
                         <td className="py-2 px-3">
                           <div className="flex items-center justify-center gap-1">
                             <button onClick={() => requestProcessAction(String(p.pid), p.name, 'process_stop')}
-                              className="px-2 py-0.5 text-xs bg-amber-50 border border-amber-200 text-amber-700 rounded hover:bg-amber-100"
-                              title="Stop (SIGTERM) — requires email approval">Stop</button>
+                              disabled={prot}
+                              title={prot ? 'Protected service — cannot be controlled remotely' : 'Stop (SIGTERM) — requires email approval'}
+                              className="px-2 py-0.5 text-xs bg-amber-50 border border-amber-200 text-amber-700 rounded hover:bg-amber-100 disabled:opacity-40 disabled:cursor-not-allowed">Stop</button>
                             <button onClick={() => requestProcessAction(String(p.pid), p.name, 'process_suspend')}
-                              className="px-2 py-0.5 text-xs bg-gray-50 border border-gray-200 text-gray-700 rounded hover:bg-gray-100"
-                              title="Suspend (SIGSTOP) — requires email approval">Suspend</button>
+                              disabled={prot}
+                              title={prot ? 'Protected service — cannot be controlled remotely' : 'Suspend (SIGSTOP) — requires email approval'}
+                              className="px-2 py-0.5 text-xs bg-gray-50 border border-gray-200 text-gray-700 rounded hover:bg-gray-100 disabled:opacity-40 disabled:cursor-not-allowed">Suspend</button>
                             <button onClick={() => requestProcessAction(String(p.pid), p.name, 'process_resume')}
                               className="px-2 py-0.5 text-xs bg-emerald-50 border border-emerald-200 text-emerald-700 rounded hover:bg-emerald-100"
                               title="Resume (SIGCONT)">Resume</button>
                           </div>
                         </td>
                       </tr>
-                    ))}
+                      )
+                    })}
                 </tbody>
               </table>
               <div className="px-3 py-2 bg-gray-50 border-t border-gray-100 text-xs text-gray-400">
