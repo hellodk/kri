@@ -604,9 +604,15 @@ export function SaltMastersTab() {
 
   const testMutation = useMutation({
     mutationFn: (id: string) => saltMastersApi.test(id),
-    onSuccess: () => {
+    onSuccess: (data) => {
       qc.invalidateQueries({ queryKey: ['salt-masters'] })
-      toast('Connection test completed', 'success')
+      if (data.status === 'healthy') {
+        toast('Connection test passed — all checks healthy', 'success')
+      } else {
+        const firstFail = data.checks.find((c) => c.status === 'fail')
+        const detail = firstFail ? firstFail.detail : 'check results below'
+        toast(`Connection test failed: ${detail}`, 'error')
+      }
     },
     onError: (err: Error) => {
       toast(`Test failed: ${err.message}`, 'error')

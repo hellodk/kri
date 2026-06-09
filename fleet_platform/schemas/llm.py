@@ -26,6 +26,7 @@ class LLMEndpointCreate(BaseModel):
     enabled: bool = True
     model_context_length: int | None = None
     model_capabilities: list[str] | None = None
+    tool_mode: str = "json"
 
 
 class LLMEndpointUpdate(BaseModel):
@@ -39,6 +40,7 @@ class LLMEndpointUpdate(BaseModel):
     enabled: bool | None = None
     model_context_length: int | None = None
     model_capabilities: list[str] | None = None
+    tool_mode: str | None = None
 
 
 class LLMEndpointResponse(BaseModel):
@@ -55,6 +57,7 @@ class LLMEndpointResponse(BaseModel):
     updated_at: datetime
     model_context_length: int | None = None
     model_capabilities: list[str] | None = None
+    tool_mode: str = "json"
 
     model_config = {"from_attributes": True}
 
