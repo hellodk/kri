@@ -10,6 +10,17 @@ the pure classifier (is_llm_process) is importable without psutil present.
 
 Usage (invoked by process_report.sls):
     INGEST_URL=https://... NODE_TOKEN=... MINION_ID=<id> python3 process_collector.py
+
+TLS verification
+----------------
+By default the ingest POST verifies the server's TLS certificate using the
+system CA bundle.  When the Fleet Platform is served behind Traefik with a
+self-signed or internal certificate, verification must be disabled:
+
+    INGEST_TLS_VERIFY=false python3 process_collector.py ...
+
+Accepted falsy values: ``0``, ``false``, ``no`` (case-insensitive).
+Any other value (or the env var being absent) keeps verification enabled.
 """
 
 import json
@@ -171,6 +182,30 @@ def collect(top_n: int = 200) -> list[dict]:
 
 
 # ---------------------------------------------------------------------------
+# TLS helpers
+# ---------------------------------------------------------------------------
+
+
+def _ssl_context(verify: bool):
+    """Return an ssl.SSLContext appropriate for the requested verification mode.
+
+    Args:
+        verify: when True return None so urllib uses its default (system CA
+                bundle, full certificate verification).  When False return an
+                unverified context that accepts self-signed / internal certs.
+
+    Returns:
+        None (verify=True) or an ssl.SSLContext with CERT_NONE (verify=False).
+    """
+    if verify:
+        return None
+    import ssl  # noqa: PLC0415 — lazy import, matches psutil pattern
+
+    ctx = ssl._create_unverified_context()  # noqa: SLF001
+    return ctx
+
+
+# ---------------------------------------------------------------------------
 # Poster
 # ---------------------------------------------------------------------------
 
@@ -212,7 +247,13 @@ def post(
         method="POST",
     )
 
-    resp = urllib.request.urlopen(req, timeout=30)
+    verify = os.environ.get("INGEST_TLS_VERIFY", "true").lower() not in (
+        "0",
+        "false",
+        "no",
+    )
+    ctx = _ssl_context(verify)
+    resp = urllib.request.urlopen(req, timeout=30, context=ctx)
     return resp.status
 
 

@@ -205,28 +205,6 @@ async def request_node_action(
     )
 
 
-@router.get("/{node_id}/processes")
-async def list_processes(
-    node_id: uuid.UUID,
-    db: AsyncSession = Depends(get_db),
-    _claims: dict = Depends(require_role("operator", "admin")),
-):
-    """List running processes on a node via Salt ps.list_processes."""
-    from sqlalchemy import select as _sel
-
-    node_result = await db.execute(_sel(Node).where(Node.id == node_id))
-    node = node_result.scalar_one_or_none()
-    if not node:
-        raise HTTPException(status_code=404, detail="Node not found")
-    from fleet_platform.workers.salt_tasks import run_salt_cmd
-
-    task = run_salt_cmd.delay(
-        function="ps.list_processes",
-        target_minions=[node.minion_id],
-        args=[],
-    )
-    return {"task_id": task.id, "minion_id": node.minion_id}
-
 
 @router.get("/{node_id}/services")
 async def list_services(
