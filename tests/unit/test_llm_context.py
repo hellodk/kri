@@ -179,8 +179,8 @@ def test_grounding_rules_never_truncated():
         playbooks_dir="/playbooks",
         node_records=[],
     )
-    # Grounding rules must always be present — even for small contexts
-    assert "ONLY" in ctx
+    # Grounding rules must always be present — even for small contexts (#637: "ONLY" removed from rules)
+    assert "authoritative" in ctx.lower()
     assert "cannot execute" in ctx.lower()
 
 

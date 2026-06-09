@@ -137,5 +137,12 @@ celery_app.conf.update(
             "schedule": 30,  # every 30 s — keeps UI health cache fresh (#519)
             "options": {"queue": "maintenance"},
         },
+        # #640: reap pending-actions stuck in 'executing' (callback lost on the
+        # unmonitored 'celery' queue) and expire stale 'pending' rows.
+        "reap-stuck-pending-actions": {
+            "task": "fleet_platform.workers.maintenance.reap_stuck_pending_actions",
+            "schedule": 300,  # every 5 min
+            "options": {"queue": "maintenance"},
+        },
     },
 )

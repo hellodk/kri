@@ -17,6 +17,7 @@ from fleet_platform.core.audit import audit
 from fleet_platform.core.auth import get_current_user, hash_password, require_role
 from fleet_platform.models.facts import NodeFact
 from fleet_platform.models.node import Node, Tag
+from fleet_platform.models.process_stat import NodeProcessStat
 from fleet_platform.schemas.common import PaginatedResponse
 from fleet_platform.schemas.fleet import (
     NodeCreateRequest,
@@ -25,6 +26,7 @@ from fleet_platform.schemas.fleet import (
     NodeUpdateRequest,
 )
 from fleet_platform.schemas.node import NodeRegisterRequest, NodeRegisterResponse
+from fleet_platform.schemas.process_stat import ProcessStatOut
 from fleet_platform.schemas.tag import TagCreate, TagResponse
 from fleet_platform.services.platform_settings_svc import encrypt_secret
 
@@ -363,6 +365,48 @@ async def get_node_packages(
         for name, version in (pkgs_raw.items() if isinstance(pkgs_raw, dict) else [])
     ]
     return {"items": packages, "source": "grains", "collected_at": fact.collected_at}
+
+
+@router.get("/{node_id}/process_stats")
+async def get_node_process_stats(
+    node_id: uuid.UUID,
+    sort: str = Query("mem_rss_bytes", pattern="^(mem_rss_bytes|cpu_pct)$"),
+    limit: int = Query(100, ge=1, le=250),
+    db: AsyncSession = Depends(get_db),
+    _: dict = Depends(require_role("viewer", "operator", "admin")),
+):
+    """Return the latest per-process snapshot for a node, sorted by pressure."""
+    node = (await db.execute(select(Node).where(Node.id == node_id))).scalar_one_or_none()
+    if node is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Node not found")
+
+    latest = (
+        await db.execute(select(func.max(NodeProcessStat.collected_at)).where(NodeProcessStat.node_id == node_id))
+    ).scalar_one_or_none()
+
+    if latest is None:
+        return {"node_id": str(node_id), "collected_at": None, "count": 0, "processes": []}
+
+    sort_col = {"mem_rss_bytes": NodeProcessStat.mem_rss_bytes, "cpu_pct": NodeProcessStat.cpu_pct}[sort]
+    rows = (
+        (
+            await db.execute(
+                select(NodeProcessStat)
+                .where(NodeProcessStat.node_id == node_id, NodeProcessStat.collected_at == latest)
+                .order_by(sort_col.desc().nullslast())
+                .limit(limit)
+            )
+        )
+        .scalars()
+        .all()
+    )
+
+    return {
+        "node_id": str(node_id),
+        "collected_at": latest,
+        "count": len(rows),
+        "processes": [ProcessStatOut.model_validate(r) for r in rows],
+    }
 
 
 @router.post("/{node_id}/tags", response_model=TagResponse, status_code=201)
