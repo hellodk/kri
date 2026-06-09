@@ -19,7 +19,15 @@ _PROBE_TIMEOUT = 5.0
 async def discover_models(url: str, provider: str) -> list[dict]:
     """Legacy: return model list without health info. Used by get_models() helper."""
     results = await discover_models_with_health(url, provider, api_key=None)
-    return [{"id": m["id"], "name": m["name"], "context_length": 0, "capabilities": []} for m in results]
+    return [
+        {
+            "id": m["id"],
+            "name": m["name"],
+            "context_length": m.get("context_length", 0),
+            "capabilities": m.get("capabilities", []),
+        }
+        for m in results
+    ]
 
 
 async def _probe_model(base_url: str, model_id: str, api_key: str | None) -> tuple[bool, int | None]:
@@ -67,8 +75,16 @@ async def discover_models_with_health(url: str, provider: str, api_key: str | No
                 resp = await client.get(f"{base}/v1/models")
                 resp.raise_for_status()
                 data = resp.json()
-                model_ids = [m["id"] for m in data.get("data", [])]
-                model_names = {m["id"]: m.get("name", m["id"]) for m in data.get("data", [])}
+                raw_models = data.get("data", [])
+                model_ids = [m["id"] for m in raw_models]
+                model_meta = {
+                    m["id"]: {
+                        "name": m.get("name", m["id"]),
+                        "context_length": m.get("context_length", 0),
+                        "capabilities": m.get("capabilities", []),
+                    }
+                    for m in raw_models
+                }
 
         # probe all non-Ollama models concurrently
         probes = await asyncio.gather(
@@ -79,12 +95,15 @@ async def discover_models_with_health(url: str, provider: str, api_key: str | No
         results = []
         for mid, (healthy, latency_ms) in zip(model_ids, probes):
             _cache.set_health(url, provider, mid, healthy=healthy, latency_ms=latency_ms)
+            meta = model_meta[mid]
             results.append(
                 {
                     "id": mid,
-                    "name": model_names[mid],
+                    "name": meta["name"],
                     "healthy": healthy,
                     "latency_ms": latency_ms,
+                    "context_length": meta["context_length"],
+                    "capabilities": meta["capabilities"],
                 }
             )
         return results

@@ -111,7 +111,7 @@ class PendingActionResponse(BaseModel):
 @router.post("/{node_id}/actions", response_model=PendingActionResponse, status_code=202)
 @limiter.limit("5/minute")
 async def request_node_action(
-    _request: Request,
+    request: Request,
     node_id: uuid.UUID,
     payload: NodeActionRequest,
     db: AsyncSession = Depends(get_db),
@@ -503,7 +503,7 @@ async def get_node_metrics(
 
 @actions_router.get("/{token}/approve")
 @limiter.limit("20/minute")
-async def approve_action(_request: Request, token: str, db: AsyncSession = Depends(get_db)):
+async def approve_action(request: Request, token: str, db: AsyncSession = Depends(get_db)):
     """Approve a pending destructive action via the emailed approval link.
 
     Security: no session auth required — the token (secrets.token_urlsafe(32),
@@ -559,7 +559,7 @@ async def approve_action(_request: Request, token: str, db: AsyncSession = Depen
 
 @actions_router.get("/{token}/reject")
 @limiter.limit("20/minute")
-async def reject_action(_request: Request, token: str, db: AsyncSession = Depends(get_db)):
+async def reject_action(request: Request, token: str, db: AsyncSession = Depends(get_db)):
     """Reject a pending destructive action via the emailed rejection link."""
     action = await pending_action_svc.get_by_token(db, token)
     if not action:
