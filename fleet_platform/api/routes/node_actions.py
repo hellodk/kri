@@ -83,6 +83,7 @@ def _build_salt_invocation(action_type: str, params: dict) -> tuple[str, list[st
             "service_disable": "service.disable",
             "service_start": "service.start",
             "service_restart": "service.restart",
+            "service_enable": "service.enable",
         }.get(action_type)
         if not fn:
             raise HTTPException(status_code=400, detail=f"Unsupported service action {action_type!r}")
@@ -145,14 +146,18 @@ async def request_node_action(
         )
 
     if not PendingAction.is_destructive(payload.action_type):
-        # Non-destructive: execute immediately (placeholder — actual Salt call TBD)
+        # Non-destructive (start/restart/enable/resume): execute immediately, no approval.
+        function, args = _build_salt_invocation(payload.action_type, payload.params)
+        from fleet_platform.workers.salt_tasks import run_salt_cmd
+
+        run_salt_cmd.delay(function=function, target_minions=[node.minion_id], args=args)
         await audit(
             db,
             actor=claims["sub"],
-            action=payload.action_type,
+            action=f"{payload.action_type}_executed",
             resource_type="node",
             resource_id=node_id,
-            new_value=payload.params,
+            new_value={"function": function, "args": args, "params": payload.params},
         )
         return PendingActionResponse(
             id=uuid.uuid4(),
@@ -160,7 +165,7 @@ async def request_node_action(
             action_type=payload.action_type,
             status="executed",
             expires_at=datetime.now(UTC),
-            message=f"Action '{payload.action_type}' queued for execution.",
+            message=f"Action '{payload.action_type}' dispatched.",
         )
 
     action = await pending_action_svc.create_pending_action(
