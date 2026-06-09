@@ -10,6 +10,7 @@ from fleet_platform.models.ansible_job import AnsibleJob
 from fleet_platform.models.bootstrap_run import BootstrapRun
 from fleet_platform.models.master_provision_run import MasterProvisionRun
 from fleet_platform.models.node import Node
+from fleet_platform.models.pending_action import PendingAction
 from fleet_platform.models.platform_setting import PlatformSetting
 from fleet_platform.models.salt_master import SaltMaster
 from fleet_platform.services.platform_settings_svc import (
@@ -287,6 +288,53 @@ def poll_salt_masters() -> dict:
         pass
 
     return {"polled": polled, "skipped": skipped}
+
+
+# #640: actions are stuck 'executing' when finalize_node_action was routed to the
+# unmonitored 'celery' queue.  This reaper catches any that slipped through (e.g.
+# during the window before the deploy, or if the callback was lost for any reason).
+_EXECUTING_ORPHAN_MINUTES = 10  # action still 'executing' after 10 min → failed
+
+
+@celery_app.task(
+    name="fleet_platform.workers.maintenance.reap_stuck_pending_actions",
+    queue="maintenance",
+)
+def reap_stuck_pending_actions() -> dict:
+    """Reap PendingAction rows stuck in transient states (#640).
+
+    Two passes:
+    1. 'executing' rows whose executed_at is older than _EXECUTING_ORPHAN_MINUTES
+       are marked 'failed' — the finalize callback never arrived (or was lost on
+       the unmonitored queue before the fix was deployed).
+    2. 'pending' rows whose expires_at has passed are marked 'expired' — mirrors
+       the async expire_old() in pending_action_svc but runs synchronously on the
+       beat worker so it executes without a live API request.
+    """
+    now = datetime.now(UTC)
+    executing_cutoff = now - timedelta(minutes=_EXECUTING_ORPHAN_MINUTES)
+
+    with get_sync_db() as db:
+        reaped = db.execute(
+            update(PendingAction)
+            .where(PendingAction.status == "executing")
+            .where(PendingAction.executed_at < executing_cutoff)
+            .values(status="failed")
+        )
+
+        expired = db.execute(
+            update(PendingAction)
+            .where(PendingAction.status == "pending")
+            .where(PendingAction.expires_at < now)
+            .values(status="expired")
+        )
+
+        db.commit()
+
+    return {
+        "reaped_executing": reaped.rowcount,  # type: ignore[attr-defined]
+        "expired_pending": expired.rowcount,  # type: ignore[attr-defined]
+    }
 
 
 _PROVISION_ORPHAN_MINUTES = 90  # provisions running > 90 min are considered orphaned
