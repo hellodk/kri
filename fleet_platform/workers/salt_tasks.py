@@ -239,10 +239,17 @@ def _status_from_salt_result(result) -> str:
     return "executed"
 
 
-@celery_app.task(name="finalize_node_action")
+@celery_app.task(name="finalize_node_action", queue="maintenance")
 def finalize_node_action(salt_result, action_id: str) -> dict:
     """Celery callback (link) for run_salt_cmd: record the real execution outcome
-    on the PendingAction. Receives run_salt_cmd's return value as the first arg."""
+    on the PendingAction. Receives run_salt_cmd's return value as the first arg.
+
+    Routed to the 'maintenance' queue so the worker (--queues default,maintenance,…)
+    actually consumes it.  Before #640 this used the default 'celery' queue which
+    no worker consumed — every action was stuck in 'executing' forever.
+
+    Guard: only finalises an action that is still 'executing'.  A later status
+    (e.g. reaped to 'failed') must not be clobbered by a stale callback."""
     import uuid as _uuid
     from datetime import UTC, datetime
 
@@ -254,6 +261,8 @@ def finalize_node_action(salt_result, action_id: str) -> dict:
         action = db.get(PendingAction, _uuid.UUID(action_id))
         if action is None:
             return {"status": "not_found", "action_id": action_id}
+        if action.status != "executing":
+            return {"status": "noop", "current": action.status, "action_id": action_id}
         action.status = new_status
         action.executed_at = datetime.now(UTC)
         db.commit()
