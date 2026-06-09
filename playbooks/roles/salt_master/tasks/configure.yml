@@ -27,7 +27,9 @@
     group: wheel
     mode: "0644"
   become: true
-  notify: Restart salt-master
+  notify:
+    - Restart salt-master
+    - Restart salt-api
 
 - name: Write salt-api configuration
   template:
