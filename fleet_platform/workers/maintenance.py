@@ -134,7 +134,7 @@ def cleanup_old_llm_logs() -> dict:
     with get_sync_db() as db:
         result = db.execute(delete(LLMQueryLog).where(LLMQueryLog.created_at < cutoff))
         db.commit()
-        return {"deleted": result.rowcount or 0}
+        return {"deleted": result.rowcount or 0}  # type: ignore[attr-defined]
 
 
 # #352: per-job orphan buffer — a running job is considered orphaned when
