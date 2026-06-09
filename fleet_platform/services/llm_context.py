@@ -34,11 +34,15 @@ INTENT_ADDENDUM: dict[str, str] = {
 }
 
 _GROUNDING_RULES = (
-    "- Answer ONLY from the Fleet Snapshot and Node Records below. "
-    "If a fact is not present, state that explicitly and stop — do not speculate.\n"
-    "- You cannot execute commands, scan nodes, or perform live actions. "
-    "Never claim to have done so.\n"
-    "- When data is absent, name the missing data and tell the operator where to find it in the kri UI.\n"
+    "- The Fleet Snapshot and Node Records below are the LIVE, AUTHORITATIVE inventory — "
+    "they are the source of truth. Answer fleet questions directly from them.\n"
+    "- A node's name is its `hostname`. If a hostname looks like an IP address or a short id, "
+    "that IS the node's current name (no friendly hostname was set) — report it directly; "
+    "do NOT say the name is unknown or tell the operator to look elsewhere.\n"
+    "- Never tell the operator to 'check the kri UI' for data that is already in this context.\n"
+    "- Only state that something is unavailable if it is genuinely not present in this context; "
+    "then name exactly what is missing — do not speculate.\n"
+    "- You cannot execute commands, scan nodes, or perform live actions. Never claim to have done so.\n"
 )
 
 
@@ -99,6 +103,7 @@ def build_static_context(
 
     if node_records:
         parts.append("\n## Node Records\n")
+        parts.append("These are the authoritative node records (the 'hostname' column is the node's name):\n")
         parts.append("| hostname | minion_id | ip | status | last_seen | group |\n")
         parts.append("|---|---|---|---|---|---|\n")
         for n in node_records:
