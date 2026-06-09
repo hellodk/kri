@@ -15,6 +15,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from fleet_platform.api.deps import get_db
 from fleet_platform.api.limiter import limiter
 from fleet_platform.core.config import settings
+from fleet_platform.core.redaction import redact_cmdline
 from fleet_platform.models.execution import ExecutionJob, ExecutionResult
 from fleet_platform.models.facts import NodeFact
 from fleet_platform.models.node import Node, Tag
@@ -425,15 +426,11 @@ async def ingest_process_stats(
             len(payload.processes),
         )
 
-    rows = [
-        NodeProcessStat(
-            node_id=node.id,
-            minion_id=payload.minion_id,
-            collected_at=ts,
-            **p.model_dump(),
-        )
-        for p in procs
-    ]
+    rows = []
+    for p in procs:
+        data = p.model_dump()
+        data["cmdline"] = redact_cmdline(data.get("cmdline"))
+        rows.append(NodeProcessStat(node_id=node.id, minion_id=payload.minion_id, collected_at=ts, **data))
     db.add_all(rows)
     await db.commit()
     return {"status": "ok", "rows": len(rows), "dropped": dropped}
