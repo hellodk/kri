@@ -58,9 +58,15 @@ def _format_last_seen(last_seen_at) -> str:
     return f"{delta_s // 86400}d ago"
 
 
-def _sanitize_cell(value: str) -> str:
-    """Strip Markdown table-breaking characters from node-controlled strings."""
-    return value.replace("|", "\\|").replace("\n", " ").replace("\r", "")
+def _sanitize_cell(value: object) -> str:
+    """Strip Markdown table-breaking characters from node-controlled values.
+
+    Coerces non-str values (IPv4Address, datetime, int, None) to str first —
+    a node `ip` arrives as an ipaddress.IPv4Address, and calling .replace() on it
+    raised AttributeError, 500-ing every AI chat query in build_fleet_context (#633).
+    """
+    text = str(value)
+    return text.replace("|", "\\|").replace("\n", " ").replace("\r", "")
 
 
 def estimate_tokens(text: str) -> int:
