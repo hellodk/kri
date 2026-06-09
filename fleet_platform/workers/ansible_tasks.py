@@ -2,6 +2,7 @@
 """Celery tasks for Ansible-based node bootstrap."""
 
 import logging
+import os
 import re
 import secrets
 import subprocess
@@ -826,27 +827,53 @@ _MASTER_PLAYBOOKS: dict[str, str] = {
 _DEFAULT_OS_FAMILY = "Linux"
 
 
-def _detect_os_family(ssh_host: str, ssh_user: str, ssh_args_extra: list[str]) -> str | None:
+def _detect_os_family(
+    ssh_host: str, ssh_user: str, ssh_args_extra: list[str], ssh_password: str | None = None
+) -> str | None:
     """Return 'Darwin' or 'Linux' by running `uname -s` over SSH.
 
     Returns None when the host is unreachable or the command fails.
     ``ssh_args_extra`` is a flat list of extra SSH option tokens (e.g.
     ['-i', '/path/key', '-o', 'StrictHostKeyChecking=accept-new']).
+    When ``ssh_password`` is provided and no key is in ssh_args_extra, uses
+    sshpass so password auth works without an interactive prompt.
     """
-    cmd = [
-        "ssh",
-        "-F",
-        "/dev/null",
-        "-o",
-        f"ConnectTimeout={_SSH_OS_DETECT_TIMEOUT}",
-        "-o",
-        "BatchMode=yes",
-        *ssh_args_extra,
-        f"{ssh_user}@{ssh_host}",
-        "uname -s",
-    ]
+    using_password = ssh_password and not any(a == "-i" for a in ssh_args_extra)
+
+    if using_password:
+        # sshpass + ssh without BatchMode so password auth is allowed
+        cmd = [
+            "sshpass",
+            "-e",
+            "ssh",
+            "-F",
+            "/dev/null",
+            "-o",
+            f"ConnectTimeout={_SSH_OS_DETECT_TIMEOUT}",
+            "-o",
+            "NumberOfPasswordPrompts=1",
+            *ssh_args_extra,
+            f"{ssh_user}@{ssh_host}",
+            "uname -s",
+        ]
+        env: dict[str, str] | None = {**os.environ, "SSHPASS": ssh_password or ""}
+    else:
+        cmd = [
+            "ssh",
+            "-F",
+            "/dev/null",
+            "-o",
+            f"ConnectTimeout={_SSH_OS_DETECT_TIMEOUT}",
+            "-o",
+            "BatchMode=yes",
+            *ssh_args_extra,
+            f"{ssh_user}@{ssh_host}",
+            "uname -s",
+        ]
+        env = None
+
     try:
-        result = subprocess.run(cmd, capture_output=True, text=True, timeout=_SSH_OS_DETECT_TIMEOUT + 5)
+        result = subprocess.run(cmd, capture_output=True, text=True, timeout=_SSH_OS_DETECT_TIMEOUT + 5, env=env)
         if result.returncode == 0:
             return result.stdout.strip()
         logger.warning(
@@ -981,7 +1008,7 @@ def provision_master(self, salt_master_id: str, action: str = "install") -> dict
             if key_file_path:
                 _detect_extra += ["-i", key_file_path]
 
-            uname_output = _detect_os_family(ssh_host, ssh_user, _detect_extra)
+            uname_output = _detect_os_family(ssh_host, ssh_user, _detect_extra, ssh_password=ssh_password)
             if uname_output is None:
                 # Host unreachable — fail immediately without running playbook
                 _err = (

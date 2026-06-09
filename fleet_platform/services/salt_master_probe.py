@@ -115,7 +115,7 @@ def _check_salt_api_auth(
         payload: list[dict[str, Any]] = [
             {
                 "client": "runner",
-                "fun": "test.ping",
+                "fun": "manage.up",
                 "username": api_user,
                 "password": api_password,
                 "eauth": api_eauth,
@@ -179,7 +179,7 @@ def _check_key_store(
     try:
         payload: list[dict[str, Any]] = [
             {
-                "client": "runner",
+                "client": "wheel",
                 "fun": "key.list_all",
                 "username": api_user,
                 "password": api_password,
