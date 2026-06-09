@@ -28,6 +28,7 @@ from fleet_platform.metrics import (
     nodes_offline,
     nodes_online,
     nodes_total,
+    pending_action_queue_depth,
 )
 
 logger = logging.getLogger(__name__)
@@ -134,6 +135,31 @@ def refresh_beat_heartbeat_gauge() -> None:
         logger.debug("refresh_beat_heartbeat_gauge: Redis read failed: %s", exc)
 
 
+def refresh_pending_action_queue_depth_gauge() -> None:
+    """Query DB for pending/executing action count and update kri_pending_action_queue_depth.
+
+    Uses a short-lived synchronous DB session.  Errors are swallowed — /metrics must
+    never return HTTP 500.
+
+    Issue #661 / audit #639.
+    """
+    try:
+        from sqlalchemy import func, select
+
+        from fleet_platform.db.session import get_sync_db
+        from fleet_platform.models.pending_action import PendingAction
+
+        with get_sync_db() as db:
+            n = db.execute(
+                select(func.count())
+                .select_from(PendingAction)
+                .where(PendingAction.status.in_(["pending", "executing"]))
+            ).scalar_one()
+        pending_action_queue_depth.set(n)
+    except Exception as exc:  # noqa: BLE001
+        logger.debug("refresh_pending_action_queue_depth_gauge failed: %s", exc)
+
+
 def refresh_all_gauges() -> None:
     """Convenience wrapper — refresh every gauge that needs a scrape-time update.
 
@@ -143,3 +169,4 @@ def refresh_all_gauges() -> None:
     refresh_ssh_reachability_gauge()
     refresh_node_count_gauges()
     refresh_beat_heartbeat_gauge()
+    refresh_pending_action_queue_depth_gauge()

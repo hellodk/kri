@@ -14,6 +14,7 @@ from fleet_platform.api.deps import get_db
 from fleet_platform.api.limiter import limiter
 from fleet_platform.core.audit import audit
 from fleet_platform.core.auth import require_role
+from fleet_platform.metrics import node_action_total
 from fleet_platform.models.node import Node
 from fleet_platform.models.pending_action import PendingAction
 from fleet_platform.services import pending_action_svc
@@ -151,6 +152,8 @@ async def request_node_action(
         from fleet_platform.workers.salt_tasks import run_salt_cmd
 
         run_salt_cmd.delay(function=function, target_minions=[node.minion_id], args=args)
+        node_action_total.labels(action_type=payload.action_type, status="requested").inc()
+        node_action_total.labels(action_type=payload.action_type, status="executed").inc()
         await audit(
             db,
             actor=claims["sub"],
@@ -175,6 +178,7 @@ async def request_node_action(
         params=payload.params,
         requested_by=claims["sub"],
     )
+    node_action_total.labels(action_type=payload.action_type, status="requested").inc()
 
     # Send approval email (non-blocking — failure must not block the response)
     try:
@@ -579,6 +583,7 @@ async def approve_action(request: Request, token: str, db: AsyncSession = Depend
             kwargs={"function": function, "target_minions": [node.minion_id], "args": args},
             link=finalize_node_action.s(str(action.id)),
         )
+        node_action_total.labels(action_type=action.action_type, status="approved").inc()
         action.status = "executing"  # finalize_node_action sets executed/failed on completion
         await db.commit()
         await audit(
@@ -604,6 +609,7 @@ async def reject_action(request: Request, token: str, db: AsyncSession = Depends
     if not action:
         raise HTTPException(status_code=404, detail="Action not found")
     action = await pending_action_svc.reject(db, action)
+    node_action_total.labels(action_type=action.action_type, status="rejected").inc()
     await audit(
         db,
         actor="approval-link",

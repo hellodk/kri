@@ -113,3 +113,57 @@ spec:
               the last 10 minutes. Current p99: {{ $value | humanizeDuration }}.
               Check for slow DB queries, Salt timeouts, or CPU/memory pressure on
               the API pod.
+
+    - name: kri.node_actions
+      interval: 1m
+      rules:
+        - alert: KriApprovalQueueDeep
+          expr: kri_pending_action_queue_depth > 10
+          for: 10m
+          labels:
+            severity: warning
+          annotations:
+            summary: "kri node action approval queue depth > 10"
+            description: >
+              More than 10 node actions are waiting for approval
+              (kri_pending_action_queue_depth). Admin is not approving queued
+              node actions in a timely manner. Review pending actions at
+              /nodes/actions.
+
+        - alert: KriNodeActionFailureRateHigh
+          expr: sum(rate(kri_node_action_total{status="failed"}[10m])) > 0.2
+          for: 10m
+          labels:
+            severity: warning
+          annotations:
+            summary: "kri node action failure rate > 0.2/s"
+            description: >
+              The rate of failed node actions (kri_node_action_total{status="failed"})
+              has exceeded 0.2 per second over the last 10 minutes.
+              Current rate: {{ $value | humanize }}. Check Salt connectivity and
+              node reachability.
+
+        - alert: KriProcessStatsIngestDrops
+          expr: rate(kri_process_stats_rows_dropped_total[10m]) > 0
+          for: 15m
+          labels:
+            severity: warning
+          annotations:
+            summary: "kri process-stats telemetry rows are being dropped"
+            description: >
+              kri_process_stats_rows_dropped_total is increasing: per-process
+              telemetry is being dropped by the payload cap. Increase the cap
+              or reduce per-node process report frequency to prevent data loss.
+
+        - alert: KriSaltDispatchErrors
+          expr: sum(rate(kri_salt_dispatch_total{outcome="error"}[10m])) > 0.1
+          for: 10m
+          labels:
+            severity: warning
+          annotations:
+            summary: "kri Salt dispatch error rate > 0.1/s"
+            description: >
+              The kri Salt dispatch error rate (kri_salt_dispatch_total{outcome="error"})
+              has exceeded 0.1 per second over the last 10 minutes.
+              Current rate: {{ $value | humanize }}. Check salt-api connectivity,
+              PAM authentication, and Salt master logs.
