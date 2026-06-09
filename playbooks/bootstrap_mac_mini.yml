@@ -249,11 +249,11 @@
           master_type: failover
           master_alive_interval: 60
           master_tries: -1
-          master_shuffle: True
+          random_master: True
           id: {{ minion_id }}
           log_level: info
           log_file: /var/log/salt/minion
-          encryption_algorithm: oaep
+          encryption_algorithm: OAEP-SHA1
       become: true
 
     # Write the master's public key directly so the minion never needs to

@@ -1735,8 +1735,8 @@
     "semantic_hash": ""
   },
   "/home/dk/Documents/git/kri/fleet_platform/workers/ansible_tasks.py": {
-    "mtime": 1781004933.871147,
-    "ast_hash": "64c1eb2ee8b5e08db76c07116769f6ed",
+    "mtime": 1780859670.1441224,
+    "ast_hash": "5bef7389db033b582a2bb9e284fde922",
     "semantic_hash": ""
   },
   "/home/dk/Documents/git/kri/fleet_platform/workers/salt_tasks.py": {
@@ -1880,8 +1880,8 @@
     "semantic_hash": "70bdd0a673bcfc0e828080b306e7c680"
   },
   "/home/dk/Documents/git/kri/frontend/package.json": {
-    "mtime": 1781004949.0644624,
-    "ast_hash": "b27241a0ce15b17a62c6c07885128fc8",
+    "mtime": 1780999983.0436223,
+    "ast_hash": "feb5a8f55619d28af6b28c68312a09e9",
     "semantic_hash": ""
   },
   "/home/dk/Documents/git/kri/frontend/postcss.config.js": {
@@ -3480,8 +3480,8 @@
     "semantic_hash": ""
   },
   "/home/dk/Documents/git/kri/playbooks/install_salt_master.yml": {
-    "mtime": 1781003720.872296,
-    "ast_hash": "243b33a7320b93ed3b264ba1f1a1e973",
+    "mtime": 1780415580.8976846,
+    "ast_hash": "cb4341a5c7ed22d33e90cab1c9db3b71",
     "semantic_hash": ""
   },
   "/home/dk/Documents/git/kri/playbooks/setup_salt_master.yml": {
@@ -4750,8 +4750,8 @@
     "semantic_hash": ""
   },
   "/home/dk/Documents/git/kri/fleet_platform/services/salt_master_probe.py": {
-    "mtime": 1781004763.0212822,
-    "ast_hash": "26a09fe99ee9fffdc5e3bb3bc52b4ce2",
+    "mtime": 1780846328.2981424,
+    "ast_hash": "cf332d6cb9077f956f6359dde9c4bf96",
     "semantic_hash": ""
   },
   "/home/dk/Documents/git/kri/fleet_platform/services/reachability.py": {
