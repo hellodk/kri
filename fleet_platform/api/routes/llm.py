@@ -2,11 +2,12 @@ import logging
 import time
 import uuid
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from fleet_platform.api.deps import get_db
+from fleet_platform.api.limiter import limiter
 from fleet_platform.core.audit import audit
 from fleet_platform.core.auth import require_role
 from fleet_platform.schemas.llm import (
@@ -238,7 +239,9 @@ async def test_endpoint(
 
 
 @router.post("/query", response_model=LLMQueryResponse)
+@limiter.limit("10/minute")
 async def submit_query(
+    request: Request,
     payload: LLMQueryRequest,
     db: AsyncSession = Depends(get_db),
     claims: dict = Depends(require_role("operator", "admin")),

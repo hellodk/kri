@@ -114,6 +114,29 @@ def cleanup_old_bootstrap_runs() -> dict:
     return {"deleted": count, "cutoff_days": days}
 
 
+_LLM_LOG_RETENTION_DAYS = 30
+
+
+@celery_app.task(
+    name="fleet_platform.workers.maintenance.cleanup_old_llm_logs",
+    queue="maintenance",
+)
+def cleanup_old_llm_logs() -> dict:
+    """Delete llm_query_log rows older than _LLM_LOG_RETENTION_DAYS."""
+    from datetime import UTC, datetime, timedelta
+
+    from sqlalchemy import delete
+
+    from fleet_platform.db.session import get_sync_db
+    from fleet_platform.models.llm_query_log import LLMQueryLog
+
+    cutoff = datetime.now(UTC) - timedelta(days=_LLM_LOG_RETENTION_DAYS)
+    with get_sync_db() as db:
+        result = db.execute(delete(LLMQueryLog).where(LLMQueryLog.created_at < cutoff))
+        db.commit()
+        return {"deleted": result.rowcount or 0}
+
+
 # #352: per-job orphan buffer — a running job is considered orphaned when
 # started_at < now() - (job.timeout_seconds + _ORPHAN_BUFFER_SECONDS).
 # The static _ORPHAN_TIMEOUT_MINUTES was removed; #348 introduced per-job
