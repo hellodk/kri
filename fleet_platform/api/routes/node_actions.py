@@ -111,7 +111,7 @@ class PendingActionResponse(BaseModel):
 @router.post("/{node_id}/actions", response_model=PendingActionResponse, status_code=202)
 @limiter.limit("5/minute")
 async def request_node_action(
-    request: Request,
+    _request: Request,
     node_id: uuid.UUID,
     payload: NodeActionRequest,
     db: AsyncSession = Depends(get_db),
@@ -361,11 +361,28 @@ async def ask_ai_about_node(
         [c.strip() for c in endpoint.model_capabilities.split(",") if c.strip()] if endpoint.model_capabilities else []
     )
 
+    # Resolve __auto__ sentinel to a concrete model
+    if endpoint.model == "__auto__":
+        from fleet_platform.services import model_health_cache as hc
+        from fleet_platform.services.model_discovery import discover_models_with_health
+
+        if hc.is_stale(endpoint.base_url or "", endpoint.provider):
+            await discover_models_with_health(endpoint.base_url or "", endpoint.provider, api_key=api_key)
+        healthy = hc.get_healthy_models(endpoint.base_url or "", endpoint.provider)
+        if not healthy:
+            raise HTTPException(
+                status_code=503,
+                detail=f"No healthy models on endpoint '{endpoint.name}'. Check URL or refresh.",
+            )
+        chosen_model = healthy[0]["id"]
+    else:
+        chosen_model = endpoint.model
+
     try:
         if endpoint.provider == "anthropic":
             content, input_tokens, output_tokens = await call_anthropic(
                 api_key=api_key or "",
-                model=endpoint.model,
+                model=chosen_model,
                 max_tokens=min(endpoint.max_tokens, 512),
                 system_prompt=system_prompt,
                 user_prompt=node_context,
@@ -374,7 +391,7 @@ async def ask_ai_about_node(
             content, input_tokens, output_tokens = await call_openai_compat(
                 base_url=endpoint.base_url,
                 api_key=api_key,
-                model=endpoint.model,
+                model=chosen_model,
                 max_tokens=min(endpoint.max_tokens, 512),
                 system_prompt=system_prompt,
                 user_prompt=node_context,
@@ -382,13 +399,17 @@ async def ask_ai_about_node(
                 model_capabilities=model_caps,
             )
     except LLMCallError as exc:
+        if endpoint.model == "__auto__":
+            from fleet_platform.services import model_health_cache as hc
+
+            hc.evict(endpoint.base_url or "", endpoint.provider, chosen_model)
         raise HTTPException(status_code=502, detail=f"LLM call failed: {exc}") from exc
 
     return {
         "node_id": str(node_id),
         "node_name": node_name,
         "recommendation": content,
-        "model_used": endpoint.model,
+        "model_used": chosen_model,
         "input_tokens": input_tokens,
         "output_tokens": output_tokens,
     }
@@ -482,7 +503,7 @@ async def get_node_metrics(
 
 @actions_router.get("/{token}/approve")
 @limiter.limit("20/minute")
-async def approve_action(request: Request, token: str, db: AsyncSession = Depends(get_db)):
+async def approve_action(_request: Request, token: str, db: AsyncSession = Depends(get_db)):
     """Approve a pending destructive action via the emailed approval link.
 
     Security: no session auth required — the token (secrets.token_urlsafe(32),
@@ -538,7 +559,7 @@ async def approve_action(request: Request, token: str, db: AsyncSession = Depend
 
 @actions_router.get("/{token}/reject")
 @limiter.limit("20/minute")
-async def reject_action(request: Request, token: str, db: AsyncSession = Depends(get_db)):
+async def reject_action(_request: Request, token: str, db: AsyncSession = Depends(get_db)):
     """Reject a pending destructive action via the emailed rejection link."""
     action = await pending_action_svc.get_by_token(db, token)
     if not action:

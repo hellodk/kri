@@ -10,6 +10,7 @@ from fleet_platform.api.deps import get_db
 from fleet_platform.core.audit import audit
 from fleet_platform.core.auth import require_role
 from fleet_platform.schemas.llm import (
+    DiscoveredModel,
     LLMEndpointCreate,
     LLMEndpointResponse,
     LLMEndpointTestResponse,
@@ -22,7 +23,7 @@ from fleet_platform.services import llm_svc
 from fleet_platform.services.llm_caller import LLMCallError, call_anthropic, call_openai_compat
 from fleet_platform.services.llm_context import build_fleet_context
 from fleet_platform.services.model_catalog import get_models
-from fleet_platform.services.model_discovery import discover_models
+from fleet_platform.services.model_discovery import discover_models_with_health
 
 router = APIRouter(prefix="/api/v1/llm", tags=["llm"])
 
@@ -51,9 +52,9 @@ async def discover_endpoint_models(
     req: DiscoverModelsRequest,
     _: dict = Depends(require_role("operator", "admin")),
 ):
-    """Query a provider endpoint and return available model IDs."""
-    models = await discover_models(req.url, req.provider)
-    return {"models": models}
+    """Query a provider endpoint, probe health, and return available models."""
+    models = await discover_models_with_health(req.url, req.provider, api_key=None)
+    return {"models": [DiscoveredModel(**m) for m in models]}
 
 
 def _to_response(endpoint) -> LLMEndpointResponse:

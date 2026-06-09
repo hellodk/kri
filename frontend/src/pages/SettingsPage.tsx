@@ -2157,7 +2157,11 @@ function LLMEndpointsSection() {
                         <ProviderBadge provider={ep.provider} />
                       </td>
                       <td className="px-4 py-3">
-                        <span className="font-mono text-gray-700 text-xs">{ep.model}</span>
+                        {ep.model === '__auto__' ? (
+                          <span className="text-blue-700 text-xs font-semibold">⚡ Auto</span>
+                        ) : (
+                          <span className="font-mono text-gray-700 text-xs">{ep.model}</span>
+                        )}
                       </td>
                       <td className="px-4 py-3">
                         <StatusPill result={testResult} checking={isChecking} />
