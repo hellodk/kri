@@ -47,6 +47,30 @@ class PendingAction(Base):
     # Blocked entirely
     FORBIDDEN = frozenset({"process_kill"})  # SIGKILL — never allowed remotely
 
+    # Critical targets that must never be stopped/disabled/signalled remotely.
+    # Matches the "NEVER disable" control-plane/system list. Compared case-insensitively
+    # against the bare name and against common macOS launchd label suffixes
+    # (e.g. com.openssh.sshd -> sshd, com.apple.mDNSResponder -> mDNSResponder).
+    PROTECTED_TARGETS = frozenset(
+        {
+            "salt-minion",
+            "salt-master",
+            "sshd",
+            "mdnsresponder",
+            "configd",
+            "powerd",
+            "securityd",
+            "trustd",
+            "opendirectoryd",
+            "syslogd",
+            "networkd",
+            "launchd",
+            "kernel_task",
+            "windowserver",
+            "exo",
+        }
+    )
+
     @classmethod
     def is_destructive(cls, action_type: str) -> bool:
         return action_type in cls.DESTRUCTIVE
@@ -54,3 +78,12 @@ class PendingAction(Base):
     @classmethod
     def is_forbidden(cls, action_type: str) -> bool:
         return action_type in cls.FORBIDDEN
+
+    @classmethod
+    def is_protected_target(cls, name: str) -> bool:
+        if not name:
+            return False
+        n = name.strip().lower()
+        # strip common launchd label prefixes -> last dotted segment
+        bare = n.rsplit(".", 1)[-1] if "." in n else n
+        return n in cls.PROTECTED_TARGETS or bare in cls.PROTECTED_TARGETS

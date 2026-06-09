@@ -8,6 +8,13 @@ VALID_PROVIDERS = Literal["openai_compat", "anthropic", "ollama", "vllm", "llama
 VALID_INTENTS = Literal["salt_state", "ansible_playbook", "fleet_command", "explain", "fleet_query", "auto"]
 
 
+class DiscoveredModel(BaseModel):
+    id: str
+    name: str
+    healthy: bool
+    latency_ms: int | None = None
+
+
 class LLMEndpointCreate(BaseModel):
     name: str = Field(..., min_length=1, max_length=255)
     provider: VALID_PROVIDERS

@@ -77,6 +77,8 @@ _DEFAULT_SALT_FUNCTIONS: frozenset[str] = frozenset(
         "service.start",
         "service.stop",
         "service.restart",
+        "service.disable",
+        "service.enable",
         "service.status",
         "service.get_all",
         "service.available",

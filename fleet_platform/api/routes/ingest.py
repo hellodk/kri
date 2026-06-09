@@ -1,6 +1,7 @@
 # fleet_platform/api/routes/ingest.py
 import asyncio
 import ipaddress as _ipaddress
+import logging
 import os
 import tempfile
 from datetime import UTC, datetime
@@ -17,15 +18,19 @@ from fleet_platform.core.config import settings
 from fleet_platform.models.execution import ExecutionJob, ExecutionResult
 from fleet_platform.models.facts import NodeFact
 from fleet_platform.models.node import Node, Tag
-from fleet_platform.schemas.ingest import ExecutionIngestPayload, GrainIngestPayload
+from fleet_platform.models.process_stat import NodeProcessStat
+from fleet_platform.schemas.ingest import ExecutionIngestPayload, GrainIngestPayload, ProcessStatsIngestPayload
 from fleet_platform.services.node_status import verify_node_token
 from fleet_platform.workers.drift_tasks import compute_drift
 from fleet_platform.workers.sbom_tasks import index_sbom, index_sbom_from_grains
 
 router = APIRouter(prefix="/api/v1/ingest")
 
+logger = logging.getLogger(__name__)
+
 _INGEST_RATE_LIMIT = 10  # requests per minute per node
 _INGEST_RATE_WINDOW = 60  # seconds
+_MAX_PROCESSES_PER_PAYLOAD = 250
 
 
 def _strip_nulls(obj: object) -> object:
@@ -392,3 +397,43 @@ async def ingest_sbom(
         raise
 
     return {"status": "queued", "node_id": str(node.id)}
+
+
+@router.post("/process_stats")
+@limiter.limit("120/minute")
+async def ingest_process_stats(
+    request: Request,
+    payload: ProcessStatsIngestPayload,
+    x_node_token: str | None = Header(alias="X-Node-Token", default=None),
+    db: AsyncSession = Depends(get_db),
+):
+    if not x_node_token:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Missing X-Node-Token")
+
+    node = await _resolve_node(payload.minion_id, x_node_token, db)
+    ts = payload.collected_at or datetime.now(UTC)
+
+    procs = payload.processes
+    dropped = 0
+    if len(procs) > _MAX_PROCESSES_PER_PAYLOAD:
+        dropped = len(procs) - _MAX_PROCESSES_PER_PAYLOAD
+        procs = procs[:_MAX_PROCESSES_PER_PAYLOAD]
+        logger.warning(
+            "process_stats payload from %s capped: dropped %d of %d",
+            payload.minion_id,
+            dropped,
+            len(payload.processes),
+        )
+
+    rows = [
+        NodeProcessStat(
+            node_id=node.id,
+            minion_id=payload.minion_id,
+            collected_at=ts,
+            **p.model_dump(),
+        )
+        for p in procs
+    ]
+    db.add_all(rows)
+    await db.commit()
+    return {"status": "ok", "rows": len(rows), "dropped": dropped}

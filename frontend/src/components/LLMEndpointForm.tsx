@@ -3,6 +3,7 @@ import { useMutation } from '@tanstack/react-query'
 import { llmApi, type LLMEndpoint, type LLMEndpointCreate, type LLMProvider } from '../api/llm'
 import { useToastStore } from '../stores/toastStore'
 import { SecretInput } from './SecretInput'
+import { ModelCombobox, AUTO_VALUE, type DiscoveredModel } from './ModelCombobox'
 
 interface Props {
   endpoint?: LLMEndpoint
@@ -32,7 +33,7 @@ export function LLMEndpointForm({ endpoint, onClose, onSaved }: Props) {
   const [enabled, setEnabled] = useState(endpoint?.enabled ?? true)
   const [formError, setFormError] = useState<string | null>(null)
 
-  const [discoveredModels, setDiscoveredModels] = useState<Array<{ id: string; name: string }>>([])
+  const [discoveredModels, setDiscoveredModels] = useState<DiscoveredModel[]>([])
   const [discovering, setDiscovering] = useState(false)
   const [discoveryError, setDiscoveryError] = useState<string | null>(null)
 
@@ -91,7 +92,7 @@ export function LLMEndpointForm({ endpoint, onClose, onSaved }: Props) {
         const res = await llmApi.discoverModels(baseUrl.trim(), provider)
         setDiscoveredModels(res.models)
         if (res.models.length > 0 && !model) {
-          setModel(res.models[0].id)
+          setModel(AUTO_VALUE)
         }
       } catch {
         setDiscoveryError('Could not reach endpoint')
@@ -136,6 +137,21 @@ export function LLMEndpointForm({ endpoint, onClose, onSaved }: Props) {
     if (!name.trim()) { setFormError('Name is required.'); return }
     if (!model.trim()) { setFormError('Model is required.'); return }
     mutation.mutate()
+  }
+
+  async function handleRefresh() {
+    if (!baseUrl.trim() || provider === 'anthropic') return
+    setDiscovering(true)
+    setDiscoveryError(null)
+    try {
+      const res = await llmApi.discoverModels(baseUrl.trim(), provider)
+      setDiscoveredModels(res.models)
+    } catch {
+      setDiscoveryError('Could not reach endpoint')
+      setDiscoveredModels([])
+    } finally {
+      setDiscovering(false)
+    }
   }
 
   const inputClass =
@@ -225,45 +241,38 @@ export function LLMEndpointForm({ endpoint, onClose, onSaved }: Props) {
 
           {/* Model */}
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1 flex items-center gap-2">
-              Model <span className="text-red-500">*</span>
-              {discovering && (
-                <span className="text-xs text-brand-500 font-normal">Discovering…</span>
-              )}
-              {!discovering && discoveredModels.length > 0 && (
-                <span className="text-xs text-emerald-600 font-normal">
-                  &#10003; {discoveredModels.length} models found
-                </span>
-              )}
-              {discoveryError && (
-                <span className="text-xs text-amber-600 font-normal">&#9888; {discoveryError}</span>
-              )}
-            </label>
             {discoveredModels.length > 0 ? (
-              <select
+              <ModelCombobox
+                models={discoveredModels}
                 value={model}
-                onChange={(e) => setModel(e.target.value)}
-                className={inputClass + ' font-mono'}
-                required
-              >
-                <option value="">Select a model…</option>
-                {discoveredModels.map((m) => (
-                  <option key={m.id} value={m.id}>{m.name}</option>
-                ))}
-              </select>
-            ) : (
-              <input
-                type="text"
-                value={model}
-                onChange={(e) => setModel(e.target.value)}
-                placeholder={
-                  provider === 'anthropic' ? 'claude-sonnet-4-6' :
-                  provider === 'ollama'    ? 'llama3.2' :
-                  'model-id'
-                }
-                className={inputClass + ' font-mono'}
-                required
+                onChange={setModel}
+                onRefresh={handleRefresh}
+                refreshing={discovering}
               />
+            ) : (
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1 flex items-center gap-2">
+                  Model <span className="text-red-500">*</span>
+                  {discovering && (
+                    <span className="text-xs text-brand-500 font-normal">Discovering…</span>
+                  )}
+                  {discoveryError && (
+                    <span className="text-xs text-amber-600 font-normal">&#9888; {discoveryError}</span>
+                  )}
+                </label>
+                <input
+                  type="text"
+                  value={model}
+                  onChange={(e) => setModel(e.target.value)}
+                  placeholder={
+                    provider === 'anthropic' ? 'claude-sonnet-4-6' :
+                    provider === 'ollama'    ? 'llama3.2' :
+                    'model-id'
+                  }
+                  className={inputClass + ' font-mono'}
+                  required
+                />
+              </div>
             )}
           </div>
 

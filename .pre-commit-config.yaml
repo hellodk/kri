@@ -31,7 +31,7 @@ repos:
 
       - id: vulture
         name: dead code (vulture)
-        entry: bash -c 'VENV="$(git rev-parse --path-format=absolute --git-common-dir)/../.venv"; "$VENV/bin/vulture" fleet_platform/ --min-confidence 80'
+        entry: bash -c 'VENV="$(git rev-parse --path-format=absolute --git-common-dir)/../.venv"; "$VENV/bin/vulture" fleet_platform/ vulture_whitelist.py --min-confidence 80'
         language: system
         files: ^fleet_platform/
         pass_filenames: false
