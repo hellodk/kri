@@ -1,0 +1,42 @@
+---
+# tasks/verify.yml — post-restart verification for salt-master and salt-api
+#
+# Included last from main.yml (after service_macos.yml / service_systemd.yml).
+# Waits for both services to be network-ready, then performs an optional
+# salt-api eauth login probe to confirm external_auth ACL is live.
+#
+# To skip the login probe (e.g. when kri_salt_api_password is not set):
+#   ansible-playbook ... -e salt_api_verify=false
+
+- name: Wait for salt-master ZeroMQ port to be ready
+  wait_for:
+    port: 4505
+    host: 127.0.0.1
+    timeout: 60
+  become: false
+
+- name: Wait for salt-api HTTPS port to be ready
+  wait_for:
+    port: "{{ salt_api_port }}"
+    host: 127.0.0.1
+    timeout: 60
+  become: false
+
+- name: Probe salt-api /login to verify external_auth ACL is live
+  uri:
+    url: "https://127.0.0.1:{{ salt_api_port }}/login"
+    method: POST
+    body_format: json
+    body:
+      username: "{{ salt_api_user }}"
+      password: "{{ kri_salt_api_password }}"
+      eauth: pam
+    validate_certs: false
+    status_code: 200
+  register: salt_api_login_result
+  failed_when: >
+    salt_api_login_result.status != 200
+    or (salt_api_login_result.json.return | default([]) | length == 0)
+    or not (salt_api_login_result.json.return[0].token | default(''))
+  when: salt_api_verify | default(true) | bool
+  become: false

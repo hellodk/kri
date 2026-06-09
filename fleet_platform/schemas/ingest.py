@@ -1,11 +1,7 @@
 # fleet_platform/schemas/ingest.py
 from datetime import datetime
 
-from pydantic import BaseModel, Field
-
-# Hard cap on per-process rows accepted in a single process_stats payload.
-# Overflow is dropped and logged at the endpoint — never silently truncated.
-MAX_PROCESSES_PER_PAYLOAD = 250
+from pydantic import BaseModel
 
 
 class GrainIngestPayload(BaseModel):
@@ -28,15 +24,13 @@ class SBOMIngestAck(BaseModel):
 
 
 class ProcessStatItem(BaseModel):
-    """A single per-process resource sample from the node-side psutil collector."""
-
     pid: int
     name: str
     cmdline: str | None = None
-    cpu_pct: float
-    mem_rss_bytes: int
-    mem_pct: float
-    num_threads: int
+    cpu_pct: float | None = None
+    mem_rss_bytes: int | None = None
+    mem_pct: float | None = None
+    num_threads: int | None = None
     status: str | None = None
     username: str | None = None
     io_read_bytes: int | None = None
@@ -46,17 +40,5 @@ class ProcessStatItem(BaseModel):
 
 class ProcessStatsIngestPayload(BaseModel):
     minion_id: str
-    # Optional — when omitted the endpoint stamps datetime.now(UTC) at ingest.
-    collected_at: datetime | None = None
-    processes: list[ProcessStatItem] = Field(default_factory=list)
-
-    def capped_processes(self) -> tuple[list[ProcessStatItem], int]:
-        """Return (kept, dropped_count), capping at MAX_PROCESSES_PER_PAYLOAD.
-
-        Truncation is explicit so the caller can log the overflow rather than
-        silently dropping rows.
-        """
-        overflow = len(self.processes) - MAX_PROCESSES_PER_PAYLOAD
-        if overflow <= 0:
-            return self.processes, 0
-        return self.processes[:MAX_PROCESSES_PER_PAYLOAD], overflow
+    collected_at: datetime | None = None  # defaults to server now() when absent
+    processes: list[ProcessStatItem]

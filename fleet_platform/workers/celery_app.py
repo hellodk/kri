@@ -78,6 +78,11 @@ celery_app.conf.update(
             "task": "fleet_platform.workers.maintenance.cleanup_old_bootstrap_runs",
             "schedule": crontab(hour=3, minute=0),
         },
+        "cleanup-old-llm-logs": {
+            "task": "fleet_platform.workers.maintenance.cleanup_old_llm_logs",
+            "schedule": crontab(hour=4, minute=0),  # daily 04:00 UTC
+            "options": {"queue": "maintenance"},
+        },
         "refresh-all-node-grains": {
             "task": "fleet_platform.workers.ansible_tasks.refresh_all_node_grains",
             "schedule": 300,  # every 5 minutes
@@ -135,6 +140,13 @@ celery_app.conf.update(
         "poll-salt-masters": {
             "task": "fleet_platform.workers.maintenance.poll_salt_masters",
             "schedule": 30,  # every 30 s — keeps UI health cache fresh (#519)
+            "options": {"queue": "maintenance"},
+        },
+        # #640: reap pending-actions stuck in 'executing' (callback lost on the
+        # unmonitored 'celery' queue) and expire stale 'pending' rows.
+        "reap-stuck-pending-actions": {
+            "task": "fleet_platform.workers.maintenance.reap_stuck_pending_actions",
+            "schedule": 300,  # every 5 min
             "options": {"queue": "maintenance"},
         },
     },

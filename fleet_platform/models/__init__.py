@@ -27,6 +27,7 @@ from fleet_platform.models.node_secret import NodeSecret
 from fleet_platform.models.pending_action import PendingAction
 from fleet_platform.models.platform_setting import PlatformSetting
 from fleet_platform.models.playbook_catalog import PlaybookCatalog, PlaybookFavorite
+from fleet_platform.models.process_stat import NodeProcessStat
 from fleet_platform.models.provisioning import ProvisioningProfile
 from fleet_platform.models.salt_master import SaltMaster
 from fleet_platform.models.sbom import SBOMComponent, SBOMScan

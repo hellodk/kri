@@ -230,3 +230,40 @@ def run_salt_cmd(
         args=args,
         timeout=120,
     )
+
+
+def _status_from_salt_result(result) -> str:
+    """Map a run_salt_cmd return value to a pending-action status."""
+    if isinstance(result, dict) and result.get("status") == "error":
+        return "failed"
+    return "executed"
+
+
+@celery_app.task(name="finalize_node_action", queue="maintenance")
+def finalize_node_action(salt_result, action_id: str) -> dict:
+    """Celery callback (link) for run_salt_cmd: record the real execution outcome
+    on the PendingAction. Receives run_salt_cmd's return value as the first arg.
+
+    Routed to the 'maintenance' queue so the worker (--queues default,maintenance,…)
+    actually consumes it.  Before #640 this used the default 'celery' queue which
+    no worker consumed — every action was stuck in 'executing' forever.
+
+    Guard: only finalises an action that is still 'executing'.  A later status
+    (e.g. reaped to 'failed') must not be clobbered by a stale callback."""
+    import uuid as _uuid
+    from datetime import UTC, datetime
+
+    from fleet_platform.db.session import get_sync_db
+    from fleet_platform.models.pending_action import PendingAction
+
+    new_status = _status_from_salt_result(salt_result)
+    with get_sync_db() as db:
+        action = db.get(PendingAction, _uuid.UUID(action_id))
+        if action is None:
+            return {"status": "not_found", "action_id": action_id}
+        if action.status != "executing":
+            return {"status": "noop", "current": action.status, "action_id": action_id}
+        action.status = new_status
+        action.executed_at = datetime.now(UTC)
+        db.commit()
+    return {"status": new_status, "action_id": action_id}

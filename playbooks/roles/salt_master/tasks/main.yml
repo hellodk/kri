@@ -57,3 +57,5 @@
 - name: Configure service (Linux systemd)
   include_tasks: service_systemd.yml
   when: _salt_os != 'macos'
+
+- import_tasks: verify.yml

@@ -1,14 +1,17 @@
-"""Celery task: sync node presence from salt-run manage.up/down (#254).
+"""Celery task: sync node presence from salt-run manage.up/down (#254, #655).
 
-Calls salt-api runner client to get the list of connected (up) and
-disconnected (down) minions. Marks nodes online/offline accordingly.
-This runs every 90 seconds so nodes appear online within ~90s of their
-salt-minion connecting, without waiting for a full grain report.
+Calls salt-api runner client to get the list of connected (up) minions.
+Marks nodes online accordingly.  This runs every 90 seconds so nodes appear
+online within ~90s of their salt-minion connecting, without waiting for a full
+grain report.
+
+Connection details are read from the default enabled SaltMaster row in the DB
+(#655 — replaces the old env-var approach that broke when SALT_API_URL was unset).
 """
 
 import logging
-import os
 from datetime import UTC, datetime
+from typing import Any
 
 import requests
 from sqlalchemy import select
@@ -19,36 +22,37 @@ from fleet_platform.workers.celery_app import celery_app
 
 logger = logging.getLogger(__name__)
 
-_SALT_API_URL = os.environ.get("SALT_API_URL", "").rstrip("/")
-_SALT_API_USER = os.environ.get("SALT_API_USER", "")
-_SALT_API_PASSWORD = os.environ.get("SALT_API_PASSWORD", "")
-_SALT_API_EAUTH = os.environ.get("SALT_API_EAUTH", "pam")
+_RUNNER_TIMEOUT = 30  # seconds
 
 
-def _runner_call(fun: str, timeout: int = 30) -> list[str] | None:
+def _runner_call(
+    api_url: str,
+    api_user: str,
+    api_password: str,
+    api_eauth: str,
+    tls_verify: bool,
+    fun: str,
+) -> list[str] | None:
     """Call a salt-run function via salt-api runner client.
 
-    Returns a list of minion IDs, or None on error / not configured.
+    Returns a list of minion IDs, or None on error / unreachable.
     """
-    if not _SALT_API_URL:
-        return None
     try:
         resp = requests.post(
-            f"{_SALT_API_URL}/run",
+            f"{api_url}/run",
             json={
                 "client": "runner",
                 "fun": fun,
-                "username": _SALT_API_USER,
-                "password": _SALT_API_PASSWORD,
-                "eauth": _SALT_API_EAUTH,
+                "username": api_user,
+                "password": api_password,
+                "eauth": api_eauth,
             },
-            timeout=timeout,
-            verify=False,  # nosec B501 — salt-api in lab uses self-signed cert
+            timeout=_RUNNER_TIMEOUT,
+            verify=tls_verify,
         )
         resp.raise_for_status()
-        data = resp.json()
+        data: dict[str, Any] = resp.json()
         # manage.up returns {"return": [["minion1", "minion2", ...]]}
-        # The inner list may be a list of minion IDs
         result = data.get("return", [{}])
         if result and isinstance(result, list):
             inner = result[0]
@@ -69,14 +73,40 @@ def _runner_call(fun: str, timeout: int = 30) -> list[str] | None:
 def sync_minion_presence() -> dict:
     """Sync node online/offline status from salt-run manage.up.
 
+    Reads connection details from the default enabled SaltMaster row (#655).
     Marks nodes whose minion is in manage.up as online (refreshes last_seen_at).
     Nodes not seen in manage.up are left unchanged — the existing mark_stale_nodes
     task handles the stale→offline transition.
     """
-    if not _SALT_API_URL:
-        return {"status": "skipped", "reason": "SALT_API_URL not configured"}
+    from fleet_platform.models.salt_master import SaltMaster
+    from fleet_platform.services.platform_settings_svc import decrypt_secret
 
-    up_minions = _runner_call("manage.up")
+    # Resolve connection details from the default enabled master in the DB.
+    with get_sync_db() as db:
+        master = db.execute(
+            select(SaltMaster).where(SaltMaster.enabled.is_(True)).where(SaltMaster.is_default.is_(True))
+        ).scalar_one_or_none()
+
+        if master is None:
+            return {"status": "skipped", "reason": "no default enabled salt master configured"}
+
+        api_url: str = (master.api_url or "").rstrip("/")
+        api_user: str = master.api_user or ""
+        api_eauth: str = master.api_eauth or "pam"
+        tls_verify: bool = bool(getattr(master, "tls_verify", False))
+
+        if not api_url or not api_user:
+            return {"status": "skipped", "reason": "api_url or api_user not configured on default master"}
+
+        api_password = ""
+        if master.api_password_enc:
+            try:
+                api_password = decrypt_secret(master.api_password_enc)
+            except Exception as exc:  # noqa: BLE001
+                logger.warning("salt_presence: cannot decrypt api_password_enc: %s", exc)
+                return {"status": "error", "reason": f"cannot decrypt api_password: {exc}"}
+
+    up_minions = _runner_call(api_url, api_user, api_password, api_eauth, tls_verify, "manage.up")
     if up_minions is None:
         return {"status": "error", "reason": "salt-api unreachable"}
 
