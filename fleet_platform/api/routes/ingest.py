@@ -16,6 +16,7 @@ from fleet_platform.api.deps import get_db
 from fleet_platform.api.limiter import limiter
 from fleet_platform.core.config import settings
 from fleet_platform.core.redaction import redact_cmdline
+from fleet_platform.metrics import process_stats_rows_dropped_total, process_stats_rows_ingested_total
 from fleet_platform.models.execution import ExecutionJob, ExecutionResult
 from fleet_platform.models.facts import NodeFact
 from fleet_platform.models.node import Node, Tag
@@ -433,4 +434,7 @@ async def ingest_process_stats(
         rows.append(NodeProcessStat(node_id=node.id, minion_id=payload.minion_id, collected_at=ts, **data))
     db.add_all(rows)
     await db.commit()
+    process_stats_rows_ingested_total.inc(len(rows))
+    if dropped:
+        process_stats_rows_dropped_total.inc(dropped)
     return {"status": "ok", "rows": len(rows), "dropped": dropped}

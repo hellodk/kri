@@ -19,6 +19,7 @@ from typing import Any
 import requests
 from sqlalchemy import select
 
+from fleet_platform.metrics import node_action_total, salt_dispatch_total
 from fleet_platform.models.salt_master import SaltMaster
 from fleet_platform.services.platform_settings_svc import (
     decrypt_secret,
@@ -213,6 +214,10 @@ def run_salt_cmd(
         allowed = get_allowed_salt_functions_sync(db)
     if function not in allowed:
         logger.error("run_salt_cmd: rejected disallowed function %r", function)
+        try:
+            salt_dispatch_total.labels(function=function, outcome="error").inc()
+        except Exception:  # noqa: BLE001
+            pass
         return {
             "status": "error",
             "reason": f"Function '{function}' is not in the allowlist. Allowed functions: {sorted(allowed)}",
@@ -220,16 +225,26 @@ def run_salt_cmd(
 
     creds = _get_default_master()
     if creds is None or not creds.get("api_url"):
+        try:
+            salt_dispatch_total.labels(function=function, outcome="error").inc()
+        except Exception:  # noqa: BLE001
+            pass
         return _salt_api_not_configured_error()
 
     target = ",".join(target_minions)
     logger.info("run_salt_cmd: target=%s function=%s args=%s", target, function, args)
-    return _run_salt_api(
+    result = _run_salt_api(
         function=function,
         target=target,
         args=args,
         timeout=120,
     )
+    try:
+        outcome = "ok" if result.get("status") == "ok" else "error"
+        salt_dispatch_total.labels(function=function, outcome=outcome).inc()
+    except Exception:  # noqa: BLE001
+        pass
+    return result
 
 
 def _status_from_salt_result(result) -> str:
@@ -263,7 +278,12 @@ def finalize_node_action(salt_result, action_id: str) -> dict:
             return {"status": "not_found", "action_id": action_id}
         if action.status != "executing":
             return {"status": "noop", "current": action.status, "action_id": action_id}
+        action_type = getattr(action, "action_type", "unknown")
         action.status = new_status
         action.executed_at = datetime.now(UTC)
         db.commit()
+    try:
+        node_action_total.labels(action_type=action_type, status=new_status).inc()
+    except Exception:  # noqa: BLE001
+        pass
     return {"status": new_status, "action_id": action_id}

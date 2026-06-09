@@ -87,3 +87,42 @@ beat_last_run_timestamp_seconds = Gauge(
     "0 when the kri:maintenance:last_run Redis key is absent (beat is silent / dead). "
     "Alert: time() - kri_beat_last_run_timestamp_seconds > 600",
 )
+
+# ---------------------------------------------------------------------------
+# Node action control-plane metrics (issue #661 / audit #639)
+# ---------------------------------------------------------------------------
+
+node_action_total = Counter(
+    "kri_node_action_total",
+    "Node control-plane actions by type and lifecycle status",
+    ["action_type", "status"],
+)
+
+pending_action_queue_depth = Gauge(
+    "kri_pending_action_queue_depth",
+    "Pending node actions awaiting approval or execution (status in pending|executing)",
+)
+
+# ---------------------------------------------------------------------------
+# Process-stats ingest metrics (issue #661 / audit #639)
+# ---------------------------------------------------------------------------
+
+process_stats_rows_ingested_total = Counter(
+    "kri_process_stats_rows_ingested_total",
+    "Per-process stat rows persisted from the ingest endpoint",
+)
+
+process_stats_rows_dropped_total = Counter(
+    "kri_process_stats_rows_dropped_total",
+    "Per-process stat rows dropped by the per-payload cap",
+)
+
+# ---------------------------------------------------------------------------
+# Salt dispatch metrics (issue #661 / audit #639)
+# ---------------------------------------------------------------------------
+
+salt_dispatch_total = Counter(
+    "kri_salt_dispatch_total",
+    "salt-api dispatches via run_salt_cmd by function and outcome",
+    ["function", "outcome"],
+)

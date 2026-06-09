@@ -1,0 +1,214 @@
+# Grafana dashboard ConfigMap for kri node-actions, process-stats ingest, and
+# Salt dispatch metrics (issue #661 — observability audit #639).
+#
+# Added as a SEPARATE ConfigMap rather than editing grafana-dashboard.yaml to
+# avoid embedded-JSON edit risk and to keep concerns cleanly separated.
+# Grafana sidecar discovers it via the same grafana_dashboard: "1" label.
+#
+# Apply:  kubectl apply -f deploy/k8s/observability/grafana-dashboard-actions.yaml
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: kri-dashboard-actions
+  namespace: kri                  # app namespace — never monitoring
+  labels:
+    grafana_dashboard: "1"        # Grafana sidecar picks this up via label selector
+data:
+  kri-actions.json: |
+    {
+      "id": null,
+      "uid": "kri-actions-ingest",
+      "title": "kri Node Actions & Ingest",
+      "tags": ["kri", "actions", "ingest"],
+      "timezone": "browser",
+      "schemaVersion": 39,
+      "version": 1,
+      "refresh": "30s",
+      "time": { "from": "now-1h", "to": "now" },
+      "templating": {
+        "list": [
+          {
+            "name": "DS_PROMETHEUS",
+            "type": "datasource",
+            "pluginId": "prometheus",
+            "query": "prometheus",
+            "label": "Datasource",
+            "hide": 0,
+            "refresh": 1,
+            "includeAll": false,
+            "multi": false,
+            "options": [],
+            "current": {}
+          }
+        ]
+      },
+      "panels": [
+        {
+          "id": 1,
+          "type": "row",
+          "title": "Node Actions",
+          "collapsed": false,
+          "gridPos": { "x": 0, "y": 0, "w": 24, "h": 1 }
+        },
+        {
+          "id": 2,
+          "type": "timeseries",
+          "title": "Node Action Rate by Status",
+          "gridPos": { "x": 0, "y": 1, "w": 16, "h": 8 },
+          "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+          "targets": [
+            {
+              "expr": "sum by (status)(rate(kri_node_action_total[5m]))",
+              "legendFormat": "{{status}}",
+              "refId": "A"
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "ops",
+              "color": { "mode": "palette-classic" },
+              "custom": {
+                "lineWidth": 2,
+                "fillOpacity": 10,
+                "spanNulls": false
+              }
+            },
+            "overrides": []
+          },
+          "options": {
+            "tooltip": { "mode": "multi", "sort": "none" },
+            "legend": { "displayMode": "table", "placement": "bottom" }
+          }
+        },
+        {
+          "id": 3,
+          "type": "stat",
+          "title": "Approval Queue Depth",
+          "gridPos": { "x": 16, "y": 1, "w": 8, "h": 8 },
+          "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+          "targets": [
+            {
+              "expr": "kri_pending_action_queue_depth",
+              "legendFormat": "Pending",
+              "refId": "A"
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "short",
+              "color": { "mode": "thresholds" },
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  { "color": "green", "value": null },
+                  { "color": "orange", "value": 5 },
+                  { "color": "red", "value": 10 }
+                ]
+              }
+            },
+            "overrides": []
+          },
+          "options": {
+            "reduceOptions": { "calcs": ["lastNotNull"] },
+            "orientation": "auto",
+            "textMode": "auto",
+            "colorMode": "background",
+            "graphMode": "area",
+            "justifyMode": "center"
+          }
+        },
+        {
+          "id": 4,
+          "type": "row",
+          "title": "Process Stats Ingest",
+          "collapsed": false,
+          "gridPos": { "x": 0, "y": 9, "w": 24, "h": 1 }
+        },
+        {
+          "id": 5,
+          "type": "timeseries",
+          "title": "Ingest Throughput & Drops",
+          "gridPos": { "x": 0, "y": 10, "w": 24, "h": 8 },
+          "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+          "targets": [
+            {
+              "expr": "rate(kri_process_stats_rows_ingested_total[5m])",
+              "legendFormat": "Ingested rows/s",
+              "refId": "A"
+            },
+            {
+              "expr": "rate(kri_process_stats_rows_dropped_total[5m])",
+              "legendFormat": "Dropped rows/s",
+              "refId": "B"
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "ops",
+              "color": { "mode": "palette-classic" },
+              "custom": {
+                "lineWidth": 2,
+                "fillOpacity": 10,
+                "spanNulls": false
+              }
+            },
+            "overrides": [
+              {
+                "matcher": { "id": "byName", "options": "Dropped rows/s" },
+                "properties": [
+                  { "id": "color", "value": { "mode": "fixed", "fixedColor": "red" } }
+                ]
+              }
+            ]
+          },
+          "options": {
+            "tooltip": { "mode": "multi", "sort": "none" },
+            "legend": { "displayMode": "table", "placement": "bottom" }
+          }
+        },
+        {
+          "id": 6,
+          "type": "row",
+          "title": "Salt Dispatch",
+          "collapsed": false,
+          "gridPos": { "x": 0, "y": 18, "w": 24, "h": 1 }
+        },
+        {
+          "id": 7,
+          "type": "timeseries",
+          "title": "Salt Dispatch Rate by Outcome",
+          "gridPos": { "x": 0, "y": 19, "w": 24, "h": 8 },
+          "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+          "targets": [
+            {
+              "expr": "sum by (outcome)(rate(kri_salt_dispatch_total[5m]))",
+              "legendFormat": "{{outcome}}",
+              "refId": "A"
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "ops",
+              "color": { "mode": "palette-classic" },
+              "custom": {
+                "lineWidth": 2,
+                "fillOpacity": 10,
+                "spanNulls": false
+              }
+            },
+            "overrides": [
+              {
+                "matcher": { "id": "byName", "options": "error" },
+                "properties": [
+                  { "id": "color", "value": { "mode": "fixed", "fixedColor": "red" } }
+                ]
+              }
+            ]
+          },
+          "options": {
+            "tooltip": { "mode": "multi", "sort": "none" },
+            "legend": { "displayMode": "table", "placement": "bottom" }
+          }
+        }
+      ]
+    }
