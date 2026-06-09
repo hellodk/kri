@@ -403,6 +403,17 @@
       failed_when: false
       when: salt_ping.rc == 0
 
+    # ── Install kri process-telemetry schedule via Salt ───────────────────────
+    # Runs base.process_report every 30s so the node reports per-process
+    # CPU/mem/io to the kri ingest API (Processes tab data source, #610/#625).
+    - name: Apply kri process-report schedule via salt-call
+      shell: |
+        /opt/salt/salt-call state.apply base.process_report_schedule
+      become: true
+      changed_when: false
+      failed_when: false
+      when: salt_ping.rc == 0
+
     # ── Push initial grains to kri Fleet Platform ─────────────────────────────
     - name: Push Ansible facts + packages as grains to kri ingest API
       uri:

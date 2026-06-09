@@ -15,6 +15,24 @@ class LLMCallError(Exception):
     """Raised when an LLM provider call fails — wraps transport and parse errors."""
 
 
+def _describe_http_error(exc: "httpx.HTTPStatusError", base_url: str) -> str:
+    status = exc.response.status_code
+    body = ""
+    try:
+        body = exc.response.text or ""
+    except Exception:  # noqa: BLE001
+        body = ""
+    body = body.strip().replace("\n", " ")[:300]
+    msg = f"HTTP {status} from {base_url}"
+    if body:
+        msg += f": {body}"
+    if status == 404:
+        msg += " (the configured model is not loaded on this endpoint — pick an available model in Settings → LLM)"
+    elif status in (401, 403):
+        msg += " (authentication failed — check the endpoint API key in Settings → LLM)"
+    return msg
+
+
 def normalize_openai_base_url(base_url: str) -> str:
     """Return *base_url* with any trailing ``/v1`` and trailing slashes removed.
 
@@ -156,7 +174,7 @@ async def call_openai_compat(
                         prompt_tokens = chunk["usage"].get("prompt_tokens", 0) or 0
                         completion_tokens = chunk["usage"].get("completion_tokens", 0) or 0
     except httpx.HTTPStatusError as exc:
-        raise LLMCallError(f"HTTP {exc.response.status_code} from {base_url}") from exc
+        raise LLMCallError(_describe_http_error(exc, base_url)) from exc
     except httpx.ReadTimeout as exc:
         raise LLMCallError(
             f"Stream stalled — no chunk received within {_READ_TIMEOUT}s. Model may be overloaded or still loading."

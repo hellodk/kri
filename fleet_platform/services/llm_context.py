@@ -34,11 +34,15 @@ INTENT_ADDENDUM: dict[str, str] = {
 }
 
 _GROUNDING_RULES = (
-    "- Answer ONLY from the Fleet Snapshot and Node Records below. "
-    "If a fact is not present, state that explicitly and stop — do not speculate.\n"
-    "- You cannot execute commands, scan nodes, or perform live actions. "
-    "Never claim to have done so.\n"
-    "- When data is absent, name the missing data and tell the operator where to find it in the kri UI.\n"
+    "- The Fleet Snapshot and Node Records below are the LIVE, AUTHORITATIVE inventory — "
+    "they are the source of truth. Answer fleet questions directly from them.\n"
+    "- A node's name is its `hostname`. If a hostname looks like an IP address or a short id, "
+    "that IS the node's current name (no friendly hostname was set) — report it directly; "
+    "do NOT say the name is unknown or tell the operator to look elsewhere.\n"
+    "- Never tell the operator to 'check the kri UI' for data that is already in this context.\n"
+    "- Only state that something is unavailable if it is genuinely not present in this context; "
+    "then name exactly what is missing — do not speculate.\n"
+    "- You cannot execute commands, scan nodes, or perform live actions. Never claim to have done so.\n"
 )
 
 
@@ -58,9 +62,15 @@ def _format_last_seen(last_seen_at) -> str:
     return f"{delta_s // 86400}d ago"
 
 
-def _sanitize_cell(value: str) -> str:
-    """Strip Markdown table-breaking characters from node-controlled strings."""
-    return value.replace("|", "\\|").replace("\n", " ").replace("\r", "")
+def _sanitize_cell(value: object) -> str:
+    """Strip Markdown table-breaking characters from node-controlled values.
+
+    Coerces non-str values (IPv4Address, datetime, int, None) to str first —
+    a node `ip` arrives as an ipaddress.IPv4Address, and calling .replace() on it
+    raised AttributeError, 500-ing every AI chat query in build_fleet_context (#633).
+    """
+    text = str(value)
+    return text.replace("|", "\\|").replace("\n", " ").replace("\r", "")
 
 
 def estimate_tokens(text: str) -> int:
@@ -93,6 +103,7 @@ def build_static_context(
 
     if node_records:
         parts.append("\n## Node Records\n")
+        parts.append("These are the authoritative node records (the 'hostname' column is the node's name):\n")
         parts.append("| hostname | minion_id | ip | status | last_seen | group |\n")
         parts.append("|---|---|---|---|---|---|\n")
         for n in node_records:
@@ -158,6 +169,7 @@ async def build_fleet_context(db: AsyncSession, intent: str, query: str = "") ->
 
     nodes_result = await db.execute(
         select(
+            Node.id,
             Node.hostname,
             Node.minion_id,
             Node.ip_address,
@@ -192,7 +204,7 @@ async def build_fleet_context(db: AsyncSession, intent: str, query: str = "") ->
                 "ip": row.ip_address if include_ips else "[redacted]",
                 "status": row.status or "unknown",
                 "last_seen": _format_last_seen(row.last_seen_at),
-                "group": node_group_map.get(str(row.minion_id), "—"),
+                "group": node_group_map.get(str(row.id), "—"),
             }
         )
 

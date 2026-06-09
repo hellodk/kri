@@ -23,6 +23,17 @@ export interface ImportCommitResponse {
   bootstrap_queued: number
 }
 
+export interface ProcessStatRow {
+  pid: number; name: string; cmdline: string | null
+  cpu_pct: number | null; mem_rss_bytes: number | null; mem_pct: number | null
+  num_threads: number | null; status: string | null; username: string | null
+  io_read_bytes: number | null; io_write_bytes: number | null; is_llm: boolean
+}
+
+export interface ProcessStatsResponse {
+  node_id: string; collected_at: string | null; count: number; processes: ProcessStatRow[]
+}
+
 export const fleetApi = {
   overview: () => api.get<FleetOverview>('/api/v1/fleet/overview'),
   nodes: (params: {
@@ -65,4 +76,11 @@ export const fleetApi = {
     api.post<ImportValidateResponse>('/api/v1/fleet/nodes/import/validate', body),
   importCommit: (body: { rows: ImportRow[]; group_id?: string; ssh_username?: string; ssh_password?: string; auto_bootstrap?: boolean }) =>
     api.post<ImportCommitResponse>('/api/v1/fleet/nodes/import/commit', body),
+  processStats: (nodeId: string, params: { sort?: 'mem_rss_bytes' | 'cpu_pct'; limit?: number } = {}) => {
+    const q = new URLSearchParams()
+    if (params.sort) q.set('sort', params.sort)
+    if (params.limit) q.set('limit', String(params.limit))
+    const qs = q.toString()
+    return api.get<ProcessStatsResponse>(`/api/v1/nodes/${nodeId}/process_stats${qs ? `?${qs}` : ''}`)
+  },
 }
