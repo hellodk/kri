@@ -106,6 +106,7 @@ def get_decrypted_api_key(endpoint: LLMEndpoint) -> str | None:
 
 _SYSTEM_PROMPT_LOG_LIMIT = 500
 _PROMPT_LOG_LIMIT = 2000
+_MAX_LOGGED_RESPONSE_CHARS = 8000
 
 
 async def create_query_log(
@@ -137,7 +138,7 @@ async def create_query_log(
         intent=intent,
         prompt=truncated_user_prompt,
         system_prompt=truncated_system_prompt,
-        response=response,
+        response=(response[:_MAX_LOGGED_RESPONSE_CHARS] if response else None),
         model_used=model_used,
         input_tokens=input_tokens,
         output_tokens=output_tokens,
