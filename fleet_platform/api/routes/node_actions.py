@@ -1,14 +1,17 @@
 """HTTP endpoints for destructive node action approval gate (#291)."""
 
+import json
+import re
 import uuid
 from datetime import UTC, datetime
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from fleet_platform.api.deps import get_db
+from fleet_platform.api.limiter import limiter
 from fleet_platform.core.audit import audit
 from fleet_platform.core.auth import require_role
 from fleet_platform.models.node import Node
@@ -18,10 +21,80 @@ from fleet_platform.services import pending_action_svc
 router = APIRouter(prefix="/api/v1/nodes", tags=["node-actions"])
 actions_router = APIRouter(prefix="/api/v1/actions", tags=["node-actions"])
 
+# Safe charset for process/service names and launchd labels (mirrors salt_ops.py minion-id pattern)
+_NAME_RE = re.compile(r"^[A-Za-z0-9._-]+$")
+_PID_RE = re.compile(r"^\d+$")
+
+
+def _validate_action_params(action_type: str, params: dict) -> None:
+    """Validate params by action_type and enforce the protected-target denylist.
+
+    Raises HTTPException 422 for malformed inputs, 403 for protected targets.
+    """
+    if action_type.startswith("process_"):
+        pid = str(params.get("pid", ""))
+        if not _PID_RE.match(pid):
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail=f"Invalid pid {pid!r}; digits only.",
+            )
+        name = params.get("name") or params.get("process_name")
+        if name is not None:
+            if not _NAME_RE.match(str(name)):
+                raise HTTPException(
+                    status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                    detail=f"Invalid process name {name!r}.",
+                )
+            if PendingAction.is_protected_target(str(name)):
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail=f"{name!r} is a protected process and cannot be controlled remotely.",
+                )
+    elif action_type.startswith("service_"):
+        svc = str(params.get("service", ""))
+        if not _NAME_RE.match(svc):
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail=f"Invalid service name {svc!r}.",
+            )
+        if PendingAction.is_protected_target(svc):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail=f"{svc!r} is a protected service and cannot be controlled remotely.",
+            )
+
+
+def _build_salt_invocation(action_type: str, params: dict) -> tuple[str, list[str]]:
+    """Map an approved action to (salt_function, args).
+
+    Raises HTTPException(400) if the action_type is unsupported or unmappable.
+    Nodes are macOS (Darwin): SIGTERM=15, SIGSTOP=17, SIGCONT=19.
+    """
+    if action_type.startswith("process_"):
+        pid = str(params.get("pid", ""))
+        sig = {"process_stop": "15", "process_suspend": "17", "process_resume": "19"}.get(action_type)
+        if not sig:
+            raise HTTPException(status_code=400, detail=f"Unsupported process action {action_type!r}")
+        return "ps.kill_pid", [pid, f"signal={sig}"]
+    if action_type.startswith("service_"):
+        svc = str(params.get("service", ""))
+        fn = {
+            "service_stop": "service.stop",
+            "service_disable": "service.disable",
+            "service_start": "service.start",
+            "service_restart": "service.restart",
+            "service_enable": "service.enable",
+        }.get(action_type)
+        if not fn:
+            raise HTTPException(status_code=400, detail=f"Unsupported service action {action_type!r}")
+        return fn, [svc]
+    raise HTTPException(status_code=400, detail=f"Unsupported action {action_type!r}")
+
 
 class NodeActionRequest(BaseModel):
     action_type: str
     params: dict = {}
+    dry_run: bool = False
 
 
 class PendingActionResponse(BaseModel):
@@ -36,7 +109,9 @@ class PendingActionResponse(BaseModel):
 
 
 @router.post("/{node_id}/actions", response_model=PendingActionResponse, status_code=202)
+@limiter.limit("5/minute")
 async def request_node_action(
+    request: Request,
     node_id: uuid.UUID,
     payload: NodeActionRequest,
     db: AsyncSession = Depends(get_db),
@@ -52,20 +127,37 @@ async def request_node_action(
             ),
         )
 
+    _validate_action_params(payload.action_type, payload.params)
+
     node_result = await db.execute(select(Node).where(Node.id == node_id))
     node = node_result.scalar_one_or_none()
     if not node:
         raise HTTPException(status_code=404, detail="Node not found")
 
+    if payload.dry_run:
+        would = "require email approval" if PendingAction.is_destructive(payload.action_type) else "execute immediately"
+        return PendingActionResponse(
+            id=uuid.uuid4(),
+            node_id=node_id,
+            action_type=payload.action_type,
+            status="dry_run",
+            expires_at=datetime.now(UTC),
+            message=f"Dry run: '{payload.action_type}' is valid and would {would}. No action created, no email sent.",
+        )
+
     if not PendingAction.is_destructive(payload.action_type):
-        # Non-destructive: execute immediately (placeholder — actual Salt call TBD)
+        # Non-destructive (start/restart/enable/resume): execute immediately, no approval.
+        function, args = _build_salt_invocation(payload.action_type, payload.params)
+        from fleet_platform.workers.salt_tasks import run_salt_cmd
+
+        run_salt_cmd.delay(function=function, target_minions=[node.minion_id], args=args)
         await audit(
             db,
             actor=claims["sub"],
-            action=payload.action_type,
+            action=f"{payload.action_type}_executed",
             resource_type="node",
             resource_id=node_id,
-            new_value=payload.params,
+            new_value={"function": function, "args": args, "params": payload.params},
         )
         return PendingActionResponse(
             id=uuid.uuid4(),
@@ -73,7 +165,7 @@ async def request_node_action(
             action_type=payload.action_type,
             status="executed",
             expires_at=datetime.now(UTC),
-            message=f"Action '{payload.action_type}' queued for execution.",
+            message=f"Action '{payload.action_type}' dispatched.",
         )
 
     action = await pending_action_svc.create_pending_action(
@@ -269,11 +361,28 @@ async def ask_ai_about_node(
         [c.strip() for c in endpoint.model_capabilities.split(",") if c.strip()] if endpoint.model_capabilities else []
     )
 
+    # Resolve __auto__ sentinel to a concrete model
+    if endpoint.model == "__auto__":
+        from fleet_platform.services import model_health_cache as hc
+        from fleet_platform.services.model_discovery import discover_models_with_health
+
+        if hc.is_stale(endpoint.base_url or "", endpoint.provider):
+            await discover_models_with_health(endpoint.base_url or "", endpoint.provider, api_key=api_key)
+        healthy = hc.get_healthy_models(endpoint.base_url or "", endpoint.provider)
+        if not healthy:
+            raise HTTPException(
+                status_code=503,
+                detail=f"No healthy models on endpoint '{endpoint.name}'. Check URL or refresh.",
+            )
+        chosen_model = healthy[0]["id"]
+    else:
+        chosen_model = endpoint.model
+
     try:
         if endpoint.provider == "anthropic":
             content, input_tokens, output_tokens = await call_anthropic(
                 api_key=api_key or "",
-                model=endpoint.model,
+                model=chosen_model,
                 max_tokens=min(endpoint.max_tokens, 512),
                 system_prompt=system_prompt,
                 user_prompt=node_context,
@@ -282,7 +391,7 @@ async def ask_ai_about_node(
             content, input_tokens, output_tokens = await call_openai_compat(
                 base_url=endpoint.base_url,
                 api_key=api_key,
-                model=endpoint.model,
+                model=chosen_model,
                 max_tokens=min(endpoint.max_tokens, 512),
                 system_prompt=system_prompt,
                 user_prompt=node_context,
@@ -290,13 +399,54 @@ async def ask_ai_about_node(
                 model_capabilities=model_caps,
             )
     except LLMCallError as exc:
+        if endpoint.model == "__auto__":
+            from fleet_platform.services import model_health_cache as hc
+
+            hc.evict(endpoint.base_url or "", endpoint.provider, chosen_model)
+            _fallback = hc.get_healthy_models(endpoint.base_url or "", endpoint.provider)
+            if _fallback:
+                chosen_model = _fallback[0]["id"]
+                try:
+                    if endpoint.provider == "anthropic":
+                        content, input_tokens, output_tokens = await call_anthropic(
+                            api_key=api_key or "",
+                            model=chosen_model,
+                            max_tokens=min(endpoint.max_tokens, 512),
+                            system_prompt=system_prompt,
+                            user_prompt=node_context,
+                        )
+                    else:
+                        content, input_tokens, output_tokens = await call_openai_compat(
+                            base_url=endpoint.base_url,
+                            api_key=api_key,
+                            model=chosen_model,
+                            max_tokens=min(endpoint.max_tokens, 512),
+                            system_prompt=system_prompt,
+                            user_prompt=node_context,
+                            model_context_length=endpoint.model_context_length,
+                            model_capabilities=model_caps,
+                        )
+                    return {
+                        "node_id": str(node_id),
+                        "node_name": node_name,
+                        "recommendation": content,
+                        "model_used": chosen_model,
+                        "input_tokens": input_tokens,
+                        "output_tokens": output_tokens,
+                    }
+                except LLMCallError as retry_exc:
+                    hc.evict(endpoint.base_url or "", endpoint.provider, chosen_model)
+                    raise HTTPException(
+                        status_code=503,
+                        detail=f"All auto-selected models failed. Last error: {retry_exc}",
+                    ) from retry_exc
         raise HTTPException(status_code=502, detail=f"LLM call failed: {exc}") from exc
 
     return {
         "node_id": str(node_id),
         "node_name": node_name,
         "recommendation": content,
-        "model_used": endpoint.model,
+        "model_used": chosen_model,
         "input_tokens": input_tokens,
         "output_tokens": output_tokens,
     }
@@ -389,7 +539,8 @@ async def get_node_metrics(
 
 
 @actions_router.get("/{token}/approve")
-async def approve_action(token: str, db: AsyncSession = Depends(get_db)):
+@limiter.limit("20/minute")
+async def approve_action(request: Request, token: str, db: AsyncSession = Depends(get_db)):
     """Approve a pending destructive action via the emailed approval link.
 
     Security: no session auth required — the token (secrets.token_urlsafe(32),
@@ -404,16 +555,59 @@ async def approve_action(token: str, db: AsyncSession = Depends(get_db)):
     if action.status == "expired":
         return {"status": "expired", "message": "This approval link has expired."}
     if action.status == "approved":
-        # TODO: dispatch actual Salt execution
-        return {"status": "approved", "message": f"Action '{action.action_type}' approved and queued."}
+        params = json.loads(action.params or "{}")
+        # Defense-in-depth: re-enforce denylist at execution time (#615 guards at request time)
+        target = params.get("name") or params.get("process_name") or params.get("service")
+        if target and PendingAction.is_protected_target(str(target)):
+            action.status = "failed"
+            await db.commit()
+            raise HTTPException(
+                status_code=403,
+                detail=f"{target!r} is a protected target; execution refused.",
+            )
+        node = (await db.execute(select(Node).where(Node.id == action.node_id))).scalar_one_or_none()
+        if not node:
+            action.status = "failed"
+            await db.commit()
+            raise HTTPException(status_code=404, detail="Node not found")
+        function, args = _build_salt_invocation(action.action_type, params)
+        from fleet_platform.workers.salt_tasks import finalize_node_action, run_salt_cmd
+
+        run_salt_cmd.apply_async(
+            kwargs={"function": function, "target_minions": [node.minion_id], "args": args},
+            link=finalize_node_action.s(str(action.id)),
+        )
+        action.status = "executing"  # finalize_node_action sets executed/failed on completion
+        await db.commit()
+        await audit(
+            db,
+            actor="approval-link",
+            action=f"{action.action_type}_dispatched",
+            resource_type="node",
+            resource_id=action.node_id,
+            new_value={"action_id": str(action.id), "function": function, "args": args},
+        )
+        return {
+            "status": "executing",
+            "message": f"Action '{action.action_type}' approved and dispatched; awaiting result.",
+        }
     return {"status": action.status}
 
 
 @actions_router.get("/{token}/reject")
-async def reject_action(token: str, db: AsyncSession = Depends(get_db)):
+@limiter.limit("20/minute")
+async def reject_action(request: Request, token: str, db: AsyncSession = Depends(get_db)):
     """Reject a pending destructive action via the emailed rejection link."""
     action = await pending_action_svc.get_by_token(db, token)
     if not action:
         raise HTTPException(status_code=404, detail="Action not found")
     action = await pending_action_svc.reject(db, action)
+    await audit(
+        db,
+        actor="approval-link",
+        action=f"{action.action_type}_rejected",
+        resource_type="node",
+        resource_id=action.node_id,
+        new_value={"action_id": str(action.id)},
+    )
     return {"status": "rejected", "message": "Action rejected."}

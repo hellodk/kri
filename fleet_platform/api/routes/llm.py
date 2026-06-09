@@ -1,3 +1,4 @@
+import logging
 import time
 import uuid
 
@@ -9,6 +10,7 @@ from fleet_platform.api.deps import get_db
 from fleet_platform.core.audit import audit
 from fleet_platform.core.auth import require_role
 from fleet_platform.schemas.llm import (
+    DiscoveredModel,
     LLMEndpointCreate,
     LLMEndpointResponse,
     LLMEndpointTestResponse,
@@ -21,9 +23,42 @@ from fleet_platform.services import llm_svc
 from fleet_platform.services.llm_caller import LLMCallError, call_anthropic, call_openai_compat
 from fleet_platform.services.llm_context import build_fleet_context
 from fleet_platform.services.model_catalog import get_models
-from fleet_platform.services.model_discovery import discover_models
+from fleet_platform.services.model_discovery import discover_models_with_health
 
 router = APIRouter(prefix="/api/v1/llm", tags=["llm"])
+
+logger = logging.getLogger(__name__)
+
+
+async def _resolve_model(endpoint) -> str:
+    """Resolve '__auto__' to a concrete model id at query dispatch time.
+
+    For non-auto endpoints returns endpoint.model unchanged.
+    For __auto__ picks lowest-latency healthy model from cache,
+    re-probing if stale. Raises HTTP 503 if no healthy model found.
+    """
+    from fleet_platform.services import model_health_cache as hc
+    from fleet_platform.services.llm_svc import get_decrypted_api_key
+    from fleet_platform.services.model_discovery import discover_models_with_health
+
+    if endpoint.model != "__auto__":
+        return endpoint.model
+
+    url = endpoint.base_url or ""
+    provider = endpoint.provider
+
+    if hc.is_stale(url, provider):
+        api_key = get_decrypted_api_key(endpoint)
+        await discover_models_with_health(url, provider, api_key=api_key)
+
+    healthy = hc.get_healthy_models(url, provider)
+    if not healthy:
+        raise HTTPException(
+            status_code=503,
+            detail=f"No healthy models available on endpoint '{endpoint.name}'. "
+            "Refresh model status or check the endpoint URL.",
+        )
+    return healthy[0]["id"]
 
 
 @router.get("/models")
@@ -48,9 +83,9 @@ async def discover_endpoint_models(
     req: DiscoverModelsRequest,
     _: dict = Depends(require_role("operator", "admin")),
 ):
-    """Query a provider endpoint and return available model IDs."""
-    models = await discover_models(req.url, req.provider)
-    return {"models": models}
+    """Query a provider endpoint, probe health, and return available models."""
+    models = await discover_models_with_health(req.url, req.provider, api_key=None)
+    return {"models": [DiscoveredModel(**m) for m in models]}
 
 
 def _to_response(endpoint) -> LLMEndpointResponse:
@@ -237,7 +272,15 @@ async def submit_query(
         resolved_intent = classify_intent(payload.prompt)
     intent = resolved_intent
 
-    system_prompt = await build_fleet_context(db, intent, query=payload.prompt)
+    try:
+        system_prompt = await build_fleet_context(db, intent, query=payload.prompt)
+    except Exception:  # noqa: BLE001
+        logger.exception("submit_query: build_fleet_context failed; degrading to minimal context")
+        system_prompt = (
+            "You are an AI assistant embedded in kri, a fleet management platform. "
+            "Live fleet context could not be loaded for this query; answer from general knowledge "
+            "and tell the operator the fleet context was temporarily unavailable."
+        )
 
     history_dicts: list[dict] = (
         [{"role": m.role, "content": m.content} for m in payload.history] if payload.history else []
@@ -251,6 +294,8 @@ async def submit_query(
         removed = history_dicts.pop(0)
         total_chars -= len(removed["content"])
 
+    chosen_model = await _resolve_model(endpoint)
+
     t0 = time.perf_counter()
     error: str | None = None
     content: str = ""
@@ -261,7 +306,7 @@ async def submit_query(
         if endpoint.provider == "anthropic":
             content, input_tokens, output_tokens = await call_anthropic(
                 api_key=api_key or "",
-                model=endpoint.model,
+                model=chosen_model,
                 max_tokens=endpoint.max_tokens,
                 system_prompt=system_prompt,
                 user_prompt=payload.prompt,
@@ -271,7 +316,7 @@ async def submit_query(
             content, input_tokens, output_tokens = await call_openai_compat(
                 base_url=endpoint.base_url,
                 api_key=api_key,
-                model=endpoint.model,
+                model=chosen_model,
                 max_tokens=endpoint.max_tokens,
                 system_prompt=system_prompt,
                 user_prompt=payload.prompt,
@@ -280,7 +325,43 @@ async def submit_query(
                 model_capabilities=model_caps,
             )
     except (LLMCallError, Exception) as exc:
-        error = str(exc)
+        if endpoint.model == "__auto__":
+            from fleet_platform.services import model_health_cache as hc
+
+            hc.evict(endpoint.base_url or "", endpoint.provider, chosen_model)
+            _fallback = hc.get_healthy_models(endpoint.base_url or "", endpoint.provider)
+            if _fallback:
+                chosen_model = _fallback[0]["id"]
+                try:
+                    if endpoint.provider == "anthropic":
+                        content, input_tokens, output_tokens = await call_anthropic(
+                            api_key=api_key or "",
+                            model=chosen_model,
+                            max_tokens=endpoint.max_tokens,
+                            system_prompt=system_prompt,
+                            user_prompt=payload.prompt,
+                            history=history_dicts,
+                        )
+                    else:
+                        content, input_tokens, output_tokens = await call_openai_compat(
+                            base_url=endpoint.base_url,
+                            api_key=api_key,
+                            model=chosen_model,
+                            max_tokens=endpoint.max_tokens,
+                            system_prompt=system_prompt,
+                            user_prompt=payload.prompt,
+                            history=history_dicts,
+                            model_context_length=model_ctx,
+                            model_capabilities=model_caps,
+                        )
+                    error = None
+                except (LLMCallError, Exception) as retry_exc:
+                    hc.evict(endpoint.base_url or "", endpoint.provider, chosen_model)
+                    error = str(retry_exc)
+            else:
+                error = str(exc)
+        else:
+            error = str(exc)
 
     duration_ms = int((time.perf_counter() - t0) * 1000)
 
@@ -292,7 +373,7 @@ async def submit_query(
         prompt=payload.prompt,
         system_prompt=system_prompt,
         response=content or None,
-        model_used=endpoint.model,
+        model_used=chosen_model,
         input_tokens=input_tokens,
         output_tokens=output_tokens,
         duration_ms=duration_ms,
@@ -308,7 +389,7 @@ async def submit_query(
         new_value={
             "query": payload.prompt[:200],
             "intent": intent,  # resolved (auto → classified)
-            "model": endpoint.model,
+            "model": chosen_model,
             "endpoint": endpoint.name,
         },
     )
@@ -320,7 +401,7 @@ async def submit_query(
         query_id=log.id,
         intent=intent,  # resolved (auto → classified)
         result=content,
-        model_used=endpoint.model,
+        model_used=chosen_model,
         endpoint_name=endpoint.name,
         input_tokens=input_tokens,
         output_tokens=output_tokens,

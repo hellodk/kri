@@ -154,7 +154,7 @@ def test_grounding_rules_never_truncated():
         retrieved_chunks=huge_chunks,
     )
     # Grounding rules must be present regardless of context size
-    assert "Answer ONLY from" in ctx or "ONLY" in ctx
+    assert "AUTHORITATIVE" in ctx or "authoritative" in ctx
     assert "never claim" in ctx.lower()
 
 
