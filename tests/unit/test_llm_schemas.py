@@ -245,6 +245,7 @@ def test_llm_endpoint_response_model_validate_with_api_key():
         max_tokens=4096,
         is_default=False,
         enabled=True,
+        tool_mode="json",
         created_at=now,
         updated_at=now,
     )
@@ -269,6 +270,7 @@ def test_llm_endpoint_response_model_validate_without_api_key():
         max_tokens=4096,
         is_default=False,
         enabled=True,
+        tool_mode="json",
         created_at=now,
         updated_at=now,
     )
