@@ -27,7 +27,6 @@ class LLMEndpointCreate(BaseModel):
     model_context_length: int | None = None
     model_capabilities: list[str] | None = None
     tool_mode: str = "json"
-    tool_mode: str = "json"
 
 
 class LLMEndpointUpdate(BaseModel):
