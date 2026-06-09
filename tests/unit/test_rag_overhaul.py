@@ -298,7 +298,7 @@ def test_grounding_rules_after_task_addendum_and_last():
         retrieved_chunks="x" * 5000,
         task_addendum="UNIQUE_TASK_MARKER_123",
     )
-    assert ctx.index("UNIQUE_TASK_MARKER_123") < ctx.index("Answer ONLY from"), (
+    assert ctx.index("UNIQUE_TASK_MARKER_123") < ctx.index("AUTHORITATIVE"), (
         "grounding rules must come AFTER the task addendum"
     )
     assert ctx.rstrip().endswith(_GROUNDING_RULES.rstrip()), "grounding rules must be the very last text"
