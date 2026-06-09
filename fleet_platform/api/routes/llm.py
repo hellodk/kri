@@ -1,3 +1,4 @@
+import logging
 import time
 import uuid
 
@@ -24,6 +25,8 @@ from fleet_platform.services.model_catalog import get_models
 from fleet_platform.services.model_discovery import discover_models
 
 router = APIRouter(prefix="/api/v1/llm", tags=["llm"])
+
+logger = logging.getLogger(__name__)
 
 
 @router.get("/models")
@@ -237,7 +240,15 @@ async def submit_query(
         resolved_intent = classify_intent(payload.prompt)
     intent = resolved_intent
 
-    system_prompt = await build_fleet_context(db, intent, query=payload.prompt)
+    try:
+        system_prompt = await build_fleet_context(db, intent, query=payload.prompt)
+    except Exception:  # noqa: BLE001
+        logger.exception("submit_query: build_fleet_context failed; degrading to minimal context")
+        system_prompt = (
+            "You are an AI assistant embedded in kri, a fleet management platform. "
+            "Live fleet context could not be loaded for this query; answer from general knowledge "
+            "and tell the operator the fleet context was temporarily unavailable."
+        )
 
     history_dicts: list[dict] = (
         [{"role": m.role, "content": m.content} for m in payload.history] if payload.history else []
