@@ -78,6 +78,11 @@ celery_app.conf.update(
             "task": "fleet_platform.workers.maintenance.cleanup_old_bootstrap_runs",
             "schedule": crontab(hour=3, minute=0),
         },
+        "cleanup-old-llm-logs": {
+            "task": "fleet_platform.workers.maintenance.cleanup_old_llm_logs",
+            "schedule": crontab(hour=4, minute=0),  # daily 04:00 UTC
+            "options": {"queue": "maintenance"},
+        },
         "refresh-all-node-grains": {
             "task": "fleet_platform.workers.ansible_tasks.refresh_all_node_grains",
             "schedule": 300,  # every 5 minutes

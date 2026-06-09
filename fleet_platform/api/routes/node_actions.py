@@ -248,7 +248,9 @@ async def list_services(
 
 
 @router.post("/{node_id}/ask-ai")
+@limiter.limit("3/minute")
 async def ask_ai_about_node(
+    request: Request,
     node_id: uuid.UUID,
     db: AsyncSession = Depends(get_db),
     claims: dict = Depends(require_role("operator", "admin")),
