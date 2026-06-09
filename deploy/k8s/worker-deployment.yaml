@@ -47,11 +47,11 @@ spec:
                 secretKeyRef:
                   name: kri-secrets
                   key: JWT_SECRET
-            - name: FERNET_KEY
+            - name: FERNET_SECRET_KEY
               valueFrom:
                 secretKeyRef:
                   name: kri-secrets
-                  key: FERNET_KEY
+                  key: FERNET_SECRET_KEY
             - name: SALT_API_URL
               valueFrom:
                 secretKeyRef:

@@ -169,6 +169,7 @@ async def build_fleet_context(db: AsyncSession, intent: str, query: str = "") ->
 
     nodes_result = await db.execute(
         select(
+            Node.id,
             Node.hostname,
             Node.minion_id,
             Node.ip_address,
@@ -203,7 +204,7 @@ async def build_fleet_context(db: AsyncSession, intent: str, query: str = "") ->
                 "ip": row.ip_address if include_ips else "[redacted]",
                 "status": row.status or "unknown",
                 "last_seen": _format_last_seen(row.last_seen_at),
-                "group": node_group_map.get(str(row.minion_id), "—"),
+                "group": node_group_map.get(str(row.id), "—"),
             }
         )
 

@@ -44,17 +44,58 @@ netapi_enable_clients:
   - wheel
 
 # External auth for salt-api (kri workers authenticate as {{ salt_api_user }}).
-# Scoped to only what kri needs: test connectivity, manage minion keys,
-# and query fleet status runners. No wildcard ('.*') or bare runner/wheel access.
+# Scoped to only what kri needs: local-client execution functions, minion keys,
+# and fleet status runners. No wildcard ('.*') or bare runner/wheel access.
+#
+# IMPORTANT: The local-client function list below MUST stay in parity with
+# _DEFAULT_SALT_FUNCTIONS in fleet_platform/services/platform_settings_svc.py.
+# That constant is the single source of truth for the app-side allowlist.
+# Any function added there must also be added here, or salt-api will deny it.
 external_auth:
   pam:
     {{ salt_api_user }}:
+      # Local-client execution functions — mirrors _DEFAULT_SALT_FUNCTIONS
+      - 'state.apply'
+      - 'state.highstate'
+      - 'state.show_sls'
+      - 'pkg.install'
+      - 'pkg.remove'
+      - 'pkg.list_pkgs'
+      - 'pkg.upgrade'
+      - 'pip.install'
+      - 'pip.installed'
+      - 'pip.list'
+      - 'service.start'
+      - 'service.stop'
+      - 'service.restart'
+      - 'service.disable'
+      - 'service.enable'
+      - 'service.status'
+      - 'service.get_all'
+      - 'service.available'
+      - 'service.enabled'
+      - 'disk.usage'
+      - 'disk.inodeusage'
+      - 'status.loadavg'
+      - 'status.meminfo'
+      - 'grains.items'
+      - 'grains.get'
       - 'test.ping'
+      - 'test.version'
+      - 'saltutil.sync_all'
+      - 'saltutil.refresh_grains'
+      - 'saltutil.refresh_pillar'
+      - 'system.reboot'
+      - 'cmd.run'
+      - 'ps.list_processes'
+      - 'ps.kill_pid'
+      # Wheel client — minion key management
       - '@wheel':
         - 'key.list_all'
         - 'key.accept'
         - 'key.reject'
         - 'key.delete'
+      # Runner client — fleet status queries
       - '@runner':
         - 'manage.up'
         - 'manage.versions'

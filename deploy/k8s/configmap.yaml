@@ -11,3 +11,4 @@ data:
   # Application
   LOG_LEVEL: "info"
   APP_ENV: "production"
+  ENVIRONMENT: "production"
