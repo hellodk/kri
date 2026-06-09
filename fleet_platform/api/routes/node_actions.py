@@ -361,11 +361,28 @@ async def ask_ai_about_node(
         [c.strip() for c in endpoint.model_capabilities.split(",") if c.strip()] if endpoint.model_capabilities else []
     )
 
+    # Resolve __auto__ sentinel to a concrete model
+    if endpoint.model == "__auto__":
+        from fleet_platform.services import model_health_cache as hc
+        from fleet_platform.services.model_discovery import discover_models_with_health
+
+        if hc.is_stale(endpoint.base_url or "", endpoint.provider):
+            await discover_models_with_health(endpoint.base_url or "", endpoint.provider, api_key=api_key)
+        healthy = hc.get_healthy_models(endpoint.base_url or "", endpoint.provider)
+        if not healthy:
+            raise HTTPException(
+                status_code=503,
+                detail=f"No healthy models on endpoint '{endpoint.name}'. Check URL or refresh.",
+            )
+        chosen_model = healthy[0]["id"]
+    else:
+        chosen_model = endpoint.model
+
     try:
         if endpoint.provider == "anthropic":
             content, input_tokens, output_tokens = await call_anthropic(
                 api_key=api_key or "",
-                model=endpoint.model,
+                model=chosen_model,
                 max_tokens=min(endpoint.max_tokens, 512),
                 system_prompt=system_prompt,
                 user_prompt=node_context,
@@ -374,7 +391,7 @@ async def ask_ai_about_node(
             content, input_tokens, output_tokens = await call_openai_compat(
                 base_url=endpoint.base_url,
                 api_key=api_key,
-                model=endpoint.model,
+                model=chosen_model,
                 max_tokens=min(endpoint.max_tokens, 512),
                 system_prompt=system_prompt,
                 user_prompt=node_context,
@@ -382,13 +399,54 @@ async def ask_ai_about_node(
                 model_capabilities=model_caps,
             )
     except LLMCallError as exc:
+        if endpoint.model == "__auto__":
+            from fleet_platform.services import model_health_cache as hc
+
+            hc.evict(endpoint.base_url or "", endpoint.provider, chosen_model)
+            _fallback = hc.get_healthy_models(endpoint.base_url or "", endpoint.provider)
+            if _fallback:
+                chosen_model = _fallback[0]["id"]
+                try:
+                    if endpoint.provider == "anthropic":
+                        content, input_tokens, output_tokens = await call_anthropic(
+                            api_key=api_key or "",
+                            model=chosen_model,
+                            max_tokens=min(endpoint.max_tokens, 512),
+                            system_prompt=system_prompt,
+                            user_prompt=node_context,
+                        )
+                    else:
+                        content, input_tokens, output_tokens = await call_openai_compat(
+                            base_url=endpoint.base_url,
+                            api_key=api_key,
+                            model=chosen_model,
+                            max_tokens=min(endpoint.max_tokens, 512),
+                            system_prompt=system_prompt,
+                            user_prompt=node_context,
+                            model_context_length=endpoint.model_context_length,
+                            model_capabilities=model_caps,
+                        )
+                    return {
+                        "node_id": str(node_id),
+                        "node_name": node_name,
+                        "recommendation": content,
+                        "model_used": chosen_model,
+                        "input_tokens": input_tokens,
+                        "output_tokens": output_tokens,
+                    }
+                except LLMCallError as retry_exc:
+                    hc.evict(endpoint.base_url or "", endpoint.provider, chosen_model)
+                    raise HTTPException(
+                        status_code=503,
+                        detail=f"All auto-selected models failed. Last error: {retry_exc}",
+                    ) from retry_exc
         raise HTTPException(status_code=502, detail=f"LLM call failed: {exc}") from exc
 
     return {
         "node_id": str(node_id),
         "node_name": node_name,
         "recommendation": content,
-        "model_used": endpoint.model,
+        "model_used": chosen_model,
         "input_tokens": input_tokens,
         "output_tokens": output_tokens,
     }

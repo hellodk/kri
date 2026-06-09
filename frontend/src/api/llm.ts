@@ -82,6 +82,8 @@ export const llmApi = {
   submitQuery: (data: LLMQueryRequest) => api.post<LLMQueryResponse>('/api/v1/llm/query', data),
   listQueries: () => api.get<LLMQueryLogEntry[]>('/api/v1/llm/queries'),
   discoverModels: (url: string, provider: string) =>
-    api.post<{ models: Array<{ id: string; name: string }> }>('/api/v1/llm/discover-models', { url, provider }),
+    api.post<{ models: Array<{ id: string; name: string; healthy: boolean; latency_ms: number | null }> }>(
+      '/api/v1/llm/discover-models',
+      { url, provider }
+    ),
 }
-
