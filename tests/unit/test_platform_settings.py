@@ -83,6 +83,50 @@ def test_ssh_keypair_idempotent():
         assert os.path.getmtime(priv) == mtime
 
 
+def test_rag_embed_url_in_settings_response_schema():
+    """PlatformSettingsResponse must include llm_embed_base_url and llm_include_node_ips (#664)."""
+    from fleet_platform.schemas.ansible import PlatformSettingsResponse
+
+    fields = PlatformSettingsResponse.model_fields
+    assert "llm_embed_base_url" in fields, "llm_embed_base_url missing from PlatformSettingsResponse"
+    assert "llm_include_node_ips" in fields, "llm_include_node_ips missing from PlatformSettingsResponse"
+
+
+def test_rag_embed_url_in_settings_update_schema():
+    """PlatformSettingsUpdate must include llm_embed_base_url and llm_include_node_ips (#664)."""
+    from fleet_platform.schemas.ansible import PlatformSettingsUpdate
+
+    fields = PlatformSettingsUpdate.model_fields
+    assert "llm_embed_base_url" in fields, "llm_embed_base_url missing from PlatformSettingsUpdate"
+    assert "llm_include_node_ips" in fields, "llm_include_node_ips missing from PlatformSettingsUpdate"
+
+
+def test_rag_settings_route_get_fetches_embed_keys():
+    """GET /api/v1/settings handler must include LLM_EMBED_BASE_URL and LLM_INCLUDE_NODE_IPS in bulk fetch (#664)."""
+    from pathlib import Path
+
+    src = (Path(__file__).resolve().parents[2] / "fleet_platform/api/routes/platform_settings.py").read_text()
+    get_fn_start = src.find("async def get_settings(")
+    get_fn_end = src.find("\n@router.", get_fn_start + 1)
+    get_fn = src[get_fn_start:get_fn_end]
+    assert "LLM_EMBED_BASE_URL" in get_fn, "GET handler must fetch LLM_EMBED_BASE_URL"
+    assert "LLM_INCLUDE_NODE_IPS" in get_fn, "GET handler must fetch LLM_INCLUDE_NODE_IPS"
+
+
+def test_rag_settings_route_put_persists_embed_keys():
+    """PUT /api/v1/settings handler must call set_setting for both RAG embedding keys (#664)."""
+    from pathlib import Path
+
+    src = (Path(__file__).resolve().parents[2] / "fleet_platform/api/routes/platform_settings.py").read_text()
+    put_fn_start = src.find("async def update_settings(")
+    put_fn_end = src.find("\n@router.", put_fn_start + 1)
+    if put_fn_end == -1:
+        put_fn_end = len(src)
+    put_fn = src[put_fn_start:put_fn_end]
+    assert "LLM_EMBED_BASE_URL" in put_fn, "PUT handler must call set_setting(db, LLM_EMBED_BASE_URL, ...)"
+    assert "LLM_INCLUDE_NODE_IPS" in put_fn, "PUT handler must call set_setting(db, LLM_INCLUDE_NODE_IPS, ...)"
+
+
 def test_playbook_sources_nonexistent_local_warns(caplog):
     """get_all_playbook_dirs logs a warning for non-existent local paths."""
     import json

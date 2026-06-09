@@ -31,6 +31,7 @@ export interface PlatformSettings {
   salt_denied_functions: string[] | null
   // RAG embedding
   llm_embed_base_url: string | null
+  llm_include_node_ips: boolean
 }
 
 export interface BootstrapResponse {
@@ -136,6 +137,7 @@ export const ansibleApi = {
     salt_denied_functions?: string[]
     // RAG embedding
     llm_embed_base_url?: string
+    llm_include_node_ips?: boolean
   }) => api.put<PlatformSettings>('/api/v1/settings', payload),
   bootstrap: (
     minion_id: string,

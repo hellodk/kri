@@ -68,6 +68,7 @@ export function SettingsPage() {
   const [testEmailTo, setTestEmailTo] = useState('')
   const [testEmailResult, setTestEmailResult] = useState<{ ok: boolean; message: string } | null>(null)
   const [llmEmbedBaseUrl, setLlmEmbedBaseUrl] = useState('')
+  const [llmIncludeNodeIps, setLlmIncludeNodeIps] = useState(true)
   const [embedUrlStatus, setEmbedUrlStatus] = useState<{ ok: boolean; latency_ms: number | null; error?: string } | null>(null)
   const [embedUrlChecking, setEmbedUrlChecking] = useState(false)
   const embedDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -108,6 +109,7 @@ export function SettingsPage() {
       if (data.smtp_from) setSmtpFrom(data.smtp_from)
       if (data.digest_recipients) setDigestRecipients(data.digest_recipients)
       if (data.llm_embed_base_url) setLlmEmbedBaseUrl(data.llm_embed_base_url)
+      setLlmIncludeNodeIps(data.llm_include_node_ips ?? true)
       if (data.ansible_endpoint_url) checkAnsible(data.ansible_endpoint_url)
       if (data.sonarqube_url) checkSonar(data.sonarqube_url)
       if (data.cxone_url) checkCxone(data.cxone_url)
@@ -215,6 +217,7 @@ export function SettingsPage() {
       digest_recipients: digestRecipients || undefined,
       jenkins_ingest_secret: jenkinsSecret || undefined,
       llm_embed_base_url: llmEmbedBaseUrl || undefined,
+      llm_include_node_ips: llmIncludeNodeIps,
     }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['settings'] })
@@ -742,6 +745,21 @@ export function SettingsPage() {
                 OpenAI-compatible endpoint for <code className="text-xs bg-gray-100 px-1 rounded">nomic-embed-text-v1.5</code> (used for RAG retrieval).
                 Leave blank to disable semantic retrieval — fleet context will use live DB facts only.
               </p>
+            </div>
+            <div className="flex items-center justify-between rounded-lg border border-gray-200 p-3">
+              <div>
+                <p className="text-sm font-medium text-gray-900">Include Node IPs in embeddings</p>
+                <p className="text-xs text-gray-500 mt-0.5">Embed IP addresses alongside hostnames — useful when queries reference IPs directly.</p>
+              </div>
+              <button
+                type="button"
+                role="switch"
+                aria-checked={llmIncludeNodeIps}
+                onClick={() => setLlmIncludeNodeIps(v => !v)}
+                className={`relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 focus:outline-none ${llmIncludeNodeIps ? 'bg-brand-600' : 'bg-gray-200'}`}
+              >
+                <span className={`inline-block h-5 w-5 transform rounded-full bg-white shadow transition-transform duration-200 ${llmIncludeNodeIps ? 'translate-x-5' : 'translate-x-0'}`} />
+              </button>
             </div>
             <button
               onClick={() => saveMutation.mutate()}

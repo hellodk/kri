@@ -23,6 +23,8 @@ from fleet_platform.services.platform_settings_svc import (
     JENKINS_INGEST_SECRET,
     KRI_API_URL,
     LICENSE_POLICY,
+    LLM_EMBED_BASE_URL,
+    LLM_INCLUDE_NODE_IPS,
     OIDC_CLIENT_ID,
     OIDC_CLIENT_SECRET,
     OIDC_ENABLED,
@@ -197,6 +199,8 @@ async def get_settings(
             SMTP_USERNAME,
             SMTP_FROM,
             DIGEST_RECIPIENTS,
+            LLM_EMBED_BASE_URL,
+            LLM_INCLUDE_NODE_IPS,
         ],
     )
     return PlatformSettingsResponse(
@@ -222,6 +226,8 @@ async def get_settings(
         digest_recipients=s[DIGEST_RECIPIENTS],
         salt_allowed_functions=_parse_salt_allowlist(s[SALT_ALLOWED_FUNCTIONS]),
         salt_denied_functions=_parse_salt_denylist(s[SALT_DENIED_FUNCTIONS]),
+        llm_embed_base_url=s[LLM_EMBED_BASE_URL],
+        llm_include_node_ips=(s[LLM_INCLUDE_NODE_IPS] or "true") != "false",
     )
 
 
@@ -298,6 +304,10 @@ async def update_settings(
         invalidate_salt_deny_cache()
         # Invalidate allowlist cache too — deny list affects effective allowlist
         invalidate_salt_allowlist_cache()
+    if payload.llm_embed_base_url is not None:
+        await set_setting(db, LLM_EMBED_BASE_URL, payload.llm_embed_base_url)
+    if payload.llm_include_node_ips is not None:
+        await set_setting(db, LLM_INCLUDE_NODE_IPS, "true" if payload.llm_include_node_ips else "false")
     await audit(
         db,
         actor=claims["email"],
@@ -333,4 +343,6 @@ async def update_settings(
         digest_recipients=await get_setting(db, DIGEST_RECIPIENTS),
         salt_allowed_functions=_parse_salt_allowlist(await get_setting(db, SALT_ALLOWED_FUNCTIONS)),
         salt_denied_functions=_parse_salt_denylist(await get_setting(db, SALT_DENIED_FUNCTIONS)),
+        llm_embed_base_url=await get_setting(db, LLM_EMBED_BASE_URL),
+        llm_include_node_ips=((await get_setting(db, LLM_INCLUDE_NODE_IPS)) or "true") != "false",
     )

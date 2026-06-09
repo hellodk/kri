@@ -53,6 +53,9 @@ class PlatformSettingsUpdate(BaseModel):
     # Salt allowlist / denylist
     salt_allowed_functions: list[str] | None = None
     salt_denied_functions: list[str] | None = None
+    # RAG embedding
+    llm_embed_base_url: str | None = None
+    llm_include_node_ips: bool | None = None
 
 
 class PlatformSettingsResponse(BaseModel):
@@ -86,3 +89,6 @@ class PlatformSettingsResponse(BaseModel):
     # Salt allowlist / denylist
     salt_allowed_functions: list[str] | None = None
     salt_denied_functions: list[str] | None = None
+    # RAG embedding
+    llm_embed_base_url: str | None = None
+    llm_include_node_ips: bool = True
