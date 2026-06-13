@@ -1,8 +1,0 @@
----
-- name: Remove profile by identifier
-  command: "profiles remove -identifier {{ mobileconfig_profile_uuid }}"
-  become: true
-  register: remove_result
-  failed_when:
-    - remove_result.rc != 0
-    - "'not installed' not in remove_result.stderr"
