@@ -1880,8 +1880,8 @@
     "semantic_hash": "70bdd0a673bcfc0e828080b306e7c680"
   },
   "/home/dk/Documents/git/kri/frontend/package.json": {
-    "mtime": 1781004949.0644624,
-    "ast_hash": "b27241a0ce15b17a62c6c07885128fc8",
+    "mtime": 1781013642.1929462,
+    "ast_hash": "3ec419878c25017564f42285969b90be",
     "semantic_hash": ""
   },
   "/home/dk/Documents/git/kri/frontend/postcss.config.js": {
@@ -2470,8 +2470,8 @@
     "semantic_hash": "ec89ff3a56b2685e2f9132ee94d9e3d6"
   },
   "/home/dk/Documents/git/kri/playbooks/bootstrap_mac_mini.yml": {
-    "mtime": 1780948505.9025967,
-    "ast_hash": "b5f88ed9f0cd700ade7bd88de2ca291b",
+    "mtime": 1781009776.374461,
+    "ast_hash": "a315827cc43e32ff0862d4563bb5be43",
     "semantic_hash": ""
   },
   "/home/dk/Documents/git/kri/playbooks/collections/installed/ansible_collections/ansible/posix/shippable.yml": {
