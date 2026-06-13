@@ -24,10 +24,7 @@ import { SecretInput } from '../components/SecretInput'
 import { formatDistanceToNow, differenceInDays, parseISO } from 'date-fns'
 import { formatIST } from '../utils/time'
 import type { Node } from '../types'
-
-function isMacOSNode(node: Node): boolean {
-  return !!(node.macos_version || node.xcode_version)
-}
+import { isMacOSNode } from './nodeDetail/utils'
 
 // ─── Shared password input with show/hide toggle ────────────────────────────
 function PasswordInput({ value, onChange, placeholder }: {

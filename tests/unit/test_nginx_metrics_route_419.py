@@ -4,7 +4,7 @@ metrics are scrapeable in every deploy mode — not swallowed by the SPA fallbac
 from pathlib import Path
 
 ROOT = Path(__file__).parent.parent.parent
-CONFS = [ROOT / "deploy/nginx.conf", ROOT / "deploy/nginx-tls.conf"]
+CONFS = [ROOT / "deploy/nginx.conf.template", ROOT / "deploy/nginx-tls.conf.template"]
 
 
 def test_both_nginx_confs_route_metrics_to_api():

@@ -58,7 +58,22 @@ _log = get_logger(__name__)
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    # configure_tracing() must run BEFORE configure_logging() so the trace_id
+    # processor can read the real OTEL trace_id from the active span instead of
+    # falling back to a random UUID4. The function is idempotent and a no-op
+    # when OTEL_EXPORTER_OTLP_ENDPOINT is unset (dev / tests).
+    from fleet_platform.core.tracing import (
+        configure_tracing,
+        instrument_httpx,
+        instrument_redis,
+        instrument_sqlalchemy,
+    )
+
+    configure_tracing(service_name="kri-api")
     configure_logging()
+    instrument_sqlalchemy()
+    instrument_httpx()
+    instrument_redis()
     from fleet_platform.api.deps import close_redis, init_redis
 
     await init_redis()
@@ -96,6 +111,16 @@ def create_app() -> FastAPI:
         redoc_url="/redoc" if settings.is_development else None,
         lifespan=lifespan,
     )
+
+    # Instrument FastAPI here (not in lifespan) so HTTP middleware is wired
+    # before the first request lands. configure_tracing() is called inside
+    # lifespan, but FastAPIInstrumentor.instrument_app() is idempotent and
+    # short-circuits when the SDK is not configured yet — first instrumented
+    # request creates spans only if the lifespan setup succeeded.
+    from fleet_platform.core.tracing import configure_tracing, instrument_fastapi
+
+    configure_tracing(service_name="kri-api")
+    instrument_fastapi(app)
 
     app.state.limiter = limiter
     app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)  # type: ignore[arg-type]

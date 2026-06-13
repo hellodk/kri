@@ -550,7 +550,7 @@ docker exec deploy-pg_backup-1 ls -lh /var/backups/postgresql/ | tail -5
 
 ```bash
 docker exec deploy-pg_backup-1 \
-  pg_dump -h db -U fleet -Fc fleet_demo \
+  pg_dump -h db -U fleet -Fc fleet_platform \
   -f /var/backups/postgresql/manual_$(date +%Y%m%d_%H%M%S).dump
 ```
 
@@ -558,18 +558,53 @@ docker exec deploy-pg_backup-1 \
 
 ```bash
 # Stop services first
-./scripts/kri.sh stop
+./scripts/kri stop
 
-# Restore (replace DUMPFILE with actual filename)
+# Identify the latest dump (pg_backup keeps 7 daily rotations locally).
+LATEST=$(docker exec deploy-pg_backup-1 \
+  sh -c 'ls -1t /var/backups/postgresql/fleet_*.dump* | head -1')
+
+# If the file ends in .age it's encrypted — decrypt first using the offline
+# operator key that holds the recipient ID matching $BACKUP_AGE_RECIPIENT.
+if echo "$LATEST" | grep -q '\.age$'; then
+  docker cp deploy-pg_backup-1:"$LATEST" /tmp/restore.dump.age
+  age -d -i ~/keys/kri-backup.key /tmp/restore.dump.age > /tmp/restore.dump
+  RESTORE_FILE=/tmp/restore.dump
+else
+  docker cp deploy-pg_backup-1:"$LATEST" /tmp/restore.dump
+  RESTORE_FILE=/tmp/restore.dump
+fi
+
+# Use the SAME timescaledb image tag as the running db service (see
+# deploy/docker-compose.yml — currently 2.26.4-pg17). Tag mismatches cause
+# pg_restore to fail on TimescaleDB catalog differences.
 docker run --rm \
-  -v pgbackups:/var/backups/postgresql \
-  -e PGPASSWORD=<POSTGRES_PASSWORD> \
-  timescale/timescaledb:2.17.2-pg17 \
-  pg_restore -h db -U fleet -d fleet_demo \
-  /var/backups/postgresql/<DUMPFILE>
+  -v "$RESTORE_FILE:/restore.dump:ro" \
+  --network deploy_default \
+  -e PGPASSWORD="$POSTGRES_PASSWORD" \
+  timescale/timescaledb:2.26.4-pg17 \
+  pg_restore -h db -U fleet -d fleet_platform --clean --if-exists /restore.dump
 
-./scripts/kri.sh start
+./scripts/kri start
 ```
+
+### Disaster recovery from offsite
+
+If the local pg_backup volume is lost (host disk failure), pull the latest
+dump from `BACKUP_REMOTE` (see `.env.docker.example`):
+
+```bash
+rclone --config /root/.config/rclone/rclone.conf \
+  ls "$BACKUP_REMOTE" | sort | tail -3
+rclone --config /root/.config/rclone/rclone.conf \
+  copy "$BACKUP_REMOTE/fleet_<timestamp>.dump.age" /tmp/
+age -d -i ~/keys/kri-backup.key /tmp/fleet_<timestamp>.dump.age \
+  > /tmp/restore.dump
+# then run the same docker-run pg_restore as above with $RESTORE_FILE pointing at /tmp/restore.dump
+```
+
+Target RPO: 24 h (daily dump cycle). Target RTO on a fresh host: 30 min
+(pull stack, restore latest dump, start services).
 
 ---
 
@@ -611,8 +646,9 @@ By default kri serves plain HTTP on port 80. For production use, enable TLS.
 # Generate a self-signed cert valid for 10 years
 KRI_HOSTNAME=kri.yourdomain.com ./scripts/gen_self_signed_cert.sh
 
-# Enable TLS nginx config
-cp deploy/nginx-tls.conf deploy/nginx.conf
+# Enable TLS by pointing the frontend image at the TLS template instead of
+# the plaintext one. Edit deploy/Dockerfile.frontend:
+#   COPY deploy/nginx-tls.conf.template /etc/nginx/templates/default.conf.template
 
 # Add to frontend service in docker-compose.yml:
 #   volumes:
@@ -620,7 +656,7 @@ cp deploy/nginx-tls.conf deploy/nginx.conf
 #   ports:
 #     - "443:443"
 
-./scripts/kri.sh rolling-deploy
+./scripts/kri rolling-deploy
 ```
 
 ### Option B: Tailscale HTTPS
@@ -629,7 +665,7 @@ If kri runs within a Tailscale network, enable Tailscale HTTPS:
 
 ```bash
 tailscale cert kri.tail-domain.ts.net
-# Then use the generated cert with nginx-tls.conf
+# Then use the generated cert with nginx-tls.conf.template (mount certs at /etc/nginx/certs)
 ```
 
 ### Option C: Caddy (automatic HTTPS)

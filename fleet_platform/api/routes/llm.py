@@ -1,8 +1,10 @@
+import json
 import logging
 import time
 import uuid
 
 from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -21,7 +23,13 @@ from fleet_platform.schemas.llm import (
     LLMQueryResponse,
 )
 from fleet_platform.services import llm_svc
-from fleet_platform.services.llm_caller import LLMCallError, call_anthropic, call_openai_compat
+from fleet_platform.services.llm_caller import (
+    LLMCallError,
+    call_anthropic,
+    call_openai_compat,
+    stream_anthropic,
+    stream_openai_compat,
+)
 from fleet_platform.services.llm_context import build_fleet_context
 from fleet_platform.services.model_catalog import get_models
 from fleet_platform.services.model_discovery import discover_models_with_health
@@ -419,3 +427,191 @@ async def list_queries(
 ):
     logs = await llm_svc.list_query_logs(db, user_id=claims["sub"], limit=50)
     return [LLMQueryLogEntry.model_validate(log) for log in logs]
+
+
+# ── Streaming query (operator+) ───────────────────────────────────────────────
+# SSE stream that emits one JSON event per LLM token delta, then a `done`
+# event with usage + the persisted query_id, then `[DONE]`. Browsers cannot
+# POST through EventSource, so the frontend uses fetch + ReadableStream and
+# parses SSE manually (see frontend/src/api/llmStream.ts).
+#
+# Event shapes (one per `data:` line):
+#   {"type": "delta", "text": "<chunk>"}
+#   {"type": "done",  "query_id": "<uuid>", "intent": "...", "model_used": "...",
+#                     "endpoint_name": "...", "input_tokens": int,
+#                     "output_tokens": int, "duration_ms": int}
+#   {"type": "error", "error": "<message>"}
+
+
+@router.post("/query/stream")
+@limiter.limit("10/minute")
+async def submit_query_stream(
+    request: Request,
+    payload: LLMQueryRequest,
+    db: AsyncSession = Depends(get_db),
+    claims: dict = Depends(require_role("operator", "admin")),
+):
+    """Stream the LLM response as Server-Sent Events.
+
+    Mirrors :func:`submit_query` for endpoint resolution, intent classification,
+    fleet-context building, and history budgeting; differs only in delivery.
+    Persists the query log on completion (or on stream error) so the Queries
+    listing reflects every attempt regardless of whether the client stayed
+    connected.
+    """
+    if payload.endpoint_id:
+        endpoint = await llm_svc.get_endpoint(db, payload.endpoint_id)
+        if not endpoint:
+            raise HTTPException(status_code=404, detail="LLM endpoint not found")
+    else:
+        endpoint = await llm_svc.get_default_endpoint(db)
+        if not endpoint:
+            raise HTTPException(
+                status_code=422,
+                detail="No default LLM endpoint configured. Add one in Settings -> LLM.",
+            )
+
+    if not endpoint.enabled:
+        raise HTTPException(status_code=422, detail="Selected LLM endpoint is disabled")
+
+    api_key = llm_svc.get_decrypted_api_key(endpoint)
+    model_ctx = endpoint.model_context_length
+    model_caps = (
+        [c.strip() for c in endpoint.model_capabilities.split(",") if c.strip()] if endpoint.model_capabilities else []
+    )
+
+    resolved_intent: str = payload.intent
+    if payload.intent == "auto":
+        from fleet_platform.services.llm_intent import classify_intent
+
+        resolved_intent = classify_intent(payload.prompt)
+    intent = resolved_intent
+
+    try:
+        system_prompt = await build_fleet_context(db, intent, query=payload.prompt)
+    except Exception:  # noqa: BLE001
+        logger.exception("submit_query_stream: build_fleet_context failed; degrading to minimal context")
+        system_prompt = (
+            "You are an AI assistant embedded in kri, a fleet management platform. "
+            "Live fleet context could not be loaded for this query; answer from general knowledge "
+            "and tell the operator the fleet context was temporarily unavailable."
+        )
+
+    history_dicts: list[dict] = (
+        [{"role": m.role, "content": m.content} for m in payload.history] if payload.history else []
+    )
+    _HISTORY_TOKEN_BUDGET = 6000
+    total_chars = sum(len(m["content"]) for m in history_dicts)
+    while history_dicts and total_chars > _HISTORY_TOKEN_BUDGET * 4:
+        removed = history_dicts.pop(0)
+        total_chars -= len(removed["content"])
+
+    chosen_model = await _resolve_model(endpoint)
+
+    async def event_stream():
+        t0 = time.perf_counter()
+        joined_content = ""
+        input_tokens = 0
+        output_tokens = 0
+        error: str | None = None
+
+        try:
+            if endpoint.provider == "anthropic":
+                source = stream_anthropic(
+                    api_key=api_key or "",
+                    model=chosen_model,
+                    max_tokens=endpoint.max_tokens,
+                    system_prompt=system_prompt,
+                    user_prompt=payload.prompt,
+                    history=history_dicts,
+                )
+            else:
+                source = stream_openai_compat(
+                    base_url=endpoint.base_url,
+                    api_key=api_key,
+                    model=chosen_model,
+                    max_tokens=endpoint.max_tokens,
+                    system_prompt=system_prompt,
+                    user_prompt=payload.prompt,
+                    history=history_dicts,
+                    model_context_length=model_ctx,
+                    model_capabilities=model_caps,
+                )
+
+            async for event in source:
+                etype = event.get("type")
+                if etype == "delta":
+                    yield f"data: {json.dumps(event)}\n\n"
+                elif etype == "error":
+                    error = event.get("error") or "unknown error"
+                    yield f"data: {json.dumps(event)}\n\n"
+                elif etype == "done":
+                    joined_content = event.get("content", "")
+                    input_tokens = int(event.get("input_tokens") or 0)
+                    output_tokens = int(event.get("output_tokens") or 0)
+        except Exception as exc:  # noqa: BLE001
+            # Guard: any unexpected failure inside the generator must still
+            # produce an SSE error frame so the client never hangs forever.
+            error = f"stream failed: {exc}"
+            yield f"data: {json.dumps({'type': 'error', 'error': error})}\n\n"
+
+        duration_ms = int((time.perf_counter() - t0) * 1000)
+
+        log = await llm_svc.create_query_log(
+            db,
+            endpoint_id=endpoint.id,
+            user_id=claims["sub"],
+            intent=intent,
+            prompt=payload.prompt,
+            system_prompt=system_prompt,
+            response=joined_content or None,
+            model_used=chosen_model,
+            input_tokens=input_tokens,
+            output_tokens=output_tokens,
+            duration_ms=duration_ms,
+            error=error,
+        )
+
+        await audit(
+            db,
+            actor=claims["sub"],
+            action="llm_query",
+            resource_type="llm",
+            resource_id=None,
+            new_value={
+                "query": payload.prompt[:200],
+                "intent": intent,
+                "model": chosen_model,
+                "endpoint": endpoint.name,
+                "stream": True,
+            },
+        )
+
+        # Final `done` frame carries the persisted query_id so the UI can
+        # reference it (rate-limit info, copy link, etc) without a separate
+        # poll. SSE clients can stop reading after `[DONE]`.
+        done_payload = {
+            "type": "done",
+            "query_id": str(log.id),
+            "intent": intent,
+            "model_used": chosen_model,
+            "endpoint_name": endpoint.name,
+            "input_tokens": input_tokens,
+            "output_tokens": output_tokens,
+            "duration_ms": duration_ms,
+        }
+        if error:
+            done_payload["error"] = error
+        yield f"data: {json.dumps(done_payload)}\n\n"
+        yield "data: [DONE]\n\n"
+
+    return StreamingResponse(
+        event_stream(),
+        media_type="text/event-stream",
+        headers={
+            # Disable buffering at any reverse proxy in front of FastAPI so
+            # the first token reaches the browser immediately.
+            "Cache-Control": "no-cache, no-transform",
+            "X-Accel-Buffering": "no",
+        },
+    )

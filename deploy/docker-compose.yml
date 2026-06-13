@@ -31,26 +31,75 @@ services:
     image: timescale/timescaledb:2.26.4-pg17
     restart: unless-stopped
     environment:
-      PGPASSWORD: ${POSTGRES_PASSWORD:-fleet}
+      # Fail loud if the password is missing — the previous default of `fleet`
+      # silently let pg_dump run with a known credential when the env was
+      # empty (#audit).
+      PGPASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD must be set in .env.docker}
+      # If set, every dump is encrypted with age (https://age-encryption.org)
+      # before leaving the container. Recipient is the public key of the
+      # backup operator (e.g. age1xxxxxxx...). Decrypt with:
+      #   age -d -i ~/keys/kri-backup.key dump.age > dump
+      BACKUP_AGE_RECIPIENT: ${BACKUP_AGE_RECIPIENT:-}
+      # If set, encrypted dump is rclone-copied to this remote target after
+      # success. Examples:
+      #   b2:my-bucket/kri/                  Backblaze B2
+      #   s3:my-bucket/kri/                  AWS S3
+      #   sftp-host:/srv/backups/kri/        SFTP
+      # Configure the remote via BACKUP_RCLONE_CONFIG (rclone.conf contents).
+      BACKUP_REMOTE: ${BACKUP_REMOTE:-}
+      BACKUP_RCLONE_CONFIG: ${BACKUP_RCLONE_CONFIG:-}
     volumes:
       - pgbackups:/var/backups/postgresql
     depends_on:
       db:
         condition: service_healthy
+    # The base image lacks age and rclone; install them once at startup, then
+    # loop. Worth ~30 s extra on container start for a transparent encryption
+    # + offsite-sync path that needs no custom image build.
     entrypoint: >
       sh -c "
+        set -eu;
+        if ! command -v age >/dev/null 2>&1 || ! command -v rclone >/dev/null 2>&1; then
+          echo '[backup] installing age + rclone';
+          apt-get update -qq && \
+            apt-get install -y --no-install-recommends age rclone >/dev/null;
+        fi;
+        if [ -n \"$$BACKUP_RCLONE_CONFIG\" ]; then
+          mkdir -p /root/.config/rclone;
+          printf '%s\\n' \"$$BACKUP_RCLONE_CONFIG\" > /root/.config/rclone/rclone.conf;
+          chmod 600 /root/.config/rclone/rclone.conf;
+        fi;
         echo '[backup] PostgreSQL backup service started';
         while true; do
           TIMESTAMP=$$(date +%Y%m%d_%H%M%S);
-          BACKUP_FILE=/var/backups/postgresql/fleet_$${TIMESTAMP}.dump;
+          BASE=fleet_$${TIMESTAMP};
+          OUT=/var/backups/postgresql/$${BASE}.dump;
+          ENCOUT=/var/backups/postgresql/$${BASE}.dump.age;
           echo \"[backup] Starting pg_dump at $$(date)\";
-          if pg_dump -h db -U fleet -Fc fleet_platform -f \"$${BACKUP_FILE}\"; then
-            echo \"[backup] Saved $${BACKUP_FILE}\";
-            find /var/backups/postgresql -name '*.dump' -mtime +7 -delete;
-            echo '[backup] Pruned backups older than 7 days';
+          if pg_dump -h db -U fleet -Fc fleet_platform -f \"$$OUT\"; then
+            echo \"[backup] Saved $$OUT\";
+            FINAL=\"$$OUT\";
+            if [ -n \"$$BACKUP_AGE_RECIPIENT\" ]; then
+              if age -r \"$$BACKUP_AGE_RECIPIENT\" -o \"$$ENCOUT\" \"$$OUT\"; then
+                rm -f \"$$OUT\";
+                FINAL=\"$$ENCOUT\";
+                echo \"[backup] Encrypted to $$ENCOUT\";
+              else
+                echo '[backup] WARN: age encryption failed, keeping plain dump';
+              fi;
+            fi;
+            if [ -n \"$$BACKUP_REMOTE\" ]; then
+              if rclone copy \"$$FINAL\" \"$$BACKUP_REMOTE\" --quiet; then
+                echo \"[backup] Synced $$FINAL → $$BACKUP_REMOTE\";
+              else
+                echo \"[backup] WARN: offsite sync failed for $$FINAL\";
+              fi;
+            fi;
+            find /var/backups/postgresql -name 'fleet_*.dump*' -mtime +7 -delete;
+            echo '[backup] Pruned local backups older than 7 days';
           else
             echo \"[backup] ERROR: pg_dump failed at $$(date) — skipping prune\";
-            rm -f \"$${BACKUP_FILE}\";
+            rm -f \"$$OUT\";
           fi;
           sleep 86400;
         done
@@ -251,10 +300,13 @@ services:
     restart: unless-stopped
     ports:
       - "${FRONTEND_PORT:-80}:80"
+    environment:
+      # NGINX_RESOLVER is substituted into nginx.conf at container start so the
+      # frontend container works on Docker (default 127.0.0.11), Podman rootful
+      # (10.88.0.1), Podman rootless (10.0.2.3), or k8s (override per cluster).
+      NGINX_RESOLVER: "${NGINX_RESOLVER:-127.0.0.11}"
     depends_on:
       - api
-    dns: 127.0.0.11
-    dns_search: ""
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:80/"]
       interval: 30s

@@ -25,9 +25,9 @@ server {
     add_header Referrer-Policy "strict-origin-when-cross-origin" always;
     add_header Permissions-Policy "geolocation=(), microphone=(), camera=()" always;
 
-    # Docker embedded DNS — re-resolve on every request so api container
-    # restarts never leave nginx with a stale upstream IP cached from startup.
-    resolver 127.0.0.11 valid=10s ipv6=off;
+    # NGINX_RESOLVER is substituted at container start. See deploy/nginx.conf.template
+    # for the per-runtime values (Docker, Podman rootful/rootless, Kubernetes).
+    resolver ${NGINX_RESOLVER} valid=10s ipv6=off;
     set $api_upstream http://api:8000;
 
     # Proxy API calls to the api service
@@ -71,6 +71,14 @@ server {
         proxy_set_header X-Real-IP $remote_addr;
         proxy_connect_timeout 5s;
         proxy_read_timeout 10s;
+    }
+
+    # K8s liveness/readiness probe — must not depend on upstream API.
+    # Returns 200 OK as long as nginx itself is serving requests.
+    location = /healthz {
+        access_log off;
+        add_header Content-Type text/plain;
+        return 200 "ok\n";
     }
 
     # SPA fallback

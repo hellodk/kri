@@ -65,6 +65,55 @@ jobs:
       - run: uv sync --extra dev
       - run: uv run pytest tests/unit/ -v --tb=short
 
+  integration-tests:
+    # tests/integration/ exercises the FastAPI app via httpx ASGITransport
+    # against a real Postgres + a mocked Redis (see tests/integration/conftest.py).
+    # Catches regressions that unit tests can't — JWT roundtrips, FK cascades,
+    # request/response shape drift, dependency-injection wiring (#arch-ci).
+    name: Integration tests
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: timescale/timescaledb:2.26.4-pg17
+        env:
+          POSTGRES_DB: fleet_platform
+          POSTGRES_USER: fleet
+          POSTGRES_PASSWORD: fleet
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 15
+      redis:
+        image: redis:7.4-alpine
+        ports: ["6379:6379"]
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 10
+    env:
+      DATABASE_URL: postgresql+psycopg://fleet:fleet@localhost:5432/fleet_platform
+      TEST_DATABASE_URL: postgresql+psycopg://fleet:fleet@localhost:5432/fleet_test
+      REDIS_URL: redis://localhost:6379/0
+      JWT_SECRET: ci-test-secret-minimum-32-chars-long
+      FERNET_KEY: dGVzdC1rZXktbm90LWZvci1wcm9kdWN0aW9uLXVzZS1vbmx5
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.13'
+      # The pgvector + pg_trgm extensions are CREATE EXTENSION IF NOT EXISTS'd
+      # by tests/integration/conftest.py::test_engine, but the extensions
+      # themselves must exist in the timescaledb image. They do (since pg17
+      # ships pgvector via the timescale image), so we only need to create
+      # the test database.
+      - run: PGPASSWORD=fleet psql -h localhost -U fleet -c "CREATE DATABASE fleet_test;" fleet_platform
+      - run: pip install uv
+      - run: uv sync --extra dev
+      - run: uv run pytest tests/integration/ -v --tb=short
+
   lint:
     name: Lint (ruff)
     runs-on: ubuntu-latest
@@ -221,3 +270,91 @@ jobs:
           ignore-unfixed: true
           vuln-type: os,library
           severity: CRITICAL,HIGH
+
+  e2e-tests:
+    # Playwright e2e tests run the full docker-compose stack (api + worker +
+    # redis + db + frontend nginx). They take ~10 minutes wall-clock so we
+    # gate them on PRs labeled `e2e` and on master pushes only — they're
+    # not in the per-commit critical path (#arch-ci).
+    name: E2E tests (Playwright)
+    runs-on: ubuntu-latest
+    if: |
+      github.event_name == 'push' ||
+      contains(github.event.pull_request.labels.*.name, 'e2e')
+    timeout-minutes: 25
+    env:
+      # docker-compose secrets — values are non-sensitive test fixtures.
+      POSTGRES_PASSWORD: fleet
+      REDIS_PASSWORD: ci-redis-password
+      JWT_SECRET: ci-test-secret-minimum-32-chars-long
+      FERNET_KEY: dGVzdC1rZXktbm90LWZvci1wcm9kdWN0aW9uLXVzZS1vbmx5
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '20'
+      - uses: pnpm/action-setup@v6
+        with:
+          version: 10.29.3
+      - run: pnpm install --frozen-lockfile
+        working-directory: frontend
+      - name: Install Playwright browsers
+        run: pnpm exec playwright install --with-deps chromium
+        working-directory: frontend
+      - name: Materialize CI .env.docker
+        # Generate a deterministic .env.docker from the secrets above so the
+        # docker-compose stack can boot without depending on developer-only
+        # files. See deploy/.env.docker.example for the full contract.
+        run: |
+          cat > .env.docker <<EOF
+          DATABASE_URL=postgresql+psycopg://fleet:${POSTGRES_PASSWORD}@db:5432/fleet_demo
+          TEST_DATABASE_URL=postgresql+psycopg://fleet:${POSTGRES_PASSWORD}@db:5432/fleet_test
+          REDIS_URL=redis://:${REDIS_PASSWORD}@redis:6379/0
+          POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+          REDIS_PASSWORD=${REDIS_PASSWORD}
+          JWT_SECRET=${JWT_SECRET}
+          JWT_ALGORITHM=HS256
+          JWT_ACCESS_TOKEN_EXPIRE_MINUTES=60
+          JWT_REFRESH_TOKEN_EXPIRE_DAYS=7
+          FERNET_KEY=${FERNET_KEY}
+          FRONTEND_ORIGIN=http://localhost
+          ENVIRONMENT=test
+          KRI_API_URL=http://api:8000
+          PILLAR_DIR=/srv/salt/pillar
+          EOF
+      - name: Build + start stack
+        run: docker compose -f deploy/docker-compose.yml up -d --build api worker pg_backup redis db frontend
+      - name: Wait for API health
+        # /health is the lightweight probe the k8s manifests also use; the
+        # worker queue takes longer to come up but the e2e tests don't
+        # require it.
+        run: |
+          for i in {1..60}; do
+            if curl -fsS http://localhost/api/v1/health >/dev/null; then
+              echo "API is healthy"; exit 0
+            fi
+            sleep 2
+          done
+          echo "API failed to come up"; docker compose -f deploy/docker-compose.yml logs api | tail -100; exit 1
+      - name: Run Playwright tests
+        run: pnpm exec playwright test --reporter=line
+        working-directory: .
+      - name: Upload Playwright report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: playwright-report/
+          retention-days: 7
+      - name: Upload stack logs on failure
+        if: failure()
+        run: |
+          mkdir -p stack-logs
+          docker compose -f deploy/docker-compose.yml logs > stack-logs/all.log 2>&1 || true
+      - name: Upload stack logs artifact
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: stack-logs
+          path: stack-logs/
+          retention-days: 3

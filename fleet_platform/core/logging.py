@@ -19,17 +19,26 @@ def _add_trace_id(logger, method, event_dict):  # noqa: ARG001
     """Inject a ``trace_id`` into every log record.
 
     In order of preference:
-    1. ``trace_id`` already bound to the structlog context (set by OTEL
-       instrumentation or middleware via ``structlog.contextvars.bind_contextvars``).
-    2. A fresh UUID4 so the field is always present and log records can be
-       correlated within a single request even without a full OTEL pipeline.
+    1. ``trace_id`` already bound to the structlog context (set explicitly by
+       a caller via ``structlog.contextvars.bind_contextvars``).
+    2. The hex trace_id of the active OpenTelemetry span (set by
+       ``configure_tracing`` + the FastAPI / Celery instrumentors). This is
+       the same value that the OTLP exporter ships to Tempo / Jaeger, so
+       grepping logs by trace_id and clicking through to a trace are
+       guaranteed to find the same record.
+    3. A fresh UUID4 so the field is always present even when no OTEL
+       collector is configured (dev / tests).
 
     Issue #576: trace_id must appear in every structured log line so that
     log-to-trace linking works from day one.
     """
-    if "trace_id" not in event_dict:
-        # Fall back to a fresh UUID so the field is never absent.
-        event_dict["trace_id"] = str(uuid.uuid4())
+    if "trace_id" in event_dict:
+        return event_dict
+    # Local import keeps logging.py importable when OTEL deps are absent.
+    from fleet_platform.core.tracing import current_trace_id_hex
+
+    real = current_trace_id_hex()
+    event_dict["trace_id"] = real if real else str(uuid.uuid4())
     return event_dict
 
 

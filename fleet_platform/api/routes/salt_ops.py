@@ -71,6 +71,12 @@ class ApplyRequest(BaseModel):
     state: str
     minion_ids: list[str]
     pillar: dict | None = None
+    # When true, dispatches `state.apply ... test=True`. Salt evaluates the
+    # state tree and reports what *would* change without making changes —
+    # the same dry-run behaviour as `salt-call --local state.apply test=True`
+    # at the CLI. Used by the UI's "Dry-run" toggle to preview impact before
+    # committing real changes.
+    test: bool = False
 
 
 class CmdRequest(BaseModel):
@@ -106,16 +112,22 @@ async def apply_state(
         state_name=payload.state,
         target_minions=payload.minion_ids,
         pillar_data=payload.pillar,
+        test_mode=payload.test,
     )
     await audit(
         db,
         actor=claims["email"],
-        action="salt.state.apply",
+        action="salt.state.apply.test" if payload.test else "salt.state.apply",
         resource_type="salt_state",
-        new_value={"state": payload.state, "minion_ids": payload.minion_ids, "task_id": task.id},
+        new_value={
+            "state": payload.state,
+            "minion_ids": payload.minion_ids,
+            "task_id": task.id,
+            "test": payload.test,
+        },
     )
     await db.commit()
-    return {"task_id": task.id}
+    return {"task_id": task.id, "test": payload.test}
 
 
 @router.get("/allowlist")

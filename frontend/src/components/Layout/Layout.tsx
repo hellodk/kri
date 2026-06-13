@@ -1,3 +1,4 @@
+import { Suspense } from 'react'
 import { Link } from 'react-router-dom'
 import { Outlet } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
@@ -6,6 +7,15 @@ import { TopBar } from './TopBar'
 import { ToastContainer } from '../ToastContainer'
 import { saltMastersApi } from '../../api/saltMasters'
 import { fleetActionsBlocked } from '../../lib/saltMasterGuard'
+
+function RouteSpinner() {
+  return (
+    <div className="flex items-center justify-center py-16" role="status" aria-live="polite">
+      <span className="inline-block h-6 w-6 rounded-full border-2 border-gray-300 border-t-brand-600 animate-spin" />
+      <span className="sr-only">Loading…</span>
+    </div>
+  )
+}
 
 function NoMasterBanner() {
   const { data: masters } = useQuery({
@@ -77,7 +87,12 @@ export function Layout() {
         <TopBar />
         <NoMasterBanner />
         <main className="flex-1 overflow-auto p-6" style={{ background: '#F9FAFB' }}>
-          <Outlet />
+          {/* Route-level Suspense boundary for the lazy-loaded pages
+              imported in App.tsx. The fallback is intentionally minimal so
+              switching tabs doesn't flash a layout-breaking placeholder. */}
+          <Suspense fallback={<RouteSpinner />}>
+            <Outlet />
+          </Suspense>
         </main>
       </div>
       <ToastContainer />

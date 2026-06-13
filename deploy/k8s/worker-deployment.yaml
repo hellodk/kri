@@ -71,6 +71,15 @@ spec:
               value: "postgresql+psycopg://fleet:$(POSTGRES_PASSWORD)@postgres.utilities.svc.cluster.local:5432/fleet_platform"
             - name: REDIS_URL
               value: "redis://:$(REDIS_PASSWORD)@redis.utilities.svc.cluster.local:6379/0"
+          # The worker dispatches Salt commands via the HTTP API, but a small
+          # number of housekeeping tasks (e.g. PKI key listing) still SSH to
+          # the salt master. Mount the dedicated service-account keypair from
+          # the kri-worker-ssh Secret. Mode 0600 mirrors how OpenSSH expects
+          # private keys; defaultMode is octal 384 = 0600.
+          volumeMounts:
+            - name: ssh-key
+              mountPath: /home/appuser/.ssh
+              readOnly: true
           livenessProbe:
             exec:
               command:
@@ -98,3 +107,16 @@ spec:
             limits:
               cpu: "2000m"
               memory: "2Gi"
+      volumes:
+        - name: ssh-key
+          secret:
+            secretName: kri-worker-ssh
+            defaultMode: 384  # 0600 — required by OpenSSH for private keys
+            items:
+              - key: id_ed25519
+                path: id_ed25519
+              - key: id_ed25519.pub
+                path: id_ed25519.pub
+              - key: known_hosts
+                path: known_hosts
+                mode: 420       # 0644 — known_hosts must be readable, not 0600

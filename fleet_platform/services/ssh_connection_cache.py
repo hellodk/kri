@@ -2,6 +2,14 @@
 
 Caches asyncssh connections keyed by (host, port, username) with a 5-minute
 idle TTL. Bounded to MAX_CACHED_CONNECTIONS to prevent leaks.
+
+Multi-replica caveat: this cache is per-process. When the API runs with
+replicas > 1, a client whose request lands on replica B cannot reuse a
+connection cached on replica A. The short-term mitigation is k8s
+sessionAffinity=ClientIP on the api Service (deploy/k8s/api-service.yaml);
+the long-term fix is to externalise the registry to Redis so any replica
+can serve any session — see the strategic-backlog issue tied to B2 in the
+sprint plan.
 """
 
 from __future__ import annotations

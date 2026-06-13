@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react'
+import React, { Suspense, lazy, useState, useEffect } from 'react'
 import { useParams, Link } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { fleetApi } from '../api/fleet'
@@ -11,7 +11,6 @@ import { nodeSecretsApi } from '../api/nodeSecrets'
 import {
   iosTrackingApi,
   type IOSNodeDetail,
-  type AddCertBody,
 } from '../api/iosTracking'
 import { vmsApi } from '../api/vms'
 import { saltMastersApi, type SaltMaster } from '../api/saltMasters'
@@ -37,444 +36,22 @@ import { saltOpsApi } from '../api/saltOps'
 import type { Node } from '../types'
 import { LogPane } from '../lib/LogPane'
 import { bootstrapRefetchInterval } from '../lib/bootstrapRefetchInterval'
+import {
+  BOOTSTRAP_STATUS_STYLE,
+  fmtBytes,
+  isMacOSNode,
+  isProtectedTarget,
+  type Tab,
+} from './nodeDetail/utils'
+import { Sparkline } from './nodeDetail/Sparkline'
+import { AiRecommendationPanel } from './nodeDetail/AiRecommendationPanel'
 
-// Mirror of PendingAction.PROTECTED_TARGETS (fleet_platform/models/pending_action.py).
-// Kept in sync by tests/unit/test_protected_targets_ui_629.py.
-const PROTECTED_TARGETS = new Set([
-  'salt-minion', 'salt-master', 'sshd', 'mdnsresponder', 'configd', 'powerd',
-  'securityd', 'trustd', 'opendirectoryd', 'syslogd', 'networkd', 'launchd',
-  'kernel_task', 'windowserver', 'exo',
-])
-function isProtectedTarget(name: string): boolean {
-  if (!name) return false
-  const n = name.trim().toLowerCase()
-  const bare = n.includes('.') ? n.split('.').pop()! : n
-  return PROTECTED_TARGETS.has(n) || PROTECTED_TARGETS.has(bare)
-}
-
-function isMacOSNode(node: Node): boolean {
-  return !!(node.macos_version || node.xcode_version)
-}
-
-function fmtBytes(n: number | null): string {
-  if (n == null) return '—'
-  if (n >= 1_073_741_824) return (n / 1_073_741_824).toFixed(1) + ' GB'
-  if (n >= 1_048_576)     return (n / 1_048_576).toFixed(1) + ' MB'
-  if (n >= 1_024)         return (n / 1_024).toFixed(1) + ' KB'
-  return n + ' B'
-}
-
-const CERT_TYPES = ['code_signing', 'provisioning', 'distribution', 'other']
-
-// ── iOS Tab Panel ──────────────────────────────────────────────────────────────
-
-function AddCertForm({ nodeId, onClose, qc, toast }: {
-  nodeId: string
-  onClose: () => void
-  qc: ReturnType<typeof useQueryClient>
-  toast: (message: string, type?: 'success' | 'error' | 'info') => void
-}) {
-  const [form, setForm] = useState<AddCertBody>({
-    name: '',
-    cert_type: 'code_signing',
-    team_id: '',
-    expiry_date: '',
-    fingerprint: '',
-  })
-
-  const mut = useMutation({
-    mutationFn: () => iosTrackingApi.addCertificate(nodeId, form),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['ios-node-detail', nodeId] })
-      toast('Certificate added', 'success')
-      onClose()
-    },
-    onError: (err: Error) => toast(err.message, 'error'),
-  })
-
-  return (
-    <div className="p-4 bg-gray-50 border border-gray-200 rounded-lg space-y-3 mb-4">
-      <h3 className="text-sm font-semibold text-gray-800">Add Certificate</h3>
-      <div className="grid grid-cols-2 gap-3">
-        <div>
-          <label className="block text-xs font-medium text-gray-600 mb-1">Name</label>
-          <input type="text" value={form.name}
-            onChange={(e) => setForm({ ...form, name: e.target.value })}
-            className="w-full px-3 py-1.5 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-500" />
-        </div>
-        <div>
-          <label className="block text-xs font-medium text-gray-600 mb-1">Type</label>
-          <select value={form.cert_type}
-            onChange={(e) => setForm({ ...form, cert_type: e.target.value })}
-            className="w-full px-3 py-1.5 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-500">
-            {CERT_TYPES.map((t) => <option key={t} value={t}>{t}</option>)}
-          </select>
-        </div>
-        <div>
-          <label className="block text-xs font-medium text-gray-600 mb-1">Team ID</label>
-          <input type="text" value={form.team_id ?? ''}
-            onChange={(e) => setForm({ ...form, team_id: e.target.value })}
-            className="w-full px-3 py-1.5 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-500" />
-        </div>
-        <div>
-          <label className="block text-xs font-medium text-gray-600 mb-1">Expiry Date</label>
-          <input type="date" value={form.expiry_date}
-            onChange={(e) => setForm({ ...form, expiry_date: e.target.value })}
-            className="w-full px-3 py-1.5 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-500" />
-        </div>
-      </div>
-      <div>
-        <label className="block text-xs font-medium text-gray-600 mb-1">Fingerprint (optional)</label>
-        <input type="text" value={form.fingerprint ?? ''}
-          onChange={(e) => setForm({ ...form, fingerprint: e.target.value })}
-          className="w-full px-3 py-1.5 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-500 font-mono" />
-      </div>
-      <div className="flex gap-2">
-        <button
-          disabled={!form.name || !form.expiry_date || mut.isPending}
-          onClick={() => mut.mutate()}
-          className="px-4 py-1.5 rounded-lg bg-brand-600 text-white text-sm font-medium hover:bg-brand-700 disabled:opacity-50 transition-colors"
-        >
-          {mut.isPending ? 'Adding…' : 'Add Certificate'}
-        </button>
-        <button onClick={onClose}
-          className="px-4 py-1.5 rounded-lg border border-gray-300 text-sm text-gray-600 hover:bg-gray-50 transition-colors">
-          Cancel
-        </button>
-      </div>
-    </div>
-  )
-}
-
-function IOSTabPanel({
-  node,
-  nodeId,
-  iosDetail,
-  showAddCert,
-  setShowAddCert,
-  showJenkinsConfigure,
-  setShowJenkinsConfigure,
-  jenkinsForm,
-  setJenkinsForm,
-  checkingJenkins,
-  checkJenkinsNow,
-  deleteCertMutation,
-  upsertJenkinsMutation,
-  qc,
-  toast,
-}: {
-  node: Node
-  nodeId: string
-  iosDetail: IOSNodeDetail | null
-  showAddCert: boolean
-  setShowAddCert: (v: boolean) => void
-  showJenkinsConfigure: boolean
-  setShowJenkinsConfigure: (v: boolean) => void
-  jenkinsForm: { jenkins_url: string; agent_name: string }
-  setJenkinsForm: (v: { jenkins_url: string; agent_name: string }) => void
-  checkingJenkins: boolean
-  checkJenkinsNow: () => Promise<void>
-  deleteCertMutation: { mutate: (certId: string) => void; isPending: boolean }
-  upsertJenkinsMutation: { mutate: (body: { jenkins_url: string; agent_name: string }) => void; isPending: boolean }
-  qc: ReturnType<typeof useQueryClient>
-  toast: (message: string, type?: 'success' | 'error' | 'info') => void
-}) {
-  const [deletingCert, setDeletingCert] = useState<string | null>(null)
-  const agent = iosDetail?.jenkins_agent ?? null
-  const certs = iosDetail?.certificates ?? []
-
-  return (
-    <div className="space-y-4">
-      {/* Build Environment card */}
-      <div className="bg-white rounded-lg border border-gray-200 p-4">
-        <h3 className="font-semibold text-gray-700 mb-3">Build Environment</h3>
-        <dl className="grid grid-cols-2 gap-x-6 gap-y-2 text-sm">
-          <div className="flex justify-between">
-            <dt className="text-gray-500">macOS Version</dt>
-            <dd className="font-medium font-mono">{node.macos_version ?? '—'}</dd>
-          </div>
-          <div className="flex justify-between">
-            <dt className="text-gray-500">Xcode Version</dt>
-            <dd className="font-medium font-mono">{node.xcode_version ?? '—'}</dd>
-          </div>
-        </dl>
-      </div>
-
-      {/* Jenkins Agent card */}
-      <div className="bg-white rounded-lg border border-gray-200 p-4">
-        <div className="flex items-center justify-between mb-3">
-          <h3 className="font-semibold text-gray-700">Jenkins Agent</h3>
-          <div className="flex items-center gap-2">
-            <button
-              onClick={checkJenkinsNow}
-              disabled={checkingJenkins || !agent}
-              className="text-xs text-brand-600 hover:text-brand-800 font-medium disabled:opacity-40"
-            >
-              {checkingJenkins ? 'Checking…' : 'Check now'}
-            </button>
-            <button
-              onClick={() => {
-                setJenkinsForm({ jenkins_url: agent?.jenkins_url ?? '', agent_name: agent?.agent_name ?? '' })
-                setShowJenkinsConfigure(!showJenkinsConfigure)
-              }}
-              className="text-xs text-gray-600 hover:text-gray-800 font-medium border border-gray-300 rounded px-2 py-1"
-            >
-              Configure
-            </button>
-          </div>
-        </div>
-
-        {showJenkinsConfigure && (
-          <div className="p-4 bg-gray-50 border border-gray-200 rounded-lg space-y-3 mb-4">
-            <div>
-              <label className="block text-xs font-medium text-gray-600 mb-1">Jenkins URL</label>
-              <input type="url" value={jenkinsForm.jenkins_url}
-                onChange={(e) => setJenkinsForm({ ...jenkinsForm, jenkins_url: e.target.value })}
-                placeholder="https://jenkins.example.com"
-                className="w-full px-3 py-1.5 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-500" />
-            </div>
-            <div>
-              <label className="block text-xs font-medium text-gray-600 mb-1">Agent Name</label>
-              <input type="text" value={jenkinsForm.agent_name}
-                onChange={(e) => setJenkinsForm({ ...jenkinsForm, agent_name: e.target.value })}
-                placeholder="mac-mini-agent-01"
-                className="w-full px-3 py-1.5 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-500" />
-            </div>
-            <div className="flex gap-2">
-              <button
-                disabled={!jenkinsForm.jenkins_url || !jenkinsForm.agent_name || upsertJenkinsMutation.isPending}
-                onClick={() => upsertJenkinsMutation.mutate(jenkinsForm)}
-                className="px-4 py-1.5 rounded-lg bg-brand-600 text-white text-sm font-medium hover:bg-brand-700 disabled:opacity-50 transition-colors"
-              >
-                {upsertJenkinsMutation.isPending ? 'Saving…' : 'Save'}
-              </button>
-              <button onClick={() => setShowJenkinsConfigure(false)}
-                className="px-4 py-1.5 rounded-lg border border-gray-300 text-sm text-gray-600 hover:bg-gray-50 transition-colors">
-                Cancel
-              </button>
-            </div>
-          </div>
-        )}
-
-        {agent ? (
-          <dl className="space-y-2 text-sm">
-            <div className="flex items-center justify-between">
-              <dt className="text-gray-500">Status</dt>
-              <dd>
-                <span className="inline-flex items-center gap-1.5">
-                  <span className={`w-2 h-2 rounded-full flex-shrink-0 ${
-                    agent.status === 'online' ? 'bg-green-500' : agent.status === 'offline' ? 'bg-red-500' : 'bg-gray-400'
-                  }`} />
-                  <span className="text-xs capitalize text-gray-700">{agent.status}</span>
-                </span>
-              </dd>
-            </div>
-            <div className="flex justify-between">
-              <dt className="text-gray-500">Jenkins URL</dt>
-              <dd className="font-mono text-xs text-gray-700">{agent.jenkins_url}</dd>
-            </div>
-            <div className="flex justify-between">
-              <dt className="text-gray-500">Agent Name</dt>
-              <dd className="font-mono text-xs text-gray-700">{agent.agent_name}</dd>
-            </div>
-            <div className="flex justify-between">
-              <dt className="text-gray-500">Last Checked</dt>
-              <dd className="text-xs text-gray-500">
-                {agent.last_checked_at
-                  ? formatDistanceToNow(new Date(agent.last_checked_at), { addSuffix: true })
-                  : '—'}
-              </dd>
-            </div>
-          </dl>
-        ) : (
-          <p className="text-sm text-gray-600">No Jenkins agent configured. Click "Configure" to set one up.</p>
-        )}
-      </div>
-
-      {/* Certificates card */}
-      <div className="bg-white rounded-lg border border-gray-200 p-4">
-        <div className="flex items-center justify-between mb-3">
-          <h3 className="font-semibold text-gray-700">Certificates</h3>
-          <button
-            onClick={() => setShowAddCert(!showAddCert)}
-            className="text-xs text-brand-600 hover:text-brand-800 font-medium border border-brand-200 rounded px-2 py-1"
-          >
-            + Add cert
-          </button>
-        </div>
-
-        {showAddCert && (
-          <AddCertForm
-            nodeId={nodeId}
-            onClose={() => setShowAddCert(false)}
-            qc={qc}
-            toast={toast}
-          />
-        )}
-
-        {certs.length === 0 ? (
-          <p className="text-sm text-gray-600">No certificates tracked for this node.</p>
-        ) : (
-          <div className="overflow-hidden rounded-lg border border-gray-200">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="bg-gray-50 border-b border-gray-200 text-left text-xs text-gray-500 uppercase tracking-wide">
-                  <th className="px-4 py-3">Name</th>
-                  <th className="px-4 py-3">Type</th>
-                  <th className="px-4 py-3">Team ID</th>
-                  <th className="px-4 py-3">Expiry</th>
-                  <th className="px-4 py-3">Fingerprint</th>
-                  <th className="px-4 py-3"></th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-100">
-                {certs.map((cert) => {
-                  const d = differenceInDays(parseISO(cert.expiry_date), new Date())
-                  const expiryClass = d < 0 ? 'text-red-700 font-semibold' : d < 30 ? 'text-red-600 font-medium' : d < 60 ? 'text-amber-600 font-medium' : 'text-gray-700'
-                  return (
-                    <tr key={cert.id} className="hover:bg-gray-50">
-                      <td className="px-4 py-2 font-medium text-gray-800">{cert.name}</td>
-                      <td className="px-4 py-2">
-                        <span className="px-2 py-0.5 rounded bg-blue-50 text-blue-700 text-xs font-medium">
-                          {cert.cert_type}
-                        </span>
-                      </td>
-                      <td className="px-4 py-2 font-mono text-xs text-gray-600">{cert.team_id ?? '—'}</td>
-                      <td className={`px-4 py-2 text-xs ${expiryClass}`}>
-                        {cert.expiry_date}
-                        {d < 60 && d >= 0 && <span className="ml-1">({d}d)</span>}
-                        {d < 0 && <span className="ml-1">(expired)</span>}
-                      </td>
-                      <td className="px-4 py-2 font-mono text-xs text-gray-500 max-w-[120px] truncate" title={cert.fingerprint ?? ''}>
-                        {cert.fingerprint ? cert.fingerprint.slice(0, 16) + '…' : '—'}
-                      </td>
-                      <td className="px-4 py-2 text-right">
-                        <button
-                          onClick={() => setDeletingCert(cert.id)}
-                          disabled={deleteCertMutation.isPending}
-                          className="text-xs text-red-500 hover:text-red-700 font-medium disabled:opacity-50"
-                        >
-                          Delete
-                        </button>
-                      </td>
-                    </tr>
-                  )
-                })}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </div>
-      {deletingCert && (
-        <ConfirmDialog
-          title="Delete this certificate?"
-          message="This certificate will be permanently removed from the node."
-          confirmLabel="Delete"
-          destructive
-          onConfirm={() => { deleteCertMutation.mutate(deletingCert); setDeletingCert(null) }}
-          onCancel={() => setDeletingCert(null)}
-        />
-      )}
-    </div>
-  )
-}
-
-const BOOTSTRAP_STATUS_STYLE: Record<string, { label: string; colour: string; bg: string }> = {
-  unregistered: { label: 'Not bootstrapped', colour: 'text-gray-500', bg: 'bg-gray-50 border-gray-200' },
-  pending:      { label: 'Queued',           colour: 'text-gray-600', bg: 'bg-gray-50 border-gray-200' },
-  bootstrapping:{ label: 'Running…',         colour: 'text-brand-600', bg: 'bg-brand-50 border-brand-200' },
-  completed:    { label: 'Completed',        colour: 'text-emerald-700', bg: 'bg-emerald-50 border-emerald-200' },
-  failed:       { label: 'Failed',           colour: 'text-red-700', bg: 'bg-red-50 border-red-200' },
-}
-
-type Tab = 'overview' | 'drift' | 'sbom' | 'executions' | 'bootstrap-history' | 'secrets' | 'ios' | 'services' | 'resources' | 'processes'
-
-function Sparkline({ data, color = '#3b82f6', height = 40 }: { data: Array<{t: number; v: number}>; color?: string; height?: number }) {
-  if (!data || data.length < 2) return <span className="text-xs text-gray-400">No data</span>
-  const vals = data.map(d => d.v)
-  const min = Math.min(...vals)
-  const max = Math.max(...vals)
-  const range = max - min || 1
-  const w = 180
-  const pts = data.map((d, i) => {
-    const x = (i / (data.length - 1)) * w
-    const y = height - ((d.v - min) / range) * (height - 4) - 2
-    return `${x},${y}`
-  })
-  const last = vals[vals.length - 1]
-  return (
-    <div className="flex items-center gap-2">
-      <svg width={w} height={height} className="shrink-0">
-        <polyline points={pts.join(' ')} fill="none" stroke={color} strokeWidth="1.5" />
-      </svg>
-      <span className="text-sm font-mono font-semibold text-gray-800">{last.toFixed(1)}</span>
-    </div>
-  )
-}
-
-/**
- * Renders an AI recommendation text with light markdown-style formatting.
- * Bold **text** is highlighted, numbered list items get visual separation,
- * and the overall block is readable without depending on a markdown library.
- */
-function AiRecommendationPanel({ text }: { text: string }) {
-  const lines = text.split('\n')
-
-  function renderLine(line: string, idx: number) {
-    // Bold: **text** or __text__
-    const boldPattern = /\*\*(.+?)\*\*|__(.+?)__/g
-    const parts: React.ReactNode[] = []
-    let last = 0
-    let match: RegExpExecArray | null
-    let key = 0
-    while ((match = boldPattern.exec(line)) !== null) {
-      if (match.index > last) parts.push(line.slice(last, match.index))
-      parts.push(<strong key={key++} className="font-semibold text-gray-900">{match[1] ?? match[2]}</strong>)
-      last = match.index + match[0].length
-    }
-    if (last < line.length) parts.push(line.slice(last))
-
-    // Numbered items get a subtle indent
-    const isNumbered = /^\s*\d+[.)]\s/.test(line)
-    // Bullet items
-    const isBullet = /^\s*[-*]\s/.test(line)
-    // Section headers (e.g. "## Heading" or "### Heading")
-    const isHeading = /^#{1,3}\s/.test(line)
-
-    if (isHeading) {
-      const headText = line.replace(/^#{1,3}\s/, '')
-      return (
-        <p key={idx} className="text-xs font-bold uppercase tracking-wide text-indigo-700 mt-3 mb-1">
-          {headText}
-        </p>
-      )
-    }
-    if (isNumbered || isBullet) {
-      return (
-        <div key={idx} className="flex gap-2 mt-1">
-          <span className="text-indigo-400 shrink-0 mt-0.5">{isBullet ? '•' : ''}</span>
-          <p className="text-sm text-gray-800 leading-relaxed">{parts.length ? parts : line}</p>
-        </div>
-      )
-    }
-    if (line.trim() === '') return <div key={idx} className="h-2" />
-
-    return (
-      <p key={idx} className="text-sm text-gray-800 leading-relaxed mt-0.5">
-        {parts.length ? parts : line}
-      </p>
-    )
-  }
-
-  return (
-    <div className="bg-white rounded-lg border border-blue-100 p-4 space-y-0.5">
-      {lines.map((line, idx) => renderLine(line, idx))}
-      <p className="text-xs text-gray-500 mt-3 pt-2 border-t border-gray-100">
-        AI-generated — verify before acting. Actions require approval.
-      </p>
-    </div>
-  )
-}
+// IOSTabPanel is only rendered for macOS/iOS hosts and pulls in heavier
+// dependencies (date-fns differenceInDays/parseISO, ConfirmDialog, the iOS
+// tracking API client). React.lazy keeps it out of the initial NodeDetail
+// chunk; <Suspense> below provides a skeleton until the chunk loads
+// (#arch-nodedetail).
+const IOSTabPanel = lazy(() => import('./nodeDetail/IOSTabPanel'))
 
 export function NodeDetail() {
   const { nodeId } = useParams<{ nodeId: string }>()
@@ -2358,23 +1935,25 @@ export function NodeDetail() {
       )}
 
       {tab === 'ios' && isMacOSNode(node) && (
-        <IOSTabPanel
-          node={node}
-          nodeId={nodeId!}
-          iosDetail={iosDetail ?? null}
-          showAddCert={showAddCert}
-          setShowAddCert={setShowAddCert}
-          showJenkinsConfigure={showJenkinsConfigure}
-          setShowJenkinsConfigure={setShowJenkinsConfigure}
-          jenkinsForm={jenkinsForm}
-          setJenkinsForm={setJenkinsForm}
-          checkingJenkins={checkingJenkins}
-          checkJenkinsNow={checkJenkinsNow}
-          deleteCertMutation={deleteCertMutation}
-          upsertJenkinsMutation={upsertJenkinsMutation}
-          qc={qc}
-          toast={toast}
-        />
+        <Suspense fallback={<Skeleton rows={6} />}>
+          <IOSTabPanel
+            node={node}
+            nodeId={nodeId!}
+            iosDetail={iosDetail ?? null}
+            showAddCert={showAddCert}
+            setShowAddCert={setShowAddCert}
+            showJenkinsConfigure={showJenkinsConfigure}
+            setShowJenkinsConfigure={setShowJenkinsConfigure}
+            jenkinsForm={jenkinsForm}
+            setJenkinsForm={setJenkinsForm}
+            checkingJenkins={checkingJenkins}
+            checkJenkinsNow={checkJenkinsNow}
+            deleteCertMutation={deleteCertMutation}
+            upsertJenkinsMutation={upsertJenkinsMutation}
+            qc={qc}
+            toast={toast}
+          />
+        </Suspense>
       )}
 
       {tab === 'bootstrap-history' && (

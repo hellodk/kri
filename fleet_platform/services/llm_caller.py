@@ -1,5 +1,6 @@
 # fleet_platform/services/llm_caller.py
 import json as _json
+from collections.abc import AsyncIterator
 
 import httpx
 
@@ -251,3 +252,189 @@ async def call_anthropic(
     block = message.content[0]
     content: str = block.text if hasattr(block, "text") else ""
     return content, message.usage.input_tokens, message.usage.output_tokens
+
+
+# ── Streaming variants (SSE-friendly) ────────────────────────────────────────
+# These yield one event per delta so the API route can re-emit them as SSE
+# straight to the browser. Each call emits at least one ``done`` event with
+# token usage and the joined content; callers are expected to forward that
+# to the query log writer.
+#
+# Event shapes:
+#   {"type": "delta", "text": "<chunk>"}
+#   {"type": "done",  "content": "<full>", "input_tokens": int, "output_tokens": int}
+#   {"type": "error", "error": "<message>"}
+
+
+async def stream_openai_compat(
+    *,
+    base_url: str,
+    api_key: str | None,
+    model: str,
+    max_tokens: int,
+    system_prompt: str,
+    user_prompt: str,
+    history: list[dict] | None = None,
+    model_context_length: int | None = None,
+    model_capabilities: list[str] | None = None,
+) -> AsyncIterator[dict]:
+    """Stream an OpenAI-compatible /chat/completions response chunk-by-chunk.
+
+    Performs the same prompt budgeting, thinking-block stripping, and
+    echo-detection as :func:`call_openai_compat` so the streamed text is
+    consistent with the buffered call. Cancelling the consumer (closing the
+    HTTP response) causes httpx to abort the upstream request.
+    """
+    import re as _re
+
+    headers: dict[str, str] = {"Content-Type": "application/json"}
+    if api_key:
+        headers["Authorization"] = f"Bearer {api_key}"
+
+    is_thinking = bool(model_capabilities and "thinking" in model_capabilities)
+
+    ctx = model_context_length or 8192
+    if max_tokens > ctx:
+        max_tokens = ctx
+
+    max_system_chars = max(1000, (ctx - max_tokens) * 4 - 200)
+    system_prompt = _truncate_system_prompt(system_prompt, max_system_chars)
+
+    messages: list[dict] = [{"role": "system", "content": system_prompt}]
+    if history:
+        messages.extend(history[-10:])
+    messages.append({"role": "user", "content": user_prompt})
+
+    payload: dict = {
+        "model": model,
+        "max_tokens": max_tokens,
+        "temperature": 0.3,
+        "top_p": 0.9,
+        "messages": messages,
+        "stream": True,
+    }
+    if not is_thinking:
+        payload["stop"] = ["</s>", "<|im_end|>", "<|endoftext|>", "Human:", "User:"]
+
+    content_parts: list[str] = []
+    prompt_tokens = 0
+    completion_tokens = 0
+
+    try:
+        async with httpx.AsyncClient(timeout=_STREAM_TIMEOUT) as client:
+            async with client.stream(
+                "POST",
+                f"{normalize_openai_base_url(base_url)}/v1/chat/completions",
+                headers=headers,
+                json=payload,
+            ) as response:
+                response.raise_for_status()
+                async for raw_line in response.aiter_lines():
+                    line = raw_line.strip()
+                    if not line or not line.startswith("data:"):
+                        continue
+                    data_str = line[len("data:") :].strip()
+                    if data_str == "[DONE]":
+                        break
+                    try:
+                        chunk = _json.loads(data_str)
+                    except _json.JSONDecodeError:
+                        continue
+                    for choice in chunk.get("choices", []):
+                        delta = choice.get("delta", {})
+                        text = delta.get("content")
+                        if text:
+                            content_parts.append(text)
+                            yield {"type": "delta", "text": text}
+                    if "usage" in chunk and chunk["usage"]:
+                        prompt_tokens = chunk["usage"].get("prompt_tokens", 0) or 0
+                        completion_tokens = chunk["usage"].get("completion_tokens", 0) or 0
+    except httpx.HTTPStatusError as exc:
+        yield {"type": "error", "error": _describe_http_error(exc, base_url)}
+        return
+    except httpx.ReadTimeout:
+        yield {
+            "type": "error",
+            "error": f"Stream stalled — no chunk received within {_READ_TIMEOUT}s.",
+        }
+        return
+    except httpx.TimeoutException:
+        yield {"type": "error", "error": f"Connection timed out after {_CONNECT_TIMEOUT}s"}
+        return
+    except httpx.RequestError as exc:
+        yield {"type": "error", "error": f"Network error: {exc}"}
+        return
+
+    content = "".join(content_parts)
+    if not content:
+        content = "[Model returned an empty stream response. Try a larger model or simplify your question.]"
+
+    if is_thinking:
+        content = _re.sub(r"<think>.*?</think>", "", content, flags=_re.DOTALL).strip()
+        if not content:
+            content = "[Model returned only a thinking block with no final answer.]"
+    else:
+        content = _validate_response(content, system_prompt)
+
+    yield {
+        "type": "done",
+        "content": content,
+        "input_tokens": prompt_tokens,
+        "output_tokens": completion_tokens,
+    }
+
+
+async def stream_anthropic(
+    *,
+    api_key: str,
+    model: str,
+    max_tokens: int,
+    system_prompt: str,
+    user_prompt: str,
+    history: list[dict] | None = None,
+) -> AsyncIterator[dict]:
+    """Stream Claude messages using the native anthropic SDK's messages.stream.
+
+    Yields one ``delta`` event per text chunk plus a final ``done`` event with
+    token counts. Errors surface as a single ``error`` event.
+    """
+    import anthropic
+
+    client = anthropic.AsyncAnthropic(api_key=api_key)
+    messages: list[dict] = []
+    if history:
+        messages.extend(history[-10:])
+    messages.append({"role": "user", "content": user_prompt})
+
+    content_parts: list[str] = []
+    input_tokens = 0
+    output_tokens = 0
+
+    try:
+        async with client.messages.stream(
+            model=model,
+            max_tokens=max_tokens,
+            system=system_prompt,
+            messages=messages,  # type: ignore[arg-type]
+        ) as stream:
+            async for text in stream.text_stream:
+                if text:
+                    content_parts.append(text)
+                    yield {"type": "delta", "text": text}
+            final_message = await stream.get_final_message()
+            input_tokens = final_message.usage.input_tokens
+            output_tokens = final_message.usage.output_tokens
+    except anthropic.APIError as exc:
+        yield {"type": "error", "error": f"Anthropic API error: {exc}"}
+        return
+    except Exception as exc:  # noqa: BLE001
+        yield {"type": "error", "error": f"Anthropic stream failed: {exc}"}
+        return
+
+    content = "".join(content_parts) or "[Model returned an empty stream response.]"
+    yield {
+        "type": "done",
+        "content": content,
+        "input_tokens": input_tokens,
+        "output_tokens": output_tokens,
+    }

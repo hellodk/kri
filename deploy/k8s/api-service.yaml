@@ -15,3 +15,13 @@ spec:
       targetPort: 8000
       protocol: TCP
   type: ClusterIP
+  # WebSSH/VNC sessions and the in-process SSH connection cache
+  # (fleet_platform/services/ssh_connection_cache.py) hold per-process state.
+  # Pinning a client to one pod for the lifetime of an SSH session prevents
+  # reconnects from landing on a replica that lacks the cached connection.
+  # Long-term: replace the in-process cache with a Redis-backed registry
+  # so this affinity is no longer load-bearing.
+  sessionAffinity: ClientIP
+  sessionAffinityConfig:
+    clientIP:
+      timeoutSeconds: 10800

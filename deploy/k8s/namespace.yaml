@@ -1,0 +1,7 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: kri
+  labels:
+    app.kubernetes.io/name: kri
+    app.kubernetes.io/part-of: kri-fleet-platform

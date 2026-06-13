@@ -118,7 +118,7 @@ export function SaltOpsPage() {
     }
   }
 
-  async function applyState(pillar: Record<string, string>) {
+  async function applyState(pillar: Record<string, string>, test: boolean) {
     if (!selectedState || selectedMinions.size === 0) return
     setApplying(true)
     setTaskOutput(null)
@@ -128,9 +128,12 @@ export function SaltOpsPage() {
         selectedState.name,
         Array.from(selectedMinions),
         Object.keys(pillar).length > 0 ? pillar : undefined,
+        test,
       )
       setTaskId(resp.task_id)
-      toast(`State "${selectedState.display}" queued`)
+      toast(test
+        ? `Dry-run "${selectedState.display}" queued — no changes will be applied`
+        : `State "${selectedState.display}" queued`)
     } catch (e: unknown) {
       setApplying(false)
       toast(e instanceof Error ? e.message : 'Apply failed', 'error')
@@ -433,11 +436,13 @@ export function SaltOpsPage() {
               {(applying || taskOutput) && (
                 <div className={`rounded-xl border overflow-hidden ${
                   taskOutput?.status === 'ok' ? 'border-emerald-200' :
+                  taskOutput?.status === 'ok_test' ? 'border-amber-200' :
                   taskOutput?.status === 'error' ? 'border-red-200' :
                   'border-brand-200'
                 }`}>
                   <div className={`px-4 py-3 flex items-center gap-2 text-sm font-medium ${
                     taskOutput?.status === 'ok' ? 'bg-emerald-50 text-emerald-800' :
+                    taskOutput?.status === 'ok_test' ? 'bg-amber-50 text-amber-800' :
                     taskOutput?.status === 'error' ? 'bg-red-50 text-red-800' :
                     'bg-brand-50 text-brand-800'
                   }`}>
@@ -445,6 +450,7 @@ export function SaltOpsPage() {
                       <div className="w-3.5 h-3.5 border-2 border-brand-600 border-t-transparent rounded-full animate-spin" />
                     )}
                     {taskOutput?.status === 'ok' ? '✓ Completed successfully' :
+                     taskOutput?.status === 'ok_test' ? '⚠ Dry-run completed — no changes applied' :
                      taskOutput?.status === 'error' ? '✗ Completed with errors' :
                      taskStatus?.state === 'PENDING' ? 'Queued…' :
                      taskStatus?.state === 'STARTED' ? 'Running…' :
@@ -584,9 +590,9 @@ export function SaltOpsPage() {
           state={selectedState.display}
           minionIds={Array.from(selectedMinions)}
           onClose={() => setShowPillarDialog(false)}
-          onConfirm={(pillar) => {
+          onConfirm={(pillar, test) => {
             setShowPillarDialog(false)
-            applyState(pillar)
+            applyState(pillar, test)
           }}
         />
       )}

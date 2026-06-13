@@ -1,0 +1,49 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.kri.api</string>
+
+    <key>ProgramArguments</key>
+    <array>
+        <string>/bin/bash</string>
+        <string>/opt/kri/deploy/launchd/run.sh</string>
+        <string>api</string>
+    </array>
+
+    <key>WorkingDirectory</key>
+    <string>/opt/kri</string>
+
+    <!-- Run at load and restart automatically on failure. The 5-second
+         throttle prevents tight crash-loops from saturating the system. -->
+    <key>RunAtLoad</key>
+    <true/>
+    <key>KeepAlive</key>
+    <dict>
+        <key>SuccessfulExit</key>
+        <false/>
+    </dict>
+    <key>ThrottleInterval</key>
+    <integer>5</integer>
+
+    <!-- Run as the kri service user (created via sysadminctl — see README). -->
+    <key>UserName</key>
+    <string>kri</string>
+    <key>GroupName</key>
+    <string>kri</string>
+
+    <!-- macOS has no journald; logs land here. logrotate equivalent is the
+         sysctl 'newsyslog' tool — see README for /etc/newsyslog.d entry. -->
+    <key>StandardOutPath</key>
+    <string>/var/log/kri/api.out.log</string>
+    <key>StandardErrorPath</key>
+    <string>/var/log/kri/api.err.log</string>
+
+    <!-- Wait for network availability before starting (PostgreSQL/Redis
+         are typically on loopback or LAN; this guards against early-boot
+         races where launchd starts kri before the network is up). -->
+    <key>NetworkState</key>
+    <true/>
+</dict>
+</plist>

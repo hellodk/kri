@@ -1,9 +1,15 @@
-# Use Docker's embedded DNS resolver so nginx re-resolves 'api' on every
-# request cycle rather than caching the IP at startup. Without this, nginx
-# caches the IP resolved at boot time — if the API container is redeployed
-# and gets a new IP, nginx keeps trying the old one and returns 502 until
-# the frontend container is also restarted.
-resolver 127.0.0.11 valid=5s ipv6=off;
+# Re-resolve upstream DNS on every request cycle so the nginx container
+# tolerates an api-pod IP change without a frontend restart.
+#
+# NGINX_RESOLVER is substituted at container start via the nginx image's
+# /etc/nginx/templates entrypoint (see deploy/Dockerfile.frontend). Defaults:
+#   Docker (default bridge / docker-compose): 127.0.0.11
+#   Podman rootful (netavark default):        10.88.0.1
+#   Podman rootless (slirp4netns / pasta):    10.0.2.3
+#   Kubernetes (resolve via cluster DNS):     kube-dns.kube-system.svc.cluster.local
+#                                             (or just remove the resolver line and
+#                                              rely on Service VIPs which are stable)
+resolver ${NGINX_RESOLVER} valid=5s ipv6=off;
 
 server {
     listen 80;
@@ -66,6 +72,14 @@ server {
         proxy_set_header X-Real-IP $remote_addr;
         proxy_connect_timeout 5s;
         proxy_read_timeout 10s;
+    }
+
+    # K8s liveness/readiness probe — must not depend on upstream API.
+    # Returns 200 OK as long as nginx itself is serving requests.
+    location = /healthz {
+        access_log off;
+        add_header Content-Type text/plain;
+        return 200 "ok\n";
     }
 
     # SPA fallback

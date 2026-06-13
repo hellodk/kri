@@ -1,7 +1,37 @@
 from celery import Celery
 from celery.schedules import crontab
+from celery.signals import worker_process_init
 
 from fleet_platform.core.config import settings
+
+
+@worker_process_init.connect
+def _init_worker_observability(**_kwargs) -> None:
+    """Initialise structured logging and OpenTelemetry once per worker process.
+
+    Celery prefork creates one process per concurrency slot; both structlog
+    and the OTEL SDK store state in module globals that must live in each
+    child, not the parent. ``worker_process_init`` is the standard hook.
+
+    Without ``configure_logging()`` here, worker stdout would be plain stdlib
+    text rather than the JSON-with-trace_id format that the API emits — the
+    OTEL backend can still join records by trace_id, but Loki/Promtail can't.
+    """
+    from fleet_platform.core.logging import configure_logging
+    from fleet_platform.core.tracing import (
+        configure_tracing,
+        instrument_celery,
+        instrument_httpx,
+        instrument_redis,
+        instrument_sqlalchemy,
+    )
+
+    configure_logging()
+    configure_tracing(service_name="kri-worker")
+    instrument_celery()
+    instrument_sqlalchemy()
+    instrument_httpx()
+    instrument_redis()
 
 celery_app = Celery(
     "fleet_platform",

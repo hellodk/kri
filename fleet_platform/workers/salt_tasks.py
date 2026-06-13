@@ -166,34 +166,47 @@ def apply_salt_state(
     state_name: str,
     target_minions: list[str],
     pillar_data: dict | None = None,
+    test_mode: bool = False,
 ) -> dict:
-    """Run: salt -L '{minion1,minion2}' state.apply {state_name} [pillar={...}]
+    """Run: salt -L '{minion1,minion2}' state.apply {state_name} [pillar={...}] [test=True]
 
     Dispatches via Salt HTTP API (salt-api).  Requires a default SaltMaster row
     with api_url / api_user / api_password_enc to be configured in the DB.
+
+    When ``test_mode`` is True, the dry-run kwarg ``test=True`` is added and
+    Salt reports what *would* change without making changes. The status field
+    in the response is set to ``ok_test`` so callers can distinguish a
+    dry-run from a real apply (#prod-salt-test).
     """
     creds = _get_default_master()
     if creds is None or not creds.get("api_url"):
         return _salt_api_not_configured_error()
 
     target = ",".join(target_minions)
-    kwarg: dict[str, Any] | None = None
+    kwarg: dict[str, Any] = {}
     if pillar_data:
-        kwarg = {"pillar": pillar_data}
+        kwarg["pillar"] = pillar_data
+    if test_mode:
+        kwarg["test"] = True
 
     logger.info(
-        "apply_salt_state: target=%s state=%s pillar=%s",
+        "apply_salt_state: target=%s state=%s pillar=%s test=%s",
         target,
         state_name,
         bool(pillar_data),
+        test_mode,
     )
-    return _run_salt_api(
+    result = _run_salt_api(
         function="state.apply",
         target=target,
         args=[state_name],
-        kwarg=kwarg,
+        kwarg=kwarg or None,
         timeout=300,
     )
+    if test_mode and isinstance(result, dict) and result.get("status") == "ok":
+        result["status"] = "ok_test"
+        result["test"] = True
+    return result
 
 
 @celery_app.task(

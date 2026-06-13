@@ -8,7 +8,8 @@ User=kri
 Group=kri
 WorkingDirectory=/opt/kri
 EnvironmentFile=/etc/kri/kri.env
-ExecStart=/usr/bin/uv run celery -A fleet_platform.workers.celery_app worker --queues default,maintenance,drift,sbom --concurrency 4 --loglevel info
+Environment=PATH=/home/kri/.local/bin:/home/linuxbrew/.linuxbrew/bin:/usr/local/bin:/usr/bin:/bin
+ExecStart=/usr/bin/env uv run celery -A fleet_platform.workers.celery_app worker --queues default,maintenance,drift,sbom --concurrency 4 --loglevel info
 Restart=on-failure
 RestartSec=5
 StandardOutput=journal

@@ -11,7 +11,13 @@ User=kri
 Group=kri
 WorkingDirectory=/opt/kri
 EnvironmentFile=/etc/kri/kri.env
-ExecStart=/usr/bin/uv run celery -A fleet_platform.workers.celery_app worker --queues ansible --concurrency 2 --loglevel info
+Environment=PATH=/home/kri/.local/bin:/home/linuxbrew/.linuxbrew/bin:/usr/local/bin:/usr/bin:/bin
+# Long-running ansible jobs (up to ~35 min hard time limit per Celery config).
+# Give systemd a longer TimeoutStopSec so SIGTERM-then-graceful shutdown can
+# complete before SIGKILL — matches the k8s terminationGracePeriodSeconds.
+TimeoutStopSec=3700
+KillSignal=SIGTERM
+ExecStart=/usr/bin/env uv run celery -A fleet_platform.workers.celery_app worker --queues ansible --concurrency 2 --loglevel info
 Restart=on-failure
 RestartSec=5
 StandardOutput=journal

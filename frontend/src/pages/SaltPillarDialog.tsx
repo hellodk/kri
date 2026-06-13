@@ -4,11 +4,14 @@ interface Props {
   state: string
   minionIds: string[]
   onClose: () => void
-  onConfirm: (pillar: Record<string, string>) => void
+  // The second arg carries dry-run intent: true = `state.apply test=True`,
+  // which evaluates the state tree but makes no changes (#prod-salt-test).
+  onConfirm: (pillar: Record<string, string>, test: boolean) => void
 }
 
 export function SaltPillarDialog({ state, minionIds, onClose, onConfirm }: Props) {
   const [pairs, setPairs] = useState<Array<{ key: string; value: string }>>([])
+  const [testMode, setTestMode] = useState(false)
 
   const add = () => setPairs((p) => [...p, { key: '', value: '' }])
   const remove = (i: number) => setPairs((p) => p.filter((_, idx) => idx !== i))
@@ -20,7 +23,7 @@ export function SaltPillarDialog({ state, minionIds, onClose, onConfirm }: Props
     for (const { key, value } of pairs) {
       if (key.trim()) pillar[key.trim()] = value
     }
-    onConfirm(pillar)
+    onConfirm(pillar, testMode)
   }
 
   return (
@@ -129,6 +132,41 @@ export function SaltPillarDialog({ state, minionIds, onClose, onConfirm }: Props
           </button>
         </div>
 
+        {/* Dry-run toggle. When enabled, the request is dispatched with
+            test=True so Salt reports what would change without writing
+            any changes. Maps to the Celery task's test_mode kwarg. */}
+        <label
+          htmlFor="salt-test-mode"
+          style={{
+            display: 'flex',
+            alignItems: 'flex-start',
+            gap: 10,
+            padding: '10px 12px',
+            background: testMode ? '#FEF3C7' : '#F9FAFB',
+            border: testMode ? '1px solid #FCD34D' : '1px solid #E5E7EB',
+            borderRadius: 8,
+            cursor: 'pointer',
+            transition: 'background 120ms, border-color 120ms',
+          }}
+        >
+          <input
+            id="salt-test-mode"
+            type="checkbox"
+            checked={testMode}
+            onChange={(e) => setTestMode(e.target.checked)}
+            style={{ marginTop: 3, cursor: 'pointer' }}
+          />
+          <div style={{ flex: 1 }}>
+            <div style={{ fontSize: 13, fontWeight: 600, color: '#111827' }}>
+              Dry-run (test=True)
+            </div>
+            <div style={{ fontSize: 12, color: '#6B7280', marginTop: 2 }}>
+              Evaluate the state and show what would change. No changes are
+              applied. Equivalent to <code>salt-call state.apply test=True</code>.
+            </div>
+          </div>
+        </label>
+
         <div
           style={{
             display: 'flex',
@@ -158,14 +196,14 @@ export function SaltPillarDialog({ state, minionIds, onClose, onConfirm }: Props
               padding: '8px 18px',
               borderRadius: 8,
               border: 'none',
-              background: '#2563EB',
+              background: testMode ? '#D97706' : '#2563EB',
               color: '#fff',
               fontSize: 14,
               cursor: 'pointer',
               fontWeight: 600,
             }}
           >
-            Run State
+            {testMode ? 'Dry-run' : 'Run State'}
           </button>
         </div>
       </div>

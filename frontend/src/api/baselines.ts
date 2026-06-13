@@ -1,6 +1,10 @@
 import { api } from './client'
 import type { Paginated } from '../types'
 
+// Canonical OS family labels — mirror baseline_loader._VALID_OS_FAMILIES on
+// the backend. `null` means OS-agnostic and applies to any node.
+export type OsFamily = 'Darwin' | 'Linux' | 'FreeBSD' | 'Windows' | null
+
 export interface Baseline {
   id: string
   name: string
@@ -11,6 +15,7 @@ export interface Baseline {
   version: number
   created_at: string
   updated_at: string
+  os_family: OsFamily
 }
 
 export interface BaselineState {
@@ -42,6 +47,7 @@ export const baselinesApi = {
     target_type: string
     target_id?: string
     state_json: object
+    os_family?: OsFamily
   }) => api.post<Baseline>('/api/v1/baselines', { ...payload, git_commit_sha: 'manual' }),
   update: (id: string, payload: {
     name?: string
@@ -49,6 +55,8 @@ export const baselinesApi = {
     target_type?: string
     target_id?: string
     state_json?: object
+    // Send empty string to explicitly clear os_family (becomes OS-agnostic).
+    os_family?: OsFamily | ''
   }) => api.patch<Baseline>(`/api/v1/baselines/${id}`, payload),
   capture: (nodeId: string) => api.get<CaptureResult>(`/api/v1/baselines/capture/${nodeId}`),
 }

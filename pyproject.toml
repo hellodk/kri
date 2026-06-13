@@ -37,6 +37,16 @@ dependencies = [
     "requests>=2.34.2",
     "prometheus-client>=0.20",
     "pgvector>=0.4.2",
+    # OpenTelemetry — wire real distributed tracing so trace_id in logs maps to
+    # spans in Tempo (replaces the random UUID4 fallback in core/logging.py).
+    # Configure via OTEL_EXPORTER_OTLP_ENDPOINT; if unset the SDK is a no-op.
+    "opentelemetry-sdk>=1.27.0",
+    "opentelemetry-exporter-otlp-proto-grpc>=1.27.0",
+    "opentelemetry-instrumentation-fastapi>=0.48b0",
+    "opentelemetry-instrumentation-sqlalchemy>=0.48b0",
+    "opentelemetry-instrumentation-celery>=0.48b0",
+    "opentelemetry-instrumentation-httpx>=0.48b0",
+    "opentelemetry-instrumentation-redis>=0.48b0",
 ]
 
 [project.optional-dependencies]

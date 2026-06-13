@@ -1,33 +1,15 @@
-import { useEffect, useRef, useState } from 'react'
+import { lazy, useEffect, useRef, useState } from 'react'
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { AuthGuard } from './components/AuthGuard'
 import { Layout } from './components/Layout/Layout'
 import { LoginPage } from './pages/LoginPage'
 import { OidcCallbackPage } from './pages/OidcCallbackPage'
+// Eager-load the four hub pages — they're the AuthGuard landing surfaces
+// (`/overview`, `/compliance`, `/automation`, `/fleet`) that operators hit
+// on every login. Splitting them out forces a flash-of-spinner that hurts
+// perceived performance more than it helps the bundle.
 import { FleetDashboard } from './pages/FleetDashboard'
-import { NodeDetail } from './pages/NodeDetail'
-import { DriftExplorer } from './pages/DriftExplorer'
-import { DriftComparePage } from './pages/DriftComparePage'
-import { SBOMExplorer } from './pages/SBOMExplorer'
-import { LicensePage } from './pages/LicensePage'
-import { GroupExplorer } from './pages/GroupExplorer'
-import { GroupDetail } from './pages/GroupDetail'
-import { ExecutionHistory } from './pages/ExecutionHistory'
-import { JobDetail } from './pages/JobDetail'
-import { PlaybookJobDetail } from './pages/PlaybookJobDetail'
-import { SettingsPage } from './pages/SettingsPage'
-import { PlaybooksPage } from './pages/PlaybooksPage'
-import { BaselinesPage } from './pages/BaselinesPage'
-import { ProvisioningPage } from './pages/ProvisioningPage'
-import { SecurityPage } from './pages/SecurityPage'
-import { AuditPage } from './pages/AuditPage'
-import { SaltKeysPage } from './pages/SaltKeysPage'
-import { SaltOpsPage } from './pages/SaltOpsPage'
-import { AlertsPage } from './pages/AlertsPage'
-import FleetHealthPage from './pages/FleetHealthPage'
-import { DashboardPage } from './pages/DashboardPage'
-import { MonitoringPage } from './pages/MonitoringPage'
 import { OverviewHub } from './pages/OverviewHub'
 import { ComplianceHub } from './pages/ComplianceHub'
 import { AutomationHub } from './pages/AutomationHub'
@@ -38,6 +20,35 @@ import { useAuthStore } from './stores/authStore'
 import LLMAssistant from './components/LLMAssistant'
 import { useKeyboardShortcuts } from './hooks/useKeyboardShortcuts'
 import { KeyboardShortcutsOverlay } from './components/KeyboardShortcutsOverlay'
+
+// Everything below is route-level lazy-loaded. NodeDetail (2347 LOC) and
+// BaselinesPage (~700 LOC) alone account for ~30% of the bundle and only
+// load on operator-driven navigation, so deferring them is a clear win
+// (#arch-nodedetail). The default-export shim lets us keep the named
+// exports unchanged in the source files; FleetHealthPage already exports
+// default and needs no shim.
+const NodeDetail = lazy(() => import('./pages/NodeDetail').then((m) => ({ default: m.NodeDetail })))
+const DriftExplorer = lazy(() => import('./pages/DriftExplorer').then((m) => ({ default: m.DriftExplorer })))
+const DriftComparePage = lazy(() => import('./pages/DriftComparePage').then((m) => ({ default: m.DriftComparePage })))
+const SBOMExplorer = lazy(() => import('./pages/SBOMExplorer').then((m) => ({ default: m.SBOMExplorer })))
+const LicensePage = lazy(() => import('./pages/LicensePage').then((m) => ({ default: m.LicensePage })))
+const GroupExplorer = lazy(() => import('./pages/GroupExplorer').then((m) => ({ default: m.GroupExplorer })))
+const GroupDetail = lazy(() => import('./pages/GroupDetail').then((m) => ({ default: m.GroupDetail })))
+const ExecutionHistory = lazy(() => import('./pages/ExecutionHistory').then((m) => ({ default: m.ExecutionHistory })))
+const JobDetail = lazy(() => import('./pages/JobDetail').then((m) => ({ default: m.JobDetail })))
+const PlaybookJobDetail = lazy(() => import('./pages/PlaybookJobDetail').then((m) => ({ default: m.PlaybookJobDetail })))
+const SettingsPage = lazy(() => import('./pages/SettingsPage').then((m) => ({ default: m.SettingsPage })))
+const PlaybooksPage = lazy(() => import('./pages/PlaybooksPage').then((m) => ({ default: m.PlaybooksPage })))
+const BaselinesPage = lazy(() => import('./pages/BaselinesPage').then((m) => ({ default: m.BaselinesPage })))
+const ProvisioningPage = lazy(() => import('./pages/ProvisioningPage').then((m) => ({ default: m.ProvisioningPage })))
+const SecurityPage = lazy(() => import('./pages/SecurityPage').then((m) => ({ default: m.SecurityPage })))
+const AuditPage = lazy(() => import('./pages/AuditPage').then((m) => ({ default: m.AuditPage })))
+const SaltKeysPage = lazy(() => import('./pages/SaltKeysPage').then((m) => ({ default: m.SaltKeysPage })))
+const SaltOpsPage = lazy(() => import('./pages/SaltOpsPage').then((m) => ({ default: m.SaltOpsPage })))
+const AlertsPage = lazy(() => import('./pages/AlertsPage').then((m) => ({ default: m.AlertsPage })))
+const FleetHealthPage = lazy(() => import('./pages/FleetHealthPage'))
+const DashboardPage = lazy(() => import('./pages/DashboardPage').then((m) => ({ default: m.DashboardPage })))
+const MonitoringPage = lazy(() => import('./pages/MonitoringPage').then((m) => ({ default: m.MonitoringPage })))
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -136,6 +147,9 @@ export default function App() {
               </AuthGuard>
             }
           >
+            {/* All non-hub routes resolve through React.lazy(); a single
+                Suspense boundary at this level shows the spinner during
+                code-split chunk load (#arch-nodedetail). */}
             <Route index element={<Navigate to="/overview" replace />} />
             <Route path="/overview" element={<OverviewHub />} />
             <Route path="/compliance" element={<ComplianceHub />} />

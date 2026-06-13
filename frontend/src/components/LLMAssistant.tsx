@@ -1,7 +1,5 @@
 import { useState, useRef, useEffect, useCallback } from 'react'
-import { useMutation } from '@tanstack/react-query'
-import { llmApi } from '../api/llm'
-import type { LLMQueryResponse } from '../api/llm'
+import { streamQuery } from '../api/llm'
 import { useLLMStore } from '../stores/llmStore'
 
 function classifyIntentHint(prompt: string): string {
@@ -28,9 +26,18 @@ export default function LLMAssistant() {
   const [prompt, setPrompt] = useState('')
   const [intentHint, setIntentHint] = useState('Fleet Query')
   const [pos, setPos] = useState<{ x: number; y: number } | null>(loadPos)
-  const { messages, addMessage, clearMessages } = useLLMStore()
+  const [streaming, setStreaming] = useState(false)
+  const { messages, addMessage, clearMessages, appendToLastMessage, patchLastMessage } = useLLMStore()
   const bottomRef = useRef<HTMLDivElement>(null)
   const intentDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const streamControllerRef = useRef<AbortController | null>(null)
+
+  useEffect(() => {
+    // If the user navigates away or unmounts the component while a stream
+    // is in-flight, abort it so the upstream LLM call is cancelled rather
+    // than leaking tokens.
+    return () => streamControllerRef.current?.abort()
+  }, [])
 
   // Drag state kept in refs to avoid re-renders during pointer move
   const draggingRef = useRef(false)
@@ -131,33 +138,9 @@ export default function LLMAssistant() {
     }
   }, [])
 
-  const mutation = useMutation({
-    mutationFn: ({ text, history }: { text: string; history: Array<{ role: 'user' | 'assistant'; content: string }> }) =>
-      llmApi.submitQuery({ prompt: text, intent: 'auto', history }),
-    onSuccess: (data: LLMQueryResponse) => {
-      addMessage({
-        role: 'assistant',
-        content: data.result,
-        meta: {
-          model: data.model_used,
-          tokens_in: data.input_tokens,
-          tokens_out: data.output_tokens,
-          duration_ms: data.duration_ms,
-        },
-      })
-    },
-    onError: (err: Error) => {
-      addMessage({
-        role: 'assistant',
-        content: '',
-        error: err.message || 'LLM call failed.',
-      })
-    },
-  })
-
   const handleSubmit = () => {
     const text = prompt.trim()
-    if (!text || mutation.isPending) return
+    if (!text || streaming) return
     // Capture history BEFORE addMessage — prevents the new message appearing
     // in both history and prompt (duplicate turn bug, closes #303)
     const history = messages
@@ -165,8 +148,44 @@ export default function LLMAssistant() {
       .slice(-10)
       .map(m => ({ role: m.role as 'user' | 'assistant', content: m.content }))
     addMessage({ role: 'user', content: text })
+    // Pre-create the assistant placeholder so deltas append to a stable
+    // bubble; the typing dots render on this bubble while streaming=true.
+    addMessage({ role: 'assistant', content: '', streaming: true })
     setPrompt('')
-    mutation.mutate({ text, history })
+    setStreaming(true)
+    streamControllerRef.current?.abort()
+    streamControllerRef.current = streamQuery(
+      { prompt: text, intent: 'auto', history },
+      {
+        onDelta: (delta) => {
+          appendToLastMessage(delta)
+        },
+        onDone: (final) => {
+          patchLastMessage({
+            streaming: false,
+            error: final.error,
+            meta: {
+              model: final.model_used,
+              tokens_in: final.input_tokens,
+              tokens_out: final.output_tokens,
+              duration_ms: final.duration_ms,
+            },
+          })
+          setStreaming(false)
+        },
+        onError: (msg) => {
+          patchLastMessage({ streaming: false, error: msg })
+          setStreaming(false)
+        },
+      },
+    )
+  }
+
+  const handleStop = () => {
+    streamControllerRef.current?.abort()
+    streamControllerRef.current = null
+    patchLastMessage({ streaming: false, error: 'cancelled' })
+    setStreaming(false)
   }
 
   const handlePromptChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
@@ -274,8 +293,20 @@ export default function LLMAssistant() {
               >
                 {msg.error ? (
                   <span>⚠ {msg.error}</span>
+                ) : msg.streaming && !msg.content ? (
+                  // First-token latency: show the typing indicator inside the
+                  // assistant bubble until the first delta arrives. Once any
+                  // text exists the indicator hides and tokens render live.
+                  <div className="flex space-x-1 py-1">
+                    <span className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
+                    <span className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
+                    <span className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
+                  </div>
                 ) : (
-                  <pre className="whitespace-pre-wrap font-sans">{msg.content}</pre>
+                  <pre className="whitespace-pre-wrap font-sans">
+                    {msg.content}
+                    {msg.streaming && <span className="inline-block w-2 h-4 ml-0.5 bg-gray-500 animate-pulse align-text-bottom" aria-hidden="true" />}
+                  </pre>
                 )}
                 {msg.meta && (
                   <div className="mt-1 text-xs text-gray-400">
@@ -285,17 +316,6 @@ export default function LLMAssistant() {
               </div>
             </div>
           ))}
-          {mutation.isPending && (
-            <div className="flex justify-start">
-              <div className="bg-gray-100 rounded-lg px-3 py-2">
-                <div className="flex space-x-1">
-                  <span className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
-                  <span className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
-                  <span className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
-                </div>
-              </div>
-            </div>
-          )}
           <div ref={bottomRef} />
         </div>
 
@@ -308,15 +328,25 @@ export default function LLMAssistant() {
               placeholder="Ask about your fleet… (Enter to send)"
               rows={2}
               className="flex-1 resize-none border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 placeholder-gray-400"
-              disabled={mutation.isPending}
+              disabled={streaming}
             />
-            <button
-              onClick={handleSubmit}
-              disabled={!prompt.trim() || mutation.isPending}
-              className="px-3 py-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white rounded-lg text-sm font-medium transition-colors self-end"
-            >
-              Send
-            </button>
+            {streaming ? (
+              <button
+                onClick={handleStop}
+                className="px-3 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg text-sm font-medium transition-colors self-end"
+                title="Stop generation"
+              >
+                Stop
+              </button>
+            ) : (
+              <button
+                onClick={handleSubmit}
+                disabled={!prompt.trim()}
+                className="px-3 py-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white rounded-lg text-sm font-medium transition-colors self-end"
+              >
+                Send
+              </button>
+            )}
           </div>
           {prompt.trim() && (
             <p className="text-xs text-gray-400">Detected: {intentHint}</p>

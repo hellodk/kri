@@ -1,0 +1,61 @@
+# Kustomize base for kri Fleet Platform.
+#
+# Usage:
+#   kubectl apply -k deploy/k8s/
+#
+# Override images at apply time without editing manifests:
+#   kubectl kustomize deploy/k8s/ \
+#     --load-restrictor LoadRestrictionsNone \
+#     | sed "s|:0\\.1\\.415|:${VERSION}|g" \
+#     | kubectl apply -f -
+#
+# Or, more idiomatically, use an overlay (deploy/k8s/overlays/prod/) that
+# imports this base and sets `images:` and any environment-specific values.
+#
+# Secrets: this base does NOT include secret.yaml. Operators must supply
+# either (a) a SealedSecret committed at deploy/k8s/sealed-secret.yaml and
+# referenced from an overlay, or (b) an out-of-band `kubectl create secret`
+# step before the first apply (see deploy/k8s/secret.yaml.template).
+
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+# All workloads land in the kri namespace; the Namespace resource is part of
+# this base so a fresh-cluster bootstrap is a single command.
+namespace: kri
+
+resources:
+  - namespace.yaml
+  - configmap.yaml
+  - api-service.yaml
+  - frontend-service.yaml
+  - api-deployment.yaml
+  - frontend-deployment.yaml
+  - worker-deployment.yaml
+  - worker-ansible-deployment.yaml
+  - beat-deployment.yaml
+  - ingress.yaml
+
+# Image-tag transformer — bump the tag here (or in an overlay) instead of
+# editing every Deployment manifest. The pre-commit VERSION-bump hook can
+# patch this single file as part of the release flow.
+images:
+  - name: gitea.local/kri/kri-api
+    newTag: 0.1.415
+  - name: gitea.local/kri/kri-frontend
+    newTag: 0.1.415
+
+# imagePullSecrets injection — Deployments don't carry imagePullSecrets in
+# their template specs because the value is environment-specific. The Secret
+# `regcred` must exist in the kri namespace (see README in this directory).
+patches:
+  - target:
+      kind: Deployment
+    patch: |-
+      - op: add
+        path: /spec/template/spec/imagePullSecrets
+        value:
+          - name: regcred
+
+commonLabels:
+  app.kubernetes.io/part-of: kri-fleet-platform

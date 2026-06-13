@@ -15,11 +15,12 @@ export const saltOpsApi = {
   listStates: () =>
     api.get<StatesResponse>('/api/v1/salt/states'),
 
-  apply: (state: string, minionIds: string[], pillar?: Record<string, string>) =>
-    api.post<{ task_id: string }>('/api/v1/salt/apply', {
+  apply: (state: string, minionIds: string[], pillar?: Record<string, string>, test = false) =>
+    api.post<{ task_id: string; test: boolean }>('/api/v1/salt/apply', {
       state,
       minion_ids: minionIds,
       pillar: pillar ?? null,
+      test,
     }),
 
   cmd: (fn: string, minionIds: string[], args?: string[]) =>

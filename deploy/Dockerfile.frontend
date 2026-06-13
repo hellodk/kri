@@ -13,5 +13,15 @@ RUN pnpm run build
 
 FROM nginx:1.27.3-alpine
 COPY --from=builder /app/dist /usr/share/nginx/html
-COPY deploy/nginx.conf /etc/nginx/conf.d/default.conf
+# Copy as a template so the nginx image's 20-envsubst-on-templates.sh entrypoint
+# substitutes ${NGINX_RESOLVER} at container start (writes to conf.d/default.conf).
+# Default = Docker's embedded DNS. Override at runtime for Podman / k8s.
+COPY deploy/nginx.conf.template /etc/nginx/templates/default.conf.template
+# Limit envsubst to NGINX_*-prefixed env vars so nginx variables like
+# $host / $remote_addr are never substituted accidentally.
+ENV NGINX_ENVSUBST_FILTER='^NGINX_'
+ENV NGINX_RESOLVER=127.0.0.11
+# Remove the base image's stub default.conf so the templated output is the only
+# file in /etc/nginx/conf.d/ at runtime.
+RUN rm -f /etc/nginx/conf.d/default.conf
 EXPOSE 80

@@ -364,6 +364,13 @@ function CreateBaselineModal({ onClose, existing }: { onClose: () => void; exist
     (existing?.target_type as 'global' | 'group' | 'node') ?? 'global'
   )
   const [targetId, setTargetId] = useState(existing?.target_id ?? '')
+  // os_family: 'any' = OS-agnostic (omit/clear); else send the canonical
+  // family label. The picker exists primarily to scope macOS-only rules
+  // (e.g. com.apple.screensharing in required_stopped) so they don't
+  // generate false drift on Linux nodes from a global baseline.
+  const [osFamily, setOsFamily] = useState<'any' | 'Darwin' | 'Linux' | 'FreeBSD' | 'Windows'>(
+    (existing?.os_family as 'Darwin' | 'Linux' | 'FreeBSD' | 'Windows' | null) ?? 'any'
+  )
 
   // Package/service state — parse from existing state_json if editing
   const parsedInitial = existing ? parseStateJson((existing as { state_json?: Record<string, unknown> }).state_json ?? {}) : null
@@ -393,6 +400,10 @@ function CreateBaselineModal({ onClose, existing }: { onClose: () => void; exist
           name,
           description: description || undefined,
           state_json: stateJson,
+          // Empty string clears the column (becomes OS-agnostic). The
+          // backend distinguishes `""` from `undefined` so an unchanged
+          // os_family is preserved when other fields are edited.
+          os_family: osFamily === 'any' ? '' : osFamily,
         })
       : baselinesApi.create({
           name,
@@ -400,6 +411,7 @@ function CreateBaselineModal({ onClose, existing }: { onClose: () => void; exist
           target_type: targetType,
           target_id: targetId || undefined,
           state_json: stateJson,
+          os_family: osFamily === 'any' ? null : osFamily,
         }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['baselines'] })
@@ -524,6 +536,26 @@ function CreateBaselineModal({ onClose, existing }: { onClose: () => void; exist
                       }
                     </select>
                   )}
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    OS family <span className="text-gray-400 font-normal">(optional)</span>
+                  </label>
+                  <select
+                    value={osFamily ?? 'any'}
+                    onChange={e => setOsFamily(e.target.value as typeof osFamily)}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:border-brand-600"
+                  >
+                    <option value="any">Any OS (apply to all)</option>
+                    <option value="Darwin">Darwin (macOS)</option>
+                    <option value="Linux">Linux</option>
+                    <option value="FreeBSD">FreeBSD</option>
+                    <option value="Windows">Windows</option>
+                  </select>
+                  <p className="mt-1 text-xs text-gray-500">
+                    OS-specific baselines take priority over OS-agnostic ones at the same target tier.
+                    A Darwin baseline only applies to macOS nodes.
+                  </p>
                 </div>
               </div>
             </div>
@@ -675,6 +707,14 @@ export function BaselinesPage() {
                     }`}>
                       {TARGET_LABELS[b.target_type]}
                     </span>
+                    {b.os_family && (
+                      <span
+                        className="ml-1.5 text-xs px-2 py-0.5 rounded font-medium border bg-slate-50 text-slate-700 border-slate-200"
+                        title={`Only applies to ${b.os_family} nodes`}
+                      >
+                        {b.os_family}
+                      </span>
+                    )}
                   </td>
                   <td className="px-4 py-3 text-gray-500">v{b.version}</td>
                   <td className="px-4 py-3 text-gray-400 text-xs">

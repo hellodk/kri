@@ -2,7 +2,7 @@
 
 from pathlib import Path
 
-NGINX_CONF = Path("deploy/nginx.conf")
+NGINX_CONF = Path("deploy/nginx.conf.template")
 
 
 def _conf():

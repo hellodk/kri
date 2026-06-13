@@ -19,6 +19,9 @@ class DesiredStateBaseline(Base, TimestampMixin):
     git_commit_sha: Mapped[str] = mapped_column(String(40), nullable=False)
     state_json: Mapped[dict] = mapped_column(JSONB, nullable=False)
     version: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
+    # OS-aware baseline filter (#prod-os-baselines). Nullable: a baseline
+    # without os_family is OS-agnostic and applies to any node.
+    os_family: Mapped[str | None] = mapped_column(String(20), nullable=True)
 
 
 class DriftRecord(Base):

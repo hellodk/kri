@@ -2,7 +2,7 @@
 
 from pathlib import Path
 
-TLS_CONF = (Path(__file__).parent.parent.parent / "deploy/nginx-tls.conf").read_text()
+TLS_CONF = (Path(__file__).parent.parent.parent / "deploy/nginx-tls.conf.template").read_text()
 RUNBOOK = (Path(__file__).parent.parent.parent / "docs/OPS_RUNBOOK.md").read_text()
 GITIGNORE = (Path(__file__).parent.parent.parent / ".gitignore").read_text()
 

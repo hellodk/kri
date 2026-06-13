@@ -1,25 +1,40 @@
 """Tests for #148: nginx WebSocket session affinity and DNS re-resolution.
 
-Architecture note: nginx resolves the 'api' hostname via Docker's embedded DNS
-(127.0.0.11). Using a static upstream block caches the IP at startup — if the
-API container is redeployed and gets a new IP, nginx keeps trying the old one
-and returns 502. The fix uses `resolver 127.0.0.11` + `set $api_upstream` so
-nginx re-resolves on every request cycle (valid=5s TTL).
+Architecture note: nginx resolves the 'api' hostname via the container
+runtime's embedded DNS. Using a static upstream block caches the IP at
+startup — if the API container is redeployed and gets a new IP, nginx
+keeps trying the old one and returns 502. The fix uses
+`resolver ${NGINX_RESOLVER}` + `set $api_upstream` so nginx re-resolves
+on every request cycle (valid=5s TTL). NGINX_RESOLVER is substituted at
+container start (Docker default 127.0.0.11; Podman/k8s override).
 """
 
 from pathlib import Path
 
 
 def _nginx() -> str:
-    return Path("deploy/nginx.conf").read_text()
+    return Path("deploy/nginx.conf.template").read_text()
 
 
-def test_nginx_has_docker_resolver():
-    """Docker embedded DNS must be configured for dynamic IP re-resolution."""
+def _dockerfile() -> str:
+    return Path("deploy/Dockerfile.frontend").read_text()
+
+
+def test_nginx_resolver_is_parameterized():
+    """Resolver must reference an env var so Docker / Podman / k8s can override it."""
     src = _nginx()
-    assert "127.0.0.11" in src, (
-        "resolver 127.0.0.11 is required so nginx re-resolves 'api' after "
-        "container restarts instead of caching the stale IP."
+    assert "${NGINX_RESOLVER}" in src, (
+        "resolver must use ${NGINX_RESOLVER} so podman-compose and k8s "
+        "deployments can override the Docker-embedded DNS IP (127.0.0.11)."
+    )
+
+
+def test_nginx_default_resolver_is_docker_embedded_dns():
+    """The Dockerfile must default NGINX_RESOLVER to 127.0.0.11 for docker-compose users."""
+    df = _dockerfile()
+    assert "NGINX_RESOLVER=127.0.0.11" in df, (
+        "Dockerfile.frontend must set ENV NGINX_RESOLVER=127.0.0.11 so the default "
+        "behaviour for docker-compose users is unchanged after the templating refactor."
     )
 
 

@@ -8,8 +8,12 @@ User=kri
 Group=kri
 WorkingDirectory=/opt/kri
 EnvironmentFile=/etc/kri/kri.env
+# uv may be installed via the astral.sh installer (~/.local/bin), Homebrew on
+# Linuxbrew (/home/linuxbrew/...), or a distro package — set PATH so the
+# /usr/bin/env lookup below resolves whichever is present, no hardcoded path.
+Environment=PATH=/home/kri/.local/bin:/home/linuxbrew/.linuxbrew/bin:/usr/local/bin:/usr/bin:/bin
 ExecStartPre=/bin/bash /opt/kri/deploy/migrate.sh
-ExecStart=/usr/bin/uv run uvicorn fleet_platform.api.main:app --host 0.0.0.0 --port 8000 --log-level info
+ExecStart=/usr/bin/env uv run uvicorn fleet_platform.api.main:app --host 0.0.0.0 --port 8000 --log-level info
 Restart=on-failure
 RestartSec=5
 StandardOutput=journal

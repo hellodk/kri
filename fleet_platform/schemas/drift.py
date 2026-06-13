@@ -50,6 +50,10 @@ class BaselineCreate(BaseModel):
     target_id: uuid.UUID | None = None
     state_json: dict
     git_commit_sha: str = "manual"
+    # When set, the baseline only applies to nodes whose derived os_family
+    # matches. Use the canonical Salt grain values: 'Darwin', 'Linux',
+    # 'FreeBSD', 'Windows'. Omit (None) for OS-agnostic baselines.
+    os_family: str | None = None
 
 
 class BaselineResponse(BaseModel):
@@ -60,6 +64,7 @@ class BaselineResponse(BaseModel):
     target_id: uuid.UUID | None
     git_commit_sha: str
     version: int
+    os_family: str | None = None
     created_at: datetime
     updated_at: datetime
 

@@ -1,0 +1,47 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.kri.worker-ansible</string>
+
+    <key>ProgramArguments</key>
+    <array>
+        <string>/bin/bash</string>
+        <string>/opt/kri/deploy/launchd/run.sh</string>
+        <string>worker-ansible</string>
+    </array>
+
+    <key>WorkingDirectory</key>
+    <string>/opt/kri</string>
+
+    <key>RunAtLoad</key>
+    <true/>
+    <!-- Long-running ansible jobs (up to 35 minutes per task) — give launchd
+         a longer ExitTimeOut so a graceful Celery shutdown can complete
+         before SIGKILL. Mirrors the k8s terminationGracePeriodSeconds=3700
+         set on worker-ansible-deployment.yaml. -->
+    <key>ExitTimeOut</key>
+    <integer>3700</integer>
+    <key>KeepAlive</key>
+    <dict>
+        <key>SuccessfulExit</key>
+        <false/>
+    </dict>
+    <key>ThrottleInterval</key>
+    <integer>5</integer>
+
+    <key>UserName</key>
+    <string>kri</string>
+    <key>GroupName</key>
+    <string>kri</string>
+
+    <key>StandardOutPath</key>
+    <string>/var/log/kri/worker-ansible.out.log</string>
+    <key>StandardErrorPath</key>
+    <string>/var/log/kri/worker-ansible.err.log</string>
+
+    <key>NetworkState</key>
+    <true/>
+</dict>
+</plist>

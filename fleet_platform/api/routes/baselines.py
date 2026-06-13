@@ -18,6 +18,9 @@ class BaselineUpdate(BaseModel):
     name: Optional[str] = None
     state_json: Optional[dict] = None
     description: Optional[str] = None
+    # Pass an empty string to explicitly clear os_family (becomes
+    # OS-agnostic again); omit the field entirely to leave it unchanged.
+    os_family: Optional[str] = None
 
 
 router = APIRouter(prefix="/api/v1/baselines")
@@ -128,6 +131,13 @@ async def create_baseline(
 ):
     from fleet_platform.core.audit import audit
 
+    from fleet_platform.services.baseline_loader import _VALID_OS_FAMILIES
+
+    if payload.os_family is not None and payload.os_family not in _VALID_OS_FAMILIES:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=f"os_family must be one of {sorted(_VALID_OS_FAMILIES)} or null",
+        )
     baseline = DesiredStateBaseline(
         name=payload.name,
         description=payload.description,
@@ -135,6 +145,7 @@ async def create_baseline(
         target_id=payload.target_id,
         git_commit_sha=payload.git_commit_sha,
         state_json=payload.state_json,
+        os_family=payload.os_family,
     )
     db.add(baseline)
     await db.flush()
@@ -144,7 +155,11 @@ async def create_baseline(
         action="baseline.create",
         resource_type="baseline",
         resource_id=baseline.id,
-        new_value={"name": baseline.name, "target_type": baseline.target_type},
+        new_value={
+            "name": baseline.name,
+            "target_type": baseline.target_type,
+            "os_family": baseline.os_family,
+        },
     )
     await db.commit()
     await db.refresh(baseline)
@@ -177,6 +192,8 @@ async def update_baseline(
     baseline = result.scalar_one_or_none()
     if not baseline:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Baseline not found")
+    from fleet_platform.services.baseline_loader import _VALID_OS_FAMILIES
+
     if payload.name is not None:
         baseline.name = payload.name
     if payload.state_json is not None:
@@ -184,6 +201,18 @@ async def update_baseline(
         baseline.version = baseline.version + 1
     if payload.description is not None:
         baseline.description = payload.description
+    if payload.os_family is not None:
+        # An explicit empty string clears the field (back to OS-agnostic);
+        # any other value must be one of the canonical families.
+        if payload.os_family == "":
+            baseline.os_family = None
+        elif payload.os_family in _VALID_OS_FAMILIES:
+            baseline.os_family = payload.os_family
+        else:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail=f"os_family must be one of {sorted(_VALID_OS_FAMILIES)} or empty string",
+            )
     await audit(
         db,
         actor=claims["email"],

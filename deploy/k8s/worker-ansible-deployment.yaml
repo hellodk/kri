@@ -20,6 +20,15 @@ spec:
         app: kri-worker-ansible
         component: worker-ansible
     spec:
+      # Ansible playbook tasks have a 30 min soft / 35 min hard time limit
+      # (fleet_platform/workers/celery_app.py: task_soft_time_limit=1800,
+      # task_time_limit=2100). Default terminationGracePeriodSeconds is 30s,
+      # which kills in-flight playbooks during a rolling deploy or eviction.
+      # Set to 3700s (35 min hard limit + 100 s slack) so SIGTERM-then-graceful
+      # Celery shutdown can complete before SIGKILL. preStop hook signals
+      # Celery to stop accepting new tasks immediately, so the grace window
+      # is used to drain rather than to start new work.
+      terminationGracePeriodSeconds: 3700
       containers:
         - name: worker-ansible
           image: gitea.local/kri/kri-api:0.1.415
@@ -34,6 +43,16 @@ spec:
             - --queues=ansible
             - --concurrency=2
             - --loglevel=info
+          # On pod termination: tell Celery to stop consuming new tasks but
+          # finish in-flight ones. The main process's SIGTERM (from kubelet)
+          # will then allow it to exit cleanly once tasks drain.
+          lifecycle:
+            preStop:
+              exec:
+                command:
+                  - sh
+                  - -c
+                  - "uv run celery -A fleet_platform.workers.celery_app control shutdown -d celery@$HOSTNAME || true"
           env:
             - name: POSTGRES_PASSWORD
               valueFrom:
@@ -74,6 +93,15 @@ spec:
               value: "postgresql+psycopg://fleet:$(POSTGRES_PASSWORD)@postgres.utilities.svc.cluster.local:5432/fleet_platform"
             - name: REDIS_URL
               value: "redis://:$(REDIS_PASSWORD)@redis.utilities.svc.cluster.local:6379/0"
+          # Ansible bootstraps and playbook runs SSH from this pod to fleet
+          # nodes. The service-account keypair lives in the kri-worker-ssh
+          # Secret. Without this mount, every run_playbook / bootstrap_node
+          # task fails with "Permission denied (publickey)". Mode 0600 is
+          # required by OpenSSH; defaultMode is octal 384 = 0600.
+          volumeMounts:
+            - name: ssh-key
+              mountPath: /home/appuser/.ssh
+              readOnly: true
           livenessProbe:
             exec:
               command:
@@ -101,3 +129,16 @@ spec:
             limits:
               cpu: "2000m"
               memory: "2Gi"
+      volumes:
+        - name: ssh-key
+          secret:
+            secretName: kri-worker-ssh
+            defaultMode: 384  # 0600 — required by OpenSSH for private keys
+            items:
+              - key: id_ed25519
+                path: id_ed25519
+              - key: id_ed25519.pub
+                path: id_ed25519.pub
+              - key: known_hosts
+                path: known_hosts
+                mode: 420       # 0644 — known_hosts must be readable, not 0600
