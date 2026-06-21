@@ -10,8 +10,10 @@
     enabled: true
   become: true
 
-- name: Install salt-master
+- name: Install salt-master and salt-api
   dnf:
-    name: "salt-master-{{ salt_version }}"
+    name:
+      - "salt-master-{{ salt_version }}"
+      - "salt-api-{{ salt_version }}"
     state: present
   become: true

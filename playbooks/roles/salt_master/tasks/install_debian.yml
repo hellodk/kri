@@ -21,9 +21,11 @@
     state: present
   become: true
 
-- name: Install salt-master
+- name: Install salt-master and salt-api
   apt:
-    name: "salt-master={{ salt_version }}*"
+    name:
+      - "salt-master={{ salt_version }}*"
+      - "salt-api={{ salt_version }}*"
     update_cache: true
     state: present
   become: true
