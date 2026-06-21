@@ -24,6 +24,22 @@
     <key>ThrottleInterval</key>
     <integer>5</integer>
 
+    <!-- macOS launchd imposes a 256 soft open-file limit by default. salt-api's
+         cheroot server churns TLS connections + internal salt FDs and exhausts
+         256 quickly, after which accept() fails with [Errno 24] Too many open
+         files and every /login + /run returns HTTP 500 (and TLS handshakes drop
+         as UNEXPECTED_EOF). Raise the limit so the API stays serviceable. -->
+    <key>SoftResourceLimits</key>
+    <dict>
+        <key>NumberOfFiles</key>
+        <integer>{{ salt_api_max_open_files }}</integer>
+    </dict>
+    <key>HardResourceLimits</key>
+    <dict>
+        <key>NumberOfFiles</key>
+        <integer>{{ salt_api_max_open_files }}</integer>
+    </dict>
+
     <key>StandardOutPath</key>
     <string>{{ salt_log_dir }}/api</string>
 
