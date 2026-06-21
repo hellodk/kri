@@ -73,52 +73,80 @@ def _runner_call(
 def sync_minion_presence() -> dict:
     """Sync node online/offline status from salt-run manage.up.
 
-    Reads connection details from the default enabled SaltMaster row (#655).
-    Marks nodes whose minion is in manage.up as online (refreshes last_seen_at).
-    Nodes not seen in manage.up are left unchanged — the existing mark_stale_nodes
-    task handles the stale→offline transition.
+    Polls EVERY enabled SaltMaster (not just the default) and unions the
+    reported-up minions (#689). Under multi-master failover a minion may be
+    attached to any enabled master — a minion up on ANY master is online.
+    Marks matching nodes online (refreshes last_seen_at). Nodes not seen are
+    left unchanged — mark_stale_nodes handles the stale→offline transition.
     """
     from fleet_platform.models.salt_master import SaltMaster
     from fleet_platform.services.platform_settings_svc import decrypt_secret
 
-    # Resolve connection details from the default enabled master in the DB.
+    # Snapshot connection details for all enabled masters while the session is
+    # open (avoid lazy-load after it closes).
     with get_sync_db() as db:
-        master = db.execute(
-            select(SaltMaster).where(SaltMaster.enabled.is_(True)).where(SaltMaster.is_default.is_(True))
-        ).scalar_one_or_none()
+        masters = db.execute(select(SaltMaster).where(SaltMaster.enabled.is_(True))).scalars().all()
 
-        if master is None:
-            return {"status": "skipped", "reason": "no default enabled salt master configured"}
+        if not masters:
+            return {"status": "skipped", "reason": "no enabled salt master configured"}
 
-        api_url: str = (master.api_url or "").rstrip("/")
-        api_user: str = master.api_user or ""
-        api_eauth: str = master.api_eauth or "pam"
-        tls_verify: bool = bool(getattr(master, "tls_verify", False))
+        master_conns: list[dict[str, Any]] = []
+        for master in masters:
+            api_url = (master.api_url or "").rstrip("/")
+            api_user = master.api_user or ""
+            if not api_url or not api_user:
+                continue
+            api_password = ""
+            if master.api_password_enc:
+                try:
+                    api_password = decrypt_secret(master.api_password_enc)
+                except Exception as exc:  # noqa: BLE001
+                    logger.warning("salt_presence: cannot decrypt api_password for master %s: %s", master.name, exc)
+                    continue
+            master_conns.append(
+                {
+                    "name": master.name,
+                    "api_url": api_url,
+                    "api_user": api_user,
+                    "api_password": api_password,
+                    "api_eauth": master.api_eauth or "pam",
+                    "tls_verify": bool(getattr(master, "tls_verify", False)),
+                }
+            )
 
-        if not api_url or not api_user:
-            return {"status": "skipped", "reason": "api_url or api_user not configured on default master"}
+    if not master_conns:
+        return {"status": "skipped", "reason": "no enabled master has api_url + api_user configured"}
 
-        api_password = ""
-        if master.api_password_enc:
-            try:
-                api_password = decrypt_secret(master.api_password_enc)
-            except Exception as exc:  # noqa: BLE001
-                logger.warning("salt_presence: cannot decrypt api_password_enc: %s", exc)
-                return {"status": "error", "reason": f"cannot decrypt api_password: {exc}"}
+    # Union manage.up across all enabled masters. One unreachable master must not
+    # abort the sweep — the others are still polled.
+    up_minions: set[str] = set()
+    reachable = 0
+    for conn in master_conns:
+        result = _runner_call(
+            conn["api_url"],
+            conn["api_user"],
+            conn["api_password"],
+            conn["api_eauth"],
+            conn["tls_verify"],
+            "manage.up",
+        )
+        if result is None:
+            continue
+        reachable += 1
+        up_minions.update(result)
 
-    up_minions = _runner_call(api_url, api_user, api_password, api_eauth, tls_verify, "manage.up")
-    if up_minions is None:
-        return {"status": "error", "reason": "salt-api unreachable"}
+    if reachable == 0:
+        return {"status": "error", "reason": "no enabled salt master reachable"}
 
     if not up_minions:
-        return {"status": "ok", "online": 0, "message": "no minions reported up"}
+        return {"status": "ok", "online": 0, "message": "no minions reported up", "masters": reachable}
 
     now = datetime.now(UTC)
     updated = 0
 
     with get_sync_db() as db:
-        result = db.execute(select(Node).where(Node.minion_id.in_(up_minions)))
-        nodes = result.scalars().all()
+        result_nodes = db.execute(select(Node).where(Node.minion_id.in_(up_minions)))
+        nodes = result_nodes.scalars().all()
         for node in nodes:
             if node.maintenance_mode:
                 continue
@@ -129,8 +157,9 @@ def sync_minion_presence() -> dict:
             db.commit()
 
     logger.info(
-        "salt_presence: marked %d/%d reported-up nodes as online",
+        "salt_presence: marked %d nodes online from %d/%d reachable master(s)",
         updated,
-        len(up_minions),
+        reachable,
+        len(master_conns),
     )
-    return {"status": "ok", "online": updated, "up_minions": len(up_minions)}
+    return {"status": "ok", "online": updated, "up_minions": len(up_minions), "masters": reachable}
