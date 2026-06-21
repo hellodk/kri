@@ -60,3 +60,15 @@ salt_master_interface: "0.0.0.0"
 # Presence events — used by kri to detect minion connect/disconnect
 salt_presence_events: true
 salt_loop_interval: 60
+
+# Co-locate a salt-minion on the master (#707) so the master is also a managed
+# node of itself (appears under its own master in the kri UI, targetable by
+# states). Disable with -e salt_master_install_minion=false.
+salt_master_install_minion: true
+# Address the co-located minion connects to (loopback = the local master).
+salt_minion_master_address: "127.0.0.1"
+# Minion id for the master's own minion. Defaults to the host's short hostname.
+salt_master_minion_id: "{{ ansible_hostname | default(inventory_hostname_short) }}"
+# salt-key binary used to accept the co-located minion's key.
+# macOS onedir installs under /opt/salt; Linux packages put it on PATH.
+salt_key_bin: "{{ '/opt/salt/salt-key' if ansible_system == 'Darwin' else 'salt-key' }}"
