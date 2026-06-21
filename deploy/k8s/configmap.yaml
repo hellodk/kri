@@ -12,3 +12,9 @@ data:
   LOG_LEVEL: "info"
   APP_ENV: "production"
   ENVIRONMENT: "production"
+  # RAG embedding server — seeds platform_settings on first start / after a DB
+  # reset so the RAG config is retained instead of reverting to empty. A value
+  # set via the Settings UI always takes precedence. Uncomment and point at your
+  # OpenAI-compatible embedding endpoint.
+  # LLM_EMBED_BASE_URL: "http://embed-host:8080"
+  # LLM_INCLUDE_NODE_IPS: "true"

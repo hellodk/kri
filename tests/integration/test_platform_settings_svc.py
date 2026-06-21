@@ -161,6 +161,47 @@ async def test_seed_settings_from_env_does_not_overwrite_existing(
 
 
 # ---------------------------------------------------------------------------
+# Test 6b: the RAG embedding config is restored from env after a DB wipe
+#          (#embed-persist — it used to silently revert to empty on every deploy)
+# ---------------------------------------------------------------------------
+
+
+async def test_seed_settings_from_env_restores_embed_base_url(db_session: AsyncSession):
+    key = svc.LLM_EMBED_BASE_URL
+    await _delete_key(db_session, key)
+
+    with pytest.MonkeyPatch().context() as mp:
+        mp.setenv("LLM_EMBED_BASE_URL", "http://embed.test:8080")
+        await svc.seed_settings_from_env(db_session)
+
+    result = await svc.get_setting(db_session, key)
+    assert result == "http://embed.test:8080"
+
+    # cleanup
+    await _delete_key(db_session, key)
+
+
+async def test_seed_settings_from_env_does_not_overwrite_embed_base_url(
+    db_session: AsyncSession,
+):
+    key = svc.LLM_EMBED_BASE_URL
+    await _delete_key(db_session, key)
+
+    # A value set via the Settings UI must always win over the env default.
+    await svc.set_setting(db_session, key, "http://embed.configured:9999")
+
+    with pytest.MonkeyPatch().context() as mp:
+        mp.setenv("LLM_EMBED_BASE_URL", "http://embed.env-override:8080")
+        await svc.seed_settings_from_env(db_session)
+
+    result = await svc.get_setting(db_session, key)
+    assert result == "http://embed.configured:9999"
+
+    # cleanup
+    await _delete_key(db_session, key)
+
+
+# ---------------------------------------------------------------------------
 # Test 7: encrypt_secret / decrypt_secret roundtrip
 # ---------------------------------------------------------------------------
 
