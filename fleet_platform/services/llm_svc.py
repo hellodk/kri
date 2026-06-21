@@ -58,6 +58,7 @@ async def create_endpoint(db: AsyncSession, payload: LLMEndpointCreate) -> LLMEn
         enabled=payload.enabled,
         model_context_length=payload.model_context_length,
         model_capabilities=(",".join(payload.model_capabilities) if payload.model_capabilities else None),
+        tool_mode=payload.tool_mode,
     )
     db.add(endpoint)
     await db.commit()
@@ -88,6 +89,8 @@ async def update_endpoint(db: AsyncSession, endpoint: LLMEndpoint, payload: LLME
         endpoint.model_context_length = payload.model_context_length
     if payload.model_capabilities is not None:
         endpoint.model_capabilities = ",".join(payload.model_capabilities)
+    if payload.tool_mode is not None:
+        endpoint.tool_mode = payload.tool_mode
     await db.commit()
     await db.refresh(endpoint)
     return endpoint

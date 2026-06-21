@@ -7,6 +7,23 @@ from pydantic import BaseModel, Field
 VALID_PROVIDERS = Literal["openai_compat", "anthropic", "ollama", "vllm", "llamacpp"]
 VALID_INTENTS = Literal["salt_state", "ansible_playbook", "fleet_command", "explain", "fleet_query", "auto"]
 
+# How the agent loop exposes tools to an endpoint (#710):
+#   native    — provider-native tool-calling (OpenAI tools=[...])
+#   anthropic — Anthropic tool_use blocks
+#   json      — tool schema embedded in the prompt, JSON reply parsed out
+#   none      — no tools exposed (plain chat / read-only Q&A)
+VALID_TOOL_MODES = ("native", "json", "anthropic", "none")
+ToolMode = Literal["native", "json", "anthropic", "none"]
+
+
+def normalize_tool_mode(value: str | None) -> str:
+    """Resolve a stored/legacy tool_mode to a safe value for the call path.
+
+    Unknown or NULL values fall back to ``json`` (prompt-embedded), which works
+    on every backend, so a legacy DB row never breaks a call.
+    """
+    return value if value in VALID_TOOL_MODES else "json"
+
 
 class DiscoveredModel(BaseModel):
     id: str
@@ -26,7 +43,7 @@ class LLMEndpointCreate(BaseModel):
     enabled: bool = True
     model_context_length: int | None = None
     model_capabilities: list[str] | None = None
-    tool_mode: str = "json"
+    tool_mode: ToolMode = "json"
 
 
 class LLMEndpointUpdate(BaseModel):
@@ -40,7 +57,7 @@ class LLMEndpointUpdate(BaseModel):
     enabled: bool | None = None
     model_context_length: int | None = None
     model_capabilities: list[str] | None = None
-    tool_mode: str | None = None
+    tool_mode: ToolMode | None = None
 
 
 class LLMEndpointResponse(BaseModel):
