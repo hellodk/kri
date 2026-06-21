@@ -10,7 +10,7 @@ const DISMISS_MS: Record<Toast['type'], number | null> = {
   success: 3000,
   info: 4000,
   warning: 6000,
-  error: null, // no auto-dismiss — user must manually close
+  error: 8000, // auto-dismiss after 8s (longest — errors need reading time)
 }
 
 interface ToastState {
