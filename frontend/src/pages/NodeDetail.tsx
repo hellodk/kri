@@ -922,6 +922,7 @@ export function NodeDetail() {
                 const result = grainTaskStatus.result as Record<string, unknown> | null
                 const httpStatus = result?.http_status as string | number | undefined
                 const reason = result?.reason as string | undefined
+                const via = result?.via as string | undefined
 
                 return (
                   <div className={`p-3 rounded-lg border text-xs font-mono ${
@@ -939,7 +940,9 @@ export function NodeDetail() {
                         {grainOutcome === 'failed' && 'Grain collection: failed'}
                       </span>
                       {grainOutcome === 'ok' && httpStatus != null && (
-                        <span className="ml-2 text-emerald-600 font-normal">HTTP {httpStatus}</span>
+                        <span className="ml-2 text-emerald-600 font-normal">
+                          HTTP {httpStatus}{via ? ` · via ${via}` : ''}
+                        </span>
                       )}
                     </div>
                     {grainOutcome === 'failed' && reason && (
@@ -947,13 +950,15 @@ export function NodeDetail() {
                         <p className="font-semibold text-red-800 not-italic">Error:</p>
                         <pre className="whitespace-pre-wrap text-red-700">{cleanGrainError(reason)}</pre>
                         <p className="text-gray-500 font-sans not-italic mt-2">
-                          Grain collection requires SSH access to the node. Offline nodes cannot be reached.
+                          kri fetches grains from the node&apos;s salt master (no SSH required). A failure usually
+                          means the minion is offline or its key has not been accepted yet.
                         </p>
                       </div>
                     )}
                     {grainOutcome === 'failed' && !reason && (
                       <p className="text-gray-500 font-sans not-italic mt-1">
-                        Grain collection requires SSH access to the node. Offline nodes cannot be reached.
+                        kri fetches grains from the node&apos;s salt master (no SSH required). A failure usually
+                        means the minion is offline or its key has not been accepted yet.
                       </p>
                     )}
                   </div>
