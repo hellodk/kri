@@ -1,7 +1,7 @@
 ---
 # playbooks/roles/salt_master/defaults/main.yml
 
-# Salt version — must match the minion version installed by bootstrap_mac_mini.yml
+# Salt version — must match the minion version installed by bootstrap_node.yml
 salt_version: "3007.14"
 
 # Download source: Artifactory mirror first, falls back to official URL

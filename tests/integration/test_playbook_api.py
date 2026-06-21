@@ -16,12 +16,12 @@ async def test_list_playbooks_viewer_can_access(viewer_client: AsyncClient):
 async def test_list_playbooks_contains_bootstrap(viewer_client: AsyncClient):
     r = await viewer_client.get("/api/v1/ansible/playbooks")
     filenames = [p["filename"] for p in r.json()]
-    assert "bootstrap_mac_mini.yml" in filenames
+    assert "bootstrap_node.yml" in filenames
 
 
 async def test_list_playbooks_includes_default_vars(viewer_client: AsyncClient):
     r = await viewer_client.get("/api/v1/ansible/playbooks")
-    bootstrap = next((p for p in r.json() if p["filename"] == "bootstrap_mac_mini.yml"), None)
+    bootstrap = next((p for p in r.json() if p["filename"] == "bootstrap_node.yml"), None)
     assert bootstrap is not None
     assert "default_vars" in bootstrap
     assert isinstance(bootstrap["default_vars"], dict)
@@ -31,7 +31,7 @@ async def test_run_playbook_requires_operator(viewer_client: AsyncClient):
     r = await viewer_client.post(
         "/api/v1/ansible/playbooks/run",
         json={
-            "playbook": "bootstrap_mac_mini.yml",
+            "playbook": "bootstrap_node.yml",
             "target_type": "node",
             "target_id": "00000000-0000-0000-0000-000000000001",
             "extravars": {},

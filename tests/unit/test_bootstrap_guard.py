@@ -25,7 +25,7 @@ def _make_entry(filename: str):
 
 @pytest.mark.asyncio
 async def test_run_playbook_rejects_bootstrap_playbook():
-    """Endpoint raises HTTP 403 for bootstrap_mac_mini.yml (not just grep check).
+    """Endpoint raises HTTP 403 for bootstrap_node.yml (not just grep check).
 
     This test will FAIL if the guard
     is removed — it calls the real route handler, not just inspects source.
@@ -35,7 +35,7 @@ async def test_run_playbook_rejects_bootstrap_playbook():
     from fleet_platform.api.routes.ansible import run_playbook_endpoint
 
     payload = MagicMock()
-    payload.playbook = "bootstrap_mac_mini.yml"
+    payload.playbook = "bootstrap_node.yml"
     payload.target_type = "node"
     payload.target_id = str(uuid.uuid4())
     payload.extravars = None
@@ -43,7 +43,7 @@ async def test_run_playbook_rejects_bootstrap_playbook():
     payload.timeout_seconds = 300
     payload.ssh_username = None
 
-    # Build a mock DB that returns bootstrap_mac_mini.yml from discover_all
+    # Build a mock DB that returns bootstrap_node.yml from discover_all
     db = AsyncMock()
     # db.execute for PlatformSetting (sources) — return no sources
     mock_sources_result = MagicMock()
@@ -54,7 +54,7 @@ async def test_run_playbook_rejects_bootstrap_playbook():
 
     with patch(
         "fleet_platform.api.routes.ansible.discover_all",
-        return_value=[_make_entry("bootstrap_mac_mini.yml")],
+        return_value=[_make_entry("bootstrap_node.yml")],
     ):
         with pytest.raises(HTTPException) as exc_info:
             await run_playbook_endpoint(payload=payload, db=db, claims=claims)
@@ -67,6 +67,6 @@ def test_bootstrap_only_playbooks_constant_exists():
     from fleet_platform.api.routes.ansible import _BOOTSTRAP_ONLY_PLAYBOOKS
 
     assert isinstance(_BOOTSTRAP_ONLY_PLAYBOOKS, frozenset)
-    assert "bootstrap_mac_mini.yml" in _BOOTSTRAP_ONLY_PLAYBOOKS
+    assert "bootstrap_node.yml" in _BOOTSTRAP_ONLY_PLAYBOOKS
     # Verify it's not empty
     assert len(_BOOTSTRAP_ONLY_PLAYBOOKS) >= 1

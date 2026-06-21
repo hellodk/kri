@@ -70,7 +70,7 @@ function AddNodeModal({ onClose }: { onClose: () => void }) {
   const [ipAddress, setIpAddress] = useState('')
   const [groupId, setGroupId] = useState('')
   const [bootstrapAfterAdd, setBootstrapAfterAdd] = useState(true)
-  const [bootstrapPlaybook, setBootstrapPlaybook] = useState('bootstrap_mac_mini.yml')
+  const [bootstrapPlaybook, setBootstrapPlaybook] = useState('bootstrap_node.yml')
 
   // ── Minion ID uniqueness check ─────────────────────────────────────────────
   const [minionIdStatus, setMinionIdStatus] = useState<
@@ -452,7 +452,7 @@ function AddNodeModal({ onClose }: { onClose: () => void }) {
                     ? playbooks.map(p => (
                         <option key={p.filename} value={p.filename}>{p.name}</option>
                       ))
-                    : <option value="bootstrap_mac_mini.yml">bootstrap_mac_mini.yml</option>
+                    : <option value="bootstrap_node.yml">bootstrap_node.yml</option>
                   }
                 </select>
                 <p className="text-xs text-gray-400">

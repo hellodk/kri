@@ -77,12 +77,12 @@ test.describe('Playbooks', () => {
       data: { email: ADMIN.email, password: ADMIN.password },
     })
     const { access_token } = await loginRes.json()
-    const res = await request.get(`${API}/api/v1/ansible/playbooks/content?filename=bootstrap_mac_mini.yml`, {
+    const res = await request.get(`${API}/api/v1/ansible/playbooks/content?filename=bootstrap_node.yml`, {
       headers: { Authorization: `Bearer ${access_token}` },
     })
     expect(res.status()).toBe(200)
     const body = await res.json()
-    expect(body).toHaveProperty('filename', 'bootstrap_mac_mini.yml')
+    expect(body).toHaveProperty('filename', 'bootstrap_node.yml')
     expect(body).toHaveProperty('content')
     expect(body.content).toContain('hosts:')
   })

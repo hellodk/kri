@@ -61,7 +61,7 @@ _SENSITIVE_EV_KEYS = frozenset(
 )
 
 # Playbooks that must only run via the dedicated bootstrap endpoint — not the generic run API
-_BOOTSTRAP_ONLY_PLAYBOOKS: frozenset[str] = frozenset({"bootstrap_mac_mini.yml"})
+_BOOTSTRAP_ONLY_PLAYBOOKS: frozenset[str] = frozenset({"bootstrap_node.yml"})
 
 
 def _scrub_extravars(ev: dict | list | None) -> dict | list | None:

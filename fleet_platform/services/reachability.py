@@ -1,7 +1,7 @@
 """Reachability helpers — node-vantage minion→master connectivity.
 
 Encapsulates parsing of per-master nc(1) reachability results that are
-registered during Ansible bootstrap (playbooks/bootstrap_mac_mini.yml).
+registered during Ansible bootstrap (playbooks/bootstrap_node.yml).
 
 Each element in ``results`` must be a dict with at least:
   - ``master``: str  — the master address that was probed

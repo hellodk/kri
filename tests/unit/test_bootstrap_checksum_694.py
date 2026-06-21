@@ -1,4 +1,4 @@
-"""Source-contract tests for issue #694 — bootstrap_mac_mini.yml hanging + broken checksum.
+"""Source-contract tests for issue #694 — bootstrap_node.yml hanging + broken checksum.
 
 Verifies at the playbook file level (no live host needed) that:
 1. The broken lookup('file')/lookup('pipe') checksum path is gone — it ran on
@@ -12,7 +12,7 @@ from pathlib import Path
 
 # Resolve relative to this test file so the test works from any cwd (source-contract
 # pattern: Path(__file__) not an absolute path).
-PLAYBOOK = Path(__file__).parent.parent.parent / "playbooks" / "bootstrap_mac_mini.yml"
+PLAYBOOK = Path(__file__).parent.parent.parent / "playbooks" / "bootstrap_node.yml"
 
 
 def _content() -> str:
@@ -33,7 +33,7 @@ def test_no_lookup_file_for_checksum():
     """
     content = _content()
     assert "lookup('file'" not in content, (
-        "bootstrap_mac_mini.yml must not use lookup('file'...) for checksum verification — "
+        "bootstrap_node.yml must not use lookup('file'...) for checksum verification — "
         "it runs on the controller, not the target, and silently skips the check"
     )
 
@@ -41,9 +41,7 @@ def test_no_lookup_file_for_checksum():
 def test_no_lookup_pipe_for_checksum():
     """lookup('pipe') is equally broken — runs cat on the controller, not the target."""
     content = _content()
-    assert "lookup('pipe'" not in content, (
-        "bootstrap_mac_mini.yml must not use lookup('pipe'...) for checksum verification"
-    )
+    assert "lookup('pipe'" not in content, "bootstrap_node.yml must not use lookup('pipe'...) for checksum verification"
 
 
 # ---------------------------------------------------------------------------
@@ -59,9 +57,7 @@ def test_check_installed_salt_version_uses_pkgutil():
     pkgutil --pkg-info reads the .pkg receipt and exits instantly.
     """
     content = _content()
-    assert "pkgutil" in content, (
-        "bootstrap_mac_mini.yml must use pkgutil --pkg-info for salt version detection"
-    )
+    assert "pkgutil" in content, "bootstrap_node.yml must use pkgutil --pkg-info for salt version detection"
 
 
 def test_check_installed_salt_version_task_no_bare_binary():
@@ -81,7 +77,7 @@ def test_check_installed_salt_version_task_no_bare_binary():
             # Within the task, the shell command must not be the raw binary path
             if "salt-minion --version" in line and "timeout" not in line:
                 raise AssertionError(
-                    f"Line {i+1}: Check installed salt version task runs "
+                    f"Line {i + 1}: Check installed salt version task runs "
                     f"'salt-minion --version' without a guard — this hangs on macOS onedir. "
                     f"Use pkgutil --pkg-info instead."
                 )
@@ -102,7 +98,7 @@ def test_confirm_installed_salt_version_no_bare_binary():
                 break
             if "salt-minion --version" in line and "timeout" not in line:
                 raise AssertionError(
-                    f"Line {i+1}: Confirm installed salt version task runs "
+                    f"Line {i + 1}: Confirm installed salt version task runs "
                     f"'salt-minion --version' without a timeout guard — hangs risk. "
                     f"Use pkgutil --pkg-info instead."
                 )
@@ -122,7 +118,7 @@ def test_shasum_verify_task_present():
     """
     content = _content()
     assert "shasum -a 512" in content, (
-        "bootstrap_mac_mini.yml must still contain the shasum -a 512 on-target "
+        "bootstrap_node.yml must still contain the shasum -a 512 on-target "
         "verification task — removing it would leave the pkg unverified"
     )
 
@@ -131,6 +127,6 @@ def test_shasum_verify_exits_on_mismatch():
     """The shasum verify task must exit 1 on mismatch (not just print a warning)."""
     content = _content()
     assert "exit 1" in content, (
-        "bootstrap_mac_mini.yml shasum verify task must 'exit 1' on checksum mismatch "
+        "bootstrap_node.yml shasum verify task must 'exit 1' on checksum mismatch "
         "to abort the bootstrap rather than continuing with a corrupt pkg"
     )

@@ -1,0 +1,77 @@
+---
+# playbooks/tasks/bootstrap/node_exporter_macos.yml
+# Install node_exporter on macOS via launchd. Listens on :9100.
+# Called from bootstrap_node.yml when ansible_os_family == 'Darwin'.
+
+- name: Set node_exporter tarball name (macOS)
+  set_fact:
+    ne_tarball: "node_exporter-{{ node_exporter_version }}.darwin-{{ ne_arch }}.tar.gz"
+
+- name: Set node_exporter download URL (macOS)
+  set_fact:
+    ne_download_url: >-
+      {%- if artifactory_binary_url -%}
+        {{ artifactory_binary_url.rstrip('/') }}/node_exporter/{{ node_exporter_version }}/{{ ne_tarball }}
+      {%- else -%}
+        {{ node_exporter_official_base }}/{{ ne_tarball }}
+      {%- endif -%}
+
+- name: Check existing node_exporter version (macOS)
+  shell: /usr/local/bin/node_exporter --version 2>&1 | head -1 | awk '{print $3}'
+  register: ne_installed_version_mac
+  failed_when: false
+  changed_when: false
+  become: false
+
+- name: Download node_exporter tarball (macOS)
+  get_url:
+    url: "{{ ne_download_url }}"
+    dest: "/tmp/{{ ne_tarball }}"
+    mode: "0644"
+  become: false
+  when: ne_installed_version_mac.stdout.strip() != node_exporter_version
+
+- name: Extract node_exporter binary (macOS)
+  shell: |
+    tar -xzf /tmp/{{ ne_tarball }} -C /tmp
+    cp /tmp/node_exporter-{{ node_exporter_version }}.darwin-{{ ne_arch }}/node_exporter /usr/local/bin/node_exporter
+    chmod 0755 /usr/local/bin/node_exporter
+  become: true
+  when: ne_installed_version_mac.stdout.strip() != node_exporter_version
+
+- name: Install node_exporter launchd plist (macOS)
+  copy:
+    dest: /Library/LaunchDaemons/io.prometheus.node_exporter.plist
+    owner: root
+    group: wheel
+    mode: "0644"
+    content: |
+      <?xml version="1.0" encoding="UTF-8"?>
+      <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+      <plist version="1.0">
+      <dict>
+        <key>Label</key>
+        <string>io.prometheus.node_exporter</string>
+        <key>ProgramArguments</key>
+        <array>
+          <string>/usr/local/bin/node_exporter</string>
+          <string>--web.listen-address=:9100</string>
+        </array>
+        <key>RunAtLoad</key>
+        <true/>
+        <key>KeepAlive</key>
+        <true/>
+        <key>StandardOutPath</key>
+        <string>/var/log/node_exporter.log</string>
+        <key>StandardErrorPath</key>
+        <string>/var/log/node_exporter.log</string>
+      </dict>
+      </plist>
+  become: true
+
+- name: Load and start node_exporter via launchd (macOS)
+  shell: |
+    launchctl load -w /Library/LaunchDaemons/io.prometheus.node_exporter.plist 2>/dev/null || true
+    launchctl start io.prometheus.node_exporter 2>/dev/null || true
+  become: true
+  changed_when: false

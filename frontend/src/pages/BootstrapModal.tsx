@@ -172,8 +172,8 @@ function SingleMode({ onClose }: { onClose: () => void }) {
   }, [existingNode, subMode, selectedNodeId])
 
   const { data: playbookData } = useQuery({
-    queryKey: ['playbook-content', 'bootstrap_mac_mini.yml'],
-    queryFn: () => ansibleApi.playbookContent('bootstrap_mac_mini.yml'),
+    queryKey: ['playbook-content', 'bootstrap_node.yml'],
+    queryFn: () => ansibleApi.playbookContent('bootstrap_node.yml'),
     enabled: showPlaybook,
     staleTime: Infinity,
   })
@@ -538,7 +538,7 @@ function SingleMode({ onClose }: { onClose: () => void }) {
           {showPlaybook && (
             <div className="mt-2 rounded-xl border border-gray-200 overflow-hidden">
               <div className="bg-gray-50 px-3 py-2 border-b border-gray-200 flex items-center justify-between">
-                <span className="text-xs font-mono text-gray-600">bootstrap_mac_mini.yml</span>
+                <span className="text-xs font-mono text-gray-600">bootstrap_node.yml</span>
                 <span className="text-xs text-gray-400">read-only preview</span>
               </div>
               <pre className="text-xs font-mono bg-gray-900 text-gray-100 p-3 overflow-auto max-h-80 whitespace-pre">
