@@ -26,7 +26,7 @@
 # ─── After running ───────────────────────────────────────────────────────────
 #
 #   1. Add to .env.docker:
-#        SALT_API_URL=http://<target_host>:8080
+#        SALT_API_URL=https://<target_host>:4507
 #        SALT_API_USER=krisalt
 #        SALT_API_PASSWORD=<kri_salt_api_password>
 #
@@ -145,7 +145,7 @@
           ╠══════════════════════════════════════════════════════════════╣
           ║
           ║  1. Add to .env.docker:
-          ║       SALT_API_URL=http://{{ target_host }}:{{ salt_api_port }}
+          ║       SALT_API_URL=https://{{ target_host }}:{{ salt_api_port }}
           ║       SALT_API_USER={{ salt_api_user }}
           ║       SALT_API_PASSWORD=<kri_salt_api_password>
           ║

@@ -8,7 +8,7 @@
 #     -e "kri_salt_api_password=<secure-password>"
 #
 # After running:
-#   1. Update .env.docker: SALT_API_URL=http://100.102.68.75:8080
+#   1. Update .env.docker: SALT_API_URL=https://100.102.68.75:4507
 #   2. Restart kri: docker compose -f deploy/docker-compose.yml up -d
 #   3. Minion configs already set salt_master_address=100.102.68.75
 

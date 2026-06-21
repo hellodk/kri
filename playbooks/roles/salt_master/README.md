@@ -10,12 +10,12 @@ Designed to be **fully idempotent** — running the role against an already-prov
 
 1. **Installs** Salt from the bundled air-gapped `.pkg` (macOS) or the SaltProject apt/yum repo (Linux).
 2. **Configures** `/etc/salt/master.d/kri.conf` — interface bind, pillar/file roots, presence events, reactor, `netapi_enable_clients`, and the `external_auth` ACL that authorises kri workers via PAM.
-3. **Configures** `/etc/salt/master.d/salt-api.conf` — `rest_cherrypy` on `{{ salt_api_port }}` (default 8080) with TLS.
+3. **Configures** `/etc/salt/master.d/salt-api.conf` — `rest_cherrypy` on `{{ salt_api_port }}` (default 4507) with TLS.
 4. **Writes PKI** — copies the pre-generated master keypair so all existing minions continue trusting the master without re-acceptance.
 5. **Creates the kri service account** (`krisalt`) and sets the salt-api password via PAM.
 6. **Generates a self-signed TLS cert/key** for salt-api (idempotent — only once).
 7. **Manages the service** via launchd plists (macOS) or systemd units (Linux).
-8. **Verifies** salt-master (port 4505) and salt-api (port 8080) are accepting connections, then performs a live `POST /login` eauth probe to confirm the `external_auth` ACL is active.
+8. **Verifies** salt-master (port 4505) and salt-api (port 4507) are accepting connections, then performs a live `POST /login` eauth probe to confirm the `external_auth` ACL is active.
 
 ---
 
@@ -94,7 +94,7 @@ All variables are defined in `defaults/main.yml` with documented descriptions.
 | Variable | Default | Description |
 |---|---|---|
 | `salt_version` | `3007.14` | Salt version to install. Must match fleet minions. |
-| `salt_api_port` | `8080` | salt-api HTTPS port. |
+| `salt_api_port` | `4507` | salt-api HTTPS port. |
 | `salt_api_user` | `krisalt` | PAM service account for kri workers. |
 | `kri_salt_api_password` | `changeme-set-in-vault` | **Must be overridden.** Pass via `-e` or Vault. |
 | `salt_master_interface` | `0.0.0.0` | Interface salt-master binds on. |
