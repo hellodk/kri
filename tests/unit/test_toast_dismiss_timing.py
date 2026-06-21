@@ -5,10 +5,10 @@ from pathlib import Path
 SRC = Path("frontend/src/stores/toastStore.ts").read_text()
 
 
-def test_error_toast_no_autodismiss():
-    """Error toasts must not auto-dismiss (no setTimeout for error type)."""
-    # The DISMISS_MS map must have null for error
-    assert "error: null" in SRC or "error:null" in SRC, "Error toasts must not auto-dismiss — null delay required"
+def test_error_toast_autodismiss_8s():
+    """Error toasts auto-dismiss after 8s — #688 superseded #159's never-dismiss,
+    pairing the longest timeout with a slow fade + manual close button."""
+    assert "error: 8000" in SRC or "error:8000" in SRC, "Error toasts should auto-dismiss after 8000ms (#688)"
 
 
 def test_success_uses_shorter_timeout():

@@ -69,7 +69,7 @@ def configure_tracing(service_name: str | None = None) -> None:
         _configured = True
         return
 
-    resolved_service = service_name or os.getenv("OTEL_SERVICE_NAME", "kri")
+    resolved_service: str = service_name or os.getenv("OTEL_SERVICE_NAME") or "kri"
     resource = Resource.create({SERVICE_NAME: resolved_service})
 
     provider = TracerProvider(resource=resource)
