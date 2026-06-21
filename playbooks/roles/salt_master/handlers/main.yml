@@ -1,10 +1,13 @@
 ---
+# macOS handlers — launchctl
 - name: Restart salt-master
   shell: |
     launchctl stop com.saltstack.salt.master 2>/dev/null || true
     sleep 2
     launchctl start com.saltstack.salt.master
   become: true
+  when: ansible_system == 'Darwin'
+  listen: Restart salt-master
 
 - name: Reload and start salt-master
   shell: |
@@ -12,6 +15,8 @@
     launchctl load -w /Library/LaunchDaemons/com.saltstack.salt.master.plist
     launchctl start com.saltstack.salt.master 2>/dev/null || true
   become: true
+  when: ansible_system == 'Darwin'
+  listen: Reload and start salt-master
 
 - name: Restart salt-api
   shell: |
@@ -19,6 +24,8 @@
     sleep 2
     launchctl start com.saltstack.salt.api
   become: true
+  when: ansible_system == 'Darwin'
+  listen: Restart salt-api
 
 - name: Reload and start salt-api
   shell: |
@@ -26,3 +33,44 @@
     launchctl load -w /Library/LaunchDaemons/com.saltstack.salt.api.plist
     launchctl start com.saltstack.salt.api 2>/dev/null || true
   become: true
+  when: ansible_system == 'Darwin'
+  listen: Reload and start salt-api
+
+# Linux handlers — systemd
+- name: Restart salt-master (systemd)
+  ansible.builtin.systemd:
+    name: salt-master
+    state: restarted
+    daemon_reload: true
+  become: true
+  when: ansible_system != 'Darwin'
+  listen: Restart salt-master
+
+- name: Reload and start salt-master (systemd)
+  ansible.builtin.systemd:
+    name: salt-master
+    state: restarted
+    enabled: true
+    daemon_reload: true
+  become: true
+  when: ansible_system != 'Darwin'
+  listen: Reload and start salt-master
+
+- name: Restart salt-api (systemd)
+  ansible.builtin.systemd:
+    name: salt-api
+    state: restarted
+    daemon_reload: true
+  become: true
+  when: ansible_system != 'Darwin'
+  listen: Restart salt-api
+
+- name: Reload and start salt-api (systemd)
+  ansible.builtin.systemd:
+    name: salt-api
+    state: restarted
+    enabled: true
+    daemon_reload: true
+  become: true
+  when: ansible_system != 'Darwin'
+  listen: Reload and start salt-api

@@ -6,7 +6,7 @@
     path: /etc/salt
     state: directory
     owner: root
-    group: wheel
+    group: "{{ 'wheel' if ansible_system == 'Darwin' else 'root' }}"
     mode: "0755"
   become: true
 
@@ -15,7 +15,7 @@
     path: /etc/salt/master.d
     state: directory
     owner: root
-    group: wheel
+    group: "{{ 'wheel' if ansible_system == 'Darwin' else 'root' }}"
     mode: "0755"
   become: true
 
@@ -24,7 +24,7 @@
     src: kri-master.conf.j2
     dest: /etc/salt/master.d/kri.conf
     owner: root
-    group: wheel
+    group: "{{ 'wheel' if ansible_system == 'Darwin' else 'root' }}"
     mode: "0644"
   become: true
   notify:
@@ -36,7 +36,7 @@
     src: salt-api.conf.j2
     dest: /etc/salt/master.d/salt-api.conf
     owner: root
-    group: wheel
+    group: "{{ 'wheel' if ansible_system == 'Darwin' else 'root' }}"
     mode: "0644"
   become: true
   notify: Restart salt-api
@@ -46,6 +46,6 @@
     path: "{{ salt_log_dir }}"
     state: directory
     owner: root
-    group: wheel
+    group: "{{ 'wheel' if ansible_system == 'Darwin' else 'root' }}"
     mode: "0755"
   become: true
