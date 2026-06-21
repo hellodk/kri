@@ -8,6 +8,12 @@ salt_version: "3007.14"
 artifactory_binary_url: "http://10.105.205.92:8082/artifactory/example-repo-local/salt"
 salt_pkg_official_base: "https://packages.broadcom.com/artifactory/saltproject-generic/onedir/{{ salt_version }}"
 
+# Linux salt package repos — override to point at an air-gapped Artifactory mirror
+salt_deb_repo_url: "https://packages.broadcom.com/artifactory/saltproject-deb/"
+salt_deb_gpg_url: "https://packages.broadcom.com/artifactory/api/security/keypair/SaltProjectKey/public"
+salt_rpm_repo_baseurl: "https://packages.broadcom.com/artifactory/saltproject-rpm/"
+salt_rpm_gpg_url: "https://packages.broadcom.com/artifactory/api/security/keypair/SaltProjectKey/public"
+
 # Directories on the salt-master host.
 # Everything lives under /etc/salt — consistent across macOS and Linux, and
 # avoids /srv which is read-only on macOS (Catalina+ root volume).

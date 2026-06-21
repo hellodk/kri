@@ -4,9 +4,9 @@
   yum_repository:
     name: salt
     description: Salt repo
-    baseurl: https://packages.broadcom.com/artifactory/saltproject-rpm/
+    baseurl: "{{ salt_rpm_repo_baseurl }}"
     gpgcheck: true
-    gpgkey: https://packages.broadcom.com/artifactory/api/security/keypair/SaltProjectKey/public
+    gpgkey: "{{ salt_rpm_gpg_url }}"
     enabled: true
   become: true
 

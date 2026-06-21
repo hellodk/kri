@@ -101,6 +101,26 @@ All variables are defined in `defaults/main.yml` with documented descriptions.
 | `salt_api_ssl_crt` | `/etc/salt/pki/api/salt-api.crt` | TLS cert path. Auto-generated if absent. |
 | `salt_api_ssl_key` | `/etc/salt/pki/api/salt-api.key` | TLS key path. Auto-generated if absent. |
 | `salt_api_verify` | `true` | Set to `false` to skip the `/login` readiness probe. |
+| `salt_deb_repo_url` | `https://packages.broadcom.com/...saltproject-deb/` | Debian/Ubuntu apt repo URL. |
+| `salt_deb_gpg_url` | `https://packages.broadcom.com/.../SaltProjectKey/public` | Debian/Ubuntu GPG key URL. |
+| `salt_rpm_repo_baseurl` | `https://packages.broadcom.com/...saltproject-rpm/` | RHEL/Rocky/Alma dnf repo base URL. |
+| `salt_rpm_gpg_url` | `https://packages.broadcom.com/.../SaltProjectKey/public` | RHEL/Rocky/Alma GPG key URL. |
+
+---
+
+## Air-gapped Linux installs
+
+On networks without internet access, override the four Linux repo variables to point at an internal Artifactory mirror:
+
+```yaml
+# group_vars/all.yml or -e on the command line
+salt_deb_repo_url: "https://artifactory.internal/artifactory/saltproject-deb/"
+salt_deb_gpg_url: "https://artifactory.internal/artifactory/api/security/keypair/SaltProjectKey/public"
+salt_rpm_repo_baseurl: "https://artifactory.internal/artifactory/saltproject-rpm/"
+salt_rpm_gpg_url: "https://artifactory.internal/artifactory/api/security/keypair/SaltProjectKey/public"
+```
+
+The defaults remain the upstream Broadcom URLs so internet-connected installs require no extra configuration.
 
 ---
 

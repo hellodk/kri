@@ -9,14 +9,14 @@
 
 - name: Add Salt project repo key
   get_url:
-    url: https://packages.broadcom.com/artifactory/api/security/keypair/SaltProjectKey/public
+    url: "{{ salt_deb_gpg_url }}"
     dest: /etc/apt/keyrings/salt-archive-keyring.pgp
     mode: "0644"
   become: true
 
 - name: Add Salt apt source
   apt_repository:
-    repo: "deb [signed-by=/etc/apt/keyrings/salt-archive-keyring.pgp] https://packages.broadcom.com/artifactory/saltproject-deb/ stable main"
+    repo: "deb [signed-by=/etc/apt/keyrings/salt-archive-keyring.pgp] {{ salt_deb_repo_url }} stable main"
     filename: salt
     state: present
   become: true
