@@ -105,6 +105,8 @@ def sync_minion_presence() -> dict:
                     continue
             master_conns.append(
                 {
+                    "id": master.id,
+                    "is_default": bool(getattr(master, "is_default", False)),
                     "name": master.name,
                     "api_url": api_url,
                     "api_user": api_user,
@@ -119,7 +121,13 @@ def sync_minion_presence() -> dict:
 
     # Union manage.up across all enabled masters. One unreachable master must not
     # abort the sweep — the others are still polled.
+    #
+    # We also record which master(s) reported each minion (#707) so we can fix
+    # node.salt_master_id when it points at a master that no longer owns the
+    # minion (e.g. the migration-041 backfill pinned everything to the first
+    # master). Online semantics stay "up on ANY master" (#689).
     up_minions: set[str] = set()
+    minion_reporters: dict[str, list[dict[str, Any]]] = {}
     reachable = 0
     for conn in master_conns:
         result = _runner_call(
@@ -134,6 +142,8 @@ def sync_minion_presence() -> dict:
             continue
         reachable += 1
         up_minions.update(result)
+        for minion_id in result:
+            minion_reporters.setdefault(minion_id, []).append({"id": conn["id"], "is_default": conn["is_default"]})
 
     if reachable == 0:
         return {"status": "error", "reason": "no enabled salt master reachable"}
@@ -143,6 +153,7 @@ def sync_minion_presence() -> dict:
 
     now = datetime.now(UTC)
     updated = 0
+    reassigned = 0
 
     with get_sync_db() as db:
         result_nodes = db.execute(select(Node).where(Node.minion_id.in_(up_minions)))
@@ -153,13 +164,33 @@ def sync_minion_presence() -> dict:
             node.status = "online"
             node.last_seen_at = now
             updated += 1
+
+            # Attribute the node to a master that actually reported it. Only
+            # touch salt_master_id when it is unset or stale (its current master
+            # did not report this minion this cycle). Prefer the default master
+            # when more than one reported it.
+            reporters = minion_reporters.get(node.minion_id, [])
+            if reporters:
+                reporter_ids = [r["id"] for r in reporters]
+                if node.salt_master_id is None or node.salt_master_id not in reporter_ids:
+                    chosen = next((r["id"] for r in reporters if r["is_default"]), reporter_ids[0])
+                    if node.salt_master_id != chosen:
+                        node.salt_master_id = chosen
+                        reassigned += 1
         if nodes:
             db.commit()
 
     logger.info(
-        "salt_presence: marked %d nodes online from %d/%d reachable master(s)",
+        "salt_presence: marked %d nodes online (%d reassigned) from %d/%d reachable master(s)",
         updated,
+        reassigned,
         reachable,
         len(master_conns),
     )
-    return {"status": "ok", "online": updated, "up_minions": len(up_minions), "masters": reachable}
+    return {
+        "status": "ok",
+        "online": updated,
+        "reassigned": reassigned,
+        "up_minions": len(up_minions),
+        "masters": reachable,
+    }
