@@ -25,6 +25,12 @@ salt_log_dir: /var/log/salt
 # salt-api HTTP port (used by kri API/worker for ad-hoc commands)
 salt_api_port: 4507
 
+# Open-file (descriptor) limit for the salt-api service. macOS launchd defaults
+# to a 256 soft limit, which salt-api's cheroot server exhausts under TLS
+# connection churn -> [Errno 24] Too many open files -> HTTP 500 on /login,/run.
+# Applied via SoftResourceLimits/HardResourceLimits in the launchd plist.
+salt_api_max_open_files: 10240
+
 # User created for kri to authenticate with salt-api (PAM auth)
 # Password is set via variable kri_salt_api_password (pass via vault or -e)
 salt_api_user: "krisalt"

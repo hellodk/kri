@@ -1,0 +1,82 @@
+# Champ configuration
+# API keys: use the 'Champ: Set API Key' command (never put keys here).
+# Champ auto-discovers all models from every provider listed below.
+# Just add the baseUrl — Champ scans for available models automatically.
+
+# Active provider for chat (Champ's Smart Router can override per-task).
+provider: openai-compatible
+
+# ── Add ALL your inference backends here. ──────────────────────────
+# Champ will scan each one for available models on startup.
+# Models appear automatically in the model picker.
+providers:
+  ollama:
+    baseUrl: http://localhost:11434
+    model: ""    # Leave blank — Champ will discover installed models automatically
+    # apiKey: your-key-here   # Set if your Ollama endpoint requires auth
+                               # Sent as: Authorization: Bearer <apiKey>
+
+  # Uncomment any provider you have running:
+  llamacpp:
+    baseUrl: http://localhost:8080/v1
+    model: default
+    # apiKey: your-key-here   # For protected llama.cpp endpoints
+
+  # vllm:
+  #   baseUrl: http://localhost:8000/v1
+  #   model: meta-llama/Llama-3.1-8B
+  #   apiKey: your-key-here   # For protected vLLM endpoints
+
+#  openai-compatible:          # Any OpenAI-spec LLM service you operate
+#    baseUrl: http://192.168.1.11:52415
+#    model: mlx-community/Meta-Llama-3.1-8B-Instruct-8bit
+#    apiKey: dummy
+
+  openai-compatible:          # Any OpenAI-spec LLM service you operate
+    baseUrl: http://192.168.1.19:8080
+    model: mlx-community/Qwen3.5-4B-MLX-8bit
+    apiKey: dummy
+
+  # claude:
+  #   model: claude-sonnet-4-20250514
+
+  # openai:
+  #   model: gpt-4o
+
+# ── Smart Routing (auto-picks best model per task) ─────────────────
+# routing:
+#   mode: smart      # "smart" (auto) or "manual" (you pick)
+#   coding: null      # override: force this model for coding
+#   chat: null        # override: force this model for chat
+#   completion: null  # override: force this model for ghost-text
+
+autocomplete:
+  enabled: true
+  debounceMs: 300
+
+agent:
+  yoloMode: false
+  defaultMode: agent
+  autoFix:
+    enabled: true
+    maxIterations: 3
+
+indexing:
+  enabled: true
+  embeddingProvider: vllm
+  ignore:
+    - node_modules/**
+    - dist/**
+    - .git/**hi
+
+# Telemetry (optional — export run analytics to OTLP or JSON endpoint)
+# telemetry:
+#   enabled: false
+#   endpoint: "http://localhost:4318/v1/traces"
+#   format: "otlp"          # "otlp" | "json"
+#   # userId: "team-name"
+#   # headers:
+#   #   Authorization: "Bearer <token>"
+#   # bufferMaxEvents: 1000
+#   # bufferMaxBytes: 5242880   # 5 MB
+#   # timeoutMs: 5000

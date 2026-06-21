@@ -25,7 +25,10 @@ def test_sync_presence_filters_maintenance():
     """#468: sync_minion_presence must not update nodes that are in maintenance_mode."""
     start = _SALT.find("def sync_minion_presence")
     assert start != -1, "sync_minion_presence function not found"
-    segment = _SALT[start : start + 3000]
+    # Scope to the whole function (bounded by the next top-level def) rather than a
+    # fixed char window — the function grew with multi-master support (#689).
+    next_def = _SALT.find("\ndef ", start + 1)
+    segment = _SALT[start : next_def if next_def != -1 else len(_SALT)]
     assert "maintenance_mode" in segment, (
         "sync_minion_presence must check maintenance_mode before updating node status (#468)"
     )

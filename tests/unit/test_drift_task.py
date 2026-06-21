@@ -42,9 +42,12 @@ def test_compute_drift_no_baseline_returns_no_baseline_status():
     mock_fact.grains = {"pkgs": {"git": "2.43.0"}}
 
     mock_db = _make_mock_db()
-    # First execute → NodeFact found; subsequent → no baseline
+    # First execute → NodeFact found; subsequent → no baseline.
+    # find_baseline_for_node_sync first looks up the Node (to derive os_family),
+    # then probes node/group/global baselines — 4 queries on top of the NodeFact.
     execute_results = [
         MagicMock(**{"scalar_one_or_none.return_value": mock_fact}),  # NodeFact
+        MagicMock(**{"scalar_one_or_none.return_value": None}),  # Node (os_family lookup)
         MagicMock(**{"scalar_one_or_none.return_value": None}),  # node baseline
         MagicMock(**{"scalar_one_or_none.return_value": None}),  # group baseline
         MagicMock(**{"scalar_one_or_none.return_value": None}),  # global baseline
