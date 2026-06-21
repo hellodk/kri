@@ -138,19 +138,22 @@
         salt_checksum_filename: "{{ salt_pkg_checksum_arm64 if cpu_arch == 'arm64' else salt_pkg_checksum_x86_64 }}"
       when: ansible_os_family == 'Darwin'
 
-    - name: Set download URL (Artifactory if configured, else official) (macOS)
+    # Resolution precedence: salt_pkg_url_override > artifactory_binary_url +
+    # artifactory_salt_path > salt_pkg_official_base. Defaults (artifactory_salt_path
+    # = salt/{{ salt_version }}) reproduce the previous URL exactly. The checksum
+    # follows the same tiers; when the pkg is fully overridden, the checksum is
+    # taken from the same directory (override | dirname) since it is a sibling file.
+    - name: Set download URL (override > Artifactory > official) (macOS)
       set_fact:
         salt_pkg_url: >-
-          {%- if artifactory_binary_url -%}
-            {{ artifactory_binary_url.rstrip('/') }}/salt/{{ salt_version }}/{{ salt_pkg_filename }}
-          {%- else -%}
-            {{ salt_pkg_official_base }}/{{ salt_pkg_filename }}
+          {%- if salt_pkg_url_override -%}{{ salt_pkg_url_override }}
+          {%- elif artifactory_binary_url -%}{{ artifactory_binary_url.rstrip('/') }}/{{ artifactory_salt_path }}/{{ salt_pkg_filename }}
+          {%- else -%}{{ salt_pkg_official_base }}/{{ salt_pkg_filename }}
           {%- endif -%}
         salt_checksum_url: >-
-          {%- if artifactory_binary_url -%}
-            {{ artifactory_binary_url.rstrip('/') }}/salt/{{ salt_version }}/{{ salt_checksum_filename }}
-          {%- else -%}
-            {{ salt_pkg_official_base }}/{{ salt_checksum_filename }}
+          {%- if salt_pkg_url_override -%}{{ salt_pkg_url_override | dirname }}/{{ salt_checksum_filename }}
+          {%- elif artifactory_binary_url -%}{{ artifactory_binary_url.rstrip('/') }}/{{ artifactory_salt_path }}/{{ salt_checksum_filename }}
+          {%- else -%}{{ salt_pkg_official_base }}/{{ salt_checksum_filename }}
           {%- endif -%}
       when: ansible_os_family == 'Darwin'
 

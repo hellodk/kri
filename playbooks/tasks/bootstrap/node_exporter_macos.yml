@@ -7,13 +7,15 @@
   set_fact:
     ne_tarball: "node_exporter-{{ node_exporter_version }}.darwin-{{ ne_arch }}.tar.gz"
 
-- name: Set node_exporter download URL (macOS)
+# Resolution precedence: node_exporter_url_override > artifactory_binary_url +
+# artifactory_node_exporter_path > node_exporter_official_base. Defaults reproduce
+# the previous URL exactly.
+- name: Resolve node_exporter download URL (macOS)
   set_fact:
     ne_download_url: >-
-      {%- if artifactory_binary_url -%}
-        {{ artifactory_binary_url.rstrip('/') }}/node_exporter/{{ node_exporter_version }}/{{ ne_tarball }}
-      {%- else -%}
-        {{ node_exporter_official_base }}/{{ ne_tarball }}
+      {%- if node_exporter_url_override -%}{{ node_exporter_url_override }}
+      {%- elif artifactory_binary_url -%}{{ artifactory_binary_url.rstrip('/') }}/{{ artifactory_node_exporter_path }}/{{ ne_tarball }}
+      {%- else -%}{{ node_exporter_official_base }}/{{ ne_tarball }}
       {%- endif -%}
 
 - name: Check existing node_exporter version (macOS)

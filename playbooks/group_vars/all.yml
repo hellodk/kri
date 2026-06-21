@@ -50,7 +50,18 @@ brew_prefix_x86: /usr/local
 
 # ── node_exporter ─────────────────────────────────────────────────────────────
 node_exporter_version: "1.8.2"
-# Artifactory mirror (air-gap); falls back to official GitHub release when
-# artifactory_binary_url is empty.
-# Layout: <artifactory_binary_url>/node_exporter/<version>/<tarball>
+# Upstream fallback (official GitHub release) used when no mirror is configured.
 node_exporter_official_base: "https://github.com/prometheus/node_exporter/releases/download/v{{ node_exporter_version }}"
+
+# ── Artifactory mirror layout (air-gap) ──────────────────────────────────
+# artifactory_binary_url = base of your binary mirror (set in host_vars or -e).
+# The *_path vars are appended to it; override to match your repo's tree.
+# Render-time vars available: salt_version, node_exporter_version, ne_os, ne_arch,
+# and the per-arch filename vars.
+artifactory_salt_path: "salt/{{ salt_version }}"
+artifactory_node_exporter_path: "node_exporter/{{ node_exporter_version }}"
+
+# Full-URL escape hatches — when set (non-empty) they win over everything,
+# pointing at an arbitrary location for mirrors that don't fit a template.
+salt_pkg_url_override: ""
+node_exporter_url_override: ""
