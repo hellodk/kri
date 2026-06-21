@@ -7,7 +7,7 @@ The caller must run this in a thread-pool executor if called from async context.
 NOTE: This probe runs from the WORKER container (control-plane reachability).
 It is intentionally NOT a substitute for node-vantage reachability — whether a
 minion can reach the master on 4505/4506 is validated at bootstrap time via
-nc(1) checks in playbooks/bootstrap_mac_mini.yml (see #536, epic #537).
+nc(1) checks in playbooks/bootstrap_node.yml (see #536, epic #537).
 
 Issue #517, epic #523.
 """

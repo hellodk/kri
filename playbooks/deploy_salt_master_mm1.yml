@@ -47,6 +47,6 @@
             cd deploy && docker compose -f docker-compose.yml up -d api worker beat
 
           Minion salt_master_address is already set to 100.102.68.75 via
-          playbooks/group_vars/all.yml. Re-run bootstrap_mac_mini.yml on
+          playbooks/group_vars/all.yml. Re-run bootstrap_node.yml on
           any node that hasn't connected yet.
           ============================================================

@@ -15,7 +15,7 @@ import yaml
 
 def test_process_report_schedule_exists_in_bootstrap():
     """Verify base.process_report_schedule is applied in bootstrap playbook."""
-    playbook_path = Path(__file__).resolve().parents[2] / "playbooks" / "bootstrap_mac_mini.yml"
+    playbook_path = Path(__file__).resolve().parents[2] / "playbooks" / "bootstrap_node.yml"
     with open(playbook_path) as f:
         content = f.read()
 
@@ -26,7 +26,7 @@ def test_process_report_schedule_exists_in_bootstrap():
 
 def test_process_report_schedule_has_correct_conditional():
     """Verify the process_report_schedule task has when: salt_ping.rc == 0."""
-    playbook_path = Path(__file__).resolve().parents[2] / "playbooks" / "bootstrap_mac_mini.yml"
+    playbook_path = Path(__file__).resolve().parents[2] / "playbooks" / "bootstrap_node.yml"
     with open(playbook_path) as f:
         content = f.read()
 
@@ -43,7 +43,7 @@ def test_process_report_schedule_has_correct_conditional():
 
 def test_process_report_schedule_after_heartbeat():
     """Verify process_report_schedule appears AFTER base.heartbeat in the file."""
-    playbook_path = Path(__file__).resolve().parents[2] / "playbooks" / "bootstrap_mac_mini.yml"
+    playbook_path = Path(__file__).resolve().parents[2] / "playbooks" / "bootstrap_node.yml"
     with open(playbook_path) as f:
         content = f.read()
 
@@ -59,6 +59,6 @@ def test_process_report_schedule_after_heartbeat():
 
 def test_bootstrap_playbook_valid_yaml():
     """Verify the bootstrap playbook is valid YAML."""
-    playbook_path = Path(__file__).resolve().parents[2] / "playbooks" / "bootstrap_mac_mini.yml"
+    playbook_path = Path(__file__).resolve().parents[2] / "playbooks" / "bootstrap_node.yml"
     with open(playbook_path) as f:
         yaml.safe_load(f)  # Will raise if invalid

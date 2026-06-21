@@ -193,7 +193,7 @@ def bootstrap_node(
     ssh_username: str | None = None,
     salt_master_ids: list[str] | None = None,
 ) -> dict:
-    """Run bootstrap_mac_mini.yml against a single Mac Mini.
+    """Run bootstrap_node.yml against a fleet node (macOS or Linux).
 
     salt_master_ids — optional list of SaltMaster UUIDs to use for this bootstrap.
     When None (default), all *enabled* SaltMaster rows are used (HA failover).
@@ -441,7 +441,7 @@ def bootstrap_node(
 
             thread, runner = ansible_runner.run_async(
                 private_data_dir=tmpdir,
-                playbook=str(_PLAYBOOKS_DIR / "bootstrap_mac_mini.yml"),
+                playbook=str(_PLAYBOOKS_DIR / "bootstrap_node.yml"),
                 inventory=str(inv_path),
                 extravars={
                     # Multi-master HA list (#534): playbook renders master: [list] + failover settings.
@@ -514,10 +514,10 @@ def bootstrap_node(
                 f"Timed out after 10 minutes. Last task: {last_task}" if last_task else "Timed out after 10 minutes."
             )
         elif final_status != "successful" or runner.rc != 0:
-            if "UNREACHABLE" in full_stdout:
-                bootstrap_error = f"SSH unreachable: check IP {target_ip} and SSH credentials in Settings"
-            elif "Authentication failure" in full_stdout or "Permission denied" in full_stdout:
+            if "Authentication failure" in full_stdout or "Permission denied" in full_stdout:
                 bootstrap_error = "SSH auth failed: check SSH username/password in Settings → Bootstrap"
+            elif "UNREACHABLE" in full_stdout:
+                bootstrap_error = f"SSH unreachable: check IP {target_ip} and SSH credentials in Settings"
             elif "No such file or directory" in full_stdout and "salt" in full_stdout:
                 bootstrap_error = "Salt package not found on target node"
             elif "Could not match supplied host pattern" in full_stdout:
@@ -1259,10 +1259,10 @@ def provision_master(self, salt_master_id: str, action: str = "install") -> dict
                 else f"Timed out after {_prov_timeout_min} minutes."
             )
         elif final_status != "successful" or runner.rc != 0:
-            if "UNREACHABLE" in full_stdout:
-                provision_error = f"SSH unreachable: check ssh_host ({ssh_host}) and SSH credentials"
-            elif "Authentication failure" in full_stdout or "Permission denied" in full_stdout:
+            if "Authentication failure" in full_stdout or "Permission denied" in full_stdout:
                 provision_error = "SSH auth failed: check SSH username/password on the master record"
+            elif "UNREACHABLE" in full_stdout:
+                provision_error = f"SSH unreachable: check ssh_host ({ssh_host}) and SSH credentials"
             else:
                 provision_error = f"ansible rc={rc_display} status={final_status}"
 

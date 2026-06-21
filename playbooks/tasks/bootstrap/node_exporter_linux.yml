@@ -1,0 +1,85 @@
+---
+# playbooks/tasks/bootstrap/node_exporter_linux.yml
+# Install node_exporter on Linux via systemd. Listens on :9100.
+# Called from bootstrap_node.yml when ansible_os_family != 'Darwin'.
+
+- name: Set node_exporter tarball name (Linux)
+  set_fact:
+    ne_tarball: "node_exporter-{{ node_exporter_version }}.linux-{{ ne_arch }}.tar.gz"
+
+# Resolution precedence: node_exporter_url_override > artifactory_binary_url +
+# artifactory_node_exporter_path > node_exporter_official_base. Defaults reproduce
+# the previous URL exactly.
+- name: Resolve node_exporter download URL (Linux)
+  set_fact:
+    ne_download_url: >-
+      {%- if node_exporter_url_override -%}{{ node_exporter_url_override }}
+      {%- elif artifactory_binary_url -%}{{ artifactory_binary_url.rstrip('/') }}/{{ artifactory_node_exporter_path }}/{{ ne_tarball }}
+      {%- else -%}{{ node_exporter_official_base }}/{{ ne_tarball }}
+      {%- endif -%}
+
+- name: Check existing node_exporter version (Linux)
+  shell: /usr/local/bin/node_exporter --version 2>&1 | head -1 | awk '{print $3}'
+  register: ne_installed_version
+  failed_when: false
+  changed_when: false
+  become: false
+
+- name: Download node_exporter tarball (Linux)
+  get_url:
+    url: "{{ ne_download_url }}"
+    dest: "/tmp/{{ ne_tarball }}"
+    mode: "0644"
+  become: false
+  when: ne_installed_version.stdout.strip() != node_exporter_version
+
+- name: Extract node_exporter binary (Linux)
+  shell: |
+    tar -xzf /tmp/{{ ne_tarball }} -C /tmp
+    cp /tmp/node_exporter-{{ node_exporter_version }}.linux-{{ ne_arch }}/node_exporter /usr/local/bin/node_exporter
+    chmod 0755 /usr/local/bin/node_exporter
+  become: true
+  when: ne_installed_version.stdout.strip() != node_exporter_version
+
+- name: Create node_exporter system group
+  group:
+    name: node_exporter
+    system: true
+  become: true
+
+- name: Create node_exporter system user
+  user:
+    name: node_exporter
+    system: true
+    shell: /usr/sbin/nologin
+    create_home: false
+    group: node_exporter
+  become: true
+
+- name: Install node_exporter systemd unit
+  copy:
+    dest: /etc/systemd/system/node_exporter.service
+    mode: "0644"
+    content: |
+      [Unit]
+      Description=Prometheus Node Exporter
+      After=network.target
+
+      [Service]
+      User=node_exporter
+      Group=node_exporter
+      Type=simple
+      ExecStart=/usr/local/bin/node_exporter --web.listen-address=:9100
+      Restart=on-failure
+
+      [Install]
+      WantedBy=multi-user.target
+  become: true
+
+- name: Enable and start node_exporter via systemd (Linux)
+  systemd:
+    name: node_exporter
+    enabled: true
+    state: started
+    daemon_reload: true
+  become: true

@@ -50,11 +50,11 @@ def test_chunk_playbook_splits_per_play():
     - name: Enable salt-master
       service: name=salt-master state=started
 """
-    chunks = chunk_playbook("playbooks/bootstrap_mac_mini.yml", yaml_content)
+    chunks = chunk_playbook("playbooks/bootstrap_node.yml", yaml_content)
     assert len(chunks) == 2
     for c in chunks:
         assert c["source_type"] == "playbook"
-        assert "playbooks/bootstrap_mac_mini.yml" in c["source_id"]
+        assert "playbooks/bootstrap_node.yml" in c["source_id"]
 
 
 def test_chunk_salt_state_splits_per_state_key():

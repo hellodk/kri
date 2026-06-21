@@ -3,7 +3,7 @@
  *
  * fuzzy(target, query): true if every character of query appears in target
  * in order (not necessarily adjacent). Case-insensitive.
- * Example: fuzzy("bootstrap_mac_mini.yml", "bsmc") → true
+ * Example: fuzzy("bootstrap_node.yml", "bsn") → true
  *
  * fuzzyScore(target, query): returns a relevance score > 0 on match, 0 on
  * no-match. Consecutive character matches score exponentially higher so
