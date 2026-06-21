@@ -49,6 +49,11 @@ class TestDeriveApiUrl:
         result = _derive_api_url("master1.fleet", 8080, use_tls=False)
         assert result.startswith("http://master1.fleet:8080")
 
+    def test_new_default_port_4507(self):
+        """#690: 4507 is the new standard salt-api port (adjacent to ZMQ 4505/4506)."""
+        result = _derive_api_url("master1.fleet", 4507, use_tls=True)
+        assert result == "https://master1.fleet:4507"
+
 
 # ---------------------------------------------------------------------------
 # 2. Schema: inputs accepted / rejected
@@ -63,7 +68,7 @@ class TestSaltMasterCreateSchema:
 
     def test_defaults(self):
         schema = SaltMasterCreate(name="m1", address="salt.local")
-        assert schema.salt_api_port == 8080
+        assert schema.salt_api_port == 4507  # #690: changed from 8080
         assert schema.use_tls is True
 
     def test_control_mode_not_in_schema(self):
@@ -85,6 +90,42 @@ class TestSaltMasterCreateSchema:
         """api_url must not be an accepted input field — it is derived (#562)."""
         fields = SaltMasterCreate.model_fields
         assert "api_url" not in fields, "api_url should not be in SaltMasterCreate (it is derived)"
+
+    def test_coerce_salt_api_port_returns_4507_for_none(self):
+        """coerce_salt_api_port (on SaltMasterResponse) returns 4507 for None (#690).
+
+        SaltMasterResponse.coerce_salt_api_port fires in mode='before' — it intercepts
+        None from a pre-migration DB column and substitutes the new default 4507.
+        """
+        import uuid as _uuid
+        from datetime import datetime, timezone
+
+        data = {
+            "id": _uuid.uuid4(),
+            "name": "m1",
+            "enabled": True,
+            "is_default": False,
+            "address": "salt.local",
+            "publish_port": 4505,
+            "ret_port": 4506,
+            "salt_api_port": None,  # simulate pre-migration NULL
+            "use_tls": True,
+            "api_url": None,
+            "api_user": None,
+            "control_mode": "salt_api",
+            "api_eauth": "pam",
+            "token_delivery": "ingest",
+            "tls_verify": False,
+            "auto_accept": True,
+            "status": "unknown",
+            "last_checked_at": None,
+            "last_error": None,
+            "checks": None,
+            "created_at": datetime.now(timezone.utc),
+            "updated_at": datetime.now(timezone.utc),
+        }
+        resp = SaltMasterResponse(**data)
+        assert resp.salt_api_port == 4507
 
 
 class TestSaltMasterUpdateSchema:

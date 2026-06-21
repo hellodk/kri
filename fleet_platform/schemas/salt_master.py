@@ -22,7 +22,7 @@ class SaltMasterCreate(BaseModel):
     publish_port: int = Field(default=4505, ge=1, le=65535)
     ret_port: int = Field(default=4506, ge=1, le=65535)
     # SSoT fields — api_url is DERIVED from these; never accepted directly from client (#562)
-    salt_api_port: int = Field(default=8080, ge=1, le=65535)
+    salt_api_port: int = Field(default=4507, ge=1, le=65535)
     use_tls: bool = True
     # control_mode, api_eauth, token_delivery are NOT user-inputs — server-defaults only
     api_user: str | None = None
@@ -127,7 +127,7 @@ class SaltMasterResponse(BaseModel):
     def coerce_salt_api_port(cls, v: Any) -> Any:
         """Coerce None to default — ORM objects on pre-migration rows return None."""
         if v is None:
-            return 8080
+            return 4507
         return v
 
     @field_validator("use_tls", mode="before")

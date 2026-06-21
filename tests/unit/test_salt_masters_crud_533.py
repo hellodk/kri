@@ -112,7 +112,7 @@ class TestSaltMasterSchemas:
         assert obj.publish_port == 4505
         assert obj.ret_port == 4506
         # control_mode / token_delivery removed from Create schema in #562 (server defaults)
-        assert obj.salt_api_port == 8080
+        assert obj.salt_api_port == 4507  # #690: default changed from 8080 to 4507
         assert obj.use_tls is True
         assert obj.api_password is None
 

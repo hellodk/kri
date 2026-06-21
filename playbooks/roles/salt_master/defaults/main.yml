@@ -17,7 +17,7 @@ salt_pillar_dir: /etc/salt/pillar
 salt_log_dir: /var/log/salt
 
 # salt-api HTTP port (used by kri API/worker for ad-hoc commands)
-salt_api_port: 8080
+salt_api_port: 4507
 
 # User created for kri to authenticate with salt-api (PAM auth)
 # Password is set via variable kri_salt_api_password (pass via vault or -e)
@@ -27,7 +27,7 @@ kri_salt_api_password: "changeme-set-in-vault"
 # salt-api TLS certificate and private key paths.
 # The api_tls.yml task generates a self-signed cert/key at these paths if absent.
 # kri must connect to salt-api via https://<addr>:<port> — update salt_masters.api_url
-# in the kri Masters UI accordingly (e.g. https://192.168.1.x:8080).
+# in the kri Masters UI accordingly (e.g. https://192.168.1.x:4507).
 # Do NOT commit generated cert/key files — they live only on the master host.
 salt_api_ssl_crt: /etc/salt/pki/api/salt-api.crt
 salt_api_ssl_key: /etc/salt/pki/api/salt-api.key

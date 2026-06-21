@@ -9,7 +9,7 @@ function useSaltMasterProbe(address: string | null) {
     queryFn: async () => {
       const res = await api.post<{ ok: boolean; latency_ms: number | null; error?: string }>(
         '/api/v1/settings/probe',
-        { target: address, port: 8080 }
+        { target: address, port: 4507 }
       )
       return res
     },
