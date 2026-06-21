@@ -136,6 +136,25 @@ async def get_current_user(
 _ROLE_HIERARCHY = ["viewer", "operator", "admin"]
 
 
+def role_rank(role: str | None) -> int:
+    """Privilege rank of a role: viewer=0 < operator=1 < admin=2.
+
+    Unknown / None roles return -1 so they never satisfy any requirement.
+    Single source of truth for role comparison used by the agent tool
+    executor (#711), the co-sign threshold (#714) and require_role.
+    """
+    try:
+        return _ROLE_HIERARCHY.index(role)  # type: ignore[arg-type]
+    except (ValueError, TypeError):
+        return -1
+
+
+def role_satisfies(actual: str | None, required: str | None) -> bool:
+    """True iff ``actual`` is ranked at or above a known ``required`` role."""
+    req = role_rank(required)
+    return req >= 0 and role_rank(actual) >= req
+
+
 def require_role(*roles: str):
     """FastAPI dependency factory with role hierarchy.
 
