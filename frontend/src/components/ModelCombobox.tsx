@@ -151,12 +151,10 @@ export function ModelCombobox({ models, value, onChange, onRefresh, refreshing }
               filtered.map((m) => (
                 <div
                   key={m.id}
-                  onClick={() => m.healthy && select(m.id)}
+                  onClick={() => select(m.id)}
                   className={clsx(
                     'px-3 py-2 flex items-center justify-between border-b border-gray-50 last:border-0',
-                    m.healthy
-                      ? 'cursor-pointer hover:bg-gray-50'
-                      : 'opacity-40 cursor-not-allowed',
+                    'cursor-pointer hover:bg-gray-50',
                     value === m.id && 'bg-gray-100'
                   )}
                 >
