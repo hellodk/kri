@@ -29,6 +29,8 @@ from __future__ import annotations
 
 import logging
 import os
+from collections.abc import Iterator
+from contextlib import contextmanager
 from typing import Any
 
 _log = logging.getLogger(__name__)
@@ -143,6 +145,44 @@ def instrument_celery() -> None:
     except ImportError:  # pragma: no cover
         return
     CeleryInstrumentor().instrument()
+
+
+@contextmanager
+def agent_span(
+    name: str,
+    *,
+    actor: str | None = None,
+    session_id: object | None = None,
+    tool_name: str | None = None,
+    **attrs: Any,
+) -> Iterator[Any]:
+    """Span for an agent operation (loop step / tool dispatch) (#710).
+
+    Always carries the operator email (``actor``) so every span answers
+    "who fired this?" — the confused-deputy guarantee (#714). Degrades to a
+    no-op if the OTEL SDK is unavailable or no provider is configured, so the
+    agent loop runs identically in dev, tests and production.
+    """
+    try:
+        from opentelemetry import trace
+    except ImportError:  # pragma: no cover — packaging gate
+        yield None
+        return
+
+    attributes: dict[str, Any] = {}
+    if actor:
+        attributes["kri.actor"] = actor
+    if session_id is not None:
+        attributes["kri.agent.session_id"] = str(session_id)
+    if tool_name:
+        attributes["kri.agent.tool"] = tool_name
+    for key, value in attrs.items():
+        if value is not None:
+            attributes[f"kri.agent.{key}"] = value
+
+    tracer = trace.get_tracer("kri.agent")
+    with tracer.start_as_current_span(name, attributes=attributes) as span:
+        yield span
 
 
 def current_trace_id_hex() -> str | None:
