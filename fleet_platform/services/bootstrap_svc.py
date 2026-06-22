@@ -32,6 +32,11 @@ async def queue_node_bootstrap(
     ssh_key: str | None = None,
     salt_master_ids: list[str] | None = None,
     require_group: bool = True,
+    # Runtime overrides for #830
+    node_exporter_version: str | None = None,
+    node_exporter_listen_address: str | None = None,
+    node_exporter_url_override: str | None = None,
+    bootstrap_full: bool | None = None,
 ):
     """Persist SSH creds, mark the node pending, audit, commit, and queue bootstrap.
 
@@ -85,4 +90,8 @@ async def queue_node_bootstrap(
         target_ip,
         ssh_username=ssh_username,
         salt_master_ids=salt_master_ids,
+        node_exporter_version=node_exporter_version,
+        node_exporter_listen_address=node_exporter_listen_address,
+        node_exporter_url_override=node_exporter_url_override,
+        bootstrap_full=bootstrap_full,
     )
