@@ -15,6 +15,7 @@ from sqlalchemy.orm import selectinload
 from fleet_platform.api.deps import get_db
 from fleet_platform.core.audit import audit
 from fleet_platform.core.auth import get_current_user, hash_password, require_role
+from fleet_platform.models.credential import Credential
 from fleet_platform.models.facts import NodeFact
 from fleet_platform.models.node import Node, Tag
 from fleet_platform.models.process_stat import NodeProcessStat
@@ -29,6 +30,7 @@ from fleet_platform.schemas.node import NodeRegisterRequest, NodeRegisterRespons
 from fleet_platform.schemas.process_stat import ProcessStatOut
 from fleet_platform.schemas.tag import TagCreate, TagResponse
 from fleet_platform.services.platform_settings_svc import encrypt_secret
+from fleet_platform.services.ssh_credential_link import owner_secret_flags, upsert_owner_ssh_credential
 
 router = APIRouter(prefix="/api/v1/nodes")
 
@@ -160,15 +162,26 @@ async def update_node(
         old_value["os_version"] = node.os_version
         node.os_version = payload.os_version
 
-    # SSH credential updates
-    if payload.ssh_username is not None:
-        node.ssh_username = payload.ssh_username
-    if payload.ssh_password is not None:
-        node.ssh_password_enc = encrypt_secret(payload.ssh_password) if payload.ssh_password else None
-    if payload.ssh_auth_mode is not None:
-        node.ssh_auth_mode = payload.ssh_auth_mode
-    if payload.ssh_key is not None:
-        node.ssh_key_enc = encrypt_secret(payload.ssh_key) if payload.ssh_key else None
+    # SSH credentials (#725). An explicit credential_id attaches an existing
+    # Credential by FK; otherwise inline ssh_* input is upserted into the node's
+    # dedicated Credential row (never the deprecated inline columns).
+    if payload.credential_id is not None:
+        cred = await db.get(Credential, payload.credential_id)
+        if cred is None:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Credential not found")
+        node.credential_id = payload.credential_id
+    else:
+        cred_id = await upsert_owner_ssh_credential(
+            db,
+            owner_name=f"node:{node.minion_id}",
+            current_credential_id=node.credential_id,
+            ssh_username=payload.ssh_username,
+            ssh_password=payload.ssh_password,
+            ssh_key=payload.ssh_key,
+            ssh_auth_mode=payload.ssh_auth_mode,
+        )
+        if cred_id is not None:
+            node.credential_id = cred_id
     # VNC credential update
     if payload.vnc_password is not None:
         node.vnc_password_enc = encrypt_secret(payload.vnc_password) if payload.vnc_password else None
@@ -186,10 +199,16 @@ async def update_node(
     # Re-query after commit so all columns (including encrypted ones) are fresh
     result2 = await db.execute(select(Node).options(selectinload(Node.tags)).where(Node.id == node_id))
     node = result2.scalar_one()
+    has_password, has_key = await owner_secret_flags(
+        db,
+        credential_id=node.credential_id,
+        inline_password_enc=node.ssh_password_enc,
+        inline_key_enc=node.ssh_key_enc,
+    )
     return NodeDetailResponse.model_validate(node).model_copy(
         update={
-            "has_ssh_password": bool(node.ssh_password_enc),
-            "has_ssh_key": bool(node.ssh_key_enc),
+            "has_ssh_password": has_password,
+            "has_ssh_key": has_key,
             "has_vnc_password": bool(node.vnc_password_enc),
         }
     )
@@ -327,7 +346,64 @@ async def get_node(
     node = result.scalar_one_or_none()
     if not node:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Node not found")
-    return NodeDetailResponse.model_validate(node)
+    has_password, has_key = await owner_secret_flags(
+        db,
+        credential_id=node.credential_id,
+        inline_password_enc=node.ssh_password_enc,
+        inline_key_enc=node.ssh_key_enc,
+    )
+    return NodeDetailResponse.model_validate(node).model_copy(
+        update={"has_ssh_password": has_password, "has_ssh_key": has_key}
+    )
+
+
+@router.get("/{node_id}/credential")
+async def get_node_resolved_credential(
+    node_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+    _: dict = Depends(require_role("operator", "admin")),
+):
+    """Resolved SSH credential source for a node + multi-group conflict info (#702).
+
+    Never returns secrets. Surfaces which credential a node will actually use and
+    warns when 2+ member groups carry credentials so the winner is explicit.
+    """
+    from fleet_platform.models.group import Group, GroupMember
+    from fleet_platform.services.credential_resolver import has_usable_secret, resolve_node_credentials
+
+    result = await db.execute(select(Node).where(Node.id == node_id))
+    node = result.scalar_one_or_none()
+    if not node:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Node not found")
+
+    creds = await resolve_node_credentials(node, db)
+
+    # Member groups that carry a credential (FK or inline), in resolution order.
+    cred_groups = (
+        (
+            await db.execute(
+                select(Group)
+                .join(GroupMember, GroupMember.group_id == Group.id)
+                .where(GroupMember.node_id == node_id)
+                .where((Group.credential_id.isnot(None)) | (Group.ssh_username.isnot(None)))
+                .order_by(Group.credential_priority.desc(), Group.name.asc())
+            )
+        )
+        .scalars()
+        .all()
+    )
+    conflict_groups = [{"name": g.name, "credential_priority": g.credential_priority} for g in cred_groups]
+
+    return {
+        "node_id": str(node_id),
+        "credential_source": creds["credential_source"],
+        "ssh_user": creds["ssh_user"],
+        "auth_mode": creds["auth_mode"],
+        "has_usable_secret": has_usable_secret(creds),
+        "node_credential_id": str(node.credential_id) if node.credential_id else None,
+        "multi_group_conflict": len(cred_groups) >= 2 and creds["credential_source"].startswith("group:"),
+        "credential_bearing_groups": conflict_groups,
+    }
 
 
 @router.get("/{node_id}/facts")

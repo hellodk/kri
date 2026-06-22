@@ -11,13 +11,14 @@ from sqlalchemy.orm import selectinload
 
 from fleet_platform.api.deps import get_db
 from fleet_platform.core.auth import get_current_user, require_role
+from fleet_platform.models.credential import Credential
 from fleet_platform.models.group import Group, GroupMember
 from fleet_platform.models.node import Node
 from fleet_platform.schemas.common import PaginatedResponse
 from fleet_platform.schemas.fleet import NodeListItem
 from fleet_platform.schemas.group import GroupCreate, GroupMemberAdd, GroupResponse, GroupUpdate
 from fleet_platform.services.group_resolver import resolve_dynamic_group, validate_predicate
-from fleet_platform.services.platform_settings_svc import encrypt_secret
+from fleet_platform.services.ssh_credential_link import owner_secret_flags, upsert_owner_ssh_credential
 
 router = APIRouter(prefix="/api/v1/groups")
 
@@ -327,26 +328,38 @@ async def update_group_credentials(
     if not group:
         raise HTTPException(status_code=404, detail="Group not found")
 
-    if payload.ssh_username is not None:
-        group.ssh_username = payload.ssh_username
-    if payload.ssh_password is not None:
-        group.ssh_password_enc = encrypt_secret(payload.ssh_password) if payload.ssh_password else None
-    if payload.ssh_auth_mode is not None:
-        group.ssh_auth_mode = payload.ssh_auth_mode
-    if payload.ssh_key is not None:
-        group.ssh_key_enc = encrypt_secret(payload.ssh_key) if payload.ssh_key else None
+    # SSH credential updates (#725): inline ssh_* input is upserted into the
+    # group's dedicated Credential row instead of the deprecated inline columns.
+    cred_id = await upsert_owner_ssh_credential(
+        db,
+        owner_name=f"group:{group.name}",
+        current_credential_id=group.credential_id,
+        ssh_username=payload.ssh_username,
+        ssh_password=payload.ssh_password,
+        ssh_key=payload.ssh_key,
+        ssh_auth_mode=payload.ssh_auth_mode,
+    )
+    if cred_id is not None:
+        group.credential_id = cred_id
     if payload.session_max_mins is not None:
         group.session_max_mins = payload.session_max_mins
     if payload.session_retention_days is not None:
         group.session_retention_days = payload.session_retention_days
 
     await db.commit()
+    has_password, has_key = await owner_secret_flags(
+        db,
+        credential_id=group.credential_id,
+        inline_password_enc=group.ssh_password_enc,
+        inline_key_enc=group.ssh_key_enc,
+    )
+    cred = await db.get(Credential, group.credential_id) if group.credential_id else None
     return {
         "group_id": str(group_id),
-        "ssh_username": group.ssh_username,
-        "has_ssh_password": bool(group.ssh_password_enc),
-        "has_ssh_key": bool(group.ssh_key_enc),
-        "ssh_auth_mode": group.ssh_auth_mode,
+        "ssh_username": cred.username if cred else group.ssh_username,
+        "has_ssh_password": has_password,
+        "has_ssh_key": has_key,
+        "ssh_auth_mode": "key" if has_key else "password",
         "session_max_mins": group.session_max_mins,
         "session_retention_days": group.session_retention_days,
     }
@@ -363,13 +376,21 @@ async def get_group_credentials(
     group = result.scalar_one_or_none()
     if not group:
         raise HTTPException(status_code=404, detail="Group not found")
+    has_password, has_key = await owner_secret_flags(
+        db,
+        credential_id=group.credential_id,
+        inline_password_enc=group.ssh_password_enc,
+        inline_key_enc=group.ssh_key_enc,
+    )
+    cred = await db.get(Credential, group.credential_id) if group.credential_id else None
     return {
         "group_id": str(group_id),
-        "ssh_username": group.ssh_username,
-        "has_ssh_password": bool(group.ssh_password_enc),
-        "has_ssh_key": bool(group.ssh_key_enc),
-        "ssh_auth_mode": group.ssh_auth_mode or "password",
+        "ssh_username": cred.username if cred else group.ssh_username,
+        "has_ssh_password": has_password,
+        "has_ssh_key": has_key,
+        "ssh_auth_mode": ("key" if has_key else "password") if cred else (group.ssh_auth_mode or "password"),
         "session_max_mins": group.session_max_mins,
         "session_retention_days": group.session_retention_days,
         "credential_source": "group",
+        "credential_id": str(group.credential_id) if group.credential_id else None,
     }

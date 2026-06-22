@@ -219,9 +219,15 @@ async def webssh_session(
         return
 
     # Resolve credentials server-side
-    from fleet_platform.services.credential_resolver import resolve_node_credentials
+    from fleet_platform.services.credential_resolver import has_usable_secret, resolve_node_credentials
 
     creds = await resolve_node_credentials(node, db)
+
+    # Fail loudly (#701): don't open a shell with no usable secret — tell the
+    # operator nothing is configured instead of silently failing the SSH auth.
+    if not has_usable_secret(creds):
+        await websocket.close(code=4006, reason=f"No credential resolved for node {node_id}")
+        return
 
     # Create session record
     session_rec = SSHSession(

@@ -1312,6 +1312,48 @@ function SaltDenylistSection() {
 // Credentials sub-section (self-contained, uses its own queries)
 // ---------------------------------------------------------------------------
 
+// Per-credential node-count badge — each row fetches independently.
+function CredentialUsage({ credentialId }: { credentialId: string }) {
+  const [expanded, setExpanded] = useState(false)
+  const { data, isLoading } = useQuery({
+    queryKey: ['credential-nodes', credentialId],
+    queryFn: () => credentialsApi.nodes(credentialId),
+    staleTime: 30_000,
+  })
+
+  const count = data?.count ?? 0
+
+  return (
+    <div className="relative shrink-0">
+      <button
+        type="button"
+        onClick={() => { if (count > 0) setExpanded((v) => !v) }}
+        title={count > 0 ? 'Click to see nodes using this credential' : 'Not referenced by any node'}
+        className={`text-xs px-1.5 py-0.5 rounded border transition-colors ${
+          isLoading
+            ? 'border-gray-100 bg-gray-50 text-gray-300'
+            : count > 0
+            ? 'border-blue-200 bg-blue-50 text-blue-700 hover:bg-blue-100 cursor-pointer'
+            : 'border-gray-200 bg-gray-50 text-gray-400 cursor-default'
+        }`}
+      >
+        {isLoading ? '…' : `${count} node${count !== 1 ? 's' : ''}`}
+      </button>
+      {expanded && data && count > 0 && (
+        <div className="absolute right-0 top-full mt-1 w-64 bg-white border border-gray-200 rounded-lg shadow-lg z-10 overflow-hidden">
+          {data.nodes.map((n) => (
+            <div key={n.id} className="px-3 py-1.5 flex items-center gap-2 border-b border-gray-100 last:border-0 text-xs">
+              <span className="font-mono text-gray-700 truncate">{n.hostname ?? n.minion_id}</span>
+              <span className="text-gray-300 shrink-0">·</span>
+              <span className="text-gray-500 shrink-0">{n.source}</span>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
 function KindBadge({ kind }: { kind: string }) {
   if (kind === 'token') {
     return (
@@ -1363,13 +1405,36 @@ function CredentialsSection() {
     onError: (e: Error) => toast(e.message, 'error'),
   })
 
-  const removeMutation = useMutation({
-    mutationFn: credentialsApi.remove,
-    onSuccess: () => {
+  const forceRemoveMutation = useMutation({
+    mutationFn: (id: string) => credentialsApi.remove(id, true),
+    onSuccess: (_data: void, id: string) => {
       qc.invalidateQueries({ queryKey: ['credentials'] })
-      toast('Credential deleted')
+      qc.invalidateQueries({ queryKey: ['credential-nodes', id] })
+      toast('Credential force-deleted — nodes detached')
     },
     onError: (e: Error) => toast(e.message, 'error'),
+  })
+
+  const removeMutation = useMutation({
+    mutationFn: (id: string) => credentialsApi.remove(id),
+    onSuccess: (_data: void, id: string) => {
+      qc.invalidateQueries({ queryKey: ['credentials'] })
+      qc.invalidateQueries({ queryKey: ['credential-nodes', id] })
+      toast('Credential deleted')
+    },
+    onError: (e: Error, id: string) => {
+      const isInUse = (e as { status?: number }).status === 409
+      if (
+        isInUse &&
+        window.confirm(
+          `${e.message}\n\nForce delete? This will detach all nodes and groups referencing this credential.`,
+        )
+      ) {
+        forceRemoveMutation.mutate(id)
+      } else if (!isInUse) {
+        toast(e.message, 'error')
+      }
+    },
   })
 
   const inputClass = 'w-full px-3 py-2 border border-gray-300 rounded-lg text-sm text-gray-900 focus:outline-none focus:border-brand-600'
@@ -1401,6 +1466,7 @@ function CredentialsSection() {
                   <span className="ml-2 text-xs text-gray-500">{cred.description}</span>
                 )}
               </div>
+              <CredentialUsage credentialId={cred.id} />
               {cred.last_used_at ? (
                 <span className="text-xs text-gray-400 shrink-0">
                   last used {new Date(cred.last_used_at).toLocaleString('en-IN', {
@@ -1413,7 +1479,7 @@ function CredentialsSection() {
               )}
               <button
                 onClick={() => removeMutation.mutate(cred.id)}
-                disabled={removeMutation.isPending}
+                disabled={removeMutation.isPending || forceRemoveMutation.isPending}
                 title="Delete credential"
                 className="text-gray-400 hover:text-red-500 transition-colors text-lg leading-none shrink-0"
               >×</button>
