@@ -37,6 +37,7 @@ from fleet_platform.services.log_delta import slice_from, split_running_marker
 from fleet_platform.services.platform_settings_svc import decrypt_secret, encrypt_secret
 from fleet_platform.services.playbook_discovery import discover_all
 from fleet_platform.services.playbook_sources import get_all_playbook_dirs, sync_all_git_sources
+from fleet_platform.services.ssh_credential_link import upsert_owner_ssh_credential
 from fleet_platform.workers.ansible_tasks import bootstrap_node
 from fleet_platform.workers.playbook_tasks import run_playbook
 
@@ -128,15 +129,24 @@ async def bootstrap(
             "Add the node to a group first, then configure group SSH credentials.",
         )
 
-    # Save SSH credentials to the node for future reuse
-    if payload.ssh_username:
-        node.ssh_username = payload.ssh_username
-    if payload.ssh_password:
-        node.ssh_password_enc = encrypt_secret(payload.ssh_password)
-        node.ssh_auth_mode = "password"
-    elif payload.ssh_key:
-        node.ssh_key_enc = encrypt_secret(payload.ssh_key)
-        node.ssh_auth_mode = "key"
+    # Save SSH credentials to the node for future reuse (#725): persist into the
+    # node's dedicated Credential row + FK rather than the deprecated inline columns.
+    # Secrets are bound to locals (never forwarded to bootstrap_node.delay(), which
+    # would put plaintext in the Redis broker — see #495).
+    _ssh_pw = payload.ssh_password
+    _ssh_key = payload.ssh_key
+    _auth_mode = "key" if (_ssh_key and not _ssh_pw) else "password"
+    _cred_id = await upsert_owner_ssh_credential(
+        db,
+        owner_name=f"node:{node.minion_id}",
+        current_credential_id=node.credential_id,
+        ssh_username=payload.ssh_username,
+        ssh_password=_ssh_pw,
+        ssh_key=_ssh_key,
+        ssh_auth_mode=_auth_mode if (_ssh_pw or _ssh_key) else None,
+    )
+    if _cred_id is not None:
+        node.credential_id = _cred_id
     await audit(
         db,
         actor=claims["email"],

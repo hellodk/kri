@@ -25,6 +25,7 @@ def _make_node(ssh_host_key=None, ssh_username=None, ssh_password_enc=None, ssh_
     node.ssh_username = ssh_username
     node.ssh_password_enc = ssh_password_enc
     node.ssh_key_enc = ssh_key_enc
+    node.credential_id = None  # no FK; explicit to avoid MagicMock truthy default (#704)
     node.ssh_auth_mode = ssh_auth_mode
     return node
 

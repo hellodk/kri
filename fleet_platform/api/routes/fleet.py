@@ -29,6 +29,7 @@ from fleet_platform.services.node_import import (
     parse_paste,
     validate_row,
 )
+from fleet_platform.services.ssh_credential_link import upsert_owner_ssh_credential
 
 router = APIRouter(prefix="/api/v1/fleet")
 
@@ -183,7 +184,6 @@ async def import_commit(
             minion_id=r.minion_id,
             hostname=r.hostname or r.minion_id,
             ip_address=r.ip or None,
-            ssh_username=payload.ssh_username or r.ssh_user or None,
             node_token_hash=token_hash,
             first_seen_at=datetime.now(UTC),
             status="unknown",
@@ -191,6 +191,19 @@ async def import_commit(
         db.add(node)
         await db.flush()
         created_ids.append(str(node.id))
+
+        # SSH username (#725): persist into the node's dedicated Credential row
+        # + FK instead of the deprecated inline ssh_username column.
+        _ssh_user = payload.ssh_username or r.ssh_user or None
+        if _ssh_user:
+            _cred_id = await upsert_owner_ssh_credential(
+                db,
+                owner_name=f"node:{node.minion_id}",
+                current_credential_id=None,
+                ssh_username=_ssh_user,
+            )
+            if _cred_id is not None:
+                node.credential_id = _cred_id
 
         if payload.group_id:
             from fleet_platform.models.group import GroupMember

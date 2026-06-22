@@ -11,6 +11,17 @@ export interface ImportRow {
   reason: string
 }
 
+export interface NodeResolvedCredential {
+  node_id: string
+  credential_source: string // 'node' | 'group:<name>' | 'controller' | 'global'
+  ssh_user: string
+  auth_mode: string // 'password' | 'key'
+  has_usable_secret: boolean
+  node_credential_id: string | null
+  multi_group_conflict: boolean
+  credential_bearing_groups: { name: string; credential_priority: number }[]
+}
+
 export interface ImportValidateResponse {
   rows: ImportRow[]
   summary: { new: number; duplicate: number; invalid: number; total: number }
@@ -56,10 +67,14 @@ export const fleetApi = {
     return api.get<Paginated<Node>>(`/api/v1/nodes?${q}`)
   },
   node: (id: string) => api.get<NodeDetail>(`/api/v1/nodes/${id}`),
+  // Resolved SSH credential source + multi-group conflict info (#702). No secrets.
+  resolvedCredential: (id: string) =>
+    api.get<NodeResolvedCredential>(`/api/v1/nodes/${id}/credential`),
   createNode: (data: { minion_id: string; hostname?: string; ip_address?: string; hardware_model?: string; os_version?: string }) =>
     api.post<NodeDetail>('/api/v1/nodes', data),
   updateNode: (id: string, data: {
     hostname?: string; ip_address?: string; hardware_model?: string; os_version?: string;
+    credential_id?: string | null;
     ssh_username?: string; ssh_password?: string; ssh_auth_mode?: string; ssh_key?: string;
     vnc_password?: string;
   }) =>
