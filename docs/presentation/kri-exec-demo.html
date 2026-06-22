@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>kri Fleet Platform — Executive Demo</title>
+  <title>kri Fleet Platform</title>
   <style>
     @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
 
@@ -364,8 +364,7 @@
 
   <!-- SLIDE 1: Title -->
   <div id="title" class="step" data-x="0" data-y="0" data-scale="1">
-    <span class="slide-num">1 / 16</span>
-    <div class="badge badge-blue">Executive Demo</div>
+    <span class="slide-num">1 / 17</span>
     <div class="hero-logo">kri + hydra</div>
     <p class="hero-tagline">One unified project — fleet control plane meets on-prem LLM inference. <strong style="color:#C4785A">pulse</strong> is a separate CI/CD project (Jenkins, iOS/Android).</p>
     <div class="stat-row">
@@ -378,7 +377,7 @@
 
   <!-- SLIDE 2: Problem / Why kri -->
   <div id="problem" class="step" data-x="1400" data-y="0" data-rotate-y="-8">
-    <span class="slide-num">2 / 16</span>
+    <span class="slide-num">2 / 17</span>
     <div class="badge badge-amber">Two Projects</div>
     <h1 class="step-title">One platform story, two deliverables</h1>
     <p class="step-subtitle"><strong>kri + hydra</strong> complement each other — fleet ops and LLM inference on the same Mac Minis. <strong>pulse</strong> is independent CI/CD on its own timeline.</p>
@@ -420,7 +419,7 @@
 
   <!-- SLIDE 3: Architecture (3 planes) -->
   <div id="architecture" class="step" data-x="2800" data-y="0">
-    <span class="slide-num">3 / 16</span>
+    <span class="slide-num">3 / 17</span>
     <div class="badge badge-blue">Architecture</div>
     <h1 class="step-title">kri + hydra — unified stack</h1>
     <p class="step-subtitle">kri provisions and operates the Mac Minis; hydra serves LLM inference on the same nodes. Three planes, one complementary project.</p>
@@ -450,7 +449,7 @@
         <text x="815" y="92" text-anchor="middle" font-size="12" font-weight="600" fill="#6D28D9">pgvector RAG</text>
         <rect x="895" y="72" width="130" height="32" rx="6" fill="#fff" stroke="#DDD6FE"/>
         <text x="960" y="92" text-anchor="middle" font-size="12" font-weight="600" fill="#6D28D9">BYO LLM</text>
-        <text x="890" y="134" text-anchor="middle" font-size="12" fill="var(--text-muted)">Ollama · vLLM · Exo · MLX · Anthropic</text>
+        <text x="890" y="134" text-anchor="middle" font-size="12" fill="var(--text-muted)">SGLang · llmd · vLLM · MLX · Anthropic</text>
         <rect x="180" y="210" width="720" height="80" rx="12" fill="#fff" stroke="var(--border)" stroke-width="2"/>
         <text x="540" y="238" text-anchor="middle" font-size="13" font-weight="700" fill="var(--text)">Fleet Nodes (macOS / Linux)</text>
         <rect x="220" y="252" width="100" height="28" rx="6" fill="#D1FAE5"/><text x="270" y="270" text-anchor="middle" font-size="12" font-weight="600" fill="#065F46">Salt-Minion</text>
@@ -481,7 +480,7 @@
 
   <!-- SLIDE 4: Deployment -->
   <div id="deployment" class="step" data-x="4200" data-y="0" data-rotate-y="5">
-    <span class="slide-num">4 / 16</span>
+    <span class="slide-num">4 / 17</span>
     <div class="badge badge-teal">Deployment</div>
     <h1 class="step-title">Where to deploy kri</h1>
     <p class="step-subtitle">One Docker Compose stack on a laptop, NUC, or rack server — manages macOS and Linux nodes alike via SSH.</p>
@@ -540,7 +539,7 @@
 
   <!-- SLIDE 5: Salt Master + Minion -->
   <div id="salt-bootstrap" class="step" data-x="5600" data-y="0" data-rotate-y="-5">
-    <span class="slide-num">5 / 16</span>
+    <span class="slide-num">5 / 17</span>
     <div class="badge badge-blue">SaltStack</div>
     <h1 class="step-title">Salt master + minion bootstrap</h1>
     <p class="step-subtitle">One-click onboarding: node picker discovers the target, installs the Salt minion over SSH, accepts keys, and joins the fleet — no manual setup.</p>
@@ -596,7 +595,7 @@
 
   <!-- SLIDE 6: Drift + Packages + Licensing -->
   <div id="drift-packages" class="step" data-x="7000" data-y="0">
-    <span class="slide-num">6 / 16</span>
+    <span class="slide-num">6 / 17</span>
     <div class="badge badge-amber">Compliance</div>
     <h1 class="step-title">Drift, packages &amp; licensing</h1>
     <p class="step-subtitle">Every node scored against a baseline; installed packages visible from grains and SBOM scans; license risks surfaced via Trivy pipeline.</p>
@@ -647,7 +646,7 @@
 
   <!-- SLIDE 7: Fleet Operations -->
   <div id="fleet-ops" class="step" data-x="8400" data-y="0" data-rotate-y="5">
-    <span class="slide-num">7 / 16</span>
+    <span class="slide-num">7 / 17</span>
     <div class="badge badge-teal">Fleet Operations</div>
     <h1 class="step-title">Operate without leaving the browser</h1>
     <p class="step-subtitle">SSH terminal, VNC desktop, process manager, and group-based bulk ops — all from the React UI.</p>
@@ -697,7 +696,7 @@
 
   <!-- SLIDE 8: Observability & Security -->
   <div id="observability" class="step" data-x="9800" data-y="0">
-    <span class="slide-num">8 / 16</span>
+    <span class="slide-num">8 / 17</span>
     <div class="badge badge-green">Observability &amp; Security</div>
     <h1 class="step-title">See everything. Trust the audit trail.</h1>
     <p class="step-subtitle">Production-grade observability — kri runs one stack per cluster; pulse and hydra publish dashboards and scrape configs (ARCH-001 step 2).</p>
@@ -736,14 +735,15 @@
 
   <!-- SLIDE 9: LLM Installation + hardware challenge -->
   <div id="llm-install" class="step" data-x="11200" data-y="0" data-rotate-y="-8">
-    <span class="slide-num">9 / 16</span>
+    <span class="slide-num">9 / 17</span>
     <div class="badge badge-purple">LLM Installation</div>
     <h1 class="step-title">Bring your own model</h1>
     <p class="step-subtitle">Local-first LLM backends on fleet nodes — hydra drives production inference at scale (28× M4, air-gapped). kri routes to any OpenAI-compatible endpoint.</p>
     <div class="grid-2">
       <div>
         <div class="grid-2" style="gap:10px;margin-bottom:12px">
-          <div class="feature-card"><h3>Ollama / exo</h3><p>Cluster-wide chat &amp; autocomplete pools</p></div>
+          <div class="feature-card"><h3>SGLang (sgllm)</h3><p>High-throughput local inference server — cluster pools</p></div>
+          <div class="feature-card"><h3>llmd</h3><p>macOS LLM daemon — OpenAI-compatible local endpoint</p></div>
           <div class="feature-card"><h3>vLLM-MLX</h3><p>Production path — batching, /metrics, prefix cache</p></div>
           <div class="feature-card"><h3>MLX (dev)</h3><p><code>mlx_lm.server</code> — not for prod at scale</p></div>
           <div class="feature-card"><h3>Model registry</h3><p>hydra offline registry via JFrog + MinIO schema</p></div>
@@ -766,11 +766,11 @@
           <text x="240" y="40" text-anchor="middle" font-size="12" font-weight="600" fill="#fff">kri AI Plane</text>
           <text x="240" y="58" text-anchor="middle" font-size="12" fill="#EFF6FF">OpenAI-Compatible Routing</text>
           <rect x="30" y="110" width="95" height="50" rx="8" fill="#EDE9FE" stroke="#7C3AED"/>
-          <text x="77" y="140" text-anchor="middle" font-size="12" font-weight="600" fill="#5B21B6">Ollama</text>
+          <text x="77" y="140" text-anchor="middle" font-size="12" font-weight="600" fill="#5B21B6">SGLang</text>
           <rect x="140" y="110" width="95" height="50" rx="8" fill="#EDE9FE" stroke="#7C3AED"/>
-          <text x="187" y="140" text-anchor="middle" font-size="12" font-weight="600" fill="#5B21B6">vLLM</text>
+          <text x="187" y="140" text-anchor="middle" font-size="12" font-weight="600" fill="#5B21B6">llmd</text>
           <rect x="250" y="110" width="95" height="50" rx="8" fill="#EDE9FE" stroke="#7C3AED"/>
-          <text x="297" y="140" text-anchor="middle" font-size="12" font-weight="600" fill="#5B21B6">Exo</text>
+          <text x="297" y="140" text-anchor="middle" font-size="12" font-weight="600" fill="#5B21B6">vLLM</text>
           <rect x="360" y="110" width="95" height="50" rx="8" fill="#FEF3C7" stroke="#F59E0B"/>
           <text x="407" y="132" text-anchor="middle" font-size="12" font-weight="600" fill="#92400E">MLX</text>
           <text x="407" y="148" text-anchor="middle" font-size="11" fill="#B45309">Mac Only</text>
@@ -789,9 +789,70 @@
     </div>
   </div>
 
-  <!-- SLIDE 10: LLM RCA + Open Code -->
-  <div id="llm-rca" class="step" data-x="12600" data-y="0">
-    <span class="slide-num">10 / 16</span>
+  <!-- SLIDE 10: OpenCode + MLX -->
+  <div id="opencode-mlx" class="step" data-x="12600" data-y="0" data-rotate-y="5">
+    <span class="slide-num">10 / 17</span>
+    <div class="badge badge-purple">Developer Workflow</div>
+    <h1 class="step-title">OpenCode + MLX on the fleet</h1>
+    <p class="step-subtitle">Local AI coding agent pointed at on-prem inference — same Mac Minis that kri operates and hydra serves tokens from.</p>
+    <div class="grid-2">
+      <div>
+        <div class="feature-card" style="margin-bottom:10px">
+          <h3>OpenCode</h3>
+          <p>Terminal/IDE coding agent — OpenAI-compatible API. Edits repos, runs tools, stays on-prem when pointed at local endpoints.</p>
+        </div>
+        <div class="feature-card" style="margin-bottom:10px">
+          <h3>MLX / vllm-mlx</h3>
+          <p><code>mlx_lm.server</code> or hydra vllm-mlx on Apple Silicon — FastPool for chat, ReasonPool for codegen.</p>
+        </div>
+        <div class="feature-card" style="margin-bottom:10px">
+          <h3>kri grounds context</h3>
+          <p>RAG over fleet state; agentic Salt/Ansible codegen with approval gates — OpenCode handles repo edits, kri handles infra.</p>
+        </div>
+        <div class="mono-snippet">opencode --model mlx-community/Qwen3.5-4B-MLX-8bit --base-url http://mm1:8080/v1</div>
+        <div class="callout-info" style="margin-top:10px">
+          <strong>Same hardware constraint</strong> — Metal OOM on 16 GB M4 applies: fleet ops + LLM + OpenCode share unified memory.
+        </div>
+      </div>
+      <div class="diagram-wrap">
+        <div class="diagram-label">OpenCode → local MLX → fleet node</div>
+        <svg viewBox="0 0 480 320" xmlns="http://www.w3.org/2000/svg">
+          <rect width="480" height="320" fill="var(--bg)"/>
+          <rect x="30" y="30" width="120" height="56" rx="10" fill="#EFF6FF" stroke="#2563EB" stroke-width="2"/>
+          <text x="90" y="54" text-anchor="middle" font-size="12" font-weight="700" fill="#1D4ED8">OpenCode</text>
+          <text x="90" y="72" text-anchor="middle" font-size="11" fill="#64748B">Dev terminal</text>
+          <rect x="180" y="30" width="120" height="56" rx="10" fill="#EDE9FE" stroke="#7C3AED" stroke-width="2"/>
+          <text x="240" y="54" text-anchor="middle" font-size="12" font-weight="700" fill="#5B21B6">SGLang / llmd</text>
+          <text x="240" y="72" text-anchor="middle" font-size="11" fill="#64748B">OpenAI API</text>
+          <rect x="330" y="30" width="120" height="56" rx="10" fill="#FEF3C7" stroke="#F59E0B" stroke-width="2"/>
+          <text x="390" y="54" text-anchor="middle" font-size="12" font-weight="700" fill="#92400E">MLX</text>
+          <text x="390" y="72" text-anchor="middle" font-size="11" fill="#B45309">Apple Silicon</text>
+          <line x1="150" y1="58" x2="180" y2="58" stroke="#2563EB" stroke-width="2"/>
+          <line x1="300" y1="58" x2="330" y2="58" stroke="#7C3AED" stroke-width="2"/>
+          <polygon points="180,54 188,58 180,62" fill="#2563EB"/>
+          <polygon points="330,54 338,58 330,62" fill="#7C3AED"/>
+          <rect x="80" y="130" width="320" height="70" rx="12" fill="#fff" stroke="#059669" stroke-width="2"/>
+          <text x="240" y="158" text-anchor="middle" font-size="12" font-weight="600" fill="#065F46">Mac Mini M4 — kri-managed node</text>
+          <text x="240" y="178" text-anchor="middle" font-size="11" fill="#64748B">Salt minion · otel-mac-agent · llm-mlx role</text>
+          <rect x="80" y="230" width="150" height="60" rx="10" fill="#E8F0FE" stroke="#C5D9FA" stroke-width="1.5"/>
+          <text x="155" y="256" text-anchor="middle" font-size="11" font-weight="700" fill="#3B6FD9">kri RAG</text>
+          <text x="155" y="274" text-anchor="middle" font-size="10" fill="#64748B">Fleet context</text>
+          <rect x="250" y="230" width="150" height="60" rx="10" fill="#F3EDFC" stroke="#D9C8F5" stroke-width="1.5"/>
+          <text x="325" y="256" text-anchor="middle" font-size="11" font-weight="700" fill="#7E5BBE">hydra cluster</text>
+          <text x="325" y="274" text-anchor="middle" font-size="10" fill="#64748B">28× M4 inference</text>
+          <path d="M 240 200 V 230" fill="none" stroke="#059669" stroke-width="1.5"/>
+          <path d="M 155 230 V 210 H 240" fill="none" stroke="#3B6FD9" stroke-width="1.5" stroke-dasharray="4 3"/>
+          <path d="M 325 230 V 210 H 240" fill="none" stroke="#7E5BBE" stroke-width="1.5" stroke-dasharray="4 3"/>
+          <defs><path id="oc1" d="M150,58 L180,58 L300,58 L330,58 L390,58 L390,120 L240,120 L240,200"/></defs>
+          <circle r="4" fill="#F59E0B"><animateMotion dur="2.5s" repeatCount="indefinite"><mpath href="#oc1"/></animateMotion></circle>
+        </svg>
+      </div>
+    </div>
+  </div>
+
+  <!-- SLIDE 11: LLM RCA + Open Code -->
+  <div id="llm-rca" class="step" data-x="14000" data-y="0">
+    <span class="slide-num">11 / 17</span>
     <div class="badge badge-purple">AI &amp; Automation</div>
     <h1 class="step-title">LLM RCA + agentic generation</h1>
     <p class="step-subtitle">Root-cause analysis via RAG over fleet state, drift records, and job history — plus agentic Salt state and Ansible playbook generation with human approval gates.</p>
@@ -842,7 +903,7 @@
       </div>
       <div class="feature-card">
         <h3>LLM RCA (pulse — separate project)</h3>
-        <p>Jenkins <code>llm-analysis.sh</code> on build failure — queries Ollama endpoints, ranks models, embeds analysis in failure email. Independent of kri+hydra stack.</p>
+        <p>Jenkins <code>llm-analysis.sh</code> on build failure — queries SGLang / llmd endpoints, ranks models, embeds analysis in failure email. Independent of kri+hydra stack.</p>
       </div>
       <div class="feature-card" style="grid-column: span 2">
         <h3>Agentic Open Code</h3>
@@ -852,9 +913,9 @@
     <a class="ref-link" href="../rag-llm-agentic-architecture.html" target="_blank"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align: middle; margin-right: 6px; margin-bottom: 2px"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>Full RAG + Agentic LLM architecture with animated diagrams</a>
   </div>
 
-  <!-- SLIDE 11: Accomplished — kri + hydra -->
-  <div id="accomplished-unified" class="step" data-x="14000" data-y="0" data-rotate-y="5">
-    <span class="slide-num">11 / 16</span>
+  <!-- SLIDE 12: Accomplished — kri + hydra -->
+  <div id="accomplished-unified" class="step" data-x="15400" data-y="0" data-rotate-y="5">
+    <span class="slide-num">12 / 17</span>
     <div class="badge badge-purple">Accomplished</div>
     <h1 class="step-title">What we've shipped — kri + hydra</h1>
     <p class="step-subtitle">Project A milestones — fleet platform and LLM inference moving together.</p>
@@ -885,7 +946,7 @@
       </div>
       <div class="accomplish-item accomplish-hydra">
         <h4>LLM engine integration</h4>
-        <p>Ollama, vLLM-MLX, exo, MLX, LiteLLM, Opik tracing — multi-pool cluster (Fast/Reason/Vision/Embed).</p>
+        <p>SGLang, llmd, vLLM-MLX, MLX, LiteLLM, Opik tracing — multi-pool cluster (Fast/Reason/Vision/Embed).</p>
       </div>
       <div class="accomplish-item accomplish-hydra">
         <h4>MLX cluster automation plan</h4>
@@ -894,9 +955,9 @@
     </div>
   </div>
 
-  <!-- SLIDE 12: Accomplished — pulse -->
-  <div id="accomplished-pulse" class="step" data-x="15400" data-y="0">
-    <span class="slide-num">12 / 16</span>
+  <!-- SLIDE 13: Accomplished — pulse -->
+  <div id="accomplished-pulse" class="step" data-x="16800" data-y="0">
+    <span class="slide-num">13 / 17</span>
     <div class="badge badge-teal">Accomplished</div>
     <h1 class="step-title">What we've shipped — pulse</h1>
     <p class="step-subtitle">Project B — independent CI/CD on k0s cluster <em>cylon</em>.</p>
@@ -911,7 +972,7 @@
       </div>
       <div class="accomplish-item accomplish-pulse">
         <h4>LLM failure analysis</h4>
-        <p><code>llm-analysis.sh</code> queries Ollama endpoints on failure, ranks models, embeds RCA in email.</p>
+        <p><code>llm-analysis.sh</code> queries SGLang / llmd endpoints on failure, ranks models, embeds RCA in email.</p>
       </div>
       <div class="accomplish-item accomplish-pulse">
         <h4>iOS agent provisioning</h4>
@@ -936,9 +997,9 @@
     </div>
   </div>
 
-  <!-- SLIDE 13: Roadmap -->
-  <div id="roadmap" class="step" data-x="16800" data-y="0" data-rotate-y="-5">
-    <span class="slide-num">13 / 16</span>
+  <!-- SLIDE 14: Roadmap -->
+  <div id="roadmap" class="step" data-x="18200" data-y="0" data-rotate-y="-5">
+    <span class="slide-num">14 / 17</span>
     <div class="badge badge-blue">Roadmap</div>
     <h1 class="step-title">Where we're going</h1>
     <p class="step-subtitle">Now → Next → Later for both projects.</p>
@@ -997,9 +1058,9 @@
     </div>
   </div>
 
-  <!-- SLIDE 14: Blockers -->
-  <div id="blockers" class="step" data-x="18200" data-y="0">
-    <span class="slide-num">14 / 16</span>
+  <!-- SLIDE 15: Blockers -->
+  <div id="blockers" class="step" data-x="19600" data-y="0">
+    <span class="slide-num">15 / 17</span>
     <div class="badge badge-amber">Blockers</div>
     <h1 class="step-title">What's blocking us</h1>
     <p class="step-subtitle">Real constraints on heterogeneous Apple Silicon hardware and multi-repo integration.</p>
@@ -1035,9 +1096,9 @@
     </div>
   </div>
 
-  <!-- SLIDE 15: Support Needed + Budget -->
-  <div id="support" class="step" data-x="19600" data-y="0" data-rotate-y="5">
-    <span class="slide-num">15 / 16</span>
+  <!-- SLIDE 16: Support Needed + Budget -->
+  <div id="support" class="step" data-x="21000" data-y="0" data-rotate-y="5">
+    <span class="slide-num">16 / 17</span>
     <div class="badge badge-green">Support Needed</div>
     <h1 class="step-title">What we need from leadership</h1>
     <p class="step-subtitle">Community, recognition, and budget to execute without friction.</p>
@@ -1065,9 +1126,9 @@
     </div>
   </div>
 
-  <!-- SLIDE 16: Close / Q&A -->
-  <div id="closing" class="step" data-x="21000" data-y="0" data-scale="1.1">
-    <span class="slide-num">16 / 16</span>
+  <!-- SLIDE 17: Close / Q&A -->
+  <div id="closing" class="step" data-x="22400" data-y="0" data-scale="1.1">
+    <span class="slide-num">17 / 17</span>
     <div class="badge badge-blue">Next Steps</div>
     <h1 class="step-title" style="font-size:2.8rem">Ready to see it live?</h1>
     <p class="step-subtitle" style="font-size:1.2rem">Project A: one Docker Compose stack for kri+hydra. Project B: pulse Jenkins on cylon. Your infrastructure, your data.</p>
@@ -1106,13 +1167,14 @@
       <div style="background:#E4F5F3;padding:6px;border-radius:5px;text-align:center;color:#4DB6AC">7 Fleet Ops</div>
       <div style="background:#E6F7EF;padding:6px;border-radius:5px;text-align:center;color:#2D8A58">8 Security</div>
       <div style="background:#F3EDFC;padding:6px;border-radius:5px;text-align:center;color:#7E5BBE">9 LLM</div>
-      <div style="background:#F3EDFC;padding:6px;border-radius:5px;text-align:center;color:#7E5BBE">10 RCA</div>
-      <div style="background:#E6F7EF;padding:6px;border-radius:5px;text-align:center;color:#2D8A58">11 Done A</div>
-      <div style="background:#FEF3EC;padding:6px;border-radius:5px;text-align:center;color:#C4785A">12 Done B</div>
-      <div style="background:#E8F0FE;padding:6px;border-radius:5px;text-align:center;color:#3B6FD9">13 Roadmap</div>
-      <div style="background:#FEF6E4;padding:6px;border-radius:5px;text-align:center;color:#B8860B">14 Blockers</div>
-      <div style="background:#F3EDFC;padding:6px;border-radius:5px;text-align:center;color:#7E5BBE">15 Support</div>
-      <div style="background:#5B8DEF;color:#fff;padding:6px;border-radius:5px;text-align:center">16 Q&amp;A</div>
+      <div style="background:#EDE9FE;padding:6px;border-radius:5px;text-align:center;color:#6B4FA0">10 OpenCode</div>
+      <div style="background:#F3EDFC;padding:6px;border-radius:5px;text-align:center;color:#7E5BBE">11 RCA</div>
+      <div style="background:#E6F7EF;padding:6px;border-radius:5px;text-align:center;color:#2D8A58">12 Done A</div>
+      <div style="background:#FEF3EC;padding:6px;border-radius:5px;text-align:center;color:#C4785A">13 Done B</div>
+      <div style="background:#E8F0FE;padding:6px;border-radius:5px;text-align:center;color:#3B6FD9">14 Roadmap</div>
+      <div style="background:#FEF6E4;padding:6px;border-radius:5px;text-align:center;color:#B8860B">15 Blockers</div>
+      <div style="background:#F3EDFC;padding:6px;border-radius:5px;text-align:center;color:#7E5BBE">16 Support</div>
+      <div style="background:#5B8DEF;color:#fff;padding:6px;border-radius:5px;text-align:center">17 Q&amp;A</div>
     </div>
   </div>
 
