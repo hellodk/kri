@@ -38,7 +38,7 @@ from fleet_platform.api.limiter import limiter
 from fleet_platform.core.auth import require_role
 from fleet_platform.models.agent_session import AgentSession
 from fleet_platform.models.llm_query_log import LLMQueryLog
-from fleet_platform.services import llm_svc
+from fleet_platform.services import llm_svc, tier_router
 
 router = APIRouter(prefix="/api/v1/agent", tags=["agent"])
 
@@ -62,12 +62,21 @@ async def run_agent_stream(
     db: AsyncSession = Depends(get_db),
     claims: dict = Depends(require_role("operator", "admin")),
 ):
+    routed_via: str | None = None
     if payload.endpoint_id:
         endpoint = await llm_svc.get_endpoint(db, payload.endpoint_id)
         if not endpoint:
             raise HTTPException(status_code=404, detail="LLM endpoint not found")
     else:
-        endpoint = await llm_svc.get_default_endpoint(db)
+        # Dogfood the tier router: pick a local planner-tier endpoint, allowing the
+        # admin-gated cloud fallback only for admins (#712 / #716 d8). Fall back to
+        # the configured default if no tier-tagged endpoint exists yet.
+        route = await tier_router.select_endpoint(db, "planner", allow_cloud=claims["role"] == "admin")
+        if route is not None:
+            endpoint = route.endpoint
+            routed_via = route.matched_tag + ("/cloud" if route.via_cloud else "")
+        else:
+            endpoint = await llm_svc.get_default_endpoint(db)
         if not endpoint:
             raise HTTPException(
                 status_code=422,
@@ -119,20 +128,31 @@ async def run_agent_stream(
         terminal = "completed"
         error: str | None = None
 
-        yield _sse({"type": "session_start", "session_id": str(session.id), "model": chosen_model})
+        yield _sse(
+            {
+                "type": "session_start",
+                "session_id": str(session.id),
+                "model": chosen_model,
+                "routed_via": routed_via,
+            }
+        )
 
         try:
-            async for event in loop.run(payload.prompt):
-                if event.type == "step_start":
-                    iterations = max(iterations, int(event.data.get("iteration", iterations)))
-                elif event.type == "tool_call":
-                    tool_calls.append({"name": event.data.get("name"), "args": event.data.get("args")})
-                elif event.type == "final":
-                    final_text = event.data.get("text")
-                elif event.type in ("limit_reached", "aborted"):
-                    terminal = "aborted"
-                yield _sse({"type": event.type, **event.data})
+            with tier_router.lease(endpoint):
+                async for event in loop.run(payload.prompt):
+                    if event.type == "step_start":
+                        iterations = max(iterations, int(event.data.get("iteration", iterations)))
+                    elif event.type == "tool_call":
+                        tool_calls.append({"name": event.data.get("name"), "args": event.data.get("args")})
+                    elif event.type == "final":
+                        final_text = event.data.get("text")
+                    elif event.type in ("limit_reached", "aborted"):
+                        terminal = "aborted"
+                    yield _sse({"type": event.type, **event.data})
         except Exception as exc:  # noqa: BLE001 — always emit a terminal frame
+            # A planner call failure trips the endpoint's health cooldown so the
+            # router steers subsequent sessions elsewhere.
+            tier_router.STATE.mark_unhealthy(str(endpoint.id))
             error = f"agent run failed: {exc}"
             terminal = "aborted"
             logger.exception("run_agent_stream failed", extra={"session_id": str(session.id)})
@@ -191,6 +211,16 @@ async def run_agent_stream(
         media_type="text/event-stream",
         headers={"Cache-Control": "no-cache, no-transform", "X-Accel-Buffering": "no"},
     )
+
+
+@router.get("/tiers")
+async def get_agent_tiers(
+    db: AsyncSession = Depends(get_db),
+    claims: dict = Depends(require_role("operator", "admin")),
+):
+    """Capability-tier snapshot: which endpoints serve planner/coder/worker/embed,
+    their health and current in-flight load. Drives the local-cluster dashboard."""
+    return await tier_router.tier_status(db)
 
 
 @router.get("/sessions")
