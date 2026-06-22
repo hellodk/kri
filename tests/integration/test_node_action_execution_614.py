@@ -195,3 +195,46 @@ async def test_approve_protected_target_blocked_at_execution(db: AsyncSession):
     assert exc_info.value.status_code == 403
     assert "sshd" in exc_info.value.detail
     mock_run.delay.assert_not_called()
+
+
+async def test_approve_twice_dispatches_once(db: AsyncSession):
+    """TOCTOU guard (#644): a second approve of the same token never re-dispatches."""
+    from fleet_platform.api.routes.node_actions import approve_action
+
+    node = await _create_node(db, f"test-node-{uuid.uuid4()}")
+    action = await _create_pending_action(db, node.id, "process_stop", {"pid": 9999, "name": "python"})
+
+    with patch("fleet_platform.workers.salt_tasks.run_salt_cmd") as mock_run:
+        mock_run.apply_async.return_value = MagicMock()
+        first = await approve_action(_fake_request(), token=action.approval_token, db=db)
+        second = await approve_action(_fake_request(), token=action.approval_token, db=db)
+
+    assert first["status"] == "executing"
+    # The losing caller observes the already-settled state and does not re-dispatch.
+    assert second["status"] in {"executing", "approved"}
+    mock_run.apply_async.assert_called_once()
+
+
+async def test_reject_after_reject_audits_once(db: AsyncSession):
+    """TOCTOU guard (#644): a duplicate reject does not write a second audit row."""
+    from sqlalchemy import func, select
+
+    from fleet_platform.api.routes.node_actions import reject_action
+    from fleet_platform.models.audit import AuditEvent
+
+    node = await _create_node(db, f"test-node-{uuid.uuid4()}")
+    action = await _create_pending_action(db, node.id, "service_stop", {"service": "com.example.x"})
+    action_type = action.action_type
+
+    with patch("fleet_platform.workers.salt_tasks.run_salt_cmd"):
+        await reject_action(_fake_request(), token=action.approval_token, db=db)
+        await reject_action(_fake_request(), token=action.approval_token, db=db)
+
+    count = (
+        await db.execute(
+            select(func.count())
+            .select_from(AuditEvent)
+            .where(AuditEvent.action == f"{action_type}_rejected", AuditEvent.resource_id == node.id)
+        )
+    ).scalar_one()
+    assert count == 1

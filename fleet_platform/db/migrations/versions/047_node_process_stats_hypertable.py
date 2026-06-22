@@ -9,6 +9,8 @@ import sqlalchemy as sa
 from alembic import op
 from sqlalchemy.dialects import postgresql
 
+from fleet_platform.db.ts_guard import timescale_enabled
+
 revision = "047"
 down_revision = "046"
 branch_labels = None
@@ -47,17 +49,22 @@ def upgrade() -> None:
         "node_process_stats",
         ["node_id", "collected_at"],
     )
-    op.execute(
-        "SELECT create_hypertable('node_process_stats', by_range('collected_at', INTERVAL '1 day'), migrate_data => true)"
-    )
-    op.execute(
-        "ALTER TABLE node_process_stats SET (timescaledb.compress = true, timescaledb.compress_orderby = 'collected_at DESC')"
-    )
-    op.execute("SELECT add_compression_policy('node_process_stats', INTERVAL '7 days')")
-    op.execute("SELECT add_retention_policy('node_process_stats', INTERVAL '14 days')")
+    # TimescaleDB-only features. On vanilla Postgres the table above is a fully
+    # functional plain table; we just skip partitioning/compression/retention (#665).
+    if timescale_enabled():
+        op.execute(
+            "SELECT create_hypertable('node_process_stats', by_range('collected_at', INTERVAL '1 day'), migrate_data => true)"
+        )
+        op.execute(
+            "ALTER TABLE node_process_stats SET (timescaledb.compress = true, timescaledb.compress_orderby = 'collected_at DESC')"
+        )
+        op.execute("SELECT add_compression_policy('node_process_stats', INTERVAL '7 days')")
+        op.execute("SELECT add_retention_policy('node_process_stats', INTERVAL '14 days')")
 
 
 def downgrade() -> None:
-    op.execute("SELECT remove_retention_policy('node_process_stats', true)")
-    op.execute("SELECT remove_compression_policy('node_process_stats', true)")
+    # Remove policies only where TimescaleDB created them; never wipe data (#665).
+    if timescale_enabled():
+        op.execute("SELECT remove_retention_policy('node_process_stats', true)")
+        op.execute("SELECT remove_compression_policy('node_process_stats', true)")
     op.drop_table("node_process_stats")
