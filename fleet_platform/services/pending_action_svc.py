@@ -46,29 +46,63 @@ async def get_by_token(db: AsyncSession, token: str) -> PendingAction | None:
     return result.scalar_one_or_none()
 
 
-async def approve(db: AsyncSession, action: PendingAction) -> PendingAction:
+async def approve(db: AsyncSession, action: PendingAction) -> tuple[PendingAction, bool]:
+    """Atomically claim a pending action for approval (TOCTOU-safe, #644).
+
+    Returns ``(action, claimed)``. ``claimed`` is True only for the single caller
+    that won the compare-and-swap ``pending`` -> ``approved``; concurrent callers
+    get ``False`` and must NOT dispatch (prevents double execution). A still-pending
+    action past its expiry is settled to ``expired`` and returned with
+    ``claimed=False``.
+    """
+    from sqlalchemy import update
+
     now = datetime.now(UTC)
-    if action.status != "pending":
-        return action
-    if action.expires_at < now:
-        action.status = "expired"
-        await db.commit()
-        return action
-    action.status = "approved"
-    action.executed_at = now
+    result = await db.execute(
+        update(PendingAction)
+        .where(
+            PendingAction.id == action.id,
+            PendingAction.status == "pending",
+            PendingAction.expires_at >= now,
+        )
+        .values(status="approved", executed_at=now)
+    )
+    await db.commit()
+    if result.rowcount == 1:  # type: ignore[attr-defined]
+        await db.refresh(action)
+        return action, True
+    # Lost the race or past expiry — settle the terminal state for the response.
+    await db.execute(
+        update(PendingAction)
+        .where(
+            PendingAction.id == action.id,
+            PendingAction.status == "pending",
+            PendingAction.expires_at < now,
+        )
+        .values(status="expired")
+    )
     await db.commit()
     await db.refresh(action)
-    return action
+    return action, False
 
 
-async def reject(db: AsyncSession, action: PendingAction) -> PendingAction:
-    if action.status != "pending":
-        # Already approved/rejected/expired — do not overwrite (audit integrity)
-        return action
-    action.status = "rejected"
+async def reject(db: AsyncSession, action: PendingAction) -> tuple[PendingAction, bool]:
+    """Atomically reject a pending action (TOCTOU-safe, #644).
+
+    Returns ``(action, claimed)``. ``claimed`` is True only for the caller that
+    transitioned ``pending`` -> ``rejected``; a losing/duplicate caller gets
+    ``False`` so side effects (audit, metrics) fire exactly once.
+    """
+    from sqlalchemy import update
+
+    result = await db.execute(
+        update(PendingAction)
+        .where(PendingAction.id == action.id, PendingAction.status == "pending")
+        .values(status="rejected")
+    )
     await db.commit()
     await db.refresh(action)
-    return action
+    return action, result.rowcount == 1  # type: ignore[attr-defined]
 
 
 async def expire_old(db: AsyncSession) -> int:
@@ -127,8 +161,10 @@ async def _send_approval_email(action: PendingAction, node, requested_by: str) -
             return
 
         node_name = getattr(node, "hostname", None) or getattr(node, "minion_id", None) or str(action.node_id)
-        approve_url = f"{api_url}/api/v1/actions/{action.approval_token}/approve"
-        reject_url = f"{api_url}/api/v1/actions/{action.approval_token}/reject"
+        # Link to the GET confirmation page (safe to prefetch); the page submits a
+        # POST to approve/reject. GET no longer mutates state (#644: mail-client
+        # prefetch can no longer auto-approve a destructive action).
+        confirm_url = f"{api_url}/api/v1/actions/{action.approval_token}"
 
         body = f"""
 <html><body style="font-family:sans-serif;color:#111827">
@@ -138,12 +174,12 @@ async def _send_approval_email(action: PendingAction, node, requested_by: str) -
   <p><strong>Action:</strong> {action.action_type}</p>
   <p><strong>Expires:</strong> 15 minutes from request</p>
   <p style="margin-top:24px">
-    <a href="{approve_url}"
-       style="background:#16A34A;color:white;padding:10px 20px;border-radius:6px;
-              text-decoration:none;margin-right:12px">&#10003; Approve</a>
-    <a href="{reject_url}"
-       style="background:#DC2626;color:white;padding:10px 20px;border-radius:6px;
-              text-decoration:none">&#10007; Reject</a>
+    <a href="{confirm_url}"
+       style="background:#2563EB;color:white;padding:10px 20px;border-radius:6px;
+              text-decoration:none">Review &amp; decide &rarr;</a>
+  </p>
+  <p style="color:#6B7280;font-size:12px;margin-top:16px">
+    This link opens a confirmation page; no action is taken until you click Approve or Reject there.
   </p>
 </body></html>"""
 
