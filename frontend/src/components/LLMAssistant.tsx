@@ -3,6 +3,7 @@ import { streamQuery } from '../api/llm'
 import { streamAgent, type AgentEvent } from '../api/agent'
 import { ToolStep, ToolResultCard, type ToolStepData } from './AgentToolStep'
 import { ArtifactsPanel } from './ArtifactsPanel'
+import { AgentApprovals } from './AgentApprovals'
 import { useLLMStore } from '../stores/llmStore'
 
 type AssistantMode = 'qa' | 'agent'
@@ -46,7 +47,7 @@ export default function LLMAssistant() {
   const [pos, setPos] = useState<{ x: number; y: number } | null>(loadPos)
   const [streaming, setStreaming] = useState(false)
   const [mode, setMode] = useState<AssistantMode>('qa')
-  const [agentView, setAgentView] = useState<'run' | 'artifacts'>('run')
+  const [agentView, setAgentView] = useState<'run' | 'artifacts' | 'approvals'>('run')
   const [agentTurns, setAgentTurns] = useState<AgentTurn[]>([])
   const { messages, addMessage, clearMessages, appendToLastMessage, patchLastMessage } = useLLMStore()
   const bottomRef = useRef<HTMLDivElement>(null)
@@ -435,8 +436,15 @@ export default function LLMAssistant() {
                 >
                   Artifacts
                 </button>
+                <button
+                  onClick={() => setAgentView('approvals')}
+                  className={`px-2 py-0.5 rounded ${agentView === 'approvals' ? 'bg-blue-100 text-blue-700' : 'text-gray-500 hover:bg-gray-100'}`}
+                >
+                  Approvals
+                </button>
               </div>
               {agentView === 'artifacts' && <ArtifactsPanel />}
+              {agentView === 'approvals' && <AgentApprovals />}
               {agentView === 'run' && agentTurns.length === 0 && (
                 <p className="text-sm text-gray-400 text-center mt-8">
                   Agent mode runs read-only tools to investigate — e.g. “why is mm7 degraded?”

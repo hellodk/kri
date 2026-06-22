@@ -25,6 +25,26 @@ export interface ArtifactDiff {
   modified: string
 }
 
+export interface AgentAction {
+  id: string
+  tool_name: string
+  params: Record<string, unknown>
+  requested_by: string
+  status: string
+  target_count: number | null
+  co_sign_required: boolean
+  approved_by: string | null
+  co_signed_by: string | null
+  dry_run_result: unknown
+  created_at: string | null
+}
+
+export const actionApi = {
+  list: () => api.get<{ actions: AgentAction[] }>('/api/v1/agent/actions'),
+  approve: (id: string) => api.post<{ status: string; message?: string }>(`/api/v1/agent/actions/${id}/approve`, {}),
+  reject: (id: string) => api.post<{ status: string }>(`/api/v1/agent/actions/${id}/reject`, {}),
+}
+
 export const artifactApi = {
   list: () => api.get<{ artifacts: ArtifactSummary[] }>('/api/v1/agent/artifacts'),
   get: (sessionId: string, filename: string) =>

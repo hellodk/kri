@@ -29,6 +29,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from fleet_platform.agent.audit import audit_tool_dispatch
 from fleet_platform.agent.executor import Executor
+from fleet_platform.agent.guards import assert_live_action_allowed
 from fleet_platform.agent.loop import AgentLoop
 from fleet_platform.agent.planner import LLMPlanner
 from fleet_platform.agent.registry import ToolCtx
@@ -38,7 +39,7 @@ from fleet_platform.api.limiter import limiter
 from fleet_platform.core.auth import require_role
 from fleet_platform.models.agent_session import AgentSession
 from fleet_platform.models.llm_query_log import LLMQueryLog
-from fleet_platform.services import llm_svc, tier_router
+from fleet_platform.services import agent_apply_svc, llm_svc, tier_router
 
 router = APIRouter(prefix="/api/v1/agent", tags=["agent"])
 
@@ -105,7 +106,7 @@ async def run_agent_stream(
     await db.refresh(session)
 
     registry = build_default_registry()
-    executor = Executor(registry, audit_hook=audit_tool_dispatch)
+    executor = Executor(registry, audit_hook=audit_tool_dispatch, guard_hook=assert_live_action_allowed)
     planner = LLMPlanner(
         registry=registry,
         role=claims["role"],
@@ -148,6 +149,24 @@ async def run_agent_stream(
                         final_text = event.data.get("text")
                     elif event.type in ("limit_reached", "aborted"):
                         terminal = "aborted"
+                    elif event.type == "awaiting_approval":
+                        # Turn the proposed live action into a PendingAction for
+                        # human approval (+ co-sign when it hits > N targets).
+                        terminal = "awaiting_approval"
+                        try:
+                            action = await agent_apply_svc.create_proposal(
+                                db,
+                                session_id=session.id,
+                                actor=claims["email"],
+                                tool_name=event.data.get("name"),
+                                args=event.data.get("args") or {},
+                                dry_run_result=event.data.get("dry_run_result"),
+                            )
+                            event.data["pending_action_id"] = str(action.id)
+                            event.data["co_sign_required"] = action.co_sign_required
+                            event.data["target_count"] = action.target_count
+                        except Exception as exc:  # noqa: BLE001 — guard refusal or db error
+                            event.data["proposal_error"] = str(exc)
                     yield _sse({"type": event.type, **event.data})
         except Exception as exc:  # noqa: BLE001 — always emit a terminal frame
             # A planner call failure trips the endpoint's health cooldown so the
@@ -289,6 +308,152 @@ async def get_agent_tiers(
     """Capability-tier snapshot: which endpoints serve planner/coder/worker/embed,
     their health and current in-flight load. Drives the local-cluster dashboard."""
     return await tier_router.tier_status(db)
+
+
+@router.get("/actions")
+async def list_agent_actions(
+    db: AsyncSession = Depends(get_db),
+    claims: dict = Depends(require_role("operator", "admin")),
+):
+    """List agent-proposed pending actions awaiting approval/co-sign."""
+    from sqlalchemy import select
+
+    from fleet_platform.models.pending_action import PendingAction
+
+    rows = (
+        (
+            await db.execute(
+                select(PendingAction)
+                .where(PendingAction.proposed_by_agent.is_(True))
+                .order_by(PendingAction.created_at.desc())
+                .limit(50)
+            )
+        )
+        .scalars()
+        .all()
+    )
+    return {
+        "actions": [
+            {
+                "id": str(a.id),
+                "tool_name": a.tool_name,
+                "params": json.loads(a.params or "{}"),
+                "requested_by": a.requested_by,
+                "status": a.status,
+                "target_count": a.target_count,
+                "co_sign_required": a.co_sign_required,
+                "approved_by": a.approved_by,
+                "co_signed_by": a.co_signed_by,
+                "dry_run_result": json.loads(a.dry_run_result) if a.dry_run_result else None,
+                "created_at": a.created_at.isoformat() if a.created_at else None,
+            }
+            for a in rows
+        ]
+    }
+
+
+async def _get_agent_action(db: AsyncSession, action_id: str):
+    from sqlalchemy import select
+
+    from fleet_platform.models.pending_action import PendingAction
+
+    try:
+        aid = uuid.UUID(action_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail="invalid action id") from exc
+    action = (await db.execute(select(PendingAction).where(PendingAction.id == aid))).scalar_one_or_none()
+    if action is None or not action.proposed_by_agent:
+        raise HTTPException(status_code=404, detail="agent action not found")
+    return action
+
+
+@router.post("/actions/{action_id}/approve")
+@limiter.limit("20/minute")
+async def approve_agent_action(
+    request: Request,
+    action_id: str,
+    db: AsyncSession = Depends(get_db),
+    claims: dict = Depends(require_role("operator", "admin")),
+):
+    """Approve (and, when fully signed, execute) an agent-proposed live action.
+
+    Execution runs as the original operator, not the approver."""
+    action = await _get_agent_action(db, action_id)
+    try:
+        return await agent_apply_svc.approve_proposal(
+            db, action, approver_email=claims["email"], approver_role=claims["role"]
+        )
+    except agent_apply_svc.ApprovalError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+
+
+@router.post("/actions/{action_id}/reject")
+@limiter.limit("20/minute")
+async def reject_agent_action(
+    request: Request,
+    action_id: str,
+    db: AsyncSession = Depends(get_db),
+    claims: dict = Depends(require_role("operator", "admin")),
+):
+    action = await _get_agent_action(db, action_id)
+    try:
+        return await agent_apply_svc.reject_proposal(db, action, approver_email=claims["email"])
+    except agent_apply_svc.ApprovalError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+
+
+@router.post("/artifacts/{session_id}/{filename}/promote")
+@limiter.limit("10/minute")
+async def promote_artifact(
+    request: Request,
+    session_id: str,
+    filename: str,
+    target: str,
+    db: AsyncSession = Depends(get_db),
+    claims: dict = Depends(require_role("admin")),
+):
+    """Promote a quarantined artifact into the live playbook tree. **Admin only.**
+
+    This is the single, deliberate path from quarantine to live — never a
+    registry tool — and is always attributed to the promoting admin.
+    """
+    from pathlib import Path
+
+    from fleet_platform.core.audit import audit
+    from fleet_platform.services import agent_quarantine as q
+    from fleet_platform.services.platform_settings_svc import get_playbooks_dir
+    from fleet_platform.services.playbook_sources import get_all_playbook_dirs
+
+    try:
+        content, meta = q.read_artifact(claims["email"], session_id, filename)
+    except q.QuarantineError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+    playbooks_dir = await get_playbooks_dir(db)
+    roots = [d.resolve() for d in get_all_playbook_dirs(None, playbooks_dir)]
+    dest = (Path(playbooks_dir) / target).resolve()
+    # Promotion target must stay inside an allowed playbook root.
+    if not any(dest.is_relative_to(r) for r in roots):
+        raise HTTPException(status_code=400, detail="promotion target is outside the playbook tree")
+    if dest.is_symlink():
+        raise HTTPException(status_code=400, detail="promotion target is a symlink")
+
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    dest.write_text(content)
+
+    await audit(
+        db,
+        actor=claims["email"],
+        action="agent.artifact.promote",
+        resource_type="playbook",
+        new_value={
+            "from": f"{session_id}:{filename}",
+            "to": str(dest),
+            "kind": (meta.get("metadata") or {}).get("kind"),
+        },
+    )
+    await db.commit()
+    return {"promoted": True, "target": str(dest)}
 
 
 @router.get("/sessions")
