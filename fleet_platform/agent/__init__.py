@@ -5,6 +5,12 @@ catalogue of what the agent can do; the executor enforces RBAC, validation,
 idempotency and audit on every dispatch; the loop drives planner ↔ tools.
 """
 
+from fleet_platform.agent.executor import (
+    Executor,
+    IdempotencyCache,
+    ToolResult,
+    validate_args,
+)
 from fleet_platform.agent.registry import (
     SIDE_EFFECTS,
     ToolCtx,
@@ -12,4 +18,13 @@ from fleet_platform.agent.registry import (
     ToolSpec,
 )
 
-__all__ = ["SIDE_EFFECTS", "ToolCtx", "ToolRegistry", "ToolSpec"]
+__all__ = [
+    "SIDE_EFFECTS",
+    "ToolCtx",
+    "ToolRegistry",
+    "ToolSpec",
+    "Executor",
+    "IdempotencyCache",
+    "ToolResult",
+    "validate_args",
+]
