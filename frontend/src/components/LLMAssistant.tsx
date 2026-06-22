@@ -1,6 +1,23 @@
 import { useState, useRef, useEffect, useCallback } from 'react'
 import { streamQuery } from '../api/llm'
+import { streamAgent, type AgentEvent } from '../api/agent'
+import { ToolStep, ToolResultCard, type ToolStepData } from './AgentToolStep'
 import { useLLMStore } from '../stores/llmStore'
+
+type AssistantMode = 'qa' | 'agent'
+
+type AgentItem = { kind: 'step'; iteration: number } | { kind: 'tool'; step: ToolStepData }
+
+interface AgentTurn {
+  prompt: string
+  model?: string
+  items: AgentItem[]
+  final?: string
+  note?: string
+  error?: string
+  meta?: { iterations: number; tool_calls: number; tokens_in: number; tokens_out: number; duration_ms: number }
+  running: boolean
+}
 
 function classifyIntentHint(prompt: string): string {
   const p = prompt.toLowerCase()
@@ -27,6 +44,8 @@ export default function LLMAssistant() {
   const [intentHint, setIntentHint] = useState('Fleet Query')
   const [pos, setPos] = useState<{ x: number; y: number } | null>(loadPos)
   const [streaming, setStreaming] = useState(false)
+  const [mode, setMode] = useState<AssistantMode>('qa')
+  const [agentTurns, setAgentTurns] = useState<AgentTurn[]>([])
   const { messages, addMessage, clearMessages, appendToLastMessage, patchLastMessage } = useLLMStore()
   const bottomRef = useRef<HTMLDivElement>(null)
   const intentDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -51,7 +70,7 @@ export default function LLMAssistant() {
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
-  }, [messages])
+  }, [messages, agentTurns])
 
   // Re-clamp pos into viewport on window resize
   useEffect(() => {
@@ -138,9 +157,110 @@ export default function LLMAssistant() {
     }
   }, [])
 
+  const patchLastTurn = useCallback((fn: (t: AgentTurn) => AgentTurn) => {
+    setAgentTurns((prev) => {
+      if (prev.length === 0) return prev
+      const next = prev.slice()
+      next[next.length - 1] = fn(next[next.length - 1])
+      return next
+    })
+  }, [])
+
+  const handleAgentEvent = useCallback(
+    (ev: AgentEvent) => {
+      switch (ev.type) {
+        case 'session_start':
+          patchLastTurn((t) => ({ ...t, model: ev.model }))
+          break
+        case 'step_start':
+          patchLastTurn((t) => ({ ...t, items: [...t.items, { kind: 'step', iteration: ev.iteration }] }))
+          break
+        case 'tool_call':
+          patchLastTurn((t) => ({
+            ...t,
+            items: [...t.items, { kind: 'tool', step: { n: ev.n, name: ev.name, args: ev.args, pending: true } }],
+          }))
+          break
+        case 'tool_result':
+          patchLastTurn((t) => {
+            // Match the most recent still-pending tool item (dispatch is serial).
+            const items = t.items.slice()
+            for (let i = items.length - 1; i >= 0; i--) {
+              const it = items[i]
+              if (it.kind === 'tool' && it.step.pending) {
+                items[i] = {
+                  kind: 'tool',
+                  step: {
+                    ...it.step,
+                    pending: false,
+                    ok: ev.ok,
+                    status: ev.status,
+                    result: ev.result,
+                    error: ev.error,
+                    cached: ev.cached,
+                  },
+                }
+                break
+              }
+            }
+            return { ...t, items }
+          })
+          break
+        case 'awaiting_approval':
+          patchLastTurn((t) => ({ ...t, note: `Awaiting approval for ${ev.name} — open it in Pending Actions.` }))
+          break
+        case 'final':
+          patchLastTurn((t) => ({ ...t, final: ev.text }))
+          break
+        case 'limit_reached':
+          patchLastTurn((t) => ({ ...t, note: `Stopped: reached ${ev.limit} (${ev.value}).` }))
+          break
+        case 'error':
+          patchLastTurn((t) => ({ ...t, error: ev.error, running: false }))
+          break
+        case 'done':
+          patchLastTurn((t) => ({
+            ...t,
+            running: false,
+            meta: {
+              iterations: ev.iterations,
+              tool_calls: ev.tool_calls,
+              tokens_in: ev.input_tokens,
+              tokens_out: ev.output_tokens,
+              duration_ms: ev.duration_ms,
+            },
+          }))
+          setStreaming(false)
+          break
+      }
+    },
+    [patchLastTurn],
+  )
+
+  const handleAgentSubmit = (text: string) => {
+    setAgentTurns((prev) => [...prev, { prompt: text, items: [], running: true }])
+    setPrompt('')
+    setStreaming(true)
+    streamControllerRef.current?.abort()
+    streamControllerRef.current = streamAgent(
+      { prompt: text },
+      {
+        onEvent: handleAgentEvent,
+        onError: (msg) => {
+          patchLastTurn((t) => ({ ...t, error: msg, running: false }))
+          setStreaming(false)
+        },
+      },
+    )
+  }
+
   const handleSubmit = () => {
     const text = prompt.trim()
     if (!text || streaming) return
+    if (mode === 'agent') {
+      handleAgentSubmit(text)
+      return
+    }
     // Capture history BEFORE addMessage — prevents the new message appearing
     // in both history and prompt (duplicate turn bug, closes #303)
     const history = messages
@@ -184,7 +304,11 @@ export default function LLMAssistant() {
   const handleStop = () => {
     streamControllerRef.current?.abort()
     streamControllerRef.current = null
-    patchLastMessage({ streaming: false, error: 'cancelled' })
+    if (mode === 'agent') {
+      patchLastTurn((t) => ({ ...t, running: false, note: t.note ?? 'cancelled' }))
+    } else {
+      patchLastMessage({ streaming: false, error: 'cancelled' })
+    }
     setStreaming(false)
   }
 
@@ -253,11 +377,30 @@ export default function LLMAssistant() {
         >
           <span className="font-semibold text-sm">AI Fleet Assistant</span>
           <div className="flex items-center gap-2">
-            {messages.length > 0 && (
+            {/* Q&A ↔ Agent mode toggle */}
+            <div className="flex rounded-md overflow-hidden border border-white/30 text-[11px] cursor-default select-auto">
               <button
-                onClick={clearMessages}
+                onClick={() => !streaming && setMode('qa')}
+                disabled={streaming}
+                className={`px-2 py-0.5 transition-colors ${mode === 'qa' ? 'bg-white text-blue-700' : 'text-white/80 hover:bg-white/10'} disabled:opacity-60`}
+                title="Single-shot Q&A"
+              >
+                Q&amp;A
+              </button>
+              <button
+                onClick={() => !streaming && setMode('agent')}
+                disabled={streaming}
+                className={`px-2 py-0.5 transition-colors ${mode === 'agent' ? 'bg-white text-blue-700' : 'text-white/80 hover:bg-white/10'} disabled:opacity-60`}
+                title="Multi-tool agent run"
+              >
+                Agent
+              </button>
+            </div>
+            {((mode === 'qa' && messages.length > 0) || (mode === 'agent' && agentTurns.length > 0)) && (
+              <button
+                onClick={() => (mode === 'agent' ? setAgentTurns([]) : clearMessages())}
                 className="text-white/70 hover:text-white text-xs px-2 py-0.5 rounded border border-white/30 hover:border-white/60 transition-colors cursor-default select-auto"
-                title="Clear chat history"
+                title="Clear history"
               >
                 Clear
               </button>
@@ -275,6 +418,59 @@ export default function LLMAssistant() {
         </div>
 
         <div className="flex-1 overflow-y-auto p-4 space-y-4 min-h-0">
+          {mode === 'agent' ? (
+            <>
+              {agentTurns.length === 0 && (
+                <p className="text-sm text-gray-400 text-center mt-8">
+                  Agent mode runs read-only tools to investigate — e.g. “why is mm7 degraded?”
+                </p>
+              )}
+              {agentTurns.map((turn, ti) => (
+                <div key={ti} className="space-y-2">
+                  <div className="flex justify-end">
+                    <div className="max-w-[85%] rounded-lg px-3 py-2 text-sm bg-blue-600 text-white">{turn.prompt}</div>
+                  </div>
+                  {turn.items.map((it, ii) =>
+                    it.kind === 'step' ? (
+                      <ToolStep key={ii} iteration={it.iteration} />
+                    ) : (
+                      <ToolResultCard key={ii} step={it.step} />
+                    ),
+                  )}
+                  {turn.running && turn.items.length === 0 && (
+                    <div className="flex space-x-1 py-1 px-1">
+                      <span className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
+                      <span className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
+                      <span className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
+                    </div>
+                  )}
+                  {turn.note && <p className="text-xs text-amber-600 px-1">{turn.note}</p>}
+                  {turn.final && (
+                    <div className="flex justify-start">
+                      <div className="max-w-[85%] rounded-lg px-3 py-2 text-sm bg-gray-100 text-gray-900">
+                        <pre className="whitespace-pre-wrap font-sans">{turn.final}</pre>
+                      </div>
+                    </div>
+                  )}
+                  {turn.error && (
+                    <div className="flex justify-start">
+                      <div className="max-w-[85%] rounded-lg px-3 py-2 text-sm bg-red-50 border border-red-200 text-red-700">
+                        ⚠ {turn.error}
+                      </div>
+                    </div>
+                  )}
+                  {turn.meta && (
+                    <div className="text-xs text-gray-400 px-1">
+                      {turn.model} · {turn.meta.iterations} steps · {turn.meta.tool_calls} tools ·{' '}
+                      {turn.meta.tokens_in}↑ {turn.meta.tokens_out}↓ · {turn.meta.duration_ms}ms
+                    </div>
+                  )}
+                </div>
+              ))}
+              <div ref={bottomRef} />
+            </>
+          ) : (
+          <>
           {messages.length === 0 && (
             <p className="text-sm text-gray-400 text-center mt-8">
               Ask anything about your fleet — node status, drift, playbooks, health metrics…
@@ -317,6 +513,8 @@ export default function LLMAssistant() {
             </div>
           ))}
           <div ref={bottomRef} />
+          </>
+          )}
         </div>
 
         <div className="border-t border-gray-200 p-3 space-y-1.5">
@@ -325,7 +523,7 @@ export default function LLMAssistant() {
               value={prompt}
               onChange={handlePromptChange}
               onKeyDown={handleKeyDown}
-              placeholder="Ask about your fleet… (Enter to send)"
+              placeholder={mode === 'agent' ? 'Investigate with tools… (Enter to run)' : 'Ask about your fleet… (Enter to send)'}
               rows={2}
               className="flex-1 resize-none border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 placeholder-gray-400"
               disabled={streaming}
@@ -348,8 +546,11 @@ export default function LLMAssistant() {
               </button>
             )}
           </div>
-          {prompt.trim() && (
+          {prompt.trim() && mode === 'qa' && (
             <p className="text-xs text-gray-400">Detected: {intentHint}</p>
+          )}
+          {mode === 'agent' && (
+            <p className="text-xs text-gray-400">Agent mode · read-only tools · bounded run</p>
           )}
         </div>
       </div>
