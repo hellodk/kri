@@ -27,6 +27,7 @@ from fleet_platform.api.routes import (
     sbom,
     search,
 )
+from fleet_platform.api.routes.agent import router as agent_router
 from fleet_platform.api.routes.alerts import router as alerts_router
 from fleet_platform.api.routes.audit import router as audit_router
 from fleet_platform.api.routes.builds import router as builds_router
@@ -188,6 +189,7 @@ def create_app() -> FastAPI:
     app.include_router(actions_router)
     app.include_router(credentials_router, tags=["credentials"])
     app.include_router(playbook_library_router, tags=["playbook-library"])
+    app.include_router(agent_router, tags=["agent"])
 
     @app.get("/metrics", include_in_schema=False)
     async def metrics_endpoint():
