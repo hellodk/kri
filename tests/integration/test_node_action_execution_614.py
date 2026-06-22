@@ -11,13 +11,40 @@ from datetime import UTC, datetime, timedelta
 from unittest.mock import MagicMock, patch
 
 import pytest
+import pytest_asyncio
 from sqlalchemy.ext.asyncio import AsyncSession
 
 pytestmark = pytest.mark.asyncio
 
 
+@pytest_asyncio.fixture(loop_scope="module")
+async def db(db_session: AsyncSession) -> AsyncSession:
+    """Alias for the shared ``db_session`` fixture used by these tests."""
+    return db_session
+
+
+def _fake_request():
+    """Minimal Starlette Request so the slowapi rate-limit decorator accepts
+    direct (non-HTTP) calls to the route handlers."""
+    from starlette.requests import Request
+
+    return Request(
+        {
+            "type": "http",
+            "method": "POST",
+            "path": "/",
+            "headers": [],
+            "query_string": b"",
+            "client": ("testclient", 12345),
+        }
+    )
+
+
 async def _create_node(db: AsyncSession, minion_id: str) -> "Node":  # noqa: F821
     """Helper: insert a minimal Node row and return it."""
+    import secrets
+
+    from fleet_platform.core.auth import hash_password
     from fleet_platform.models.node import Node
 
     node = Node(
@@ -25,6 +52,8 @@ async def _create_node(db: AsyncSession, minion_id: str) -> "Node":  # noqa: F82
         minion_id=minion_id,
         hostname=minion_id,
         status="online",
+        node_token_hash=hash_password(secrets.token_urlsafe(16)),
+        first_seen_at=datetime.now(UTC),
     )
     db.add(node)
     await db.commit()
@@ -65,19 +94,21 @@ async def test_approve_dispatches_salt_cmd(db: AsyncSession):
 
     mock_task = MagicMock()
     with patch("fleet_platform.workers.salt_tasks.run_salt_cmd") as mock_run:
-        mock_run.delay.return_value = mock_task
-        result = await approve_action(token=action.approval_token, db=db)
+        mock_run.apply_async.return_value = mock_task
+        result = await approve_action(_fake_request(), token=action.approval_token, db=db)
 
-    assert result["status"] == "executed"
+    # Dispatch is async (apply_async + finalize link); status is "executing" until
+    # finalize_node_action reports completion.
+    assert result["status"] == "executing"
     assert "dispatched" in result["message"]
-    mock_run.delay.assert_called_once()
-    call_kwargs = mock_run.delay.call_args
-    assert call_kwargs.kwargs["function"] == "ps.kill_pid"
-    assert call_kwargs.kwargs["target_minions"] == [node.minion_id]
-    assert "signal=15" in call_kwargs.kwargs["args"]
+    mock_run.apply_async.assert_called_once()
+    invocation = mock_run.apply_async.call_args.kwargs["kwargs"]
+    assert invocation["function"] == "ps.kill_pid"
+    assert invocation["target_minions"] == [node.minion_id]
+    assert "signal=15" in invocation["args"]
 
     await db.refresh(action)
-    assert action.status == "executed"
+    assert action.status == "executing"
 
 
 async def test_approve_expired_token_not_dispatched(db: AsyncSession):
@@ -88,7 +119,7 @@ async def test_approve_expired_token_not_dispatched(db: AsyncSession):
     action = await _create_pending_action(db, node.id, expired=True)
 
     with patch("fleet_platform.workers.salt_tasks.run_salt_cmd") as mock_run:
-        result = await approve_action(token=action.approval_token, db=db)
+        result = await approve_action(_fake_request(), token=action.approval_token, db=db)
 
     assert result["status"] == "expired"
     mock_run.delay.assert_not_called()
@@ -107,7 +138,7 @@ async def test_reject_sets_status_no_dispatch_and_writes_audit(db: AsyncSession)
     action_type = action.action_type
 
     with patch("fleet_platform.workers.salt_tasks.run_salt_cmd") as mock_run:
-        result = await reject_action(token=action.approval_token, db=db)
+        result = await reject_action(_fake_request(), token=action.approval_token, db=db)
 
     assert result["status"] == "rejected"
     mock_run.delay.assert_not_called()
@@ -159,7 +190,7 @@ async def test_approve_protected_target_blocked_at_execution(db: AsyncSession):
 
     with patch("fleet_platform.workers.salt_tasks.run_salt_cmd") as mock_run:
         with pytest.raises(HTTPException) as exc_info:
-            await approve_action(token=action.approval_token, db=db)
+            await approve_action(_fake_request(), token=action.approval_token, db=db)
 
     assert exc_info.value.status_code == 403
     assert "sshd" in exc_info.value.detail

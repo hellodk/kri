@@ -1,5 +1,7 @@
 """Integration tests for POST /api/v1/settings/test-email (#417)."""
 
+from unittest.mock import patch
+
 from httpx import AsyncClient
 
 
@@ -10,10 +12,17 @@ async def test_test_email_viewer_forbidden(viewer_client: AsyncClient):
 
 
 async def test_test_email_admin_no_smtp_host_returns_400(admin_client: AsyncClient):
-    """Admin with no SMTP host configured must receive HTTP 400 with a clear message."""
-    # Ensure smtp_host is absent / empty by not setting it
-    r = await admin_client.post("/api/v1/settings/test-email", json={})
-    # Could be 400 (no host) or 400 (SMTP refused) — in test DB smtp_host is blank by default
+    """Admin with no SMTP host configured must receive HTTP 400 with a clear message.
+
+    The route reads SMTP settings via a synchronous session (``get_sync_db``)
+    that is not part of the async test-DB override, so we mock the underlying
+    send helper to exercise the route's ValueError -> HTTP 400 mapping.
+    """
+    with patch(
+        "fleet_platform.services.digest_svc.send_test_email",
+        side_effect=ValueError("SMTP host not configured"),
+    ):
+        r = await admin_client.post("/api/v1/settings/test-email", json={})
     assert r.status_code == 400
     body = r.json()
     assert "detail" in body
