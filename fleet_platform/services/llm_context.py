@@ -4,6 +4,8 @@ from datetime import UTC, datetime
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from fleet_platform.services.prompt_safety import sanitize_untrusted
+
 INTENT_ADDENDUM: dict[str, str] = {
     "fleet_query": (
         "Answer the operator's question using ONLY the Fleet Snapshot and Node Records below. "
@@ -63,14 +65,17 @@ def _format_last_seen(last_seen_at) -> str:
 
 
 def _sanitize_cell(value: object) -> str:
-    """Strip Markdown table-breaking characters from node-controlled values.
+    """Sanitize a node-controlled value for a Markdown table cell.
 
     Coerces non-str values (IPv4Address, datetime, int, None) to str first —
     a node `ip` arrives as an ipaddress.IPv4Address, and calling .replace() on it
     raised AttributeError, 500-ing every AI chat query in build_fleet_context (#633).
+
+    Beyond escaping table-breaking characters, this now neutralizes prompt-injection
+    markers (code fences, model-control tokens, tool-call-shaped tokens, control/bidi
+    Unicode) via the shared sanitizer (#710).
     """
-    text = str(value)
-    return text.replace("|", "\\|").replace("\n", " ").replace("\r", "")
+    return sanitize_untrusted(value, cell=True)
 
 
 def estimate_tokens(text: str) -> int:

@@ -116,6 +116,7 @@ def _to_response(endpoint) -> LLMEndpointResponse:
             if endpoint.model_capabilities
             else []
         ),
+        tool_mode=endpoint.tool_mode,
     )
 
 
