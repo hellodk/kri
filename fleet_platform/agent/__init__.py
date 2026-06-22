@@ -11,6 +11,15 @@ from fleet_platform.agent.executor import (
     ToolResult,
     validate_args,
 )
+from fleet_platform.agent.loop import (
+    MAX_ITERATIONS,
+    MAX_TOOL_CALLS,
+    AgentEvent,
+    AgentLoop,
+    PlanDecision,
+    Planner,
+    ToolCall,
+)
 from fleet_platform.agent.registry import (
     SIDE_EFFECTS,
     ToolCtx,
@@ -27,4 +36,11 @@ __all__ = [
     "IdempotencyCache",
     "ToolResult",
     "validate_args",
+    "AgentLoop",
+    "AgentEvent",
+    "PlanDecision",
+    "Planner",
+    "ToolCall",
+    "MAX_ITERATIONS",
+    "MAX_TOOL_CALLS",
 ]
