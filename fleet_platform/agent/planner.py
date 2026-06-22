@@ -20,6 +20,10 @@ from fleet_platform.agent.loop import PlanDecision, ToolCall
 from fleet_platform.agent.registry import ToolRegistry
 from fleet_platform.services.tool_calling import parse_tool_calls_from_content
 
+# Hard cap on a single tool result fed back into the planner prompt (#715). Keeps
+# a hostile/huge tool result from blowing the context window or smuggling payload.
+TOOL_RESULT_CAP = 4096
+
 _SYSTEM_PREAMBLE = (
     "You are kri's fleet operations agent. You answer the operator's question by "
     "calling read-only tools, observing their results, and reasoning step by step.\n\n"
@@ -47,8 +51,8 @@ def _summarize_result(result: Any) -> str:
         payload = _json.dumps(getattr(result, "result", None), default=str)
     except (TypeError, ValueError):
         payload = str(getattr(result, "result", None))
-    if len(payload) > 4000:
-        payload = payload[:4000] + " ...[truncated]"
+    if len(payload) > TOOL_RESULT_CAP:
+        payload = payload[:TOOL_RESULT_CAP] + " ...[truncated]"
     return f"[{name}] OK: {payload}"
 
 
