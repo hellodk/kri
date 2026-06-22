@@ -6,7 +6,9 @@ POST /api/v1/fleet/nodes/import/commit
 """
 
 import secrets
+import uuid
 from datetime import UTC, datetime
+from unittest.mock import MagicMock, patch
 
 import pytest_asyncio
 from httpx import ASGITransport, AsyncClient
@@ -15,6 +17,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_asyn
 from fleet_platform.core.auth import create_access_token, hash_password
 from fleet_platform.core.config import settings
 from fleet_platform.models import Base, User
+from fleet_platform.models.credential import Credential
 from fleet_platform.models.group import Group, GroupMember
 from fleet_platform.models.node import Node
 
@@ -371,3 +374,129 @@ async def test_commit_requires_auth(viewer_client: AsyncClient):
     rows = [{"minion_id": "x", "status": "new", "reason": ""}]
     resp = await viewer_client.post("/api/v1/fleet/nodes/import/commit", json={"rows": rows})
     assert resp.status_code == 403
+
+
+# ─── Auto-bootstrap parity (import → bootstrap consolidation) ───────────────────
+
+
+async def test_commit_persists_ssh_password_credential(
+    operator_client: AsyncClient,
+    test_engine,
+):
+    """SSH password supplied at import is persisted to the node's credential (#dead-field fix)."""
+    rows = [
+        {
+            "minion_id": "commit-cred-node-1",
+            "hostname": "commit-cred-node-1",
+            "ip": "10.210.0.1",
+            "status": "new",
+            "reason": "",
+        },
+    ]
+    resp = await operator_client.post(
+        "/api/v1/fleet/nodes/import/commit",
+        json={
+            "rows": rows,
+            "ssh_username": "deploy",
+            "ssh_password": "s3cret-pw",
+        },
+    )
+    assert resp.status_code == 200, resp.text
+    node_id = uuid.UUID(resp.json()["node_ids"][0])
+
+    TestSession = async_sessionmaker(test_engine, expire_on_commit=False)
+    async with TestSession() as session:
+        node = await session.get(Node, node_id)
+        assert node.credential_id is not None
+        cred = await session.get(Credential, node.credential_id)
+        assert cred.kind == "username_password"
+        assert cred.username == "deploy"
+        assert cred.secret_enc  # password was encrypted + stored, not dropped
+
+
+async def test_commit_auto_bootstrap_requires_group(operator_client: AsyncClient):
+    """auto_bootstrap without a group is rejected up front (bootstrap needs a group)."""
+    rows = [
+        {
+            "minion_id": "commit-bs-nogroup",
+            "hostname": "commit-bs-nogroup",
+            "ip": "10.211.0.1",
+            "status": "new",
+            "reason": "",
+        },
+    ]
+    resp = await operator_client.post(
+        "/api/v1/fleet/nodes/import/commit",
+        json={"rows": rows, "auto_bootstrap": True},
+    )
+    assert resp.status_code == 400
+    assert "group" in resp.json()["detail"].lower()
+
+
+async def test_commit_auto_bootstrap_queues_with_target_ip(
+    operator_client: AsyncClient,
+    test_group: Group,
+):
+    """auto_bootstrap with a group queues the worker with the node's IP and SSH user."""
+    rows = [
+        {
+            "minion_id": "commit-bs-ok",
+            "hostname": "commit-bs-ok",
+            "ip": "10.212.0.7",
+            "status": "new",
+            "reason": "",
+        },
+    ]
+    with patch("fleet_platform.workers.ansible_tasks.bootstrap_node") as mock_bn:
+        mock_bn.delay = MagicMock(return_value=MagicMock(id="task-1"))
+        resp = await operator_client.post(
+            "/api/v1/fleet/nodes/import/commit",
+            json={
+                "rows": rows,
+                "group_id": str(test_group.id),
+                "ssh_username": "ops",
+                "auto_bootstrap": True,
+            },
+        )
+    assert resp.status_code == 200, resp.text
+    data = resp.json()
+    assert data["created"] == 1
+    assert data["bootstrap_queued"] == 1
+
+    mock_bn.delay.assert_called_once()
+    args, kwargs = mock_bn.delay.call_args
+    node_id = data["node_ids"][0]
+    assert args[0] == node_id  # node id
+    assert args[1] == "10.212.0.7"  # target_ip (the previously-missing argument)
+    assert kwargs.get("ssh_username") == "ops"
+
+
+async def test_commit_auto_bootstrap_skips_node_without_ip(
+    operator_client: AsyncClient,
+    test_group: Group,
+):
+    """A node with no IP can't be SSH-bootstrapped; it's created but not queued."""
+    rows = [
+        {
+            "minion_id": "commit-bs-noip",
+            "hostname": "commit-bs-noip",
+            "ip": None,
+            "status": "new",
+            "reason": "",
+        },
+    ]
+    with patch("fleet_platform.workers.ansible_tasks.bootstrap_node") as mock_bn:
+        mock_bn.delay = MagicMock(return_value=MagicMock(id="task-2"))
+        resp = await operator_client.post(
+            "/api/v1/fleet/nodes/import/commit",
+            json={
+                "rows": rows,
+                "group_id": str(test_group.id),
+                "auto_bootstrap": True,
+            },
+        )
+    assert resp.status_code == 200, resp.text
+    data = resp.json()
+    assert data["created"] == 1
+    assert data["bootstrap_queued"] == 0
+    mock_bn.delay.assert_not_called()
