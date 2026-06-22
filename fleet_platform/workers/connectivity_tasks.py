@@ -26,6 +26,7 @@ Probe classification:
 from __future__ import annotations
 
 import logging
+import os
 import socket
 import subprocess  # nosec B404 — controlled SSH probe, no shell=True
 import tempfile
@@ -71,6 +72,7 @@ def _probe_node(node: Node, creds: dict) -> int:
             with tempfile.NamedTemporaryFile(mode="w", suffix=".pem", delete=True) as tmp:
                 tmp.write(ssh_key)
                 tmp.flush()
+                os.chmod(tmp.name, 0o600)
                 proc = subprocess.run(  # nosec B603 B607 — fixed args, no shell
                     [
                         "ssh",
