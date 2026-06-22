@@ -43,6 +43,15 @@ class PendingAction(Base):
     target_count: Mapped[int | None] = mapped_column(Integer, nullable=True)
     dry_run_result: Mapped[str | None] = mapped_column(Text, nullable=True)
     co_sign_required: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False, server_default="false")
+    # Co-sign audit trail (#714): first approver + (when co_sign_required) admin co-signer.
+    approved_by: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    approved_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    co_signed_by: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    co_signed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+    # Agent-proposed live actions that hit more than this many targets require a
+    # second admin co-sign on top of the first approval (#714, #716 decision d5).
+    CO_SIGN_THRESHOLD = 8
 
     __table_args__ = (
         Index("idx_pending_actions_token", "approval_token", unique=True),

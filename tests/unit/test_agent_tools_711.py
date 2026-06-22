@@ -47,12 +47,28 @@ def test_every_tool_has_handler_and_strict_schema():
     for spec in build_default_registry().all():
         assert spec.handler is not None, f"{spec.name} missing handler"
         assert spec.params_schema["type"] == "object"
-        # All read-only tools must lock additionalProperties to reject junk args.
+        # All tools must lock additionalProperties to reject junk args.
         assert spec.params_schema.get("additionalProperties") is False, spec.name
-        # Phase B/D read + write-quarantine tools never gate on approval
-        # (approval gating begins with Phase E live tools).
-        assert spec.requires_approval is False
-        assert spec.side_effect in ("read", "execute_read", "write_quarantine")
+        assert spec.side_effect in ("read", "execute_read", "write_quarantine", "write_live")
+        if spec.side_effect == "write_live":
+            # Every live tool MUST gate on human approval (#714).
+            assert spec.requires_approval is True, spec.name
+        else:
+            # Read / quarantine tools never gate on approval.
+            assert spec.requires_approval is False, spec.name
+
+
+def test_all_live_tools_require_approval():
+    live = [t for t in build_default_registry().all() if t.side_effect == "write_live"]
+    names = {t.name for t in live}
+    assert {"apply_salt_state", "restart_service", "set_pillar", "bootstrap_node", "enable_node"} <= names
+    assert all(t.requires_approval for t in live)
+
+
+def test_no_audit_deletion_tool_exists():
+    # Append-only audit by construction (#715): there is no tool to delete audit rows.
+    names = {t.name for t in build_default_registry().all()}
+    assert not any("delete" in n and "audit" in n for n in names)
 
 
 def test_node_to_dict_is_json_safe():

@@ -361,6 +361,58 @@ async def _dry_run_artifact(ctx: ToolCtx, filename: str) -> Any:
 
 
 # ---------------------------------------------------------------------------
+# 15–19. Live apply / control tools (#714) — write-live, dry-run + approval.
+# These handlers ONLY run via Executor.dispatch_approved after human sign-off;
+# guards (PROTECTED_TARGETS / planner-self-deplane) are enforced at propose and
+# execute time. ctx.actor is always the original operator.
+# ---------------------------------------------------------------------------
+async def _apply_salt_state(ctx: ToolCtx, minion_id: str, state: str) -> Any:
+    from fleet_platform.workers.salt_tasks import _run_salt_api
+
+    # Live state.apply (no test=True) — gated upstream by approval + prior dry-run.
+    return await asyncio.to_thread(_run_salt_api, "state.apply", minion_id, [state])
+
+
+async def _restart_service(ctx: ToolCtx, minion_id: str, service: str) -> Any:
+    from fleet_platform.workers.salt_tasks import _run_salt_api
+
+    return await asyncio.to_thread(_run_salt_api, "service.restart", minion_id, [service])
+
+
+async def _set_pillar(ctx: ToolCtx, minion_id: str, pillar_key: str, value: str) -> Any:
+    """Refresh a minion's pillar after a promoted pillar change.
+
+    Pillar *content* is authored via the quarantine→promote path; this live tool
+    records the intended key/value (audited) and triggers a pillar refresh so the
+    minion re-fetches it. It never injects arbitrary master-side state.
+    """
+    from fleet_platform.workers.salt_tasks import _run_salt_api
+
+    refreshed = await asyncio.to_thread(_run_salt_api, "saltutil.refresh_pillar", minion_id)
+    return {"pillar_key": pillar_key, "value": value, "refreshed": refreshed}
+
+
+async def _bootstrap_node(ctx: ToolCtx, minion_id: str) -> Any:
+    from fleet_platform.workers.salt_tasks import _run_salt_api
+
+    # Apply the bootstrap state set live on a freshly-accepted minion.
+    return await asyncio.to_thread(_run_salt_api, "state.apply", minion_id, ["bootstrap"])
+
+
+async def _enable_node(ctx: ToolCtx, minion_id: str) -> Any:
+    from fleet_platform.models.node import Node
+
+    if ctx.db is None:
+        raise ValueError("enable_node requires a db session")
+    node = (await ctx.db.execute(select(Node).where(Node.minion_id == minion_id))).scalar_one_or_none()
+    if node is None:
+        raise ValueError(f"node {minion_id!r} not found")
+    node.status = "active"
+    await ctx.db.commit()
+    return {"minion_id": minion_id, "status": "active"}
+
+
+# ---------------------------------------------------------------------------
 # Registry assembly
 # ---------------------------------------------------------------------------
 def _obj_schema(properties: dict[str, Any], required: list[str] | None = None) -> dict[str, Any]:
@@ -595,6 +647,88 @@ def build_default_registry() -> ToolRegistry:
             required_role="operator",
             side_effect="read",
             handler=_dry_run_artifact,
+        )
+    )
+    reg.register(
+        ToolSpec(
+            name="apply_salt_state",
+            description="Apply a Salt state live to a minion. Requires a prior dry-run and human approval.",
+            params_schema=_obj_schema(
+                {
+                    "minion_id": {"type": "string", "maxLength": 200},
+                    "state": {"type": "string", "maxLength": 200},
+                },
+                required=["minion_id", "state"],
+            ),
+            required_role="operator",
+            side_effect="write_live",
+            requires_approval=True,
+            requires_dry_run_first=True,
+            handler=_apply_salt_state,
+        )
+    )
+    reg.register(
+        ToolSpec(
+            name="restart_service",
+            description="Restart a service on a minion live. Requires human approval; protected services refused.",
+            params_schema=_obj_schema(
+                {
+                    "minion_id": {"type": "string", "maxLength": 200},
+                    "service": {"type": "string", "maxLength": 200},
+                },
+                required=["minion_id", "service"],
+            ),
+            required_role="operator",
+            side_effect="write_live",
+            requires_approval=True,
+            handler=_restart_service,
+        )
+    )
+    reg.register(
+        ToolSpec(
+            name="set_pillar",
+            description="Refresh a minion's pillar for a promoted pillar key/value. Requires human approval.",
+            params_schema=_obj_schema(
+                {
+                    "minion_id": {"type": "string", "maxLength": 200},
+                    "pillar_key": {"type": "string", "maxLength": 200},
+                    "value": {"type": "string", "maxLength": 2000},
+                },
+                required=["minion_id", "pillar_key", "value"],
+            ),
+            required_role="operator",
+            side_effect="write_live",
+            requires_approval=True,
+            handler=_set_pillar,
+        )
+    )
+    reg.register(
+        ToolSpec(
+            name="bootstrap_node",
+            description="Apply the bootstrap state to a minion live. Requires a prior dry-run and human approval.",
+            params_schema=_obj_schema(
+                {"minion_id": {"type": "string", "maxLength": 200}},
+                required=["minion_id"],
+            ),
+            required_role="operator",
+            side_effect="write_live",
+            requires_approval=True,
+            requires_dry_run_first=True,
+            handler=_bootstrap_node,
+        )
+    )
+    reg.register(
+        ToolSpec(
+            name="enable_node",
+            description="Mark a node active in the fleet inventory. Requires human approval.",
+            params_schema=_obj_schema(
+                {"minion_id": {"type": "string", "maxLength": 200}},
+                required=["minion_id"],
+            ),
+            required_role="operator",
+            side_effect="write_live",
+            requires_approval=True,
+            handler=_enable_node,
         )
     )
     return reg

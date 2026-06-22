@@ -32,6 +32,9 @@ AWAITING_APPROVAL = "awaiting_approval"
 DRY_RUN_REQUIRED = "dry_run_required"
 
 AuditHook = Callable[["ToolCtx", "ToolSpec", dict, "ToolResult"], Awaitable[None]]
+# Guard runs for approval-gated (live) tools before they are proposed; raising
+# refuses the action with an operator-readable reason (#714).
+GuardHook = Callable[[str, dict], None]
 
 _PY_TYPES: dict[str, tuple[type, ...]] = {
     "string": (str,),
@@ -129,10 +132,12 @@ class Executor:
         registry: ToolRegistry,
         *,
         audit_hook: AuditHook | None = None,
+        guard_hook: GuardHook | None = None,
         idempotency: IdempotencyCache | None = None,
     ) -> None:
         self.registry = registry
         self.audit_hook = audit_hook
+        self.guard_hook = guard_hook
         self.cache = idempotency if idempotency is not None else IdempotencyCache()
 
     async def _audit(self, ctx: ToolCtx, spec: ToolSpec, args: dict, result: ToolResult) -> None:
@@ -152,12 +157,22 @@ class Executor:
         if err:
             return ToolResult(name, ok=False, status=ERROR, error=err)
 
-        if spec.requires_approval:
-            # Execution is deferred — the loop queues a PendingAction (#714).
-            return ToolResult(name, ok=False, status=AWAITING_APPROVAL)
-
+        # Dry-run gate precedes approval so a live tool first forces a dry-run,
+        # then (once a dry-run has run) is proposed for approval.
         if spec.requires_dry_run_first and not ctx.extra.get("dry_run_done"):
             return ToolResult(name, ok=False, status=DRY_RUN_REQUIRED, error="a dry-run must run first")
+
+        if spec.requires_approval:
+            # Safety guards run before proposing; a refusal never reaches approval.
+            if self.guard_hook is not None:
+                try:
+                    self.guard_hook(name, args)
+                except Exception as exc:  # noqa: BLE001 — surfaced as a denial
+                    result = ToolResult(name, ok=False, status=DENIED, error=str(exc))
+                    await self._audit(ctx, spec, args, result)
+                    return result
+            # Execution is deferred — the route queues a PendingAction (#714).
+            return ToolResult(name, ok=False, status=AWAITING_APPROVAL)
 
         cache_key = self.cache.key(ctx, name, args)
         if self.cache.has(cache_key):
@@ -176,6 +191,43 @@ class Executor:
             return result
 
         self.cache.put(cache_key, value)
+        result = ToolResult(name, ok=True, status=OK, result=value)
+        await self._audit(ctx, spec, args, result)
+        return result
+
+    async def dispatch_approved(self, name: str, args: dict[str, Any] | None, ctx: ToolCtx) -> ToolResult:
+        """Execute an already-approved live tool, bypassing the approval/dry-run
+        gates but re-running RBAC, validation, guards and audit.
+
+        ``ctx.actor`` MUST be the original operator (confused-deputy guarantee):
+        the approver triggers execution, but the action is attributed to and
+        authorized as the human who proposed it.
+        """
+        args = args or {}
+        spec = self.registry.get(name)
+        if spec is None or not spec.enabled:
+            return ToolResult(name, ok=False, status=DENIED, error="unknown or disabled tool")
+        if not role_satisfies(ctx.role, spec.required_role):
+            return ToolResult(name, ok=False, status=DENIED, error=f"role {ctx.role!r} cannot call {name!r}")
+        err = validate_args(spec.params_schema, args)
+        if err:
+            return ToolResult(name, ok=False, status=ERROR, error=err)
+        # Guards are re-enforced at execution time (defense-in-depth).
+        if self.guard_hook is not None:
+            try:
+                self.guard_hook(name, args)
+            except Exception as exc:  # noqa: BLE001
+                result = ToolResult(name, ok=False, status=DENIED, error=str(exc))
+                await self._audit(ctx, spec, args, result)
+                return result
+        if spec.handler is None:
+            return ToolResult(name, ok=False, status=ERROR, error="tool has no handler")
+        try:
+            value = await spec.handler(ctx, **args)
+        except Exception as exc:  # noqa: BLE001
+            result = ToolResult(name, ok=False, status=ERROR, error=str(exc))
+            await self._audit(ctx, spec, args, result)
+            return result
         result = ToolResult(name, ok=True, status=OK, result=value)
         await self._audit(ctx, spec, args, result)
         return result

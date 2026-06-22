@@ -23,6 +23,9 @@ from fleet_platform.agent.registry import ToolCtx
 MAX_ITERATIONS = 6
 MAX_TOOL_CALLS = 12
 
+# Tools whose successful result satisfies the "dry-run first" gate for live tools.
+DRY_RUN_TOOLS = frozenset({"apply_salt_state_dry_run", "dry_run_artifact"})
+
 
 @dataclass
 class ToolCall:
@@ -70,6 +73,7 @@ class AgentLoop:
         history: list[dict] = []
         tool_results: list[Any] = []
         total_calls = 0
+        last_dry_run: Any = None
 
         for iteration in range(1, self.max_iterations + 1):
             if self.should_stop is not None and self.should_stop():
@@ -98,8 +102,24 @@ class AgentLoop:
                 result = await self.executor.dispatch(call.name, call.args, self.ctx)
 
                 if result.status == AWAITING_APPROVAL:
-                    yield AgentEvent("awaiting_approval", {"name": call.name, "n": total_calls})
+                    # The route turns this into a PendingAction carrying the
+                    # captured dry-run output for the approver to review.
+                    yield AgentEvent(
+                        "awaiting_approval",
+                        {
+                            "name": call.name,
+                            "args": call.args,
+                            "n": total_calls,
+                            "dry_run_result": last_dry_run,
+                        },
+                    )
                     return
+
+                # A successful dry-run satisfies the dry-run-first gate for the
+                # subsequent live tool and is captured for the approval email.
+                if call.name in DRY_RUN_TOOLS and result.ok:
+                    self.ctx.extra["dry_run_done"] = True
+                    last_dry_run = result.result
 
                 tool_results.append(result)
                 history.append({"tool": call.name, "args": call.args, "ok": result.ok})
