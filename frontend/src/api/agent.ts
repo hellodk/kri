@@ -1,4 +1,40 @@
-import { ApiError } from './client'
+import { ApiError, api } from './client'
+
+// ── Quarantined artifacts (#713) ─────────────────────────────────────────────
+
+export interface ArtifactSummary {
+  id: string
+  session_id: string
+  filename: string
+  size: number
+  created_at: number | null
+  metadata: { kind?: string; created_by?: string } & Record<string, unknown>
+}
+
+export interface ArtifactDetail {
+  content: string
+  metadata: Record<string, unknown>
+}
+
+export interface ArtifactDiff {
+  unified: string
+  added: number
+  removed: number
+  is_new: boolean
+  original: string
+  modified: string
+}
+
+export const artifactApi = {
+  list: () => api.get<{ artifacts: ArtifactSummary[] }>('/api/v1/agent/artifacts'),
+  get: (sessionId: string, filename: string) =>
+    api.get<ArtifactDetail>(`/api/v1/agent/artifacts/${encodeURIComponent(sessionId)}/${encodeURIComponent(filename)}`),
+  diff: (sessionId: string, filename: string, target?: string) =>
+    api.get<ArtifactDiff>(
+      `/api/v1/agent/artifacts/${encodeURIComponent(sessionId)}/${encodeURIComponent(filename)}/diff` +
+        (target ? `?target=${encodeURIComponent(target)}` : ''),
+    ),
+}
 
 // ── Agent run (SSE) ──────────────────────────────────────────────────────────
 // The agent endpoint streams structured events (not plain text deltas):

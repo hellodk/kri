@@ -2,6 +2,7 @@ import { useState, useRef, useEffect, useCallback } from 'react'
 import { streamQuery } from '../api/llm'
 import { streamAgent, type AgentEvent } from '../api/agent'
 import { ToolStep, ToolResultCard, type ToolStepData } from './AgentToolStep'
+import { ArtifactsPanel } from './ArtifactsPanel'
 import { useLLMStore } from '../stores/llmStore'
 
 type AssistantMode = 'qa' | 'agent'
@@ -45,6 +46,7 @@ export default function LLMAssistant() {
   const [pos, setPos] = useState<{ x: number; y: number } | null>(loadPos)
   const [streaming, setStreaming] = useState(false)
   const [mode, setMode] = useState<AssistantMode>('qa')
+  const [agentView, setAgentView] = useState<'run' | 'artifacts'>('run')
   const [agentTurns, setAgentTurns] = useState<AgentTurn[]>([])
   const { messages, addMessage, clearMessages, appendToLastMessage, patchLastMessage } = useLLMStore()
   const bottomRef = useRef<HTMLDivElement>(null)
@@ -420,12 +422,27 @@ export default function LLMAssistant() {
         <div className="flex-1 overflow-y-auto p-4 space-y-4 min-h-0">
           {mode === 'agent' ? (
             <>
-              {agentTurns.length === 0 && (
+              <div className="flex gap-1 text-[11px] mb-1">
+                <button
+                  onClick={() => setAgentView('run')}
+                  className={`px-2 py-0.5 rounded ${agentView === 'run' ? 'bg-blue-100 text-blue-700' : 'text-gray-500 hover:bg-gray-100'}`}
+                >
+                  Run
+                </button>
+                <button
+                  onClick={() => setAgentView('artifacts')}
+                  className={`px-2 py-0.5 rounded ${agentView === 'artifacts' ? 'bg-blue-100 text-blue-700' : 'text-gray-500 hover:bg-gray-100'}`}
+                >
+                  Artifacts
+                </button>
+              </div>
+              {agentView === 'artifacts' && <ArtifactsPanel />}
+              {agentView === 'run' && agentTurns.length === 0 && (
                 <p className="text-sm text-gray-400 text-center mt-8">
                   Agent mode runs read-only tools to investigate — e.g. “why is mm7 degraded?”
                 </p>
               )}
-              {agentTurns.map((turn, ti) => (
+              {agentView === 'run' && agentTurns.map((turn, ti) => (
                 <div key={ti} className="space-y-2">
                   <div className="flex justify-end">
                     <div className="max-w-[85%] rounded-lg px-3 py-2 text-sm bg-blue-600 text-white">{turn.prompt}</div>

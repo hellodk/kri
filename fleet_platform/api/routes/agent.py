@@ -213,6 +213,74 @@ async def run_agent_stream(
     )
 
 
+@router.get("/artifacts")
+async def list_artifacts(
+    db: AsyncSession = Depends(get_db),
+    claims: dict = Depends(require_role("operator", "admin")),
+):
+    """List the caller's quarantined artifacts (across sessions, newest first)."""
+    from fleet_platform.services import agent_quarantine as q
+
+    try:
+        return {"artifacts": q.list_artifacts(claims["email"])}
+    except q.QuarantineError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@router.get("/artifacts/{session_id}/{filename}")
+async def get_artifact(
+    session_id: str,
+    filename: str,
+    db: AsyncSession = Depends(get_db),
+    claims: dict = Depends(require_role("operator", "admin")),
+):
+    """Fetch one quarantined artifact's content + metadata."""
+    from fleet_platform.services import agent_quarantine as q
+
+    try:
+        content, meta = q.read_artifact(claims["email"], session_id, filename)
+    except q.QuarantineError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    return {"content": content, "metadata": meta}
+
+
+@router.get("/artifacts/{session_id}/{filename}/diff")
+async def diff_artifact(
+    session_id: str,
+    filename: str,
+    target: str | None = None,
+    db: AsyncSession = Depends(get_db),
+    claims: dict = Depends(require_role("operator", "admin")),
+):
+    """Unified diff of a quarantined artifact vs the live tree.
+
+    ``target`` is a path relative to the playbooks dir; when omitted (or not
+    found), the diff is reported as a new file.
+    """
+    from pathlib import Path
+
+    from fleet_platform.services import agent_quarantine as q
+    from fleet_platform.services.artifact_diff import diff_text
+    from fleet_platform.services.platform_settings_svc import get_playbooks_dir
+    from fleet_platform.services.playbook_sources import get_all_playbook_dirs
+
+    try:
+        new_content, _meta = q.read_artifact(claims["email"], session_id, filename)
+    except q.QuarantineError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+    live_content: str | None = None
+    if target:
+        playbooks_dir = await get_playbooks_dir(db)
+        roots = [d.resolve() for d in get_all_playbook_dirs(None, playbooks_dir)]
+        candidate = (Path(playbooks_dir) / target).resolve()
+        if any(candidate.is_relative_to(r) for r in roots) and candidate.is_file():
+            live_content = candidate.read_text(errors="replace")
+
+    result = diff_text(live_content, new_content, fromfile=target or "live", tofile=filename)
+    return {**result.as_dict(), "original": live_content or "", "modified": new_content}
+
+
 @router.get("/tiers")
 async def get_agent_tiers(
     db: AsyncSession = Depends(get_db),

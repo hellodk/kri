@@ -305,6 +305,62 @@ async def _lint_artifact(ctx: ToolCtx, content: str) -> Any:
 
 
 # ---------------------------------------------------------------------------
+# 12–14. Authoring tools (write-quarantine) + artifact dry-run (#713)
+# ---------------------------------------------------------------------------
+async def _author_artifact(ctx: ToolCtx, kind: str, filename: str, content: str) -> Any:
+    from fleet_platform.services import agent_quarantine as q
+    from fleet_platform.services.artifact_validation import validate_artifact
+
+    if ctx.session_id is None:
+        raise ValueError("authoring requires an agent session")
+    result = validate_artifact(content, kind)
+    if not result.valid:
+        # Rejected content never touches quarantine — validation is a hard gate.
+        return {"written": False, "validation": result.as_dict()}
+    meta = await asyncio.to_thread(
+        q.write_artifact,
+        ctx.actor,
+        ctx.session_id,
+        filename,
+        content,
+        metadata={"kind": kind, "created_by": ctx.actor},
+    )
+    return {"written": True, "artifact": meta, "validation": result.as_dict()}
+
+
+async def _generate_ansible_playbook(ctx: ToolCtx, filename: str, content: str) -> Any:
+    return await _author_artifact(ctx, "ansible_playbook", filename, content)
+
+
+async def _generate_salt_state(ctx: ToolCtx, filename: str, content: str) -> Any:
+    return await _author_artifact(ctx, "salt_state", filename, content)
+
+
+async def _dry_run_artifact(ctx: ToolCtx, filename: str) -> Any:
+    """Local dry-run of a quarantined artifact: re-validate + render summary.
+
+    This is a master-free dry-run (no minion execution): it confirms the
+    quarantined content still parses/validates and reports the structural plan
+    (play/state count). Live minion dry-runs are gated in Phase E.
+    """
+    from fleet_platform.services import agent_quarantine as q
+    from fleet_platform.services.artifact_validation import validate_artifact
+
+    if ctx.session_id is None:
+        raise ValueError("dry-run requires an agent session")
+    content, meta = await asyncio.to_thread(q.read_artifact, ctx.actor, ctx.session_id, filename)
+    kind = (meta.get("metadata") or {}).get("kind") or "ansible_playbook"
+    result = validate_artifact(content, kind)
+    plan = None
+    if result.valid and result.parsed is not None:
+        if kind == "ansible_playbook" and isinstance(result.parsed, list):
+            plan = {"plays": len(result.parsed)}
+        elif kind == "salt_state" and isinstance(result.parsed, dict):
+            plan = {"states": len([k for k in result.parsed if k != "include"])}
+    return {"filename": filename, "kind": kind, "validation": result.as_dict(), "plan": plan}
+
+
+# ---------------------------------------------------------------------------
 # Registry assembly
 # ---------------------------------------------------------------------------
 def _obj_schema(properties: dict[str, Any], required: list[str] | None = None) -> dict[str, Any]:
@@ -488,6 +544,57 @@ def build_default_registry() -> ToolRegistry:
             required_role="operator",
             side_effect="read",
             handler=_lint_artifact,
+        )
+    )
+    reg.register(
+        ToolSpec(
+            name="generate_ansible_playbook",
+            description=(
+                "Validate an Ansible playbook (YAML) and write it to the session quarantine. "
+                "Never reaches the live tree — promotion is a separate admin action."
+            ),
+            params_schema=_obj_schema(
+                {
+                    "filename": {"type": "string", "maxLength": 128},
+                    "content": {"type": "string", "maxLength": 65536},
+                },
+                required=["filename", "content"],
+            ),
+            required_role="operator",
+            side_effect="write_quarantine",
+            handler=_generate_ansible_playbook,
+        )
+    )
+    reg.register(
+        ToolSpec(
+            name="generate_salt_state",
+            description=(
+                "Validate a Salt state (YAML) and write it to the session quarantine. "
+                "Never reaches the live tree — promotion is a separate admin action."
+            ),
+            params_schema=_obj_schema(
+                {
+                    "filename": {"type": "string", "maxLength": 128},
+                    "content": {"type": "string", "maxLength": 65536},
+                },
+                required=["filename", "content"],
+            ),
+            required_role="operator",
+            side_effect="write_quarantine",
+            handler=_generate_salt_state,
+        )
+    )
+    reg.register(
+        ToolSpec(
+            name="dry_run_artifact",
+            description="Re-validate a quarantined artifact and report its structural plan (play/state count).",
+            params_schema=_obj_schema(
+                {"filename": {"type": "string", "maxLength": 128}},
+                required=["filename"],
+            ),
+            required_role="operator",
+            side_effect="read",
+            handler=_dry_run_artifact,
         )
     )
     return reg

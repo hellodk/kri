@@ -118,6 +118,18 @@ _LLM_LOG_RETENTION_DAYS = 30
 
 
 @celery_app.task(
+    name="fleet_platform.workers.maintenance.sweep_agent_quarantine",
+    queue="maintenance",
+)
+def sweep_agent_quarantine() -> dict:
+    """Delete agent quarantine session dirs past their 24h TTL (#713)."""
+    from fleet_platform.services import agent_quarantine as q
+
+    removed = q.sweep_expired()
+    return {"removed": len(removed)}
+
+
+@celery_app.task(
     name="fleet_platform.workers.maintenance.cleanup_old_llm_logs",
     queue="maintenance",
 )
