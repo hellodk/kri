@@ -7,6 +7,8 @@ Create Date: 2026-05-28
 
 from alembic import op
 
+from fleet_platform.db.ts_guard import timescale_enabled
+
 revision = "024"
 down_revision = "023"
 branch_labels = None
@@ -15,10 +17,17 @@ depends_on = None
 
 def upgrade() -> None:
     # ── node_health_snapshots ─────────────────────────────────────────
-    # TimescaleDB requires all unique constraints to include the partition column.
-    # Drop the existing UUID-only PK and recreate as (id, collected_at).
+    # The composite-PK change is valid on plain Postgres too, so it runs
+    # unconditionally; only the hypertable/compression/retention features are
+    # gated on TimescaleDB being installed (#665).
     op.execute("ALTER TABLE node_health_snapshots DROP CONSTRAINT node_health_snapshots_pkey")
     op.execute("ALTER TABLE node_health_snapshots ADD PRIMARY KEY (id, collected_at)")
+    op.execute("ALTER TABLE ansible_jobs DROP CONSTRAINT ansible_jobs_pkey")
+    op.execute("ALTER TABLE ansible_jobs ADD PRIMARY KEY (id, created_at)")
+
+    if not timescale_enabled():
+        return
+
     op.execute(
         "SELECT create_hypertable('node_health_snapshots', by_range('collected_at', INTERVAL '1 day'), migrate_data => true)"
     )
@@ -30,8 +39,6 @@ def upgrade() -> None:
     op.execute("SELECT add_retention_policy('node_health_snapshots', INTERVAL '90 days')")
 
     # ── ansible_jobs ─────────────────────────────────────────────────
-    op.execute("ALTER TABLE ansible_jobs DROP CONSTRAINT ansible_jobs_pkey")
-    op.execute("ALTER TABLE ansible_jobs ADD PRIMARY KEY (id, created_at)")
     op.execute(
         "SELECT create_hypertable('ansible_jobs', by_range('created_at', INTERVAL '1 day'), migrate_data => true)"
     )
@@ -45,7 +52,9 @@ def upgrade() -> None:
 
 def downgrade() -> None:
     # Hypertable conversion is not reversible without data migration.
-    # Remove policies only; tables remain as hypertables.
+    # Remove policies only where TimescaleDB created them; tables remain.
+    if not timescale_enabled():
+        return
     op.execute("SELECT remove_retention_policy('ansible_jobs', true)")
     op.execute("SELECT remove_compression_policy('ansible_jobs', true)")
     op.execute("SELECT remove_retention_policy('node_health_snapshots', true)")
