@@ -33,6 +33,7 @@ def _init_worker_observability(**_kwargs) -> None:
     instrument_httpx()
     instrument_redis()
 
+
 celery_app = Celery(
     "fleet_platform",
     broker=settings.redis_url,
@@ -177,6 +178,11 @@ celery_app.conf.update(
         "reap-stuck-pending-actions": {
             "task": "fleet_platform.workers.maintenance.reap_stuck_pending_actions",
             "schedule": 300,  # every 5 min
+            "options": {"queue": "maintenance"},
+        },
+        "sweep-agent-quarantine": {
+            "task": "fleet_platform.workers.maintenance.sweep_agent_quarantine",
+            "schedule": crontab(minute=15),  # hourly — TTL is 24h, so hourly is ample (#713)
             "options": {"queue": "maintenance"},
         },
     },

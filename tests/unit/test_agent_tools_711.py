@@ -14,10 +14,10 @@ from fleet_platform.agent.registry import ToolCtx
 from fleet_platform.agent.tools import build_default_registry
 
 
-def test_registry_has_eleven_tools():
+def test_registry_has_expected_read_tools():
     reg = build_default_registry()
     names = {t.name for t in reg.all()}
-    assert names == {
+    assert {
         "list_nodes",
         "get_node",
         "get_recent_audit",
@@ -29,7 +29,7 @@ def test_registry_has_eleven_tools():
         "run_salt_cmd",
         "apply_salt_state_dry_run",
         "lint_artifact",
-    }
+    } <= names
 
 
 def test_rbac_filtering_is_monotonic():
@@ -49,9 +49,10 @@ def test_every_tool_has_handler_and_strict_schema():
         assert spec.params_schema["type"] == "object"
         # All read-only tools must lock additionalProperties to reject junk args.
         assert spec.params_schema.get("additionalProperties") is False, spec.name
-        # None of the Phase B read tools should gate on approval/dry-run.
+        # Phase B/D read + write-quarantine tools never gate on approval
+        # (approval gating begins with Phase E live tools).
         assert spec.requires_approval is False
-        assert spec.side_effect in ("read", "execute_read")
+        assert spec.side_effect in ("read", "execute_read", "write_quarantine")
 
 
 def test_node_to_dict_is_json_safe():
@@ -118,3 +119,49 @@ def test_agent_salt_readonly_excludes_mutating_functions():
     assert "cmd.run" not in agent_tools._AGENT_SALT_READONLY
     assert "state.apply" not in agent_tools._AGENT_SALT_READONLY
     assert "test.ping" in agent_tools._AGENT_SALT_READONLY
+
+
+def test_registry_includes_phase_d_authoring_tools():
+    names = {t.name for t in build_default_registry().all()}
+    assert {"generate_ansible_playbook", "generate_salt_state", "dry_run_artifact"} <= names
+    reg = build_default_registry()
+    assert reg.get("generate_ansible_playbook").side_effect == "write_quarantine"
+    assert reg.get("generate_salt_state").side_effect == "write_quarantine"
+
+
+async def test_generate_ansible_playbook_writes_valid(tmp_path, monkeypatch):
+    from fleet_platform.services import agent_quarantine as q
+
+    monkeypatch.setattr(q, "QUARANTINE_ROOT", tmp_path)
+    ctx = ToolCtx(actor="op@x.com", role="operator", session_id="sess1")
+    out = await agent_tools._generate_ansible_playbook(
+        ctx, filename="play.yml", content="- hosts: all\n  tasks:\n    - ansible.builtin.ping:\n"
+    )
+    assert out["written"] is True
+    assert out["validation"]["valid"] is True
+    assert out["artifact"]["filename"] == "play.yml"
+
+
+async def test_generate_ansible_playbook_rejects_dangerous(tmp_path, monkeypatch):
+    from fleet_platform.services import agent_quarantine as q
+
+    monkeypatch.setattr(q, "QUARANTINE_ROOT", tmp_path)
+    ctx = ToolCtx(actor="op@x.com", role="operator", session_id="sess1")
+    out = await agent_tools._generate_ansible_playbook(
+        ctx, filename="evil.yml", content="- hosts: all\n  tasks:\n    - ansible.builtin.shell: rm -rf /\n"
+    )
+    # Dangerous content is rejected and NEVER written to quarantine.
+    assert out["written"] is False
+    assert out["validation"]["valid"] is False
+    assert q.list_artifacts("op@x.com", root=tmp_path) == []
+
+
+async def test_dry_run_artifact_reports_plan(tmp_path, monkeypatch):
+    from fleet_platform.services import agent_quarantine as q
+
+    monkeypatch.setattr(q, "QUARANTINE_ROOT", tmp_path)
+    ctx = ToolCtx(actor="op@x.com", role="operator", session_id="sess1")
+    await agent_tools._generate_ansible_playbook(ctx, filename="play.yml", content="- hosts: all\n- hosts: db\n")
+    out = await agent_tools._dry_run_artifact(ctx, filename="play.yml")
+    assert out["validation"]["valid"] is True
+    assert out["plan"] == {"plays": 2}
