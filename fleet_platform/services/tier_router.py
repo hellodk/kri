@@ -132,9 +132,14 @@ async def select_endpoint(
             return RouteResult(endpoint=chosen, capability=capability, matched_tag=tag, via_cloud=False)
 
     if allow_cloud:
-        chosen = _select_among(cloud_candidates)
-        if chosen is not None:
-            return RouteResult(endpoint=chosen, capability=capability, matched_tag=CLOUD_TAG, via_cloud=True)
+        # The cloud fallback is also gated by the daily spend cap (#715): a
+        # degraded local cluster must not run up an unbounded bill.
+        from fleet_platform.services import cost_tracker
+
+        if cost_tracker.can_spend():
+            chosen = _select_among(cloud_candidates)
+            if chosen is not None:
+                return RouteResult(endpoint=chosen, capability=capability, matched_tag=CLOUD_TAG, via_cloud=True)
 
     return None
 

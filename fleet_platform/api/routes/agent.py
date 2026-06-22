@@ -56,7 +56,7 @@ def _sse(event: dict) -> str:
 
 
 @router.post("/run/stream")
-@limiter.limit("10/minute")
+@limiter.limit("6/minute")
 async def run_agent_stream(
     request: Request,
     payload: AgentRunRequest,
@@ -179,6 +179,12 @@ async def run_agent_stream(
 
         duration_ms = int((time.perf_counter() - t0) * 1000)
 
+        # Record cloud spend against the daily cap when the run was cloud-served (#715).
+        if routed_via and routed_via.endswith("cloud"):
+            from fleet_platform.services import cost_tracker
+
+            cost_tracker.record_tokens(planner.input_tokens, planner.output_tokens)
+
         # Finalize the session + persist a linked query log (best-effort).
         try:
             session.status = terminal
@@ -298,6 +304,17 @@ async def diff_artifact(
 
     result = diff_text(live_content, new_content, fromfile=target or "live", tofile=filename)
     return {**result.as_dict(), "original": live_content or "", "modified": new_content}
+
+
+@router.get("/costs")
+async def get_agent_costs(
+    db: AsyncSession = Depends(get_db),
+    claims: dict = Depends(require_role("operator", "admin")),
+):
+    """Today's cloud-fallback spend vs the daily cap (#715 cost dashboard)."""
+    from fleet_platform.services import cost_tracker
+
+    return cost_tracker.snapshot()
 
 
 @router.get("/tiers")
