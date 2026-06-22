@@ -31,6 +31,8 @@ class ImportCommitRequest(BaseModel):
     group_id: str | None = None
     ssh_username: str | None = None
     ssh_password: str | None = None
+    ssh_key: str | None = None
+    ssh_auth_mode: str | None = None  # "password" | "key"; inferred when omitted
     auto_bootstrap: bool = False
 
 
