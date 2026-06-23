@@ -1,6 +1,6 @@
 import logging as _logging
 
-from pydantic import model_validator
+from pydantic import Field, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 _log = _logging.getLogger(__name__)
@@ -27,8 +27,12 @@ class Settings(BaseSettings):
     frontend_origin: str = "http://localhost:5173"
     environment: str = "development"
 
-    fernet_secret_key: str | None = (
-        None  # separate key for encrypting platform secrets; if unset, derived from jwt_secret
+    # Env var is FERNET_KEY (matches CI and .env*.example).
+    # Use Field(validation_alias=...) so the Python attribute stays fernet_secret_key
+    # while pydantic-settings reads the env var as FERNET_KEY.
+    fernet_secret_key: str | None = Field(
+        default=None,
+        validation_alias="FERNET_KEY",
     )
 
     oidc_enabled: bool = False

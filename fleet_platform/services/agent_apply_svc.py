@@ -115,6 +115,10 @@ async def approve_proposal(
         raise ApprovalError("approval window has expired")
 
     if action.status == "pending":
+        # Separation-of-duties: the person who requested (or triggered) an action
+        # must not be able to approve it themselves (#772).
+        if approver_email == action.requested_by:
+            raise ApprovalError("approver must differ from the action requester; self-approval is not permitted")
         action.approved_by = approver_email
         action.approved_at = now
         if action.co_sign_required:

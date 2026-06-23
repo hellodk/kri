@@ -71,7 +71,9 @@ async def login(request: Request, payload: LoginRequest, db: AsyncSession = Depe
 
 
 @router.post("/refresh", response_model=TokenResponse)
+@limiter.limit("10/minute")
 async def refresh(
+    request: Request,
     payload: RefreshRequest,
     db: AsyncSession = Depends(get_db),
     redis=Depends(get_redis),
