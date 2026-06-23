@@ -2075,16 +2075,19 @@ function LLMEndpointsSection() {
   const [deletingId, setDeletingId] = useState<string | null>(null)
   const [settingDefaultId, setSettingDefaultId] = useState<string | null>(null)
   const [testResults, setTestResults] = useState<Record<string, { ok: boolean; latency_ms: number | null; error: string | null }>>({})
+  const [togglingEnabledId, setTogglingEnabledId] = useState<string | null>(null)
 
   const { data: endpoints = [], isLoading, isError } = useQuery({
     queryKey: ['llm-endpoints'],
     queryFn: llmApi.list,
   })
 
-  // Auto-ping all endpoints when the list loads or changes size
+  // Auto-ping only enabled endpoints when the list loads or changes size.
+  // Disabled endpoints are intentionally out of rotation — skip them to avoid
+  // spurious "unreachable" status noise (#840).
   useEffect(() => {
     if (endpoints.length === 0) return
-    endpoints.forEach(ep => handleTest(ep))
+    endpoints.filter(ep => ep.enabled).forEach(ep => handleTest(ep))
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [endpoints.length])
 
@@ -2144,6 +2147,19 @@ function LLMEndpointsSection() {
       toast((e instanceof Error ? e.message : null) ?? 'Failed to set default', 'error')
     } finally {
       setSettingDefaultId(null)
+    }
+  }
+
+  async function handleToggleEnabled(ep: LLMEndpoint) {
+    setTogglingEnabledId(ep.id)
+    try {
+      await llmApi.update(ep.id, { enabled: !ep.enabled })
+      qc.invalidateQueries({ queryKey: ['llm-endpoints'] })
+      toast(`${ep.name} ${ep.enabled ? 'disabled' : 'enabled'}`)
+    } catch (e: unknown) {
+      toast((e instanceof Error ? e.message : null) ?? 'Failed to update endpoint', 'error')
+    } finally {
+      setTogglingEnabledId(null)
     }
   }
 
@@ -2265,11 +2281,19 @@ function LLMEndpointsSection() {
                         </button>
                       </td>
                       <td className="px-4 py-3 text-center">
-                        {ep.enabled ? (
-                          <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-emerald-100 text-emerald-700">On</span>
-                        ) : (
-                          <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-gray-100 text-gray-500">Off</span>
-                        )}
+                        <button
+                          onClick={() => handleToggleEnabled(ep)}
+                          disabled={togglingEnabledId === ep.id}
+                          title={ep.enabled ? 'Click to disable endpoint' : 'Click to enable endpoint'}
+                          className={[
+                            'inline-flex items-center px-2 py-0.5 rounded text-xs font-medium transition-colors disabled:opacity-50',
+                            ep.enabled
+                              ? 'bg-emerald-100 text-emerald-700 hover:bg-emerald-200'
+                              : 'bg-gray-100 text-gray-500 hover:bg-gray-200',
+                          ].join(' ')}
+                        >
+                          {togglingEnabledId === ep.id ? '…' : ep.enabled ? 'On' : 'Off'}
+                        </button>
                       </td>
                       <td className="px-4 py-3 text-center">
                         {ep.has_api_key ? (

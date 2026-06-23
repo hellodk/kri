@@ -44,6 +44,9 @@ def _make_node(
     n.maintenance_mode = False
     n.xcode_version = None
     n.macos_version = None
+    n.ssh_state = None
+    n.ssh_checked_at = None
+    n.ssh_detail = None
     return n
 
 

@@ -81,6 +81,11 @@ async def update_endpoint(db: AsyncSession, endpoint: LLMEndpoint, payload: LLME
         endpoint.max_tokens = payload.max_tokens
     if payload.enabled is not None:
         endpoint.enabled = payload.enabled
+        # A disabled endpoint cannot serve as the default — clear it
+        # automatically so the tier-router's enabled+is_default filter never
+        # returns a broken endpoint as "the default".
+        if not payload.enabled and endpoint.is_default:
+            endpoint.is_default = False
     if payload.is_default is not None:
         if payload.is_default:
             await db.execute(update(LLMEndpoint).values(is_default=False))

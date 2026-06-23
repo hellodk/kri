@@ -20,6 +20,7 @@ import uuid
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from fleet_platform.agent.guards import assert_live_action_allowed, co_sign_required
@@ -62,7 +63,7 @@ async def create_proposal(
     now = datetime.now(UTC)
 
     action = PendingAction(
-        node_id=node.id if node else uuid.UUID(int=0),
+        node_id=node.id if node else None,
         action_type=tool_name,
         params=json.dumps(args),
         requested_by=actor,
@@ -96,6 +97,15 @@ async def approve_proposal(
     approver_role: str,
 ) -> dict[str, Any]:
     """Advance the co-sign state machine; execute when fully approved."""
+    # Re-fetch under a row-level lock to serialise concurrent approve requests
+    # and prevent TOCTOU double-execution / co-sign bypass (#735).
+    locked: PendingAction | None = (
+        await db.execute(select(PendingAction).where(PendingAction.id == action.id).with_for_update())
+    ).scalar_one_or_none()
+    if locked is None:
+        raise ApprovalError("action not found")
+    action = locked
+
     now = datetime.now(UTC)
     if action.status in ("executed", "executing", "rejected", "failed", "expired"):
         raise ApprovalError(f"action is already {action.status}")
@@ -131,6 +141,13 @@ async def approve_proposal(
 
 
 async def reject_proposal(db: AsyncSession, action: PendingAction, *, approver_email: str) -> dict[str, Any]:
+    # Re-fetch under a row-level lock to serialise concurrent reject/approve requests (#735).
+    locked: PendingAction | None = (
+        await db.execute(select(PendingAction).where(PendingAction.id == action.id).with_for_update())
+    ).scalar_one_or_none()
+    if locked is None:
+        raise ApprovalError("action not found")
+    action = locked
     if action.status in ("executed", "executing", "failed"):
         raise ApprovalError(f"action is already {action.status}")
     action.status = "rejected"
