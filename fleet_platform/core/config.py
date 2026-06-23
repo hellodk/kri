@@ -1,6 +1,6 @@
 import logging as _logging
 
-from pydantic import Field, model_validator
+from pydantic import AliasChoices, Field, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 _log = _logging.getLogger(__name__)
@@ -27,12 +27,15 @@ class Settings(BaseSettings):
     frontend_origin: str = "http://localhost:5173"
     environment: str = "development"
 
-    # Env var is FERNET_KEY (matches CI and .env*.example).
-    # Use Field(validation_alias=...) so the Python attribute stays fernet_secret_key
-    # while pydantic-settings reads the env var as FERNET_KEY.
+    # Canonical env var is FERNET_KEY (matches CI and .env*.example). The legacy
+    # name FERNET_SECRET_KEY is still accepted for backward compatibility so that
+    # existing deployments keep decrypting secrets after the rename — otherwise
+    # the explicit key would vanish on redeploy and every stored secret encrypted
+    # under it would fail to decrypt. AliasChoices tries names in order, so when
+    # both are set FERNET_KEY wins. The Python attribute stays fernet_secret_key.
     fernet_secret_key: str | None = Field(
         default=None,
-        validation_alias="FERNET_KEY",
+        validation_alias=AliasChoices("FERNET_KEY", "FERNET_SECRET_KEY"),
     )
 
     oidc_enabled: bool = False
