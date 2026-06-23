@@ -55,7 +55,13 @@ def _strip_nulls(obj: object) -> object:
 
 
 def _check_ingest_rate_limit(node_id: str) -> bool:
-    """Return True if allowed, False if rate limit exceeded."""
+    """Return True if allowed, False if rate limit exceeded.
+
+    Fail-closed policy: if Redis is unreachable, raise HTTP 503 rather than
+    allowing the request through unchecked.  An open failure would let any
+    node bypass per-node throttling whenever the rate-limit store is down,
+    turning a dependency outage into an uncontrolled ingest spike.
+    """
     try:
         r = _get_ingest_redis()
         key = f"ingest_rl:{node_id}"
@@ -65,7 +71,10 @@ def _check_ingest_rate_limit(node_id: str) -> bool:
         count, _ = pipe.execute()
         return int(count) <= _INGEST_RATE_LIMIT
     except Exception:
-        return True  # fail open — don't block ingest if Redis is down
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Rate-limit service (Redis) unavailable; ingest request denied.",
+        )
 
 
 async def _resolve_node(minion_id: str, token: str, db: AsyncSession) -> Node:
