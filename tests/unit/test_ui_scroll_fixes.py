@@ -35,9 +35,10 @@ def test_fleet_dashboard_th_has_opaque_background():
 def test_node_detail_tab_bar_is_sticky():
     """NodeDetail tab bar must be sticky so tabs remain accessible while scrolling (#364)."""
     content = open("frontend/src/pages/NodeDetail.tsx").read()
-    # Find the tab bar div (has 'border-b border-gray-200 flex gap-1')
-    tab_bar_match = re.search(r"<div[^>]*(?:border-b|flex gap-1)[^>]*>.*?{tabs\.map", content, re.DOTALL)
-    assert tab_bar_match, "Tab bar div not found in NodeDetail.tsx"
+    # The tab bar is a role="tablist" div (#666); match from it up to {tabs.map.
+    # Avoid [^>]* across the body since the inline onKeyDown arrow fn contains '=>'.
+    tab_bar_match = re.search(r'<div\b[^>]*role="tablist".*?\{tabs\.map', content, re.DOTALL)
+    assert tab_bar_match, "Tab bar (role=tablist) not found in NodeDetail.tsx"
     tab_bar_html = tab_bar_match.group(0)
     assert "sticky" in tab_bar_html, "Tab bar div must have 'sticky' class (#364)"
 

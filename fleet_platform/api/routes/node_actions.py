@@ -6,6 +6,7 @@ import uuid
 from datetime import UTC, datetime
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi.responses import HTMLResponse
 from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -203,7 +204,6 @@ async def request_node_action(
         expires_at=action.expires_at,
         message="Approval email sent. Action will expire in 15 minutes.",
     )
-
 
 
 @router.get("/{node_id}/services")
@@ -522,78 +522,160 @@ async def get_node_metrics(
     return results
 
 
-@actions_router.get("/{token}/approve")
+def _confirm_html(action: PendingAction | None, token: str) -> str:
+    """Build the side-effect-free confirmation page for an emailed approval link.
+
+    All dynamic values are HTML-escaped. When the action is still actionable the
+    page renders Approve/Reject buttons that POST (never GET) to the mutating
+    endpoints; otherwise it shows the settled status.
+    """
+    import html as _html
+
+    style = (
+        "font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;"
+        "max-width:520px;margin:48px auto;padding:0 20px;color:#111827"
+    )
+    if action is None:
+        return (
+            f'<html><body style="{style}"><h2>Action not found</h2>'
+            "<p>This approval link is invalid or has already been cleaned up.</p></body></html>"
+        )
+
+    now = datetime.now(UTC)
+    expires_at = action.expires_at
+    if expires_at is not None and expires_at.tzinfo is None:
+        expires_at = expires_at.replace(tzinfo=UTC)
+    actionable = action.status == "pending" and expires_at is not None and expires_at >= now
+
+    safe_type = _html.escape(str(action.action_type))
+    safe_status = _html.escape(str(action.status))
+    safe_node = _html.escape(str(action.node_id))
+    safe_by = _html.escape(str(action.requested_by or "unknown"))
+    safe_token = _html.escape(token)
+
+    if actionable:
+        decision = f"""
+  <form method="post" action="/api/v1/actions/{safe_token}/approve" style="display:inline">
+    <button type="submit" style="background:#16A34A;color:#fff;border:0;padding:10px 22px;
+      border-radius:6px;font-size:14px;cursor:pointer;margin-right:12px">&#10003; Approve</button>
+  </form>
+  <form method="post" action="/api/v1/actions/{safe_token}/reject" style="display:inline">
+    <button type="submit" style="background:#DC2626;color:#fff;border:0;padding:10px 22px;
+      border-radius:6px;font-size:14px;cursor:pointer">&#10007; Reject</button>
+  </form>"""
+    elif action.status == "pending":
+        decision = "<p style='color:#B45309'>This approval link has expired.</p>"
+    else:
+        decision = f"<p style='color:#6B7280'>Already <strong>{safe_status}</strong> — no further action possible.</p>"
+
+    return f"""<html><body style="{style}">
+  <h2 style="color:#D97706">&#9888; Confirm node action</h2>
+  <table style="font-size:14px;line-height:1.8">
+    <tr><td style="color:#6B7280;padding-right:16px">Action</td><td><strong>{safe_type}</strong></td></tr>
+    <tr><td style="color:#6B7280;padding-right:16px">Node</td><td>{safe_node}</td></tr>
+    <tr><td style="color:#6B7280;padding-right:16px">Requested by</td><td>{safe_by}</td></tr>
+    <tr><td style="color:#6B7280;padding-right:16px">Status</td><td>{safe_status}</td></tr>
+  </table>
+  <div style="margin-top:24px">{decision}</div>
+</body></html>"""
+
+
+@actions_router.get("/{token}")
+async def action_confirm_page(token: str, db: AsyncSession = Depends(get_db)):
+    """Render the GET confirmation page for an emailed approval link (#644).
+
+    This endpoint is intentionally side-effect-free so mail-client/link-unfurler
+    prefetch cannot decide an action. The page POSTs to ``/approve`` or
+    ``/reject`` only when the operator clicks a button.
+    """
+    action = await pending_action_svc.get_by_token(db, token)
+    if not action:
+        return HTMLResponse(_confirm_html(None, token), status_code=404)
+    return HTMLResponse(_confirm_html(action, token))
+
+
+@actions_router.post("/{token}/approve")
 @limiter.limit("20/minute")
 async def approve_action(request: Request, token: str, db: AsyncSession = Depends(get_db)):
-    """Approve a pending destructive action via the emailed approval link.
+    """Approve a pending destructive action (POST-only, #644).
 
     Security: no session auth required — the token (secrets.token_urlsafe(32),
     ~192 bits entropy, one-time use, 15-minute TTL) IS the credential, matching
     the password-reset link pattern. The token is delivered only to configured
-    SMTP recipients and is never reusable after approval/rejection/expiry.
+    SMTP recipients and is never reusable after approval/rejection/expiry. Mutation
+    requires POST so prefetch of the emailed (GET) link cannot trigger it; the
+    approval itself is an atomic compare-and-swap so concurrent POSTs can't
+    double-dispatch (TOCTOU).
     """
     action = await pending_action_svc.get_by_token(db, token)
     if not action:
         raise HTTPException(status_code=404, detail="Action not found")
-    action = await pending_action_svc.approve(db, action)
-    if action.status == "expired":
-        return {"status": "expired", "message": "This approval link has expired."}
-    if action.status == "approved":
-        params = json.loads(action.params or "{}")
-        # Defense-in-depth: re-enforce denylist at execution time (#615 guards at request time)
-        target = params.get("name") or params.get("process_name") or params.get("service")
-        if target and PendingAction.is_protected_target(str(target)):
-            action.status = "failed"
-            await db.commit()
-            raise HTTPException(
-                status_code=403,
-                detail=f"{target!r} is a protected target; execution refused.",
-            )
-        node = (await db.execute(select(Node).where(Node.id == action.node_id))).scalar_one_or_none()
-        if not node:
-            action.status = "failed"
-            await db.commit()
-            raise HTTPException(status_code=404, detail="Node not found")
-        function, args = _build_salt_invocation(action.action_type, params)
-        from fleet_platform.workers.salt_tasks import finalize_node_action, run_salt_cmd
-
-        run_salt_cmd.apply_async(
-            kwargs={"function": function, "target_minions": [node.minion_id], "args": args},
-            link=finalize_node_action.s(str(action.id)),
-        )
-        node_action_total.labels(action_type=action.action_type, status="approved").inc()
-        action.status = "executing"  # finalize_node_action sets executed/failed on completion
+    action, claimed = await pending_action_svc.approve(db, action)
+    if not claimed:
+        # Expired, or another approver/rejecter already settled it — never re-dispatch.
+        if action.status == "expired":
+            return {"status": "expired", "message": "This approval link has expired."}
+        return {"status": action.status, "message": f"Action already {action.status}."}
+    # claimed == True: this caller owns the single pending -> approved transition.
+    params = json.loads(action.params or "{}")
+    # Defense-in-depth: re-enforce denylist at execution time (#615 guards at request time)
+    target = params.get("name") or params.get("process_name") or params.get("service")
+    if target and PendingAction.is_protected_target(str(target)):
+        action.status = "failed"
         await db.commit()
-        await audit(
-            db,
-            actor="approval-link",
-            action=f"{action.action_type}_dispatched",
-            resource_type="node",
-            resource_id=action.node_id,
-            new_value={"action_id": str(action.id), "function": function, "args": args},
+        raise HTTPException(
+            status_code=403,
+            detail=f"{target!r} is a protected target; execution refused.",
         )
-        return {
-            "status": "executing",
-            "message": f"Action '{action.action_type}' approved and dispatched; awaiting result.",
-        }
-    return {"status": action.status}
+    node = (await db.execute(select(Node).where(Node.id == action.node_id))).scalar_one_or_none()
+    if not node:
+        action.status = "failed"
+        await db.commit()
+        raise HTTPException(status_code=404, detail="Node not found")
+    function, args = _build_salt_invocation(action.action_type, params)
+    from fleet_platform.workers.salt_tasks import finalize_node_action, run_salt_cmd
 
-
-@actions_router.get("/{token}/reject")
-@limiter.limit("20/minute")
-async def reject_action(request: Request, token: str, db: AsyncSession = Depends(get_db)):
-    """Reject a pending destructive action via the emailed rejection link."""
-    action = await pending_action_svc.get_by_token(db, token)
-    if not action:
-        raise HTTPException(status_code=404, detail="Action not found")
-    action = await pending_action_svc.reject(db, action)
-    node_action_total.labels(action_type=action.action_type, status="rejected").inc()
+    run_salt_cmd.apply_async(
+        kwargs={"function": function, "target_minions": [node.minion_id], "args": args},
+        link=finalize_node_action.s(str(action.id)),
+    )
+    node_action_total.labels(action_type=action.action_type, status="approved").inc()
+    action.status = "executing"  # finalize_node_action sets executed/failed on completion
+    await db.commit()
     await audit(
         db,
         actor="approval-link",
-        action=f"{action.action_type}_rejected",
+        action=f"{action.action_type}_dispatched",
         resource_type="node",
         resource_id=action.node_id,
-        new_value={"action_id": str(action.id)},
+        new_value={"action_id": str(action.id), "function": function, "args": args},
     )
+    return {
+        "status": "executing",
+        "message": f"Action '{action.action_type}' approved and dispatched; awaiting result.",
+    }
+
+
+@actions_router.post("/{token}/reject")
+@limiter.limit("20/minute")
+async def reject_action(request: Request, token: str, db: AsyncSession = Depends(get_db)):
+    """Reject a pending destructive action (POST-only, #644).
+
+    Mutation requires POST so prefetch of the emailed (GET) link cannot trigger
+    it; the rejection is an atomic compare-and-swap so audit/metrics fire once.
+    """
+    action = await pending_action_svc.get_by_token(db, token)
+    if not action:
+        raise HTTPException(status_code=404, detail="Action not found")
+    action, claimed = await pending_action_svc.reject(db, action)
+    if claimed:
+        node_action_total.labels(action_type=action.action_type, status="rejected").inc()
+        await audit(
+            db,
+            actor="approval-link",
+            action=f"{action.action_type}_rejected",
+            resource_type="node",
+            resource_id=action.node_id,
+            new_value={"action_id": str(action.id)},
+        )
     return {"status": "rejected", "message": "Action rejected."}

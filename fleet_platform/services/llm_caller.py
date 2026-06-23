@@ -1,8 +1,11 @@
 # fleet_platform/services/llm_caller.py
 import json as _json
+import logging
 from collections.abc import AsyncIterator
 
 import httpx
+
+logger = logging.getLogger(__name__)
 
 # Per-chunk read timeout: as long as tokens keep flowing, the request won't
 # abort — only a silent/stalled stream triggers this. Connect timeout is
@@ -10,6 +13,55 @@ import httpx
 _CONNECT_TIMEOUT = 10.0
 _READ_TIMEOUT = 30.0  # max silence between consecutive SSE chunks
 _STREAM_TIMEOUT = httpx.Timeout(connect=_CONNECT_TIMEOUT, read=_READ_TIMEOUT, write=10.0, pool=5.0)
+
+# Anthropic's SDK defaults to a 600s timeout, which would pin a DB connection
+# and event-loop slot on a stalled call. Bound it to the same budget as the
+# OpenAI-compatible path (#667).
+_ANTHROPIC_TIMEOUT = httpx.Timeout(connect=_CONNECT_TIMEOUT, read=_READ_TIMEOUT, write=10.0, pool=5.0)
+
+# Claude context window when the caller doesn't supply one. Used only to size
+# the truncation budget so a runaway prompt can't blow the window (#667).
+_ANTHROPIC_DEFAULT_CTX = 200_000
+
+# Rough bytes-per-token estimate shared by all prompt-budgeting math.
+_CHARS_PER_TOKEN = 4
+
+
+def _budget_inputs(
+    *,
+    system_prompt: str,
+    history: list[dict] | None,
+    user_prompt: str,
+    ctx: int,
+    max_tokens: int,
+) -> tuple[str, list[dict]]:
+    """Fit system prompt + history + user prompt under ONE input ceiling (#667).
+
+    Previously the system-prompt truncation budget and the ``history[-10:]``
+    slice were independent and additive, so their sum could exceed the model
+    window (~47% over on the default 8k). Here a single ceiling — the context
+    window minus the reserved output (``max_tokens``) — is shared across all
+    inputs, prioritising the user prompt, then the grounding tail of the system
+    prompt, then the most recent history. Returns the (possibly truncated)
+    system prompt and the history messages that fit.
+    """
+    history = list(history or [])
+    input_chars = max(1000, (ctx - max_tokens) * _CHARS_PER_TOKEN - 200)
+    user_chars = len(user_prompt or "")
+    remaining = max(1000, input_chars - user_chars)
+    # History gets at most half the remaining budget, most-recent-first, so a
+    # long back-and-forth can never starve the system prompt's grounding rules.
+    history_budget = remaining // 2
+    kept: list[dict] = []
+    used = 0
+    for msg in reversed(history[-10:]):
+        c = len(str(msg.get("content", "")))
+        if used + c > history_budget:
+            break
+        kept.insert(0, msg)
+        used += c
+    system_budget = max(1000, remaining - used)
+    return _truncate_system_prompt(system_prompt, system_budget), kept
 
 
 class LLMCallError(Exception):
@@ -119,14 +171,17 @@ async def call_openai_compat(
     if max_tokens > ctx:
         max_tokens = ctx
 
-    # Budget the system prompt so it fits in the context window.
-    # Reserve max_tokens chars for output; allow the rest (≈ 4 chars/token).
-    max_system_chars = max(1000, (ctx - max_tokens) * 4 - 200)
-    system_prompt = _truncate_system_prompt(system_prompt, max_system_chars)
+    # Unified input budget: system + history + user share one ceiling (#667).
+    system_prompt, budgeted_history = _budget_inputs(
+        system_prompt=system_prompt,
+        history=history,
+        user_prompt=user_prompt,
+        ctx=ctx,
+        max_tokens=max_tokens,
+    )
 
     messages: list[dict] = [{"role": "system", "content": system_prompt}]
-    if history:
-        messages.extend(history[-10:])
+    messages.extend(budgeted_history)
     messages.append({"role": "user", "content": user_prompt})
 
     payload: dict = {
@@ -231,24 +286,41 @@ async def call_anthropic(
     system_prompt: str,
     user_prompt: str,
     history: list[dict] | None = None,
+    model_context_length: int | None = None,
 ) -> tuple[str, int, int]:
     """
     Call Anthropic Claude via the native anthropic SDK.
     Returns (content, input_tokens, output_tokens).
+
+    Applies the same unified prompt budget as the OpenAI-compatible path and a
+    bounded request timeout so a stalled call can't pin a DB connection for the
+    SDK's 600s default (#667).
     """
     import anthropic
 
-    client = anthropic.AsyncAnthropic(api_key=api_key)
-    messages: list[dict] = []
-    if history:
-        messages.extend(history[-10:])
-    messages.append({"role": "user", "content": user_prompt})
-    message = await client.messages.create(
-        model=model,
-        max_tokens=max_tokens,
-        system=system_prompt,
-        messages=messages,  # type: ignore[arg-type]  # dict is runtime-compatible with MessageParam
+    ctx = model_context_length or _ANTHROPIC_DEFAULT_CTX
+    system_prompt, budgeted_history = _budget_inputs(
+        system_prompt=system_prompt,
+        history=history,
+        user_prompt=user_prompt,
+        ctx=ctx,
+        max_tokens=min(max_tokens, ctx),
     )
+
+    client = anthropic.AsyncAnthropic(api_key=api_key, timeout=_ANTHROPIC_TIMEOUT)
+    messages: list[dict] = list(budgeted_history)
+    messages.append({"role": "user", "content": user_prompt})
+    try:
+        message = await client.messages.create(
+            model=model,
+            max_tokens=max_tokens,
+            system=system_prompt,
+            messages=messages,  # type: ignore[arg-type]  # dict is runtime-compatible with MessageParam
+        )
+    except anthropic.APIError as exc:
+        raise LLMCallError(f"Anthropic API error: {exc}") from exc
+    except httpx.TimeoutException as exc:
+        raise LLMCallError(f"Anthropic call timed out after {_READ_TIMEOUT}s") from exc
     block = message.content[0]
     content: str = block.text if hasattr(block, "text") else ""
     return content, message.usage.input_tokens, message.usage.output_tokens
@@ -297,12 +369,17 @@ async def stream_openai_compat(
     if max_tokens > ctx:
         max_tokens = ctx
 
-    max_system_chars = max(1000, (ctx - max_tokens) * 4 - 200)
-    system_prompt = _truncate_system_prompt(system_prompt, max_system_chars)
+    # Unified input budget: system + history + user share one ceiling (#667).
+    system_prompt, budgeted_history = _budget_inputs(
+        system_prompt=system_prompt,
+        history=history,
+        user_prompt=user_prompt,
+        ctx=ctx,
+        max_tokens=max_tokens,
+    )
 
     messages: list[dict] = [{"role": "system", "content": system_prompt}]
-    if history:
-        messages.extend(history[-10:])
+    messages.extend(budgeted_history)
     messages.append({"role": "user", "content": user_prompt})
 
     payload: dict = {
@@ -392,18 +469,27 @@ async def stream_anthropic(
     system_prompt: str,
     user_prompt: str,
     history: list[dict] | None = None,
+    model_context_length: int | None = None,
 ) -> AsyncIterator[dict]:
     """Stream Claude messages using the native anthropic SDK's messages.stream.
 
     Yields one ``delta`` event per text chunk plus a final ``done`` event with
-    token counts. Errors surface as a single ``error`` event.
+    token counts. Errors surface as a single ``error`` event. Applies the same
+    unified prompt budget and bounded timeout as :func:`call_anthropic` (#667).
     """
     import anthropic
 
-    client = anthropic.AsyncAnthropic(api_key=api_key)
-    messages: list[dict] = []
-    if history:
-        messages.extend(history[-10:])
+    ctx = model_context_length or _ANTHROPIC_DEFAULT_CTX
+    system_prompt, budgeted_history = _budget_inputs(
+        system_prompt=system_prompt,
+        history=history,
+        user_prompt=user_prompt,
+        ctx=ctx,
+        max_tokens=min(max_tokens, ctx),
+    )
+
+    client = anthropic.AsyncAnthropic(api_key=api_key, timeout=_ANTHROPIC_TIMEOUT)
+    messages: list[dict] = list(budgeted_history)
     messages.append({"role": "user", "content": user_prompt})
 
     content_parts: list[str] = []
