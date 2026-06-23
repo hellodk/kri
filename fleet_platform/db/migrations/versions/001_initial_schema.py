@@ -9,6 +9,8 @@ import sqlalchemy as sa
 from alembic import op
 from sqlalchemy.dialects import postgresql
 
+from fleet_platform.db.ts_guard import timescale_available, timescale_enabled
+
 revision = "001"
 down_revision = None
 branch_labels = None
@@ -16,9 +18,13 @@ depends_on = None
 
 
 def upgrade() -> None:
-    # Extensions
-    op.execute("CREATE EXTENSION IF NOT EXISTS timescaledb CASCADE")
+    # Extensions. TimescaleDB is optional: on vanilla Postgres (CI, dev laptops,
+    # air-gapped/standalone deploys) the extension files are absent, so we skip it
+    # and create plain tables instead of hypertables (#665).
+    if timescale_available():
+        op.execute("CREATE EXTENSION IF NOT EXISTS timescaledb CASCADE")
     op.execute('CREATE EXTENSION IF NOT EXISTS "uuid-ossp"')
+    _ts = timescale_enabled()
 
     # users
     op.create_table(
@@ -113,8 +119,9 @@ def upgrade() -> None:
         sa.Column("grains", postgresql.JSONB, nullable=False),
     )
     op.create_index("idx_node_facts_node_id", "node_facts", ["node_id", "collected_at"])
-    op.execute("SELECT create_hypertable('node_facts', by_range('collected_at', INTERVAL '1 day'))")
-    op.execute("SELECT add_retention_policy('node_facts', INTERVAL '90 days')")
+    if _ts:
+        op.execute("SELECT create_hypertable('node_facts', by_range('collected_at', INTERVAL '1 day'))")
+        op.execute("SELECT add_retention_policy('node_facts', INTERVAL '90 days')")
 
     # desired_state_baselines
     op.create_table(
@@ -154,8 +161,9 @@ def upgrade() -> None:
     )
     op.create_index("idx_drift_records_node_id", "drift_records", ["node_id", "computed_at"])
     op.create_index("idx_drift_records_score", "drift_records", ["drift_score", "computed_at"])
-    op.execute("SELECT create_hypertable('drift_records', by_range('computed_at', INTERVAL '1 day'))")
-    op.execute("SELECT add_retention_policy('drift_records', INTERVAL '180 days')")
+    if _ts:
+        op.execute("SELECT create_hypertable('drift_records', by_range('computed_at', INTERVAL '1 day'))")
+        op.execute("SELECT add_retention_policy('drift_records', INTERVAL '180 days')")
 
     # sbom_scans
     op.create_table(
@@ -259,29 +267,30 @@ def upgrade() -> None:
     )
     op.create_index("idx_audit_events_actor", "audit_events", ["actor", "event_at"])
     op.create_index("idx_audit_events_resource", "audit_events", ["resource_type", "resource_id", "event_at"])
-    op.execute("SELECT create_hypertable('audit_events', by_range('event_at', INTERVAL '7 days'))")
-    op.execute("SELECT add_retention_policy('audit_events', INTERVAL '730 days')")
+    if _ts:
+        op.execute("SELECT create_hypertable('audit_events', by_range('event_at', INTERVAL '7 days'))")
+        op.execute("SELECT add_retention_policy('audit_events', INTERVAL '730 days')")
 
-    # Continuous aggregate for fleet drift dashboard
-    op.execute("""
-        CREATE MATERIALIZED VIEW fleet_drift_hourly
-        WITH (timescaledb.continuous) AS
-        SELECT
-            time_bucket('1 hour', computed_at) AS bucket,
-            AVG(drift_score)::SMALLINT AS avg_drift_score,
-            MAX(drift_score) AS max_drift_score,
-            COUNT(*) FILTER (WHERE drift_score > 50) AS nodes_high_drift,
-            COUNT(DISTINCT node_id) AS nodes_evaluated
-        FROM drift_records
-        GROUP BY bucket
-        WITH NO DATA
-    """)
-    op.execute("""
-        SELECT add_continuous_aggregate_policy('fleet_drift_hourly',
-            start_offset => INTERVAL '3 hours',
-            end_offset   => INTERVAL '1 hour',
-            schedule_interval => INTERVAL '1 hour')
-    """)
+        # Continuous aggregate for fleet drift dashboard (TimescaleDB-only)
+        op.execute("""
+            CREATE MATERIALIZED VIEW fleet_drift_hourly
+            WITH (timescaledb.continuous) AS
+            SELECT
+                time_bucket('1 hour', computed_at) AS bucket,
+                AVG(drift_score)::SMALLINT AS avg_drift_score,
+                MAX(drift_score) AS max_drift_score,
+                COUNT(*) FILTER (WHERE drift_score > 50) AS nodes_high_drift,
+                COUNT(DISTINCT node_id) AS nodes_evaluated
+            FROM drift_records
+            GROUP BY bucket
+            WITH NO DATA
+        """)
+        op.execute("""
+            SELECT add_continuous_aggregate_policy('fleet_drift_hourly',
+                start_offset => INTERVAL '3 hours',
+                end_offset   => INTERVAL '1 hour',
+                schedule_interval => INTERVAL '1 hour')
+        """)
 
 
 def downgrade() -> None:
