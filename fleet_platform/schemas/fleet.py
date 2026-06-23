@@ -36,6 +36,11 @@ class NodeListItem(BaseModel):
     xcode_version: str | None = None
     macos_version: str | None = None
     group_count: int = 0  # number of groups this node belongs to
+    # SSH reachability (independent of Salt `status`). ssh_state ∈
+    # {ok, auth_failed, unreachable, unknown}; null = never probed (#356-ui).
+    ssh_state: str | None = None
+    ssh_checked_at: datetime | None = None
+    ssh_detail: str | None = None
 
     model_config = {"from_attributes": True}
 
