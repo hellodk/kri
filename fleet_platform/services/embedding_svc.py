@@ -508,11 +508,24 @@ async def retrieve(
 
 
 def format_retrieved_chunks(chunks: list[dict[str, Any]]) -> str:
-    """Format top-N chunks for insertion into the LLM context block."""
+    """Format top-N chunks for injection-safe insertion into the LLM context (#773).
+
+    Each chunk is wrapped in explicit ``[chunk N]`` / ``[/chunk N]`` delimiters
+    and its text is passed through :func:`sanitize_untrusted` before inclusion.
+    This prevents stored-injection payloads (e.g. '## Rules' headings, code-fences,
+    model-control tokens) embedded in playbook or Salt content from influencing
+    the model's system-level behaviour.
+    """
     if not chunks:
         return ""
-    lines = ["## Retrieved Knowledge\n"]
-    for c in chunks:
-        lines.append(c["chunk_text"])
+    from fleet_platform.services.prompt_safety import sanitize_untrusted
+
+    lines = ["[retrieved_knowledge]"]
+    for i, c in enumerate(chunks, start=1):
+        safe_text = sanitize_untrusted(c["chunk_text"])
+        lines.append(f"[chunk {i}]")
+        lines.append(safe_text)
+        lines.append(f"[/chunk {i}]")
         lines.append("")
+    lines.append("[/retrieved_knowledge]")
     return "\n".join(lines)
