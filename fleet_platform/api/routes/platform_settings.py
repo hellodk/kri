@@ -134,7 +134,7 @@ async def test_email(
             return send_test_email(sync_db, to_addr=payload.to)
 
     try:
-        result = await _asyncio.get_event_loop().run_in_executor(None, _send)
+        result = await _asyncio.get_running_loop().run_in_executor(None, _send)
         return {
             "status": result["status"],
             "detail": f"Test email sent to {result['recipients']} recipient(s)",

@@ -263,6 +263,15 @@ def reap_orphaned_bootstraps() -> dict:
     return {"reaped": result.rowcount}  # type: ignore[attr-defined]
 
 
+async def _probe_all(masters: list) -> list:
+    """Probe all masters concurrently and return results in the same order.
+
+    Uses return_exceptions=True so a single failing probe does not abort the
+    batch — callers must check each result for Exception instances.
+    """
+    return list(await asyncio.gather(*[run_probe(m) for m in masters], return_exceptions=True))
+
+
 @celery_app.task(
     name="fleet_platform.workers.maintenance.poll_salt_masters",
     queue="maintenance",
@@ -286,6 +295,10 @@ def poll_salt_masters() -> dict:
     A dead-man's-switch key (``kri:salt:poll:last_run``) is refreshed in Redis
     at the end of every successful run.  Monitoring alerts if the key expires.
     Redis failures are swallowed so they never abort the task.
+
+    #734: all probes are issued concurrently via a single asyncio.gather() call
+    inside one asyncio.run().  The DB session is idle while probes are in-flight;
+    status updates and commit happen only after all results are collected.
     """
     now = datetime.now(UTC)
     polled = 0
@@ -294,15 +307,27 @@ def poll_salt_masters() -> dict:
     with get_sync_db() as db:
         masters = db.execute(select(SaltMaster).where(SaltMaster.enabled.is_(True))).scalars().all()
 
+        # Phase 1: Classify — separate backoff-skipped masters from those to probe
+        to_probe = []
         for master in masters:
-            # Backoff: skip recently-checked unreachable masters
             if master.status == "unreachable" and master.last_checked_at is not None:
                 age = (now - master.last_checked_at).total_seconds()
                 if age < _SALT_UNREACHABLE_BACKOFF_SECONDS:
                     skipped += 1
                     continue
+            to_probe.append(master)
 
-            result = asyncio.run(run_probe(master))
+        # Phase 2: Probe all concurrently in a SINGLE event loop.
+        # The DB session is held but idle during network I/O; no queries execute
+        # until the gather returns and we apply results below. Skip spinning up an
+        # event loop entirely when every master was backoff-skipped.
+        probe_results = asyncio.run(_probe_all(to_probe)) if to_probe else []
+
+        # Phase 3: Apply results and commit once, after all I/O is complete
+        for master, result in zip(to_probe, probe_results):
+            if isinstance(result, Exception):
+                # One failing probe must not abort the rest of the batch
+                continue
 
             master.status = result["status"]
             master.checks = result["checks"]  # type: ignore[assignment]

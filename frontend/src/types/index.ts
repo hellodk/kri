@@ -40,7 +40,13 @@ export interface Node {
   ssh_auth_mode?: 'password' | 'key'
   has_ssh_password?: boolean
   has_ssh_key?: boolean
+  // SSH reachability (independent of Salt `status`); null = never probed
+  ssh_state?: SshState | null
+  ssh_checked_at?: string | null
+  ssh_detail?: string | null
 }
+
+export type SshState = 'ok' | 'auth_failed' | 'unreachable' | 'unknown'
 
 export interface NodeDetail extends Node {
   os_build: string | null

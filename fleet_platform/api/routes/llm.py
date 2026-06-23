@@ -173,14 +173,21 @@ async def update_endpoint(
     endpoint = await llm_svc.get_endpoint(db, endpoint_id)
     if not endpoint:
         raise HTTPException(status_code=404, detail="LLM endpoint not found")
+    old_enabled = endpoint.enabled
+    old_is_default = endpoint.is_default
     endpoint = await llm_svc.update_endpoint(db, endpoint, payload)
+    audit_value: dict = {"name": endpoint.name, "provider": endpoint.provider, "model": endpoint.model}
+    if payload.enabled is not None and payload.enabled != old_enabled:
+        audit_value["enabled"] = {"old": old_enabled, "new": endpoint.enabled}
+    if endpoint.is_default != old_is_default:
+        audit_value["is_default"] = {"old": old_is_default, "new": endpoint.is_default}
     await audit(
         db,
         actor=claims["email"],
         action="llm_endpoint.update",
         resource_type="llm_endpoint",
         resource_id=endpoint_id,
-        new_value={"name": endpoint.name, "provider": endpoint.provider, "model": endpoint.model},
+        new_value=audit_value,
     )
     await db.commit()
     return _to_response(endpoint)

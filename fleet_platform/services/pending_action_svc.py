@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import logging
 import uuid
 from datetime import UTC, datetime, timedelta
 
@@ -10,6 +11,8 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from fleet_platform.models.pending_action import PendingAction
+
+logger = logging.getLogger(__name__)
 
 _TTL_MINUTES = 15
 
@@ -196,7 +199,12 @@ async def _send_approval_email(action: PendingAction, node, requested_by: str) -
                 if smtp_user and smtp_password:
                     s.login(smtp_user, smtp_password)
                 s.sendmail(from_addr, recipients, msg.as_string())
-        except Exception:
-            pass
+        except Exception as exc:
+            logger.warning(
+                "approval email send failed for action=%s: %s",
+                action.id,
+                exc,
+                exc_info=True,
+            )
 
     await asyncio.to_thread(_send)  # get_event_loop() deprecated in 3.10+; to_thread is safe
