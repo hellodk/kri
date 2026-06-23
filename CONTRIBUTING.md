@@ -19,7 +19,7 @@ kri is a build fleet management platform. This guide covers everything you need 
 
 ### Prerequisites
 
-- Python 3.11+ with [uv](https://docs.astral.sh/uv/)
+- Python 3.13+ with [uv](https://docs.astral.sh/uv/)
 - Node.js 20+ and npm
 - Docker + Docker Compose
 - Git
@@ -38,8 +38,8 @@ uv sync --extra dev
 cd frontend && npm ci && cd ..
 
 # 4. Configure environment
-cp deploy/.env.example deploy/.env
-# Edit deploy/.env — set POSTGRES_PASSWORD, SECRET_KEY, etc.
+cp .env.example .env
+# Edit .env — set POSTGRES_PASSWORD, SECRET_KEY, etc.
 
 # 5. Start backing services (PostgreSQL, Redis, etc.)
 docker compose -f deploy/docker-compose.yml -f deploy/docker-compose.override.yml up -d
@@ -55,16 +55,16 @@ alembic upgrade head
 
 ```bash
 # Start all services (API, Celery worker, frontend dev server)
-./scripts/kri.sh start
+./scripts/kri start
 
 # Verify everything is healthy
-./scripts/kri.sh status
+./scripts/kri status
 
 # Tail logs for a specific service
-./scripts/kri.sh logs worker
+./scripts/kri logs worker
 
 # Stop everything cleanly
-./scripts/kri.sh stop
+./scripts/kri stop
 ```
 
 The API will be available at `http://localhost:8000` and the frontend dev server at `http://localhost:5173`.
@@ -149,7 +149,7 @@ pytest tests/integration/ -q
 
 ```bash
 # Start the full stack first
-./scripts/kri.sh start
+./scripts/kri start
 
 cd frontend && npx playwright test
 ```
@@ -160,7 +160,7 @@ cd frontend && npx playwright test
 pytest tests/unit/ --cov=fleet_platform/services --cov-report=term-missing
 ```
 
-The CI gate requires 75% line coverage on `fleet_platform/services/`. Confirm you meet this floor before pushing.
+The CI gate requires 80% line coverage on `fleet_platform/services/`. Confirm you meet this floor before pushing.
 
 ### Pre-commit hooks
 
@@ -210,7 +210,7 @@ Both must succeed before a PR can merge.
 - [ ] PR title is concise and references the change type (`feat:`, `fix:`, `chore:`)
 - [ ] PR body references the issue with `Closes #N`
 - [ ] All acceptance criteria from the linked issue are covered by tests
-- [ ] Coverage floor (75% on `fleet_platform/services/`) is maintained
+- [ ] Coverage floor (80% on `fleet_platform/services/`) is maintained
 
 ### What reviewers look for
 

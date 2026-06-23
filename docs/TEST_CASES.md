@@ -1,6 +1,6 @@
 # kri — Test Cases
 
-> Version: 0.1.0 | Platform: macOS Fleet Management  
+> Version: 0.1.0 | Platform: macOS Fleet Management
 > Covers: Authentication · Fleet · Nodes · Bootstrap · Groups · Drift · Baselines · SBOM · Playbooks · Settings · Search
 
 ---
@@ -281,10 +281,10 @@ Last updated: 2026-05-24
 | HLTH-02 | P1 | A | Health degrades when DB down | Stop postgres, call `/health/ready` | `{ status: "degraded" }`, HTTP 503 |
 | HLTH-03 | P2 | A | SBOM ingest cap enforced | POST SBOM > 50 MB | HTTP 413 |
 | HLTH-04 | P2 | A | Ingest rate limited | Send > 60 grain ingests per minute | HTTP 429 |
-| HLTH-05 | P1 | M | kri.sh start brings all services up | Run `./scripts/kri.sh start` | API :8000, frontend :5173, Celery all healthy |
-| HLTH-06 | P1 | M | kri.sh stop cleanly shuts down | Run `./scripts/kri.sh stop` | All services stopped, PID files removed |
-| HLTH-07 | P1 | M | kri.sh status shows running services | Run `./scripts/kri.sh status` | Shows ✓ api, ✓ worker, ✓ frontend with PIDs |
-| HLTH-08 | P2 | M | kri.sh logs tails correct service | Run `./scripts/kri.sh logs worker` | Tails `.kri-logs/worker.log` |
+| HLTH-05 | P1 | M | kri start brings all services up | Run `./scripts/kri start` | API :8000, frontend :5173, Celery all healthy |
+| HLTH-06 | P1 | M | kri stop cleanly shuts down | Run `./scripts/kri stop` | All services stopped, PID files removed |
+| HLTH-07 | P1 | M | kri status shows running services | Run `./scripts/kri status` | Shows ✓ api, ✓ worker, ✓ frontend with PIDs |
+| HLTH-08 | P2 | M | kri logs tails correct service | Run `./scripts/kri logs worker` | Tails `.kri-logs/worker.log` |
 
 ---
 
@@ -309,7 +309,7 @@ Last updated: 2026-05-24
 
 ```bash
 # Run full backend test suite
-cd /home/dk/Documents/git/kri && source .venv/bin/activate
+cd /path/to/kri && source .venv/bin/activate
 python -m pytest tests/ -v --no-header 2>&1 | tail -20
 
 # Run only integration tests

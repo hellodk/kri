@@ -5,7 +5,7 @@ Kri (Sanskrit: "Create") — a self-hosted control plane for teams running physi
 [![CI](https://github.com/hellodk/kri/actions/workflows/ci.yml/badge.svg)](https://github.com/hellodk/kri/actions/workflows/ci.yml)
 [![Version](https://img.shields.io/github/v/release/hellodk/kri?include_prereleases)](https://github.com/hellodk/kri/releases)
 [![Issues](https://img.shields.io/github/issues/hellodk/kri)](https://github.com/hellodk/kri/issues)
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+[![License: Proprietary](https://img.shields.io/badge/License-Proprietary-red.svg)](LICENSE)
 [![Python 3.13](https://img.shields.io/badge/Python-3.13-blue)](https://www.python.org/)
 [![React 18](https://img.shields.io/badge/React-18-61DAFB)](https://react.dev/)
 
@@ -133,12 +133,14 @@ cd kri
 
 # Copy and fill in environment secrets
 cp .env.docker.example .env.docker
+# Edit .env.docker — set POSTGRES_PASSWORD, REDIS_PASSWORD, JWT_SECRET,
+# SEED_LOCAL_ADMIN_EMAIL, SEED_LOCAL_ADMIN_PASSWORD (first admin account), etc.
 
 # Start the full stack (API, worker, beat, salt-master, frontend, db, redis)
 docker compose -f deploy/docker-compose.yml up -d
 ```
 
-Then open **http://localhost** and log in with `admin` / `admin` — **change this immediately** under Settings.
+Then open **http://localhost** and log in with the `SEED_LOCAL_ADMIN_EMAIL` / `SEED_LOCAL_ADMIN_PASSWORD` you set in `.env.docker`.
 
 > The salt-master can run inside Docker (convenient for development) or natively on a dedicated fleet node (recommended for production). Point the API at the master via `.env.docker`.
 
@@ -267,4 +269,4 @@ Track sprint progress on the [kri Fleet Platform — GitHub Projects board](http
 
 ## License
 
-MIT — see [LICENSE](LICENSE) for details.
+Proprietary — see [LICENSE](LICENSE) for details.
