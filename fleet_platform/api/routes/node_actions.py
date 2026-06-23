@@ -104,7 +104,7 @@ class NodeActionRequest(BaseModel):
 
 class PendingActionResponse(BaseModel):
     id: uuid.UUID
-    node_id: uuid.UUID
+    node_id: uuid.UUID | None
     action_type: str
     status: str
     expires_at: datetime
