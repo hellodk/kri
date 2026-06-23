@@ -441,3 +441,38 @@ async def test_group_credential_fk():
     assert result["credential_source"] == "group:prod"
     assert result["ssh_user"] == "guser"
     assert result["ssh_password"] == "gpw"
+
+
+async def test_node_fk_empty_secret_falls_through_to_group():
+    """A node FK pointing at a secret-less credential (#704 Class-A defect) is
+    skipped; resolution falls through to the usable group credential instead of
+    short-circuiting to the dead node FK."""
+    empty_node_cred = _credential(kind="username_password", username="nuser", secret_plain=None)
+    group_cred = _credential(kind="username_password", username="guser", secret_plain="gpw")
+    group = _group(name="prod", ssh_username=None, credential_id=group_cred.id)
+    node = _node(credential_id=empty_node_cred.id)
+    db = _make_db(group)
+
+    async def _get(_model, ident):
+        return empty_node_cred if ident == empty_node_cred.id else group_cred
+
+    db.get = AsyncMock(side_effect=_get)
+
+    result = await resolve_node_credentials(node, db)
+
+    assert result["credential_source"] == "group:prod"
+    assert result["ssh_user"] == "guser"
+    assert result["ssh_password"] == "gpw"
+
+
+async def test_node_fk_empty_secret_falls_through_to_global():
+    """An empty node FK with no group falls all the way through to global."""
+    empty_node_cred = _credential(kind="username_password", username="nuser", secret_plain=None)
+    node = _node(credential_id=empty_node_cred.id)
+    # group query (None), SSH_USERNAME (None), SSH_PASSWORD (None)
+    db = _make_db(None, None, None)
+    db.get = AsyncMock(return_value=empty_node_cred)
+
+    result = await resolve_node_credentials(node, db)
+
+    assert result["credential_source"] == "global"

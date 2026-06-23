@@ -156,3 +156,22 @@ def test_sync_group_credential_fk():
     assert result["ssh_user"] == "guser"
     assert result["ssh_key"] == "KEYBLOB"
     assert result["auth_mode"] == "key"
+
+
+def test_sync_node_fk_empty_secret_falls_through_to_group():
+    """Sync twin: an empty-secret node FK (#704 Class-A defect) is skipped and
+    resolution falls through to the usable group credential."""
+    from fleet_platform.services.credential_resolver import resolve_node_credentials_sync
+
+    empty_node_cred = _credential(kind="username_password", username="nuser", secret_plain=None)
+    group_cred = _credential(kind="username_password", username="guser", secret_plain="gpw")
+    group = _group(name="prod", ssh_username=None, credential_id=group_cred.id)
+    node = _node(credential_id=empty_node_cred.id)
+    db = _sync_db(group)
+    db.get.side_effect = lambda _model, ident: empty_node_cred if ident == empty_node_cred.id else group_cred
+
+    result = resolve_node_credentials_sync(node, db)
+
+    assert result["credential_source"] == "group:prod"
+    assert result["ssh_user"] == "guser"
+    assert result["ssh_password"] == "gpw"

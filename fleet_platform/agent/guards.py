@@ -20,7 +20,9 @@ PROTECTED_NODES: frozenset[str] = frozenset(
 )
 
 # Tools whose effect can take a host/service out of service.
-_DEPLANING_TOOLS = {"restart_service", "set_pillar", "apply_salt_state", "enable_node", "disable_node"}
+# Must mirror every registered write_live ToolSpec — add here when registering a new
+# live tool, remove only when the tool is deregistered (#777).
+_DEPLANING_TOOLS = {"restart_service", "set_pillar", "apply_salt_state", "bootstrap_node", "enable_node"}
 
 
 class GuardError(PermissionError):
