@@ -12,7 +12,7 @@ def test_llm_assistant_captures_history_before_addmessage():
     next_func = content.find("const handleKeyDown", submit_fn_start)
     submit_fn = content[submit_fn_start:next_func]
 
-    history_capture_pos = submit_fn.find("const history = messages")
+    history_capture_pos = submit_fn.find("const rawHistory = messages")
     # Look for the specific addMessage call that adds the user message
     add_msg_pos = submit_fn.find("addMessage({ role: 'user'")
 
@@ -25,21 +25,21 @@ def test_llm_assistant_captures_history_before_addmessage():
 
 
 def test_filter_before_slice_in_history():
-    """filter(error) must come before slice(-10) so we keep last 10 valid messages."""
+    """filter(error) must come before slice() so we keep last N valid messages."""
     with open("frontend/src/components/LLMAssistant.tsx") as f:
         content = f.read()
 
     # find the filter and slice positions relative to the history capture
-    history_start = content.find("const history = messages")
-    history_end = content.find("mutation.mutate", history_start)
+    history_start = content.find("const rawHistory = messages")
+    history_end = content.find("streamQuery(", history_start)
     capture_block = content[history_start:history_end]
 
-    filter_pos = capture_block.find(".filter(m => !m.error)")
-    slice_pos = capture_block.find(".slice(-10)")
+    filter_pos = capture_block.find(".filter(m => !m.error")
+    slice_pos = capture_block.find(".slice(-20)")
 
     assert filter_pos != -1, "filter(!m.error) not found in history capture"
-    assert slice_pos != -1, "slice(-10) not found in history capture"
-    assert filter_pos < slice_pos, "filter(!m.error) must come before slice(-10)"
+    assert slice_pos != -1, "slice(-20) not found in history capture"
+    assert filter_pos < slice_pos, "filter(!m.error) must come before slice(-20)"
 
 
 def test_stream_call_receives_text_and_history():

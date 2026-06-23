@@ -846,7 +846,6 @@ def collect_node_grains(self, node_id: str) -> dict:
         ssh_user = node_user or "admin"
         minion_id = node.minion_id
         ssh_host_key = node.ssh_host_key
-        pillar_dir = _get_pillar_dir(db)
         master_creds = _resolve_node_master_creds(db, node)
 
         # Prefer kri_api_url for ingest; no salt_master address fallback (#562)
@@ -859,6 +858,13 @@ def collect_node_grains(self, node_id: str) -> dict:
                 kri_api_url = row.value.rstrip("/")
         except Exception:
             pass
+
+        # Mint a fresh node token for this grain-collection run (#739).
+        # The salt-pillar write was removed in #509 so the pillar file never
+        # exists; the token now lives as a bcrypt hash on node.node_token_hash.
+        raw_token = secrets.token_urlsafe(32)
+        node.node_token_hash = hash_password(raw_token)
+        db.commit()
 
     ingest_base = kri_api_url or "http://localhost"
     ingest_url = f"{ingest_base}/api/v1/ingest"
@@ -891,25 +897,16 @@ def collect_node_grains(self, node_id: str) -> dict:
     if grains is None:
         return {"status": "error", "reason": "; ".join(failures) or "grain collection failed"}
 
-    # 3) Push grains to ingest (node token from pillar)
+    # 3) Push grains to ingest using the freshly minted node token (#739).
+    # raw_token was generated and its hash persisted to node.node_token_hash above.
     try:
-        pillar_file = pillar_dir / f"{minion_id}.sls"
-        node_token = ""
-        if pillar_file.exists():
-            for line in pillar_file.read_text().splitlines():
-                if "node_token:" in line:
-                    node_token = line.split("node_token:")[-1].strip()
-                    break
-        if not node_token:
-            return {"status": "error", "reason": "no node_token found in pillar"}
-
         import urllib.request
 
         payload = _json.dumps({"minion_id": minion_id, "grains": grains}).encode()
         req = urllib.request.Request(
             f"{ingest_url}/grains",
             data=payload,
-            headers={"Content-Type": "application/json", "X-Node-Token": node_token},
+            headers={"Content-Type": "application/json", "X-Node-Token": raw_token},
             method="POST",
         )
         with urllib.request.urlopen(req, timeout=15) as resp:  # nosec B310
@@ -1297,12 +1294,19 @@ def provision_master(self, salt_master_id: str, action: str = "install") -> dict
             import asyncio
 
             try:
+                # Read master fields inside the DB context, then release the session
+                # before calling run_probe() — holding the session during network I/O
+                # exhausts the sync pool under load (#738).
+                _fresh_master = None
                 with get_sync_db() as _pdb:
                     _fresh_master = _pdb.execute(
                         select(SaltMaster).where(SaltMaster.id == master_uuid)
                     ).scalar_one_or_none()
                     if _fresh_master:
-                        probe_result = dict(asyncio.run(run_probe(_fresh_master)))
+                        _pdb.expunge(_fresh_master)
+                # DB session is now released; run the network probe outside.
+                if _fresh_master:
+                    probe_result = dict(asyncio.run(run_probe(_fresh_master)))
             except Exception as _pe:  # noqa: BLE001
                 logger.warning(
                     "provision_master: probe after provision failed for master_id=%s: %s",
