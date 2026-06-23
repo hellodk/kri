@@ -137,8 +137,8 @@ async def test_different_client_keys_create_separate_entries():
     conn_a = _make_fake_conn()
     conn_b = _make_fake_conn()
 
-    key_bytes_a = b"-----BEGIN OPENSSH PRIVATE KEY-----\nAAAAkey1\n-----END OPENSSH PRIVATE KEY-----"
-    key_bytes_b = b"-----BEGIN OPENSSH PRIVATE KEY-----\nAAAAkey2\n-----END OPENSSH PRIVATE KEY-----"
+    key_bytes_a = b"FAKE_KEY_MATERIAL_FOR_TESTING_ONLY_AAAA_1111"
+    key_bytes_b = b"FAKE_KEY_MATERIAL_FOR_TESTING_ONLY_BBBB_2222"
 
     kwargs_a = {"host": "10.0.0.2", "port": 22, "username": "root", "client_keys": [key_bytes_a]}
     kwargs_b = {"host": "10.0.0.2", "port": 22, "username": "root", "client_keys": [key_bytes_b]}
