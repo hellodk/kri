@@ -81,6 +81,7 @@ def test_probe_tcp_and_auth_success_returns_1():
     with (
         patch("fleet_platform.workers.connectivity_tasks.socket.socket", return_value=_FakeSocket(succeed=True)),
         patch("fleet_platform.workers.connectivity_tasks.tempfile.NamedTemporaryFile") as mock_tmp,
+        patch("fleet_platform.workers.connectivity_tasks.os.chmod"),
         patch("fleet_platform.workers.connectivity_tasks.subprocess.run", return_value=fake_proc),
     ):
         # Simulate context manager for NamedTemporaryFile
@@ -108,6 +109,7 @@ def test_probe_tcp_success_auth_failure_returns_0():
     with (
         patch("fleet_platform.workers.connectivity_tasks.socket.socket", return_value=_FakeSocket(succeed=True)),
         patch("fleet_platform.workers.connectivity_tasks.tempfile.NamedTemporaryFile") as mock_tmp,
+        patch("fleet_platform.workers.connectivity_tasks.os.chmod"),
         patch("fleet_platform.workers.connectivity_tasks.subprocess.run", return_value=fake_proc),
     ):
         tmp_obj = MagicMock()
