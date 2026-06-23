@@ -33,6 +33,14 @@ logger = logging.getLogger(__name__)
 _INGEST_RATE_LIMIT = 10  # requests per minute per node
 _INGEST_RATE_WINDOW = 60  # seconds
 _MAX_PROCESSES_PER_PAYLOAD = 250
+_ingest_redis_client: sync_redis.Redis | None = None
+
+
+def _get_ingest_redis() -> sync_redis.Redis:
+    global _ingest_redis_client
+    if _ingest_redis_client is None:
+        _ingest_redis_client = sync_redis.Redis.from_url(settings.redis_url, decode_responses=True)
+    return _ingest_redis_client
 
 
 def _strip_nulls(obj: object) -> object:
@@ -49,12 +57,13 @@ def _strip_nulls(obj: object) -> object:
 def _check_ingest_rate_limit(node_id: str) -> bool:
     """Return True if allowed, False if rate limit exceeded."""
     try:
-        r = sync_redis.Redis.from_url(settings.redis_url, decode_responses=True)
+        r = _get_ingest_redis()
         key = f"ingest_rl:{node_id}"
-        count = int(r.incr(key))  # type: ignore[arg-type]
-        if count == 1:
-            r.expire(key, _INGEST_RATE_WINDOW)
-        return count <= _INGEST_RATE_LIMIT
+        pipe = r.pipeline()
+        pipe.incr(key)
+        pipe.expire(key, _INGEST_RATE_WINDOW)
+        count, _ = pipe.execute()
+        return int(count) <= _INGEST_RATE_LIMIT
     except Exception:
         return True  # fail open — don't block ingest if Redis is down
 
