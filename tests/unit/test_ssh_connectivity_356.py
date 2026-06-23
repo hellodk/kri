@@ -1,12 +1,12 @@
 # tests/unit/test_ssh_connectivity_356.py
-"""Unit tests for issue #356 — periodic SSH reachability probe.
+"""Unit tests for issue #356 — periodic SSH reachability sweep.
 
-Coverage:
+The probe mechanism itself now lives in ``fleet_platform.services.ssh_probe``
+(see test_ssh_probe_356ui.py). This file covers the *sweep* wiring:
+
 - beat schedule entry present (schedule=900, correct task path)
-- probe classification: TCP success + auth success → 1
-- probe classification: TCP success + auth failure → 0
-- probe classification: TCP failure → 0
-- probe classification: exception → 0, sweep continues to next node
+- sweep persists ssh_state to the DB and the legacy 0/1 signal to Redis
+- one bad node doesn't abort the rest
 - redis writes: hset per minion_id, ts key written
 - /metrics contract: gauge name literal present in metrics.py
 - /metrics contract: main.py calls refresh from redis before generate_latest
@@ -31,7 +31,7 @@ def test_beat_schedule_entry_present():
 
 
 # ---------------------------------------------------------------------------
-# Probe classification helpers
+# Helpers
 # ---------------------------------------------------------------------------
 
 
@@ -52,117 +52,41 @@ def _creds(auth_mode: str = "password", ssh_key: str = "") -> dict:
     }
 
 
-class _FakeSocket:
-    """Fake socket that simulates TCP connect success or failure."""
-
-    def __init__(self, succeed: bool = True):
-        self._succeed = succeed
-
-    def settimeout(self, t):
-        pass
-
-    def connect_ex(self, addr):
-        return 0 if self._succeed else 111  # 0 = success, 111 = ECONNREFUSED
-
-    def close(self):
-        pass
+# ---------------------------------------------------------------------------
+# Sweep — persistence + one bad node doesn't abort the rest
+# ---------------------------------------------------------------------------
 
 
-def test_probe_tcp_and_auth_success_returns_1():
-    """TCP connect succeeds + subprocess auth succeeds → 1."""
-    from fleet_platform.workers.connectivity_tasks import _probe_node
+def test_sweep_persists_ssh_state_to_db():
+    """Each probed node gets ssh_state/ssh_detail/ssh_checked_at set, and db.commit() runs."""
+    from fleet_platform.workers.connectivity_tasks import check_ssh_connectivity
 
-    node = _make_node("mac-mini-01")
-    creds = _creds(auth_mode="key", ssh_key="FAKE_KEY_MATERIAL")
+    node = _make_node("mac-mini-persist", "10.0.5.1")
 
-    fake_proc = MagicMock()
-    fake_proc.returncode = 0
+    mock_db = MagicMock()
+    mock_db.__enter__ = MagicMock(return_value=mock_db)
+    mock_db.__exit__ = MagicMock(return_value=False)
+    mock_db.execute.return_value.scalars.return_value.all.return_value = [node]
 
     with (
-        patch("fleet_platform.workers.connectivity_tasks.socket.socket", return_value=_FakeSocket(succeed=True)),
-        patch("fleet_platform.workers.connectivity_tasks.tempfile.NamedTemporaryFile") as mock_tmp,
-        patch("fleet_platform.workers.connectivity_tasks.subprocess.run", return_value=fake_proc),
+        patch("fleet_platform.workers.connectivity_tasks.get_sync_db", return_value=mock_db),
+        patch(
+            "fleet_platform.workers.connectivity_tasks.resolve_node_credentials_sync",
+            return_value=_creds(auth_mode="password"),
+        ),
+        patch(
+            "fleet_platform.workers.connectivity_tasks.probe_node_ssh",
+            return_value={"state": "ok", "detail": "authenticated"},
+        ),
+        patch("fleet_platform.workers.connectivity_tasks.sync_redis.Redis.from_url", return_value=MagicMock()),
     ):
-        # Simulate context manager for NamedTemporaryFile
-        tmp_obj = MagicMock()
-        tmp_obj.__enter__ = MagicMock(return_value=tmp_obj)
-        tmp_obj.__exit__ = MagicMock(return_value=False)
-        tmp_obj.name = "/tmp/fake_key"
-        mock_tmp.return_value = tmp_obj
+        result = check_ssh_connectivity()
 
-        result = _probe_node(node, creds)
-
-    assert result == 1
-
-
-def test_probe_tcp_success_auth_failure_returns_0():
-    """TCP connect succeeds but subprocess returns non-zero (auth failure) → 0."""
-    from fleet_platform.workers.connectivity_tasks import _probe_node
-
-    node = _make_node("mac-mini-02")
-    creds = _creds(auth_mode="key", ssh_key="FAKE_KEY_MATERIAL")
-
-    fake_proc = MagicMock()
-    fake_proc.returncode = 255  # SSH auth failure
-
-    with (
-        patch("fleet_platform.workers.connectivity_tasks.socket.socket", return_value=_FakeSocket(succeed=True)),
-        patch("fleet_platform.workers.connectivity_tasks.tempfile.NamedTemporaryFile") as mock_tmp,
-        patch("fleet_platform.workers.connectivity_tasks.subprocess.run", return_value=fake_proc),
-    ):
-        tmp_obj = MagicMock()
-        tmp_obj.__enter__ = MagicMock(return_value=tmp_obj)
-        tmp_obj.__exit__ = MagicMock(return_value=False)
-        tmp_obj.name = "/tmp/fake_key"
-        mock_tmp.return_value = tmp_obj
-
-        result = _probe_node(node, creds)
-
-    assert result == 0
-
-
-def test_probe_tcp_failure_returns_0():
-    """TCP connect fails → 0, no SSH attempt."""
-    from fleet_platform.workers.connectivity_tasks import _probe_node
-
-    node = _make_node("mac-mini-03")
-    creds = _creds(auth_mode="password")
-
-    with patch("fleet_platform.workers.connectivity_tasks.socket.socket", return_value=_FakeSocket(succeed=False)):
-        result = _probe_node(node, creds)
-
-    assert result == 0
-
-
-def test_probe_password_mode_tcp_success_returns_1():
-    """Password auth mode: TCP connect only (no subprocess) → 1 on success."""
-    from fleet_platform.workers.connectivity_tasks import _probe_node
-
-    node = _make_node("mac-mini-04")
-    creds = _creds(auth_mode="password", ssh_key="")  # no key → TCP-only check
-
-    with patch("fleet_platform.workers.connectivity_tasks.socket.socket", return_value=_FakeSocket(succeed=True)):
-        result = _probe_node(node, creds)
-
-    assert result == 1
-
-
-def test_probe_exception_returns_0():
-    """If socket raises an exception, _probe_node returns 0 (never raises)."""
-    from fleet_platform.workers.connectivity_tasks import _probe_node
-
-    node = _make_node("mac-mini-05")
-    creds = _creds()
-
-    with patch("fleet_platform.workers.connectivity_tasks.socket.socket", side_effect=OSError("network error")):
-        result = _probe_node(node, creds)
-
-    assert result == 0
-
-
-# ---------------------------------------------------------------------------
-# Sweep — one bad node doesn't abort the rest
-# ---------------------------------------------------------------------------
+    assert node.ssh_state == "ok"
+    assert node.ssh_detail == "authenticated"
+    assert node.ssh_checked_at is not None
+    mock_db.commit.assert_called_once()
+    assert result["reachable"] == 1
 
 
 def test_sweep_continues_after_per_node_exception():
@@ -178,21 +102,15 @@ def test_sweep_continues_after_per_node_exception():
     mock_db.__exit__ = MagicMock(return_value=False)
     mock_db.execute.return_value.scalars.return_value.all.return_value = [node_a, node_b, node_c]
 
-    creds_ok = _creds(auth_mode="password")
-
     mock_redis = MagicMock()
 
-    call_count = 0
-
     def _resolve_side_effect(node, db):
-        nonlocal call_count
-        call_count += 1
         if node.minion_id == "mac-mini-b":
             raise RuntimeError("cred resolve blew up")
-        return creds_ok
+        return _creds(auth_mode="password")
 
     def _probe_side_effect(node, creds):
-        return 1
+        return {"state": "ok", "detail": "authenticated"}
 
     with (
         patch("fleet_platform.workers.connectivity_tasks.get_sync_db", return_value=mock_db),
@@ -200,15 +118,16 @@ def test_sweep_continues_after_per_node_exception():
             "fleet_platform.workers.connectivity_tasks.resolve_node_credentials_sync",
             side_effect=_resolve_side_effect,
         ),
-        patch("fleet_platform.workers.connectivity_tasks._probe_node", side_effect=_probe_side_effect),
+        patch("fleet_platform.workers.connectivity_tasks.probe_node_ssh", side_effect=_probe_side_effect),
         patch("fleet_platform.workers.connectivity_tasks.sync_redis.Redis.from_url", return_value=mock_redis),
     ):
         result = check_ssh_connectivity()
 
-    # node_b raised → 0 for it; node_a and node_c → 1 each; total 3 probed
+    # node_b raised → unreachable for it; node_a and node_c → ok; total 3 probed
     assert result["probed"] == 3
     assert result["reachable"] == 2
     assert result["unreachable"] == 1
+    assert node_b.ssh_state == "unreachable"
 
 
 # ---------------------------------------------------------------------------
@@ -236,14 +155,16 @@ def test_redis_hset_written_per_minion():
             "fleet_platform.workers.connectivity_tasks.resolve_node_credentials_sync",
             return_value=_creds(auth_mode="password"),
         ),
-        patch("fleet_platform.workers.connectivity_tasks._probe_node", return_value=1),
+        patch(
+            "fleet_platform.workers.connectivity_tasks.probe_node_ssh",
+            return_value={"state": "ok", "detail": "authenticated"},
+        ),
         patch("fleet_platform.workers.connectivity_tasks.sync_redis.Redis.from_url", return_value=mock_redis),
     ):
         check_ssh_connectivity()
 
-    # hset must be called for each minion_id
+    # hset must be called for each minion_id with the legacy 1 (ok) signal
     hset_calls = [c for c in mock_redis.hset.call_args_list]
-    # We expect hset("kri:ssh_reachable", "mac-mini-r1", "1") and ("mac-mini-r2", "1")
     assert any("mac-mini-r1" in str(c) for c in hset_calls), "hset not called for mac-mini-r1"
     assert any("mac-mini-r2" in str(c) for c in hset_calls), "hset not called for mac-mini-r2"
 
@@ -267,12 +188,14 @@ def test_redis_ts_key_written():
             "fleet_platform.workers.connectivity_tasks.resolve_node_credentials_sync",
             return_value=_creds(auth_mode="password"),
         ),
-        patch("fleet_platform.workers.connectivity_tasks._probe_node", return_value=1),
+        patch(
+            "fleet_platform.workers.connectivity_tasks.probe_node_ssh",
+            return_value={"state": "ok", "detail": "authenticated"},
+        ),
         patch("fleet_platform.workers.connectivity_tasks.sync_redis.Redis.from_url", return_value=mock_redis),
     ):
         check_ssh_connectivity()
 
-    # set must be called for the timestamp key
     set_calls = [str(c) for c in mock_redis.set.call_args_list]
     assert any("kri:ssh_reachable:ts" in s for s in set_calls), (
         f"kri:ssh_reachable:ts not written. set calls: {set_calls}"
@@ -296,7 +219,10 @@ def test_redis_failure_doesnt_raise():
             "fleet_platform.workers.connectivity_tasks.resolve_node_credentials_sync",
             return_value=_creds(auth_mode="password"),
         ),
-        patch("fleet_platform.workers.connectivity_tasks._probe_node", return_value=0),
+        patch(
+            "fleet_platform.workers.connectivity_tasks.probe_node_ssh",
+            return_value={"state": "unreachable", "detail": "TCP port 22 closed or timed out"},
+        ),
         patch(
             "fleet_platform.workers.connectivity_tasks.sync_redis.Redis.from_url",
             side_effect=ConnectionError("redis down"),
