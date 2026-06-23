@@ -1,7 +1,7 @@
 """Make pending_actions.node_id nullable (#742).
 
-Revision ID: 056
-Revises: 055
+Revision ID: 057
+Revises: 056
 Create Date: 2026-06-23
 
 Bug #742: ``create_proposal`` was writing ``uuid.UUID(int=0)`` (the nil UUID) as
@@ -17,8 +17,8 @@ back-filled with the nil UUID to avoid failures on legacy rows.
 import sqlalchemy as sa
 from alembic import op
 
-revision = "056"
-down_revision = "055"
+revision = "057"
+down_revision = "056"
 branch_labels = None
 depends_on = None
 
