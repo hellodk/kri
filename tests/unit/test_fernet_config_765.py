@@ -28,7 +28,7 @@ def test_settings_reads_fernet_key_from_env():
     """
     from fleet_platform.core.config import Settings
 
-    valid_key = "dGVzdC1rZXktbm90LWZvci1wcm9kdWN0aW9uLXVzZS1vbmx5"
+    valid_key = "TJNUjlTWwn0v5n5raoMUYp-An_l3EnATE7xthpfAFGM="
     with patch.dict(os.environ, {"FERNET_KEY": valid_key}, clear=False):
         assert Settings().fernet_secret_key == valid_key
 
