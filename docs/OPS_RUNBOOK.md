@@ -36,15 +36,15 @@ sudo chown -R $(whoami):$(whoami) /srv/salt
 
 ## Starting and Stopping kri
 
-All lifecycle operations go through `./scripts/kri.sh`. The script manages PIDs in `.kri-pids/` and writes logs to `.kri-logs/`.
+All lifecycle operations go through `./scripts/kri`. The script manages PIDs in `.kri-pids/` and writes logs to `.kri-logs/`.
 
 ```bash
-./scripts/kri.sh start    # Start postgres + redis (Docker), API, Celery worker, Vite frontend
-./scripts/kri.sh stop     # Stop all services in reverse order
-./scripts/kri.sh restart  # Stop then start
-./scripts/kri.sh status   # Show PID and health of each service
-./scripts/kri.sh logs api|worker|frontend   # Tail a log file (Ctrl-C to exit)
-./scripts/kri.sh test [grep-pattern]        # Run E2E test suite (kri must be running)
+./scripts/kri start    # Start postgres + redis (Docker), API, Celery worker, Vite frontend
+./scripts/kri stop     # Stop all services in reverse order
+./scripts/kri restart  # Stop then start
+./scripts/kri status   # Show PID and health of each service
+./scripts/kri logs api|worker|frontend   # Tail a log file (Ctrl-C to exit)
+./scripts/kri test [grep-pattern]        # Run E2E test suite (kri must be running)
 ```
 
 After a successful `start`:
@@ -174,7 +174,7 @@ Set `ANSIBLE_VERBOSITY=2` in your shell before starting the worker (or add it to
 ANSIBLE_VERBOSITY=2
 
 # Then restart the worker
-./scripts/kri.sh restart
+./scripts/kri restart
 ```
 
 With verbosity 2, SSH connection details, module arguments, and return values are written to `.kri-logs/worker.log`. Set to `4` for full debug (very noisy).
@@ -311,7 +311,7 @@ Update your `.env` file with the new JWT_SECRET:
 sed -i "s/JWT_SECRET=.*/JWT_SECRET=$NEW_SECRET/" .env
 
 # Restart the stack
-./scripts/kri.sh restart
+./scripts/kri restart
 ```
 
 #### Step 4: Monitor logs
@@ -319,8 +319,8 @@ sed -i "s/JWT_SECRET=.*/JWT_SECRET=$NEW_SECRET/" .env
 Check that API and Celery worker start cleanly:
 
 ```bash
-./scripts/kri.sh logs api    # Should show startup without errors
-./scripts/kri.sh logs worker  # Should show worker ready
+./scripts/kri logs api    # Should show startup without errors
+./scripts/kri logs worker  # Should show worker ready
 ```
 
 ### JWT tokens are invalidated
@@ -339,7 +339,7 @@ If you updated `.env` before discovering a problem, revert the `.env` change and
 
 ```bash
 git checkout .env
-./scripts/kri.sh restart
+./scripts/kri restart
 ```
 
 Stored secrets are still encrypted with the old `JWT_SECRET`, so the old `.env` will decrypt them correctly.
@@ -353,7 +353,7 @@ Run from the kri server:
 
 ```bash
 # All services status
-./scripts/kri.sh status
+./scripts/kri status
 
 # API readiness (returns {"status":"ok"})
 curl -s http://localhost:8000/health/ready
@@ -407,8 +407,8 @@ tail -50 .kri-logs/worker.log
 **Fix:**
 ```bash
 # Restart the worker
-./scripts/kri.sh stop
-./scripts/kri.sh start
+./scripts/kri stop
+./scripts/kri start
 
 # Or individually
 pkill -f "celery worker"
@@ -510,7 +510,7 @@ docker exec deploy-redis-1 redis-cli FLUSHDB
 
 # Restart Redis to clear all data
 docker restart deploy-redis-1
-./scripts/kri.sh restart  # Restart worker and API to reconnect
+./scripts/kri restart  # Restart worker and API to reconnect
 ```
 
 ### Database migration failed at startup
@@ -612,7 +612,7 @@ Target RPO: 24 h (daily dump cycle). Target RTO on a fresh host: 30 min
 
 ### Full restart
 ```bash
-./scripts/kri.sh restart
+./scripts/kri restart
 ```
 
 Use when:
@@ -632,7 +632,7 @@ Use when:
 - Minimal disruption is required
 - Redis broker state must be preserved
 
-For most operational scenarios, a full restart via `./scripts/kri.sh restart` is recommended. Rolling restart is most useful during active deployments to avoid interrupting long-running Ansible jobs.
+For most operational scenarios, a full restart via `./scripts/kri restart` is recommended. Rolling restart is most useful during active deployments to avoid interrupting long-running Ansible jobs.
 
 ---
 
