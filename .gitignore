@@ -96,3 +96,6 @@ test-reports/**
 !test-reports/
 !test-reports/*/
 !test-reports/**/.gitkeep
+
+# best-of-n-runner / agent worktrees (never commit)
+.claude/worktrees/
