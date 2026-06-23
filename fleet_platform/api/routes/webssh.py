@@ -393,7 +393,7 @@ async def webssh_session(
         asyncio.create_task(read_ssh())
 
         # Session timeout
-        loop = asyncio.get_event_loop()
+        loop = asyncio.get_running_loop()
         deadline = loop.time() + max_mins * 60
 
         # Read keystrokes from browser, forward to SSH

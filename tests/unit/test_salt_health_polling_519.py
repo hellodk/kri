@@ -89,12 +89,15 @@ class TestPollSaltMasters:
         mock_execute_result.scalars.return_value = mock_scalars
         mock_db.execute.return_value = mock_execute_result
 
+        # #734: poll_salt_masters now issues a SINGLE asyncio.run(_probe_all(...))
+        # that returns the full list of per-master results, so the mock returns
+        # that list in one call rather than one dict per call.
+        results_list = probe_side_effect if probe_side_effect is not None else probe_return
         with (
             patch("fleet_platform.workers.maintenance.get_sync_db", return_value=mock_db),
             patch(
                 "fleet_platform.workers.maintenance.asyncio.run",
-                side_effect=probe_side_effect,
-                return_value=probe_return,
+                return_value=results_list,
             ) as mock_asyncio_run,
             patch("fleet_platform.workers.maintenance.sync_redis.Redis.from_url") as mock_redis_cls,
         ):
@@ -209,7 +212,7 @@ class TestPollSaltMasters:
             patch("fleet_platform.workers.maintenance.get_sync_db", return_value=mock_db),
             patch(
                 "fleet_platform.workers.maintenance.asyncio.run",
-                side_effect=[probe_result],
+                return_value=[probe_result],
             ),
             patch(
                 "fleet_platform.workers.maintenance.sync_redis.Redis.from_url",
