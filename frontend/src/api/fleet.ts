@@ -89,7 +89,7 @@ export const fleetApi = {
     api.patch<NodeDetail>(`/api/v1/nodes/${nodeId}/maintenance`, { enabled }),
   importValidate: (body: { source: string; text?: string; csv_content?: string; mapping?: Record<string, string> }) =>
     api.post<ImportValidateResponse>('/api/v1/fleet/nodes/import/validate', body),
-  importCommit: (body: { rows: ImportRow[]; group_id?: string; ssh_username?: string; ssh_password?: string; auto_bootstrap?: boolean }) =>
+  importCommit: (body: { rows: ImportRow[]; group_id?: string; ssh_username?: string; ssh_password?: string; ssh_key?: string; ssh_auth_mode?: 'password' | 'key'; auto_bootstrap?: boolean }) =>
     api.post<ImportCommitResponse>('/api/v1/fleet/nodes/import/commit', body),
   processStats: (nodeId: string, params: { sort?: 'mem_rss_bytes' | 'cpu_pct'; limit?: number } = {}) => {
     const q = new URLSearchParams()
