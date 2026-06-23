@@ -17,8 +17,8 @@ Downgrade: DROP COLUMN.
 import sqlalchemy as sa
 from alembic import op
 
-revision = "058"
-down_revision = "057"
+revision = "060"
+down_revision = "059"
 branch_labels = None
 depends_on = None
 
