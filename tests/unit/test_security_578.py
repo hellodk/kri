@@ -185,7 +185,7 @@ def test_fernet_key_raises_in_non_dev_without_explicit_key(monkeypatch):
     monkeypatch.setattr(cfg_mod.settings, "environment", "production")
     monkeypatch.setattr(cfg_mod.settings, "fernet_secret_key", None)
 
-    with pytest.raises(RuntimeError, match="FERNET_SECRET_KEY"):
+    with pytest.raises(RuntimeError, match="FERNET_KEY"):
         svc_mod._fernet_key()
 
 
@@ -219,7 +219,7 @@ def test_fernet_key_dev_fallback_warns(monkeypatch, caplog):
         key = svc_mod._fernet_key()
 
     assert key is not None
-    assert any("FERNET_SECRET_KEY" in r.message for r in caplog.records)
+    assert any("FERNET_KEY" in r.message for r in caplog.records)
 
 
 # ---------------------------------------------------------------------------

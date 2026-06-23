@@ -66,8 +66,13 @@ def test_rate_limit_denied_when_count_exceeds_limit():
     assert allowed is False
 
 
-def test_rate_limit_fails_open_on_redis_error():
+def test_rate_limit_fails_closed_on_redis_error():
+    """#768: Redis failure must raise 503, not silently allow the request through."""
+    from fastapi import HTTPException
+
     with patch(f"{MODULE}.sync_redis.Redis.from_url", side_effect=Exception("redis down")):
         from fleet_platform.api.routes.ingest import _check_ingest_rate_limit
 
-        assert _check_ingest_rate_limit("node-y") is True
+        with pytest.raises(HTTPException) as exc_info:
+            _check_ingest_rate_limit("node-y")
+    assert exc_info.value.status_code == 503
