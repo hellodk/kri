@@ -97,7 +97,9 @@ class NodeUpdateRequest(BaseModel):
     ip_address: str | None = None
     hardware_model: str | None = None
     os_version: str | None = None
-    # SSH credential updates (plaintext in, encrypted on save)
+    # Attach an existing Credential by FK (#725); takes precedence over inline ssh_* input.
+    credential_id: uuid.UUID | None = None
+    # SSH credential updates (plaintext in, persisted to the node's Credential row)
     ssh_username: str | None = None
     ssh_password: str | None = None  # plaintext, will be encrypted on save
     ssh_auth_mode: str | None = None  # "password" | "key"

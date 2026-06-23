@@ -34,9 +34,12 @@ def test_cancel_audit_before_commit():
 
 
 def test_bootstrap_delay_no_ssh_password():
-    # Only check the bootstrap() function body, not the whole file
-    # (run_playbook_endpoint legitimately passes ssh_password)
-    start = _SRC.find("async def bootstrap(")
-    end = _SRC.find("\n@router.", start + 1)
-    bootstrap_fn = _SRC[start:end]
-    assert "ssh_password=payload.ssh_password" not in bootstrap_fn, "bootstrap_node.delay() must not pass ssh_password"
+    # The bootstrap dispatch now lives in the shared bootstrap_svc helper. The
+    # security property is the same: the SSH password is persisted to the node's
+    # credential but must NEVER be forwarded to bootstrap_node.delay() (which would
+    # place plaintext on the Redis broker — see #495).
+    svc_src = (_WORKTREE / "fleet_platform/services/bootstrap_svc.py").read_text()
+    delay_start = svc_src.find("bootstrap_node.delay(")
+    assert delay_start != -1, "bootstrap_svc must dispatch via bootstrap_node.delay()"
+    delay_call = svc_src[delay_start : svc_src.find(")", delay_start)]
+    assert "ssh_password" not in delay_call, "bootstrap_node.delay() must not pass ssh_password"

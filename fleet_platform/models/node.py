@@ -47,11 +47,23 @@ class Node(Base, TimestampMixin):
     bootstrap_error: Mapped[str | None] = mapped_column(Text, nullable=True)
     bootstrap_logs: Mapped[str | None] = mapped_column(Text, nullable=True)
 
-    # Per-node SSH credentials (encrypted at rest)
+    # Per-node SSH credentials (encrypted at rest).
+    # DEPRECATED (#704/#697): superseded by ``credential_id`` -> ``credentials``.
+    # Retained one release as a read-fallback; dropped in a follow-up migration.
     ssh_username: Mapped[str | None] = mapped_column(String(255), nullable=True)
     ssh_password_enc: Mapped[str | None] = mapped_column(Text, nullable=True)
     ssh_auth_mode: Mapped[str] = mapped_column(String(10), default="password")  # "password" | "key"
     ssh_key_enc: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+    # First-class Credential store reference (#703). Nullable: nodes are born from
+    # salt-minion check-ins with no operator in the loop, so a credential is never
+    # mandatory. Resolution falls back to group -> controller -> global.
+    credential_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("credentials.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
 
     # Per-node VNC password (encrypted at rest)
     vnc_password_enc: Mapped[str | None] = mapped_column(Text, nullable=True)

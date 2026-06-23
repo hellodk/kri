@@ -15,7 +15,7 @@ import pytest_asyncio
 from httpx import AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from fleet_platform.core.auth import create_access_token, hash_password
+from fleet_platform.core.auth import hash_password
 from fleet_platform.models.node import Node
 from fleet_platform.models.process_stat import NodeProcessStat
 
@@ -34,6 +34,7 @@ async def ps_read_node(db_session: AsyncSession):
         hostname="ps-read-host.local",
         node_token_hash=hash_password(secrets.token_urlsafe(16)),
         status="online",
+        first_seen_at=datetime.now(timezone.utc),
     )
     db_session.add(node)
     await db_session.commit()
@@ -51,6 +52,7 @@ async def ps_empty_node(db_session: AsyncSession):
         hostname="ps-empty-host.local",
         node_token_hash=hash_password(secrets.token_urlsafe(16)),
         status="online",
+        first_seen_at=datetime.now(timezone.utc),
     )
     db_session.add(node)
     await db_session.commit()
@@ -58,11 +60,6 @@ async def ps_empty_node(db_session: AsyncSession):
     yield node
     await db_session.delete(node)
     await db_session.commit()
-
-
-@pytest_asyncio.fixture(scope="module", loop_scope="module")
-async def viewer_token(viewer_user):
-    return create_access_token({"sub": viewer_user.email, "role": viewer_user.role})
 
 
 @pytest_asyncio.fixture(scope="module", loop_scope="module")
