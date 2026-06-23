@@ -353,11 +353,28 @@ export default function LLMAssistant() {
       return
     }
     // Capture history BEFORE addMessage — prevents the new message appearing
-    // in both history and prompt (duplicate turn bug, closes #303)
-    const history = messages
-      .filter(m => !m.error)
-      .slice(-10)
+    // in both history and prompt (duplicate turn bug, closes #303).
+    // Normalize to strictly alternating user/assistant roles (#840):
+    //   1. Drop error turns (empty or error-flagged assistant bubbles).
+    //   2. Collapse consecutive same-role messages by joining their content.
+    //   3. Drop any leading assistant turns (LLMs expect user first).
+    const rawHistory = messages
+      .filter(m => !m.error && m.content.trim() !== '')
+      .slice(-20)
       .map(m => ({ role: m.role as 'user' | 'assistant', content: m.content }))
+    const normalizedHistory: { role: 'user' | 'assistant'; content: string }[] = []
+    for (const msg of rawHistory) {
+      const prev = normalizedHistory[normalizedHistory.length - 1]
+      if (prev && prev.role === msg.role) {
+        prev.content = prev.content + '\n' + msg.content
+      } else {
+        normalizedHistory.push({ ...msg })
+      }
+    }
+    while (normalizedHistory.length > 0 && normalizedHistory[0].role === 'assistant') {
+      normalizedHistory.shift()
+    }
+    const history = normalizedHistory.slice(-10)
     addMessage({ role: 'user', content: text })
     // Pre-create the assistant placeholder so deltas append to a stable
     // bubble; the typing dots render on this bubble while streaming=true.
@@ -372,9 +389,13 @@ export default function LLMAssistant() {
           appendToLastMessage(delta)
         },
         onDone: (final) => {
+          // A `done` event with no preceding deltas means the stream returned
+          // zero tokens — treat as a failed turn so the bubble is visibly
+          // marked rather than silently empty (#840).
+          const isEmpty = !final.error && (final.output_tokens ?? 0) === 0
           patchLastMessage({
             streaming: false,
-            error: final.error,
+            error: final.error ?? (isEmpty ? 'No response received (empty stream)' : undefined),
             meta: {
               model: final.model_used,
               tokens_in: final.input_tokens,
