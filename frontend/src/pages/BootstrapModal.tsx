@@ -73,6 +73,14 @@ function SingleMode({ onClose }: { onClose: () => void }) {
   const [nodeId, setNodeId] = useState<string | null>(null)
   const [showPlaybook, setShowPlaybook] = useState(false)
   const [existingNodeDbId, setExistingNodeDbId] = useState<string | null>(null)
+
+  // Advanced options (#830)
+  const [showAdvanced, setShowAdvanced] = useState(false)
+  const [neVersion, setNeVersion] = useState('1.8.2')
+  const [neListenAddress, setNeListenAddress] = useState(':9100')
+  const [neUrlOverride, setNeUrlOverride] = useState('')
+  const [bootstrapFull, setBootstrapFull] = useState(false)
+
   const toast = useToastStore((s) => s.add)
   const qc = useQueryClient()
   const navigate = useNavigate()
@@ -187,6 +195,12 @@ function SingleMode({ onClose }: { onClose: () => void }) {
       sshUsername || undefined,
       sshPassword || undefined,
       selectedMasterIds.size > 0 ? Array.from(selectedMasterIds) : undefined,
+      {
+        nodeExporterVersion: neVersion !== '1.8.2' ? neVersion : undefined,
+        nodeExporterListenAddress: neListenAddress !== ':9100' ? neListenAddress : undefined,
+        nodeExporterUrlOverride: neUrlOverride || undefined,
+        bootstrapFull: bootstrapFull || undefined,
+      },
     ),
     onMutate: () => { setLocalLogs('') },
     onSuccess: (data) => { setNodeId(data.node_id); setShowLogs(true); toast('Bootstrap started') },
@@ -525,6 +539,77 @@ function SingleMode({ onClose }: { onClose: () => void }) {
             </div>
           </div>
         )}
+
+        {/* Advanced options (#830) */}
+        <div className="border border-gray-200 rounded-xl overflow-hidden">
+          <button
+            type="button"
+            onClick={() => setShowAdvanced(!showAdvanced)}
+            className="w-full flex items-center justify-between px-3 py-2 bg-gray-50 hover:bg-gray-100 transition-colors"
+            aria-expanded={showAdvanced}
+          >
+            <span className="text-xs font-medium text-gray-500 uppercase tracking-wide">
+              Advanced — node_exporter &amp; minion options
+            </span>
+            <span className="text-gray-400 text-xs">{showAdvanced ? '▲' : '▼'}</span>
+          </button>
+          {showAdvanced && (
+            <div className="px-3 py-3 space-y-3 border-t border-gray-100">
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    node_exporter version
+                  </label>
+                  <input
+                    value={neVersion}
+                    onChange={(e) => setNeVersion(e.target.value)}
+                    placeholder="1.8.2"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm text-gray-900 focus:outline-none focus:border-brand-600"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Listen address
+                  </label>
+                  <input
+                    value={neListenAddress}
+                    onChange={(e) => setNeListenAddress(e.target.value)}
+                    placeholder=":9100"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm text-gray-900 focus:outline-none focus:border-brand-600"
+                  />
+                </div>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  node_exporter download URL override
+                </label>
+                <input
+                  value={neUrlOverride}
+                  onChange={(e) => setNeUrlOverride(e.target.value)}
+                  placeholder="leave blank for default"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm text-gray-900 focus:outline-none focus:border-brand-600"
+                />
+              </div>
+              <label className="flex items-start gap-3 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={bootstrapFull}
+                  onChange={(e) => setBootstrapFull(e.target.checked)}
+                  className="mt-0.5 rounded"
+                  aria-label="Full bootstrap (VNC, brew inventory, salt schedules)"
+                />
+                <div>
+                  <span className="text-sm font-medium text-gray-700">
+                    Full bootstrap (VNC, brew inventory, salt schedules)
+                  </span>
+                  <p className="text-xs text-gray-400 mt-0.5">
+                    Off = minimal: salt-minion + node_exporter + registration only
+                  </p>
+                </div>
+              </label>
+            </div>
+          )}
+        </div>
 
         {/* Playbook preview */}
         <div>

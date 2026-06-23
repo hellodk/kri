@@ -57,7 +57,7 @@
         <key>ProgramArguments</key>
         <array>
           <string>/usr/local/bin/node_exporter</string>
-          <string>--web.listen-address=:9100</string>
+          <string>--web.listen-address={{ node_exporter_listen_address | default(':9100') }}</string>
         </array>
         <key>RunAtLoad</key>
         <true/>

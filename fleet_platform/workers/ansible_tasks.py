@@ -193,6 +193,10 @@ def bootstrap_node(
     target_ip: str,
     ssh_username: str | None = None,
     salt_master_ids: list[str] | None = None,
+    node_exporter_version: str | None = None,
+    node_exporter_listen_address: str | None = None,
+    node_exporter_url_override: str | None = None,
+    bootstrap_full: bool | None = None,
 ) -> dict:
     """Run bootstrap_node.yml against a fleet node (macOS or Linux).
 
@@ -446,6 +450,19 @@ def bootstrap_node(
                         _append_capped(stdout_lines, msg, _trunc_ref)
                 return True
 
+            # Build runtime-override extravars for #830.
+            # Only inject when the caller provided a value — omitted vars fall back
+            # to playbook/group_vars defaults (extravars always win in Ansible precedence).
+            runtime_extravars: dict = {}
+            if node_exporter_version is not None:
+                runtime_extravars["node_exporter_version"] = node_exporter_version
+            if node_exporter_listen_address is not None:
+                runtime_extravars["node_exporter_listen_address"] = node_exporter_listen_address
+            if node_exporter_url_override is not None:
+                runtime_extravars["node_exporter_url_override"] = node_exporter_url_override
+            if bootstrap_full is not None:
+                runtime_extravars["bootstrap_full"] = bootstrap_full
+
             thread, runner = ansible_runner.run_async(
                 private_data_dir=tmpdir,
                 playbook=str(_PLAYBOOKS_DIR / "bootstrap_node.yml"),
@@ -461,6 +478,7 @@ def bootstrap_node(
                     "ingest_url": ingest_url,
                     "node_token": raw_token,
                     **password_extravars,
+                    **runtime_extravars,
                 },
                 envvars={
                     "ANSIBLE_COLLECTIONS_PATH": str(_PLAYBOOKS_DIR / "collections" / "installed"),

@@ -145,6 +145,12 @@ export const ansibleApi = {
     sshUsername?: string,
     sshPassword?: string,
     saltMasterIds?: string[],
+    options?: {
+      nodeExporterVersion?: string
+      nodeExporterListenAddress?: string
+      nodeExporterUrlOverride?: string
+      bootstrapFull?: boolean
+    },
   ) =>
     api.post<BootstrapResponse>('/api/v1/ansible/bootstrap', {
       minion_id,
@@ -152,6 +158,10 @@ export const ansibleApi = {
       ssh_username: sshUsername || undefined,
       ssh_password: sshPassword || undefined,
       salt_master_ids: saltMasterIds && saltMasterIds.length > 0 ? saltMasterIds : undefined,
+      ...(options?.nodeExporterVersion ? { node_exporter_version: options.nodeExporterVersion } : {}),
+      ...(options?.nodeExporterListenAddress ? { node_exporter_listen_address: options.nodeExporterListenAddress } : {}),
+      ...(options?.nodeExporterUrlOverride ? { node_exporter_url_override: options.nodeExporterUrlOverride } : {}),
+      ...(options?.bootstrapFull != null ? { bootstrap_full: options.bootstrapFull } : {}),
     }),
   bootstrapStatus: (nodeId: string) =>
     api.get<BootstrapStatus>(`/api/v1/ansible/bootstrap/${nodeId}/status`),

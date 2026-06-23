@@ -125,6 +125,10 @@ async def bootstrap(
             ssh_password=payload.ssh_password,
             ssh_key=payload.ssh_key,
             salt_master_ids=payload.salt_master_ids,
+            node_exporter_version=payload.node_exporter_version,
+            node_exporter_listen_address=payload.node_exporter_listen_address,
+            node_exporter_url_override=payload.node_exporter_url_override,
+            bootstrap_full=payload.bootstrap_full,
         )
     except BootstrapGroupRequired as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
