@@ -15,33 +15,11 @@ OpenSSH cannot parse as a known_hosts entry.  The fix:
 from __future__ import annotations
 
 import base64
-import sys
 import tempfile
 from pathlib import Path
-from types import ModuleType
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
-
-
-@pytest.fixture(autouse=False)
-def mock_ansible_runner():
-    """Stub out heavy dependencies not installed in the unit-test venv.
-
-    ``playbook_tasks`` has module-level ``import ansible_runner`` and
-    ``import redis`` which are runtime deps, not dev deps.  We stub them
-    out so the pure-Python helper ``_write_known_hosts`` is accessible.
-    """
-    stubs = {
-        "ansible_runner": ModuleType("ansible_runner"),
-        "redis": ModuleType("redis"),
-    }
-    with patch.dict(sys.modules, stubs):
-        # Evict any previously cached (potentially broken) import.
-        sys.modules.pop("fleet_platform.workers.playbook_tasks", None)
-        yield
-    sys.modules.pop("fleet_platform.workers.playbook_tasks", None)
-
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -258,7 +236,7 @@ class TestBootstrapKnownHostsPath:
 
 
 class TestWriteKnownHostsNormalisation:
-    def test_legacy_key_written_as_valid_token(self, mock_ansible_runner):
+    def test_legacy_key_written_as_valid_token(self):
         """_write_known_hosts must normalise a legacy base64-wrapped key to a valid token."""
         from fleet_platform.workers.playbook_tasks import _write_known_hosts
 
@@ -273,7 +251,7 @@ class TestWriteKnownHostsNormalisation:
         assert "10.0.0.1 ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAItest" in content
         assert all_have_keys is True
 
-    def test_native_key_written_unchanged(self, mock_ansible_runner):
+    def test_native_key_written_unchanged(self):
         """_write_known_hosts must accept a native key token without modification."""
         from fleet_platform.workers.playbook_tasks import _write_known_hosts
 
@@ -287,7 +265,7 @@ class TestWriteKnownHostsNormalisation:
         assert "10.0.0.1 ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIFoo" in content
         assert all_have_keys is True
 
-    def test_unparseable_key_treated_as_missing(self, mock_ansible_runner):
+    def test_unparseable_key_treated_as_missing(self):
         """An unparseable stored key must be skipped and all_have_keys=False."""
         from fleet_platform.workers.playbook_tasks import _write_known_hosts
 
