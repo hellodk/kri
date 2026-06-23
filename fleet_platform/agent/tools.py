@@ -16,6 +16,7 @@ executor. The registry filters by role, so a viewer never sees admin tools.
 from __future__ import annotations
 
 import asyncio
+import re
 import uuid
 from typing import Any
 
@@ -32,6 +33,7 @@ _AGENT_SALT_READONLY: frozenset[str] = frozenset(
         "test.ping",
         "grains.items",
         "grains.get",
+        "grains.item",
         "status.uptime",
         "status.loadavg",
         "disk.usage",
@@ -41,6 +43,57 @@ _AGENT_SALT_READONLY: frozenset[str] = frozenset(
         "network.interfaces",
     }
 )
+
+# Salt state names must match this pattern to prevent path-traversal or injection
+# (#775). Dots, slashes, and hyphens are allowed after the first character; no
+# whitespace or shell metacharacters.
+_SALT_STATE_NAME_RE = re.compile(r"^[a-zA-Z0-9_][a-zA-Z0-9_./-]{0,199}$")
+
+# Grain-reading functions where the first positional arg is a grain key (#776).
+_GRAIN_KEY_FUNCTIONS: frozenset[str] = frozenset({"grains.get", "grains.item"})
+
+# Grain keys that could expose Salt master/pillar secrets (#776).
+_FORBIDDEN_GRAIN_KEYS: frozenset[str] = frozenset({"master", "pillar"})
+
+# Limits for the LLM-controlled args list passed to run_salt_cmd (#776).
+_SALT_CMD_ARGS_MAX_ITEMS = 10
+_SALT_CMD_ARGS_MAX_ITEM_LEN = 200
+
+
+def _validate_salt_state_name(state: str) -> None:
+    """Raise ValueError if *state* is not a safe Salt state identifier (#775)."""
+    if not state or not _SALT_STATE_NAME_RE.match(state):
+        raise ValueError(
+            f"state name {state!r} is not permitted; must match "
+            r"^[a-zA-Z0-9_][a-zA-Z0-9_./-]{0,199}$"
+        )
+
+
+def _validate_single_minion(minion_id: str) -> None:
+    """Reject comma-separated target lists for read-only tools (#779)."""
+    if "," in minion_id:
+        raise ValueError(
+            f"minion_id must target a single minion; comma-separated lists are not "
+            f"permitted for read-only tools (got {minion_id!r})"
+        )
+
+
+def _validate_salt_cmd_args(function: str, args: list[str] | None) -> None:
+    """Validate the LLM-supplied args list for run_salt_cmd (#776)."""
+    if args is None:
+        return
+    if len(args) > _SALT_CMD_ARGS_MAX_ITEMS:
+        raise ValueError(f"args list has {len(args)} items; maximum allowed is {_SALT_CMD_ARGS_MAX_ITEMS}")
+    for i, arg in enumerate(args):
+        if len(str(arg)) > _SALT_CMD_ARGS_MAX_ITEM_LEN:
+            raise ValueError(f"arg[{i}] exceeds max length of {_SALT_CMD_ARGS_MAX_ITEM_LEN} characters")
+    if args and function in _GRAIN_KEY_FUNCTIONS:
+        key = str(args[0]).lower()
+        if key in _FORBIDDEN_GRAIN_KEYS:
+            raise ValueError(
+                f"grain key {args[0]!r} is not permitted; it may expose sensitive Salt master or pillar configuration"
+            )
+
 
 _MAX_LIMIT = 100
 
@@ -247,6 +300,7 @@ async def _embed_text(ctx: ToolCtx, text: str) -> Any:
 async def _ping_node(ctx: ToolCtx, minion_id: str) -> Any:
     from fleet_platform.workers.salt_tasks import _run_salt_api
 
+    _validate_single_minion(minion_id)
     return await asyncio.to_thread(_run_salt_api, "test.ping", minion_id)
 
 
@@ -260,6 +314,9 @@ async def _run_salt_cmd(ctx: ToolCtx, function: str, minion_id: str, args: list[
         get_setting,
     )
     from fleet_platform.workers.salt_tasks import _run_salt_api
+
+    _validate_single_minion(minion_id)
+    _validate_salt_cmd_args(function, args)
 
     raw = await get_setting(ctx.db, SALT_ALLOWED_FUNCTIONS)
     if raw:
@@ -282,6 +339,8 @@ async def _run_salt_cmd(ctx: ToolCtx, function: str, minion_id: str, args: list[
 async def _apply_salt_state_dry_run(ctx: ToolCtx, state: str, minion_id: str) -> Any:
     from fleet_platform.workers.salt_tasks import _run_salt_api
 
+    _validate_salt_state_name(state)
+    _validate_single_minion(minion_id)
     # state.apply <state> test=True — dry-run only, never mutates the minion.
     return await asyncio.to_thread(_run_salt_api, "state.apply", minion_id, [state], {"test": True})
 
@@ -369,6 +428,7 @@ async def _dry_run_artifact(ctx: ToolCtx, filename: str) -> Any:
 async def _apply_salt_state(ctx: ToolCtx, minion_id: str, state: str) -> Any:
     from fleet_platform.workers.salt_tasks import _run_salt_api
 
+    _validate_salt_state_name(state)
     # Live state.apply (no test=True) — gated upstream by approval + prior dry-run.
     return await asyncio.to_thread(_run_salt_api, "state.apply", minion_id, [state])
 
@@ -380,16 +440,23 @@ async def _restart_service(ctx: ToolCtx, minion_id: str, service: str) -> Any:
 
 
 async def _set_pillar(ctx: ToolCtx, minion_id: str, pillar_key: str, value: str) -> Any:
-    """Refresh a minion's pillar after a promoted pillar change.
+    """Set a pillar key/value on a minion and trigger a full pillar refresh.
 
-    Pillar *content* is authored via the quarantine→promote path; this live tool
-    records the intended key/value (audited) and triggers a pillar refresh so the
-    minion re-fetches it. It never injects arbitrary master-side state.
+    Calls ``pillar.set`` to write the key/value pair to the minion's local
+    pillar store, then ``saltutil.refresh_pillar`` so the minion picks up the
+    updated value immediately. Both arguments are required and validated so
+    neither is silently discarded (#771).
     """
+    if not value or not value.strip():
+        raise ValueError("value must be a non-empty string")
+    if not pillar_key or not pillar_key.strip():
+        raise ValueError("pillar_key must be a non-empty string")
+
     from fleet_platform.workers.salt_tasks import _run_salt_api
 
+    set_result = await asyncio.to_thread(_run_salt_api, "pillar.set", minion_id, [pillar_key, value])
     refreshed = await asyncio.to_thread(_run_salt_api, "saltutil.refresh_pillar", minion_id)
-    return {"pillar_key": pillar_key, "value": value, "refreshed": refreshed}
+    return {"pillar_key": pillar_key, "value": value, "set_result": set_result, "refreshed": refreshed}
 
 
 async def _bootstrap_node(ctx: ToolCtx, minion_id: str) -> Any:
@@ -560,7 +627,12 @@ def build_default_registry() -> ToolRegistry:
                 {
                     "function": {"type": "string", "maxLength": 100},
                     "minion_id": {"type": "string", "maxLength": 255},
-                    "args": {"type": "array", "description": "Positional args for the function."},
+                    "args": {
+                        "type": "array",
+                        "description": "Positional args for the function (max 10 items).",
+                        "maxItems": _SALT_CMD_ARGS_MAX_ITEMS,
+                        "items": {"type": "string", "maxLength": _SALT_CMD_ARGS_MAX_ITEM_LEN},
+                    },
                 },
                 required=["function", "minion_id"],
             ),
