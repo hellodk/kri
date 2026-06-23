@@ -89,6 +89,93 @@ sudo systemctl restart salt-master   # Linux
 
 ---
 
+## Step 2a — Enable the Salt HTTP API (required)
+
+The Fleet Platform dispatches all Salt commands (state runs, key management, module calls) through the **salt-api** HTTP interface. This replaces the older `docker exec` approach and must be running before the platform can control any minion.
+
+### Install salt-api
+
+**Linux (Ubuntu/Debian):**
+```bash
+sudo apt-get install -y salt-api
+# salt-api ships with the Salt package on most distros; install separately if missing
+```
+
+**macOS (Homebrew):**
+```bash
+# salt-api is included with the saltstack Homebrew formula
+brew install saltstack
+```
+
+### Configure rest_cherrypy in salt-master.conf
+
+The kri repo ships `deploy/salt-master.conf` with the required `netapi_enable_clients` and `external_auth` blocks already set. Copy it to your master:
+
+```bash
+# Linux
+sudo cp /path/to/kri/deploy/salt-master.conf /etc/salt/master.d/kri.conf
+
+# macOS
+sudo cp /path/to/kri/deploy/salt-master.conf /usr/local/etc/salt/master.d/kri.conf
+```
+
+Then add the `rest_cherrypy` listener to your master config (or to `kri.conf`):
+
+```yaml
+# /etc/salt/master.d/kri.conf — append these lines
+rest_cherrypy:
+  port: 8080
+  disable_ssl: True    # use True for internal LAN; set up TLS termination for production
+```
+
+### Create the OS user for PAM authentication
+
+salt-api uses PAM to authenticate requests. Create a dedicated system account:
+
+```bash
+# Linux
+sudo useradd -r -s /sbin/nologin kri
+sudo passwd kri      # set the password you will use for SALT_API_PASSWORD
+```
+
+> **macOS:** Create the user via System Settings → Users & Groups, or with `dscl`:
+> ```bash
+> sudo dscl . -create /Users/kri
+> sudo dscl . -passwd /Users/kri <password>
+> ```
+
+### Start salt-api
+
+```bash
+sudo systemctl enable salt-api
+sudo systemctl start salt-api       # Linux
+# macOS: sudo salt-api -d
+```
+
+Verify it is listening:
+```bash
+curl -sk http://localhost:8080/     # should return {"return": "Welcome"}
+```
+
+### Configure the Fleet Platform
+
+Add the following to your `.env.docker` (copy from `.env.docker.example` as a starting point):
+
+```bash
+SALT_API_URL=http://<salt-master-ip>:8080
+SALT_API_USER=kri
+SALT_API_PASSWORD=<password-set-above>
+# SALT_API_EAUTH=pam      # default; uncomment only to override
+```
+
+The `api` and `worker` containers read these values at startup. Restart them after editing `.env.docker`:
+
+```bash
+docker compose -f deploy/docker-compose.yml restart api worker worker-ansible
+```
+
+---
+
 ## Step 3 — Deploy Salt States from the Repo
 
 The Fleet Platform repo ships the required Salt states under `salt/states/`. Copy them to the master:
@@ -191,7 +278,7 @@ FLEET_API="http://localhost:8000"
 
 ADMIN_TOKEN=$(curl -s -X POST $FLEET_API/auth/login \
   -H "Content-Type: application/json" \
-  -d '{"email":"admin@fleet.local","password":"changeme123"}' \
+  -d '{"email":"admin@fleet.local","password":"<SEED_LOCAL_ADMIN_PASSWORD>"}' \
   | python3 -c "import sys,json; print(json.load(sys.stdin)['access_token'])")
 ```
 
@@ -448,10 +535,23 @@ sudo salt 'mac-mini-01' schedule.list
 
 ## Step 14 — Start Celery Workers
 
-Celery workers must be running on the control plane to process drift and SBOM tasks that the API queues.
+### Docker Compose (recommended)
+
+If you are running the platform via Docker Compose, the Celery workers (`worker`, `worker-ansible`, and `beat` services) start automatically with the stack — no manual action is needed:
 
 ```bash
-cd /home/dk/Documents/git/kri
+docker compose -f deploy/docker-compose.yml up -d
+# worker, worker-ansible, and beat containers handle all task queues
+```
+
+Skip to the [End-to-End Flow](#end-to-end-flow) section.
+
+### Bare-metal / local development
+
+If you are running the platform directly on the host (without Docker Compose), start the workers manually:
+
+```bash
+cd /path/to/kri
 source .venv/bin/activate
 
 # Drift worker — processes compute_drift tasks queued after grain ingestion
