@@ -43,7 +43,7 @@ E2E tests use Playwright to drive a real browser against the full running stack 
 
 | Scope | Requirement | Enforcement |
 |-------|-------------|-------------|
-| `fleet_platform/services/` | 75% line coverage minimum | Enforced in CI — PR blocked if floor not met |
+| `fleet_platform/services/` | 80% line coverage minimum | Enforced in CI — PR blocked if floor not met |
 | `fleet_platform/workers/` | Best effort | Not enforced; aim for 60%+ |
 | `fleet_platform/api/routes/` | Covered by integration tests | Not separately enforced |
 | Integration tests | No mocks — real DB only | Code review policy |
@@ -104,7 +104,7 @@ CI runs on every pull request targeting `master` via `.github/workflows/ci.yml`.
 | TypeScript build | Every PR | `cd frontend && npm run build` | Yes |
 | Unit tests | Every PR | `pytest tests/unit/ -q` | Yes |
 | Integration tests | After unit tests pass | `pytest tests/integration/ -q` | Yes |
-| Coverage floor | After unit tests | 75% on `fleet_platform/services/` | Yes |
+| Coverage floor | After unit tests | 80% on `fleet_platform/services/` | Yes |
 | E2E tests | Manual / staging only | `npx playwright test` | No (not in CI yet) |
 
 A PR cannot merge until all blocking gates are green.
