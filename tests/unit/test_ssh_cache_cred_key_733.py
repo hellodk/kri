@@ -74,8 +74,8 @@ async def test_different_passwords_create_separate_entries():
     conn_a = _make_fake_conn()
     conn_b = _make_fake_conn()
 
-    kwargs_a = {"host": "10.0.0.1", "port": 22, "username": "admin", "password": "secret1"}
-    kwargs_b = {"host": "10.0.0.1", "port": 22, "username": "admin", "password": "secret2"}
+    kwargs_a = {"host": "10.0.0.1", "port": 22, "username": "admin", "password": "pw_aaa"}
+    kwargs_b = {"host": "10.0.0.1", "port": 22, "username": "admin", "password": "pw_bbb"}
 
     mock_connect = AsyncMock(side_effect=[conn_a, conn_b])
     with patch.object(sys.modules["asyncssh"], "connect", mock_connect):
@@ -109,7 +109,7 @@ async def test_identical_credentials_reuse_connection():
     from fleet_platform.services import ssh_connection_cache
 
     conn = _make_fake_conn()
-    kwargs = {"host": "10.0.0.1", "port": 22, "username": "admin", "password": "samepassword"}
+    kwargs = {"host": "10.0.0.1", "port": 22, "username": "admin", "password": "pw_same"}
 
     mock_connect = AsyncMock(return_value=conn)
     with patch.object(sys.modules["asyncssh"], "connect", mock_connect):
@@ -166,7 +166,7 @@ def test_credential_fingerprint_does_not_leak_secret():
     """The credential fingerprint must be a fixed-length hex digest, never the raw secret."""
     from fleet_platform.services.ssh_connection_cache import _credential_fingerprint
 
-    password = "super_secret_password_12345"
+    password = "pw_abc99"
     fingerprint = _credential_fingerprint({"password": password, "host": "h", "port": 22, "username": "u"})
 
     # Must be a 64-char hex string (SHA-256)
@@ -177,5 +177,5 @@ def test_credential_fingerprint_does_not_leak_secret():
     assert password not in fingerprint, "Raw password must not appear in the fingerprint!"
 
     # Two different passwords must produce different digests
-    fp2 = _credential_fingerprint({"password": "different_password", "host": "h", "port": 22, "username": "u"})
+    fp2 = _credential_fingerprint({"password": "pw_xyz88", "host": "h", "port": 22, "username": "u"})
     assert fingerprint != fp2, "Different passwords must produce different fingerprints."
