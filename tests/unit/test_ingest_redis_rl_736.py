@@ -1,78 +1,73 @@
-"""Unit tests for #736 (Redis client reuse) and #737 (atomic INCR+EXPIRE)."""
+"""Unit tests for #736 (Redis client reuse) and #737 (atomic INCR+EXPIRE).
 
-from unittest.mock import MagicMock, patch
+Updated for #747: _check_ingest_rate_limit is now async and uses the shared
+aioredis singleton from deps.get_redis() instead of a per-module sync client.
+"""
+
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-MODULE = "fleet_platform.api.routes.ingest"
+import fleet_platform.api.routes.ingest as _ingest_mod
 
 
-@pytest.fixture(autouse=True)
-def reset_ingest_redis_client():
-    import fleet_platform.api.routes.ingest as ingest_mod
+def _make_redis_mock(count: int = 1) -> tuple:
+    """Return (mock_redis, mock_pipe).
 
-    ingest_mod._ingest_redis_client = None
-    yield
-    ingest_mod._ingest_redis_client = None
-
-
-def test_rate_limit_reuses_single_redis_client():
-    """#736: multiple limiter calls must not create a new Redis client each time."""
-    mock_redis = MagicMock()
+    redis.asyncio.Redis.pipeline() is synchronous; only execute() is awaitable.
+    """
     mock_pipe = MagicMock()
-    mock_pipe.execute.return_value = [1, True]
+    mock_pipe.execute = AsyncMock(return_value=[count, True])
+    mock_redis = MagicMock()
     mock_redis.pipeline.return_value = mock_pipe
-
-    with patch(f"{MODULE}.sync_redis.Redis.from_url", return_value=mock_redis) as from_url:
-        from fleet_platform.api.routes.ingest import _check_ingest_rate_limit
-
-        _check_ingest_rate_limit("node-1")
-        _check_ingest_rate_limit("node-2")
-        _check_ingest_rate_limit("node-3")
-
-    from_url.assert_called_once()
+    return mock_redis, mock_pipe
 
 
-def test_rate_limit_uses_pipeline_for_atomic_incr_expire():
+@pytest.mark.asyncio
+async def test_rate_limit_uses_get_redis_singleton():
+    """#747: multiple rate-limit calls must use the shared get_redis() client."""
+    mock_redis, _ = _make_redis_mock(1)
+    mock_get_redis = AsyncMock(return_value=mock_redis)
+
+    with patch.object(_ingest_mod, "get_redis", mock_get_redis):
+        await _ingest_mod._check_ingest_rate_limit("node-1")
+        await _ingest_mod._check_ingest_rate_limit("node-2")
+        await _ingest_mod._check_ingest_rate_limit("node-3")
+
+    assert mock_get_redis.await_count == 3
+
+
+@pytest.mark.asyncio
+async def test_rate_limit_uses_pipeline_for_atomic_incr_expire():
     """#737: INCR and EXPIRE must be issued together via a Redis pipeline."""
-    mock_redis = MagicMock()
-    mock_pipe = MagicMock()
-    mock_pipe.execute.return_value = [1, True]
-    mock_redis.pipeline.return_value = mock_pipe
+    mock_redis, mock_pipe = _make_redis_mock(1)
 
-    with patch(f"{MODULE}.sync_redis.Redis.from_url", return_value=mock_redis):
-        from fleet_platform.api.routes.ingest import _INGEST_RATE_WINDOW, _check_ingest_rate_limit
-
-        allowed = _check_ingest_rate_limit("node-abc")
+    with patch.object(_ingest_mod, "get_redis", AsyncMock(return_value=mock_redis)):
+        allowed = await _ingest_mod._check_ingest_rate_limit("node-abc")
 
     mock_redis.pipeline.assert_called_once()
     mock_pipe.incr.assert_called_once_with("ingest_rl:node-abc")
-    mock_pipe.expire.assert_called_once_with("ingest_rl:node-abc", _INGEST_RATE_WINDOW)
-    mock_pipe.execute.assert_called_once()
+    mock_pipe.expire.assert_called_once_with("ingest_rl:node-abc", _ingest_mod._INGEST_RATE_WINDOW)
+    mock_pipe.execute.assert_awaited_once()
     assert allowed is True
 
 
-def test_rate_limit_denied_when_count_exceeds_limit():
-    mock_redis = MagicMock()
-    mock_pipe = MagicMock()
-    mock_pipe.execute.return_value = [11, True]
-    mock_redis.pipeline.return_value = mock_pipe
+@pytest.mark.asyncio
+async def test_rate_limit_denied_when_count_exceeds_limit():
+    mock_redis, _ = _make_redis_mock(11)
 
-    with patch(f"{MODULE}.sync_redis.Redis.from_url", return_value=mock_redis):
-        from fleet_platform.api.routes.ingest import _check_ingest_rate_limit
-
-        allowed = _check_ingest_rate_limit("node-hot")
+    with patch.object(_ingest_mod, "get_redis", AsyncMock(return_value=mock_redis)):
+        allowed = await _ingest_mod._check_ingest_rate_limit("node-hot")
 
     assert allowed is False
 
 
-def test_rate_limit_fails_closed_on_redis_error():
+@pytest.mark.asyncio
+async def test_rate_limit_fails_closed_on_redis_error():
     """#768: Redis failure must raise 503, not silently allow the request through."""
     from fastapi import HTTPException
 
-    with patch(f"{MODULE}.sync_redis.Redis.from_url", side_effect=Exception("redis down")):
-        from fleet_platform.api.routes.ingest import _check_ingest_rate_limit
-
+    with patch.object(_ingest_mod, "get_redis", AsyncMock(side_effect=Exception("redis down"))):
         with pytest.raises(HTTPException) as exc_info:
-            _check_ingest_rate_limit("node-y")
+            await _ingest_mod._check_ingest_rate_limit("node-y")
     assert exc_info.value.status_code == 503

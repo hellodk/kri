@@ -6,15 +6,13 @@ import os
 import tempfile
 from datetime import UTC, datetime
 
-import redis as sync_redis
 from fastapi import APIRouter, Depends, Header, HTTPException, Request, status
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from fleet_platform.api.deps import get_db
+from fleet_platform.api.deps import get_db, get_redis
 from fleet_platform.api.limiter import limiter
-from fleet_platform.core.config import settings
 from fleet_platform.core.redaction import redact_cmdline
 from fleet_platform.metrics import process_stats_rows_dropped_total, process_stats_rows_ingested_total
 from fleet_platform.models.execution import ExecutionJob, ExecutionResult
@@ -33,14 +31,6 @@ logger = logging.getLogger(__name__)
 _INGEST_RATE_LIMIT = 10  # requests per minute per node
 _INGEST_RATE_WINDOW = 60  # seconds
 _MAX_PROCESSES_PER_PAYLOAD = 250
-_ingest_redis_client: sync_redis.Redis | None = None
-
-
-def _get_ingest_redis() -> sync_redis.Redis:
-    global _ingest_redis_client
-    if _ingest_redis_client is None:
-        _ingest_redis_client = sync_redis.Redis.from_url(settings.redis_url, decode_responses=True)
-    return _ingest_redis_client
 
 
 def _strip_nulls(obj: object) -> object:
@@ -54,8 +44,11 @@ def _strip_nulls(obj: object) -> object:
     return obj
 
 
-def _check_ingest_rate_limit(node_id: str) -> bool:
+async def _check_ingest_rate_limit(node_id: str) -> bool:
     """Return True if allowed, False if rate limit exceeded.
+
+    Uses the shared async Redis singleton from deps.get_redis() — no per-request
+    connection is created (#747).
 
     Fail-closed policy: if Redis is unreachable, raise HTTP 503 rather than
     allowing the request through unchecked.  An open failure would let any
@@ -63,12 +56,12 @@ def _check_ingest_rate_limit(node_id: str) -> bool:
     turning a dependency outage into an uncontrolled ingest spike.
     """
     try:
-        r = _get_ingest_redis()
+        r = await get_redis()
         key = f"ingest_rl:{node_id}"
         pipe = r.pipeline()
         pipe.incr(key)
         pipe.expire(key, _INGEST_RATE_WINDOW)
-        count, _ = pipe.execute()
+        count, _ = await pipe.execute()
         return int(count) <= _INGEST_RATE_LIMIT
     except Exception:
         raise HTTPException(
@@ -247,7 +240,7 @@ async def ingest_grains(
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Missing X-Node-Token")
 
     node = await _resolve_node(payload.minion_id, x_node_token, db)
-    if not _check_ingest_rate_limit(str(node.id)):
+    if not await _check_ingest_rate_limit(str(node.id)):
         raise HTTPException(
             status_code=429,
             detail="Rate limit exceeded -- max 10 ingest requests per minute per node",

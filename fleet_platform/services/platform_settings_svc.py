@@ -225,8 +225,16 @@ def _fernet_key() -> bytes:
     return base64.urlsafe_b64encode(digest)
 
 
+# Module-level Fernet cache: (key_bytes, Fernet_instance) — invalidated when _fernet_key() output changes (#751).
+_fernet_cache: tuple[bytes, Fernet] | None = None
+
+
 def _fernet() -> Fernet:
-    return Fernet(_fernet_key())
+    global _fernet_cache
+    key = _fernet_key()
+    if _fernet_cache is None or _fernet_cache[0] != key:
+        _fernet_cache = (key, Fernet(key))
+    return _fernet_cache[1]
 
 
 def encrypt_secret(plaintext: str) -> str:
