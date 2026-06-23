@@ -373,6 +373,19 @@ async def submit_query(
             else:
                 error = str(exc)
         else:
+            # Fixed-model endpoint: mark transiently unhealthy so it falls out
+            # of rotation until a successful probe restores it (#840).
+            # NEVER touch LLMEndpoint.enabled — that is operator-only.
+            if isinstance(exc, LLMCallError):
+                from fleet_platform.services import model_health_cache as hc
+
+                hc.set_health(
+                    endpoint.base_url or "",
+                    endpoint.provider,
+                    endpoint.model,
+                    healthy=False,
+                    latency_ms=None,
+                )
             error = str(exc)
 
     duration_ms = int((time.perf_counter() - t0) * 1000)
@@ -545,6 +558,19 @@ async def submit_query_stream(
                     yield f"data: {json.dumps(event)}\n\n"
                 elif etype == "error":
                     error = event.get("error") or "unknown error"
+                    # Fixed-model endpoint: mark transiently unhealthy so it
+                    # falls out of rotation until a probe restores it (#840).
+                    # NEVER touch LLMEndpoint.enabled — operator-only.
+                    if endpoint.model != "__auto__":
+                        from fleet_platform.services import model_health_cache as _hc
+
+                        _hc.set_health(
+                            endpoint.base_url or "",
+                            endpoint.provider,
+                            endpoint.model,
+                            healthy=False,
+                            latency_ms=None,
+                        )
                     yield f"data: {json.dumps(event)}\n\n"
                 elif etype == "done":
                     joined_content = event.get("content", "")
@@ -554,6 +580,16 @@ async def submit_query_stream(
             # Guard: any unexpected failure inside the generator must still
             # produce an SSE error frame so the client never hangs forever.
             error = f"stream failed: {exc}"
+            if endpoint.model != "__auto__":
+                from fleet_platform.services import model_health_cache as _hc
+
+                _hc.set_health(
+                    endpoint.base_url or "",
+                    endpoint.provider,
+                    endpoint.model,
+                    healthy=False,
+                    latency_ms=None,
+                )
             yield f"data: {json.dumps({'type': 'error', 'error': error})}\n\n"
 
         duration_ms = int((time.perf_counter() - t0) * 1000)
