@@ -188,7 +188,7 @@ class TestPromoteNodeToMaster:
         assert master_obj.name == "mac-01"
         assert master_obj.is_default is True  # first master
         assert master_obj.provision_status == "unprovisioned"
-        assert master_obj.api_url == "https://192.168.1.50:8080"
+        assert master_obj.api_url == "https://192.168.1.50:4507"
 
     @pytest.mark.asyncio
     async def test_uses_minion_id_when_hostname_is_none(self):

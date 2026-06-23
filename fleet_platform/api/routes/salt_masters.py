@@ -496,7 +496,7 @@ async def promote_node_to_master(
     is_first = count_result.scalar_one() == 0
 
     # Derive api_url from defaults.
-    derived_api_url = _derive_api_url(node.bootstrap_ip, 8080, True)
+    derived_api_url = _derive_api_url(node.bootstrap_ip, 4507, True)
 
     master = SaltMaster(
         name=candidate_name,

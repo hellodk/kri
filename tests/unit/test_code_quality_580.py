@@ -3,7 +3,7 @@
 Four tests — each fails against pre-fix behaviour:
 
 1. test_bootstrap_guard_403_actually_called
-   — calls run_playbook_endpoint with bootstrap_mac_mini.yml → must raise 403.
+   — calls run_playbook_endpoint with bootstrap_node.yml → must raise 403.
    — Deleting the 'if safe_name in _BOOTSTRAP_ONLY_PLAYBOOKS' guard makes it fail.
 
 2. test_multigroup_node_yields_all_groups
@@ -58,7 +58,7 @@ async def test_bootstrap_guard_403_actually_called():
     from fleet_platform.api.routes.ansible import run_playbook_endpoint
 
     payload = MagicMock()
-    payload.playbook = "bootstrap_mac_mini.yml"
+    payload.playbook = "bootstrap_node.yml"
     payload.target_type = "node"
     payload.target_id = str(uuid.uuid4())
     payload.extravars = None
@@ -74,7 +74,7 @@ async def test_bootstrap_guard_403_actually_called():
 
     with patch(
         "fleet_platform.api.routes.ansible.discover_all",
-        return_value=[_make_entry("bootstrap_mac_mini.yml")],
+        return_value=[_make_entry("bootstrap_node.yml")],
     ):
         with pytest.raises(HTTPException) as exc_info:
             await run_playbook_endpoint(payload=payload, db=db, claims=_make_claims("operator"))

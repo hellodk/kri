@@ -42,20 +42,21 @@ def test_filter_before_slice_in_history():
     assert filter_pos < slice_pos, "filter(!m.error) must come before slice(-10)"
 
 
-def test_mutation_receives_text_and_history():
-    """mutation.mutate() must pass both text and pre-captured history, not just text."""
+def test_stream_call_receives_text_and_history():
+    """The stream call must pass both the prompt text and pre-captured history.
+
+    LLMAssistant was refactored from a react-query mutation to streamQuery();
+    the #303 guarantee still holds — history is captured before addMessage and
+    handed to the stream alongside the prompt text.
+    """
     with open("frontend/src/components/LLMAssistant.tsx") as f:
         content = f.read()
 
-    # Check that mutationFn accepts { text, history }
-    mutation_sig = content[content.find("mutationFn:") : content.find("onSuccess")]
-    assert "{ text, history }" in mutation_sig, "mutationFn must accept { text, history } destructured object"
-
-    # Check that mutation.mutate is called with { text, history }
     submit_fn_start = content.index("const handleSubmit = ()")
-    next_func = content.find("const handleKeyDown", submit_fn_start)
+    next_func = content.find("const handleStop", submit_fn_start)
     submit_fn = content[submit_fn_start:next_func]
 
-    assert "mutation.mutate" in submit_fn and "text, history" in submit_fn, (
-        "mutation.mutate() must be called with { text, history }, not just text"
+    assert "streamQuery(" in submit_fn, "handleSubmit must dispatch the prompt via streamQuery()"
+    assert "prompt: text" in submit_fn and "history" in submit_fn, (
+        "stream call must pass the prompt text and pre-captured history, not just text"
     )

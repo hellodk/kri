@@ -1,8 +1,18 @@
 # fleet_platform/services/llm_context.py
+import logging
 from datetime import UTC, datetime
 
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
+
+from fleet_platform.services.prompt_safety import sanitize_untrusted
+
+logger = logging.getLogger(__name__)
+
+# Cap on per-request node records embedded in the prompt. Beyond this the model
+# sees a partial inventory; the snapshot header is annotated and a warning is
+# logged so the silent truncation is visible (#667).
+_NODE_SNAPSHOT_CAP = 50
 
 INTENT_ADDENDUM: dict[str, str] = {
     "fleet_query": (
@@ -63,14 +73,17 @@ def _format_last_seen(last_seen_at) -> str:
 
 
 def _sanitize_cell(value: object) -> str:
-    """Strip Markdown table-breaking characters from node-controlled values.
+    """Sanitize a node-controlled value for a Markdown table cell.
 
     Coerces non-str values (IPv4Address, datetime, int, None) to str first —
     a node `ip` arrives as an ipaddress.IPv4Address, and calling .replace() on it
     raised AttributeError, 500-ing every AI chat query in build_fleet_context (#633).
+
+    Beyond escaping table-breaking characters, this now neutralizes prompt-injection
+    markers (code fences, model-control tokens, tool-call-shaped tokens, control/bidi
+    Unicode) via the shared sanitizer (#710).
     """
-    text = str(value)
-    return text.replace("|", "\\|").replace("\n", " ").replace("\r", "")
+    return sanitize_untrusted(value, cell=True)
 
 
 def estimate_tokens(text: str) -> int:
@@ -88,6 +101,7 @@ def build_static_context(
     node_records: list[dict] | None = None,
     retrieved_chunks: str | None = None,
     task_addendum: str | None = None,
+    nodes_shown: int | None = None,
 ) -> str:
     group_line = ", ".join(groups) if groups else "(none)"
     parts = [
@@ -103,6 +117,15 @@ def build_static_context(
 
     if node_records:
         parts.append("\n## Node Records\n")
+        shown = nodes_shown if nodes_shown is not None else len(node_records)
+        if shown < node_count:
+            # Make the partial inventory explicit so the model never reports the
+            # capped list as the whole fleet (#667).
+            parts.append(
+                f"NOTE: showing the first {shown} of {node_count} nodes "
+                "(alphabetical by hostname). For nodes beyond this list, ask about a "
+                "specific node or group by name.\n"
+            )
         parts.append("These are the authoritative node records (the 'hostname' column is the node's name):\n")
         parts.append("| hostname | minion_id | ip | status | last_seen | group |\n")
         parts.append("|---|---|---|---|---|---|\n")
@@ -177,9 +200,17 @@ async def build_fleet_context(db: AsyncSession, intent: str, query: str = "") ->
             Node.last_seen_at,
         )
         .order_by(Node.hostname)
-        .limit(50)
+        .limit(_NODE_SNAPSHOT_CAP)
     )
     node_rows = nodes_result.all()
+    if node_count > len(node_rows):
+        logger.warning(
+            "LLM fleet context node cap hit: embedding %d of %d nodes (cap=%d); snapshot is partial for intent=%s",
+            len(node_rows),
+            node_count,
+            _NODE_SNAPSHOT_CAP,
+            intent,
+        )
 
     membership_result = await db.execute(
         select(GroupMember.node_id, Group.name).join(Group, Group.id == GroupMember.group_id)
@@ -235,6 +266,7 @@ async def build_fleet_context(db: AsyncSession, intent: str, query: str = "") ->
         node_records=node_records,
         retrieved_chunks=retrieved_chunks_text,
         task_addendum=addendum,
+        nodes_shown=len(node_records),
     )
 
     return _redact_sensitive_data(context, include_ips=include_ips)

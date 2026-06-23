@@ -11,7 +11,7 @@ from pathlib import Path
 import yaml
 
 ROOT = Path(__file__).resolve().parents[2]
-PLAYBOOK = ROOT / "playbooks/bootstrap_mac_mini.yml"
+PLAYBOOK = ROOT / "playbooks/bootstrap_node.yml"
 
 
 def _tasks() -> list[dict]:

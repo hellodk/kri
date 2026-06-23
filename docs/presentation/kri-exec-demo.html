@@ -1,0 +1,1192 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>kri Fleet Platform</title>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
+
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg: #FAFBFE;
+      --card: #FFFFFF;
+      --text: #1E293B;
+      --text-muted: #64748B;
+      --border: #E8EDF5;
+      --accent: #5B8DEF;
+      --accent-light: #E8F0FE;
+      --accent-dark: #3B6FD9;
+      --green: #34A06B;
+      --green-light: #E6F7EF;
+      --amber: #D4A017;
+      --amber-light: #FEF6E4;
+      --purple: #9B7EDE;
+      --purple-light: #F3EDFC;
+      --teal: #4DB6AC;
+      --teal-light: #E4F5F3;
+      --pink: #F4A4B8;
+      --pink-light: #FDEEF2;
+      --peach: #FBC4AB;
+      --peach-light: #FEF3EC;
+      --red: #E57373;
+      --red-light: #FDECEC;
+      --shadow: 0 2px 16px rgba(100, 116, 139, 0.1);
+    }
+
+    html, body { height: 100%; overflow: hidden; font-family: 'Inter', system-ui, sans-serif; background: var(--bg); color: var(--text); }
+
+    .fallback-message {
+      display: none;
+      max-width: 640px;
+      margin: 80px auto;
+      padding: 32px;
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      text-align: center;
+      line-height: 1.6;
+    }
+    .impress-not-supported .fallback-message { display: block; }
+    .impress-not-supported #impress { display: none; }
+
+    #impress { font-size: 24px; }
+
+    .step {
+      width: 1200px;
+      padding: 48px 56px;
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 20px;
+      box-shadow: var(--shadow);
+      line-height: 1.45;
+    }
+
+    .step-title {
+      font-size: 2.4rem;
+      font-weight: 800;
+      letter-spacing: -0.03em;
+      color: var(--text);
+      margin-bottom: 12px;
+    }
+
+    .step-subtitle {
+      font-size: 1.15rem;
+      color: var(--text-muted);
+      margin-bottom: 28px;
+      max-width: 900px;
+    }
+
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 0.72rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      padding: 6px 14px;
+      border-radius: 999px;
+      margin-bottom: 16px;
+    }
+    .badge-blue   { background: var(--accent-light); color: var(--accent-dark); }
+    .badge-green  { background: var(--green-light);  color: var(--green); }
+    .badge-purple { background: var(--purple-light); color: var(--purple); }
+    .badge-amber  { background: var(--amber-light);  color: var(--amber); }
+    .badge-teal   { background: var(--teal-light);   color: var(--teal); }
+
+    .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+    .grid-3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
+    .grid-4 { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; }
+
+    .feature-card {
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 18px 20px;
+    }
+    .feature-card h3 {
+      font-size: 0.95rem;
+      font-weight: 700;
+      margin-bottom: 6px;
+      color: var(--text);
+    }
+    .feature-card p {
+      font-size: 0.82rem;
+      color: var(--text-muted);
+      line-height: 1.55;
+    }
+    .feature-icon {
+      width: 40px;
+      height: 40px;
+      border-radius: 10px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 1.2rem;
+      margin-bottom: 10px;
+      border: 1px solid var(--border);
+    }
+
+    .stat-row { display: flex; gap: 24px; margin-top: 24px; }
+    .stat {
+      flex: 1;
+      text-align: center;
+      padding: 20px;
+      background: var(--bg);
+      border-radius: 12px;
+      border: 1px solid var(--border);
+    }
+    .stat-num { font-size: 2rem; font-weight: 800; color: var(--accent); }
+    .stat-label { font-size: 0.75rem; color: var(--text-muted); margin-top: 4px; font-weight: 500; }
+
+    .diagram-wrap {
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      overflow: hidden;
+      margin-top: 8px;
+    }
+    .diagram-label {
+      background: #F1F5F9;
+      border-bottom: 1px solid var(--border);
+      padding: 8px 16px;
+      font-size: 0.65rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      color: var(--text-muted);
+    }
+    .diagram-wrap > svg { display: block; width: 100%; height: auto; }
+    .diagram-wrap svg text { font-family: 'Inter', system-ui, sans-serif; }
+
+    /* Exec status quadrants */
+    .status-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+    .status-quad {
+      border-radius: 14px;
+      padding: 16px 18px;
+      border: 1.5px solid var(--border);
+      min-height: 200px;
+    }
+    .status-quad h3 {
+      font-size: 0.82rem;
+      font-weight: 800;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      margin-bottom: 10px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .status-quad ul { list-style: none; font-size: 0.78rem; color: var(--text-muted); line-height: 1.55; }
+    .status-quad li { padding: 5px 0 5px 14px; position: relative; border-bottom: 1px solid rgba(0,0,0,0.04); }
+    .status-quad li:last-child { border-bottom: none; }
+    .status-quad li::before { content: '•'; position: absolute; left: 0; color: var(--accent); font-weight: 700; }
+
+    .accomplish-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+    .accomplish-item {
+      border-radius: 14px;
+      padding: 16px 18px;
+      border: 1.5px solid var(--border);
+    }
+    .accomplish-item h4 { font-size: 0.88rem; font-weight: 700; margin-bottom: 6px; color: var(--text); }
+    .accomplish-item p { font-size: 0.8rem; color: var(--text-muted); line-height: 1.5; }
+    .accomplish-kri { background: var(--accent-light); border-color: #C5D9FA; }
+    .accomplish-kri h4 { color: var(--accent-dark); }
+    .accomplish-hydra { background: var(--purple-light); border-color: #D9C8F5; }
+    .accomplish-hydra h4 { color: #7E5BBE; }
+    .accomplish-pulse { background: var(--peach-light); border-color: #F5D0BC; }
+    .accomplish-pulse h4 { color: #C4785A; }
+
+    .blocker-card {
+      background: var(--amber-light);
+      border: 1.5px solid #F5DFA8;
+      border-radius: 14px;
+      padding: 16px 18px;
+      margin-bottom: 12px;
+    }
+    .blocker-card h4 { font-size: 0.88rem; font-weight: 700; color: #B8860B; margin-bottom: 6px; }
+    .blocker-card p { font-size: 0.8rem; color: var(--text-muted); line-height: 1.5; }
+
+    .quad-done   { background: var(--green-light);  border-color: #B8E6CF; }
+    .quad-done h3   { color: #2D8A58; }
+    .quad-road   { background: var(--accent-light); border-color: #C5D9FA; }
+    .quad-road h3   { color: var(--accent-dark); }
+    .quad-block  { background: var(--amber-light); border-color: #F5DFA8; }
+    .quad-block h3  { color: #B8860B; }
+    .quad-support{ background: var(--purple-light); border-color: #D9C8F5; }
+    .quad-support h3{ color: #7E5BBE; }
+    .quad-pulse  { background: var(--peach-light); border-color: #F5D0BC; }
+    .quad-pulse h3  { color: #C4785A; }
+    .quad-hydra  { background: var(--purple-light); border-color: #D9C8F5; }
+    .quad-hydra h3  { color: #7E5BBE; }
+    .project-tag {
+      display: inline-block;
+      font-size: 0.62rem;
+      font-weight: 700;
+      padding: 2px 8px;
+      border-radius: 999px;
+      margin-left: 6px;
+      vertical-align: middle;
+    }
+    .tag-unified { background: #D9C8F5; color: #6B4FA0; }
+    .tag-pulse   { background: #F5D0BC; color: #A65E42; }
+
+    .two-project-diagram { margin-top: 8px; }
+
+    .ref-link {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      margin-top: 16px;
+      font-size: 0.72rem;
+      font-weight: 600;
+      color: var(--accent);
+      text-decoration: none;
+      padding: 8px 14px;
+      background: var(--accent-light);
+      border-radius: 8px;
+      border: 1px solid #BFDBFE;
+    }
+    .ref-link:hover { background: #BFDBFE; }
+
+    .hero-logo {
+      font-size: 4.5rem;
+      font-weight: 800;
+      letter-spacing: -0.04em;
+      background: linear-gradient(135deg, var(--accent) 0%, var(--purple) 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+      margin-bottom: 8px;
+    }
+    .hero-tagline { font-size: 1.35rem; color: var(--text-muted); max-width: 720px; line-height: 1.55; }
+    .hero-meta { margin-top: 36px; font-size: 0.8rem; color: #94A3B8; }
+
+    .roadmap-col h3 { font-size: 0.85rem; font-weight: 700; margin-bottom: 10px; }
+    .roadmap-col ul { list-style: none; font-size: 0.75rem; color: var(--text-muted); }
+    .roadmap-col li { padding: 6px 0; border-bottom: 1px solid var(--border); }
+    .roadmap-col li:last-child { border-bottom: none; }
+    .roadmap-now  h3 { color: var(--green); }
+    .roadmap-next h3 { color: var(--accent); }
+    .roadmap-later h3 { color: var(--purple); }
+
+    .callout-red {
+      background: #FDECEC;
+      border: 2px solid #F4C4C4;
+      border-radius: 12px;
+      padding: 14px 18px;
+      margin-top: 12px;
+      font-family: ui-monospace, 'SF Mono', monospace;
+      font-size: 0.72rem;
+      line-height: 1.6;
+      color: #9B4444;
+    }
+    .callout-red strong { display: block; font-size: 0.78rem; margin-bottom: 6px; color: #C75050; }
+
+    .callout-info {
+      background: #E8F0FE;
+      border: 1px solid #C5D9FA;
+      border-radius: 10px;
+      padding: 12px 16px;
+      margin-top: 10px;
+      font-size: 0.72rem;
+      color: var(--text-muted);
+      line-height: 1.5;
+    }
+    .callout-info strong { color: var(--accent-dark); }
+
+    .mono-snippet {
+      font-family: ui-monospace, 'SF Mono', monospace;
+      font-size: 0.68rem;
+      background: #F1F5F9;
+      padding: 10px 14px;
+      border-radius: 8px;
+      color: #334155;
+      line-height: 1.6;
+      margin-top: 8px;
+    }
+
+    .nav-hint {
+      position: fixed;
+      bottom: 20px;
+      right: 24px;
+      z-index: 1000;
+      font-size: 0.72rem;
+      color: #94A3B8;
+      background: rgba(255,255,255,0.92);
+      border: 1px solid var(--border);
+      padding: 8px 14px;
+      border-radius: 8px;
+      backdrop-filter: blur(8px);
+    }
+    .nav-hint kbd {
+      display: inline-block;
+      background: #F1F5F9;
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      padding: 1px 6px;
+      font-family: inherit;
+      font-size: 0.68rem;
+    }
+
+    .pulse-dot { animation: pulse 2s ease-in-out infinite; }
+    @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.45; } }
+
+    .slide-num {
+      position: absolute;
+      top: 20px;
+      right: 24px;
+      font-size: 0.65rem;
+      font-weight: 600;
+      color: #CBD5E1;
+    }
+
+    #overview { position: relative; }
+  </style>
+</head>
+<body class="impress-not-supported">
+
+<div class="fallback-message">
+  <h2>Your browser does not support the features required by impress.js.</h2>
+  <p>Please use a modern browser (Chrome, Firefox, Safari, Edge) for the best experience.</p>
+</div>
+
+<div class="nav-hint">Navigate: <kbd>→</kbd> <kbd>←</kbd> <kbd>↑</kbd> <kbd>↓</kbd> &nbsp;·&nbsp; Overview: <kbd>O</kbd></div>
+
+<div id="impress"
+     data-transition-duration="800"
+     data-width="1200"
+     data-height="700"
+     data-max-scale="1.5"
+     data-min-scale="0.5">
+
+  <!-- SLIDE 1: Title -->
+  <div id="title" class="step" data-x="0" data-y="0" data-scale="1">
+    <span class="slide-num">1 / 17</span>
+    <div class="hero-logo">kri + hydra</div>
+    <p class="hero-tagline">One unified project — fleet control plane meets on-prem LLM inference. <strong style="color:#C4785A">pulse</strong> is a separate CI/CD project (Jenkins, iOS/Android).</p>
+    <div class="stat-row">
+      <div class="stat" style="background:var(--purple-light);border-color:#D9C8F5"><div class="stat-num" style="color:#7E5BBE">2→1</div><div class="stat-label">kri + hydra complement</div></div>
+      <div class="stat" style="background:var(--peach-light);border-color:#F5D0BC"><div class="stat-num" style="color:#C4785A">pulse</div><div class="stat-label">Separate CI/CD project</div></div>
+      <div class="stat"><div class="stat-num">28× M4</div><div class="stat-label">Hydra cluster · air-gapped</div></div>
+    </div>
+    <p class="hero-meta">Project A: kri + hydra &nbsp;·&nbsp; Project B: pulse &nbsp;·&nbsp; hellodk</p>
+  </div>
+
+  <!-- SLIDE 2: Problem / Why kri -->
+  <div id="problem" class="step" data-x="1400" data-y="0" data-rotate-y="-8">
+    <span class="slide-num">2 / 17</span>
+    <div class="badge badge-amber">Two Projects</div>
+    <h1 class="step-title">One platform story, two deliverables</h1>
+    <p class="step-subtitle"><strong>kri + hydra</strong> complement each other — fleet ops and LLM inference on the same Mac Minis. <strong>pulse</strong> is independent CI/CD on its own timeline.</p>
+    <div class="diagram-wrap two-project-diagram">
+      <div class="diagram-label">Two-project model — pastel overview</div>
+      <svg viewBox="0 0 1080 280" xmlns="http://www.w3.org/2000/svg">
+        <rect width="1080" height="280" fill="#FAFBFE"/>
+        <!-- Project A: kri + hydra unified -->
+        <rect x="40" y="30" width="480" height="220" rx="16" fill="#F3EDFC" stroke="#D9C8F5" stroke-width="2"/>
+        <text x="280" y="62" text-anchor="middle" font-size="16" font-weight="800" fill="#6B4FA0">Project A — kri + hydra</text>
+        <text x="280" y="84" text-anchor="middle" font-size="13" fill="#8B7AAB">Fleet platform + LLM inference · one story</text>
+        <rect x="70" y="100" width="190" height="56" rx="10" fill="#E8F0FE" stroke="#C5D9FA" stroke-width="1.5"/>
+        <text x="165" y="124" text-anchor="middle" font-size="13" font-weight="700" fill="#3B6FD9">kri</text>
+        <text x="165" y="144" text-anchor="middle" font-size="11" fill="#64748B">Bootstrap · Drift · RAG · SSH</text>
+        <rect x="300" y="100" width="190" height="56" rx="10" fill="#EDE9FE" stroke="#D9C8F5" stroke-width="1.5"/>
+        <text x="395" y="124" text-anchor="middle" font-size="13" font-weight="700" fill="#7E5BBE">hydra</text>
+        <text x="395" y="144" text-anchor="middle" font-size="11" fill="#64748B">28× M4 · vLLM-MLX · OTEL</text>
+        <line x1="260" y1="128" x2="300" y2="128" stroke="#9B7EDE" stroke-width="2"/>
+        <polygon points="300,124 292,128 300,132" fill="#9B7EDE"/>
+        <rect x="120" y="175" width="320" height="52" rx="10" fill="#E6F7EF" stroke="#B8E6CF" stroke-width="1.5"/>
+        <text x="280" y="198" text-anchor="middle" font-size="12" font-weight="600" fill="#2D8A58">Shared: Mac Minis · Salt · Grafana · AI assistant</text>
+        <text x="280" y="216" text-anchor="middle" font-size="11" fill="#64748B">kri runs nodes · hydra serves tokens · same hardware</text>
+        <!-- Project B: pulse -->
+        <rect x="560" y="30" width="480" height="220" rx="16" fill="#FEF3EC" stroke="#F5D0BC" stroke-width="2"/>
+        <text x="800" y="62" text-anchor="middle" font-size="16" font-weight="800" fill="#C4785A">Project B — pulse</text>
+        <text x="800" y="84" text-anchor="middle" font-size="13" fill="#A65E42">CI/CD · separate scope · own Jenkins stack</text>
+        <rect x="610" y="110" width="380" height="56" rx="10" fill="#FDEEF2" stroke="#F4C4D0" stroke-width="1.5"/>
+        <text x="800" y="134" text-anchor="middle" font-size="13" font-weight="700" fill="#C4785A">Jenkins on k0s (cylon)</text>
+        <text x="800" y="154" text-anchor="middle" font-size="11" fill="#64748B">Android + iOS · Semgrep · SonarQube · LLM failure analysis</text>
+        <rect x="610" y="180" width="380" height="44" rx="10" fill="#FEF6E4" stroke="#F5DFA8" stroke-width="1.5"/>
+        <text x="800" y="207" text-anchor="middle" font-size="12" font-weight="600" fill="#B8860B">optimize_build_mac.sh · iOS agent provisioning</text>
+        <!-- Dotted link -->
+        <line x1="520" y1="140" x2="560" y2="140" stroke="#CBD5E1" stroke-width="2" stroke-dasharray="8 5"/>
+        <text x="540" y="130" text-anchor="middle" font-size="10" fill="#94A3B8">future</text>
+        <text x="540" y="260" text-anchor="middle" font-size="12" font-weight="600" fill="#64748B">kri provisions Mac agents for pulse (ARCH-001 step 3) — not merged into one repo</text>
+      </svg>
+    </div>
+  </div>
+
+  <!-- SLIDE 3: Architecture (3 planes) -->
+  <div id="architecture" class="step" data-x="2800" data-y="0">
+    <span class="slide-num">3 / 17</span>
+    <div class="badge badge-blue">Architecture</div>
+    <h1 class="step-title">kri + hydra — unified stack</h1>
+    <p class="step-subtitle">kri provisions and operates the Mac Minis; hydra serves LLM inference on the same nodes. Three planes, one complementary project.</p>
+    <div class="diagram-wrap">
+      <div class="diagram-label">Platform Architecture — Data Flow Animated</div>
+      <svg viewBox="0 0 1080 320" xmlns="http://www.w3.org/2000/svg">
+        <rect width="1080" height="320" fill="var(--bg)"/>
+        <rect x="30" y="30" width="320" height="120" rx="12" fill="#EFF6FF" stroke="#2563EB" stroke-width="2"/>
+        <text x="190" y="58" text-anchor="middle" font-size="13" font-weight="700" fill="#1D4ED8">Control Plane</text>
+        <rect x="50" y="72" width="85" height="32" rx="6" fill="#fff" stroke="#BFDBFE"/>
+        <text x="92" y="92" text-anchor="middle" font-size="12" font-weight="600" fill="#1E40AF">FastAPI</text>
+        <rect x="148" y="72" width="85" height="32" rx="6" fill="#fff" stroke="#BFDBFE"/>
+        <text x="190" y="92" text-anchor="middle" font-size="12" font-weight="600" fill="#1E40AF">Celery</text>
+        <rect x="246" y="72" width="85" height="32" rx="6" fill="#fff" stroke="#BFDBFE"/>
+        <text x="288" y="92" text-anchor="middle" font-size="12" font-weight="600" fill="#1E40AF">Salt Master</text>
+        <text x="190" y="134" text-anchor="middle" font-size="12" fill="var(--text-muted)">Bootstrap · States · Playbooks · Drift Scans</text>
+        <rect x="380" y="30" width="320" height="120" rx="12" fill="#F0FDF4" stroke="#059669" stroke-width="2"/>
+        <text x="540" y="58" text-anchor="middle" font-size="13" font-weight="700" fill="#065F46">Data Plane</text>
+        <rect x="400" y="72" width="130" height="32" rx="6" fill="#fff" stroke="#BBF7D0"/>
+        <text x="465" y="92" text-anchor="middle" font-size="12" font-weight="600" fill="#166534">TimescaleDB</text>
+        <rect x="545" y="72" width="130" height="32" rx="6" fill="#fff" stroke="#BBF7D0"/>
+        <text x="610" y="92" text-anchor="middle" font-size="12" font-weight="600" fill="#166534">Event-Sourced</text>
+        <text x="540" y="134" text-anchor="middle" font-size="12" fill="var(--text-muted)">Drift Scores · Metrics · Audit · Job History</text>
+        <rect x="730" y="30" width="320" height="120" rx="12" fill="#EDE9FE" stroke="#7C3AED" stroke-width="2"/>
+        <text x="890" y="58" text-anchor="middle" font-size="13" font-weight="700" fill="#5B21B6">AI Plane</text>
+        <rect x="750" y="72" width="130" height="32" rx="6" fill="#fff" stroke="#DDD6FE"/>
+        <text x="815" y="92" text-anchor="middle" font-size="12" font-weight="600" fill="#6D28D9">pgvector RAG</text>
+        <rect x="895" y="72" width="130" height="32" rx="6" fill="#fff" stroke="#DDD6FE"/>
+        <text x="960" y="92" text-anchor="middle" font-size="12" font-weight="600" fill="#6D28D9">BYO LLM</text>
+        <text x="890" y="134" text-anchor="middle" font-size="12" fill="var(--text-muted)">SGLang · llmd · vLLM · MLX · Anthropic</text>
+        <rect x="180" y="210" width="720" height="80" rx="12" fill="#fff" stroke="var(--border)" stroke-width="2"/>
+        <text x="540" y="238" text-anchor="middle" font-size="13" font-weight="700" fill="var(--text)">Fleet Nodes (macOS / Linux)</text>
+        <rect x="220" y="252" width="100" height="28" rx="6" fill="#D1FAE5"/><text x="270" y="270" text-anchor="middle" font-size="12" font-weight="600" fill="#065F46">Salt-Minion</text>
+        <rect x="340" y="252" width="100" height="28" rx="6" fill="#D1FAE5"/><text x="390" y="270" text-anchor="middle" font-size="12" font-weight="600" fill="#065F46">Salt-Minion</text>
+        <rect x="460" y="252" width="100" height="28" rx="6" fill="#CCFBF1"/><text x="510" y="270" text-anchor="middle" font-size="12" font-weight="600" fill="#134E4A">Salt-Minion</text>
+        <rect x="580" y="252" width="100" height="28" rx="6" fill="#CCFBF1"/><text x="630" y="270" text-anchor="middle" font-size="12" font-weight="600" fill="#134E4A">Salt-Minion</text>
+        <rect x="700" y="252" width="100" height="28" rx="6" fill="#CCFBF1"/><text x="750" y="270" text-anchor="middle" font-size="12" font-weight="600" fill="#134E4A">Salt-Minion</text>
+        <path d="M 190 150 V 180 H 270 V 210" fill="none" stroke="#2563EB" stroke-width="2"/>
+        <path d="M 540 150 V 210" fill="none" stroke="#059669" stroke-width="2"/>
+        <path d="M 890 150 V 180 H 810 V 210" fill="none" stroke="#7C3AED" stroke-width="2"/>
+        <defs>
+          <path id="arch1" d="M 190 150 V 180 H 270 V 210"/>
+          <path id="arch2" d="M 540 150 V 210"/>
+          <path id="arch3" d="M 890 150 V 180 H 810 V 210"/>
+        </defs>
+        <circle r="4" fill="#2563EB"><animateMotion dur="1.8s" repeatCount="indefinite"><mpath href="#arch1"/></animateMotion></circle>
+        <circle r="4" fill="#059669"><animateMotion dur="1.8s" repeatCount="indefinite" begin="0.3s"><mpath href="#arch2"/></animateMotion></circle>
+        <circle r="4" fill="#7C3AED"><animateMotion dur="1.8s" repeatCount="indefinite" begin="0.6s"><mpath href="#arch3"/></animateMotion></circle>
+        <text x="540" y="305" text-anchor="middle" font-size="12" fill="var(--text-muted)">React Frontend → Nginx → REST API · TanStack Query Polling</text>
+      </svg>
+    </div>
+    <div class="grid-2" style="margin-top:14px">
+      <div class="feature-card" style="background:var(--accent-light);border-color:#C5D9FA"><h3 style="color:#3B6FD9">kri layer</h3><p>Control + Data + AI planes · bootstrap · drift · RAG · SSH/VNC · Salt+Ansible runner</p></div>
+      <div class="feature-card" style="background:var(--purple-light);border-color:#D9C8F5"><h3 style="color:#7E5BBE">hydra layer</h3><p>28× M4 · 10GbE+RDMA · zero-internet · model registry · vLLM-MLX · otel-mac-agent · Opik traces</p></div>
+    </div>
+    <a class="ref-link" href="../ARCHITECTURE-3-repo-split.md" target="_blank">📖 ARCH-001: Three-repo split — kri / pulse / hydra</a>
+  </div>
+
+  <!-- SLIDE 4: Deployment -->
+  <div id="deployment" class="step" data-x="4200" data-y="0" data-rotate-y="5">
+    <span class="slide-num">4 / 17</span>
+    <div class="badge badge-teal">Deployment</div>
+    <h1 class="step-title">Where to deploy kri</h1>
+    <p class="step-subtitle">One Docker Compose stack on a laptop, NUC, or rack server — manages macOS and Linux nodes alike via SSH.</p>
+    <div class="grid-2">
+      <div>
+        <div class="diagram-wrap">
+          <div class="diagram-label">Component-wise — deploy/docker-compose.yml</div>
+          <svg viewBox="0 0 520 300" xmlns="http://www.w3.org/2000/svg">
+            <rect width="520" height="300" fill="var(--bg)"/>
+            <rect x="160" y="20" width="200" height="44" rx="10" fill="#fff" stroke="#2563EB" stroke-width="2"/>
+            <text x="260" y="48" text-anchor="middle" font-size="12" font-weight="600" fill="#1D4ED8">Nginx (Frontend Proxy)</text>
+            <rect x="40" y="90" width="110" height="44" rx="8" fill="#2563EB"/>
+            <text x="95" y="108" text-anchor="middle" font-size="12" font-weight="600" fill="#fff">FastAPI</text>
+            <text x="95" y="124" text-anchor="middle" font-size="11" fill="#DBEAFE">API</text>
+            <rect x="170" y="90" width="110" height="44" rx="8" fill="#2563EB"/>
+            <text x="225" y="108" text-anchor="middle" font-size="12" font-weight="600" fill="#fff">Celery</text>
+            <text x="225" y="124" text-anchor="middle" font-size="11" fill="#DBEAFE">Worker + Beat</text>
+            <rect x="300" y="90" width="110" height="44" rx="8" fill="#EFF6FF" stroke="#2563EB"/>
+            <text x="355" y="108" text-anchor="middle" font-size="12" font-weight="600" fill="#1D4ED8">Salt Master</text>
+            <text x="355" y="124" text-anchor="middle" font-size="11" fill="var(--text-muted)">:4505 / :4506</text>
+            <rect x="430" y="90" width="70" height="44" rx="8" fill="#fff" stroke="var(--border)"/>
+            <text x="465" y="118" text-anchor="middle" font-size="12" font-weight="600" fill="var(--text)">React</text>
+            <rect x="80" y="170" width="140" height="44" rx="8" fill="#F0FDF4" stroke="#059669"/>
+            <text x="150" y="188" text-anchor="middle" font-size="12" font-weight="600" fill="#065F46">TimescaleDB</text>
+            <text x="150" y="204" text-anchor="middle" font-size="11" fill="#059669">PostgreSQL 17</text>
+            <rect x="260" y="170" width="100" height="44" rx="8" fill="#FEF3C7" stroke="#F59E0B"/>
+            <text x="310" y="198" text-anchor="middle" font-size="12" font-weight="600" fill="#92400E">Redis 7</text>
+            <rect x="90" y="240" width="340" height="44" rx="8" fill="#fff" stroke="#059669" stroke-width="2" stroke-dasharray="6 4"/>
+            <text x="260" y="268" text-anchor="middle" font-size="12" font-weight="600" fill="#065F46">Fleet Nodes — Salt-Minion (Auto-Installed)</text>
+            <line x1="260" y1="64" x2="95" y2="90" stroke="#2563EB" stroke-width="1.5"/>
+            <line x1="260" y1="64" x2="225" y2="90" stroke="#2563EB" stroke-width="1.5"/>
+            <line x1="260" y1="64" x2="355" y2="90" stroke="#2563EB" stroke-width="1.5"/>
+            <line x1="355" y1="134" x2="260" y2="240" stroke="#059669" stroke-width="1.5" stroke-dasharray="4 3"/>
+            <defs><path id="dep1" d="M355,134 L260,240"/></defs>
+            <circle r="4" fill="#059669"><animateMotion dur="2s" repeatCount="indefinite"><mpath href="#dep1"/></animateMotion></circle>
+          </svg>
+        </div>
+      </div>
+      <div>
+        <div class="feature-card" style="margin-bottom:12px">
+          <h3>Tenant content mounts</h3>
+          <p><code>PULSE_REPOS_DIR</code> → <code>/mnt/pulse:ro</code> in Compose — kri discovers pulse playbooks at runtime. Hydra roles migrate to kri's registry (ARCH-001 step 4).</p>
+        </div>
+        <div class="feature-card" style="margin-bottom:12px">
+          <h3>salt-master: Docker vs native</h3>
+          <p><strong>Docker</strong> — convenient for development (included in Compose). <strong>Native</strong> — recommended for production on a dedicated fleet node; point the API via <code>.env.docker</code>.</p>
+        </div>
+        <div class="feature-card">
+          <h3>Related deployments</h3>
+          <p><strong>pulse</strong> — Jenkins on k0s cluster <em>cylon</em> (utilities namespace). <strong>hydra</strong> — 28-node Mac Mini cluster, air-gapped, JFrog Artifactory for deps.</p>
+        </div>
+        <div class="mono-snippet">docker compose -f deploy/docker-compose.yml up -d</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- SLIDE 5: Salt Master + Minion -->
+  <div id="salt-bootstrap" class="step" data-x="5600" data-y="0" data-rotate-y="-5">
+    <span class="slide-num">5 / 17</span>
+    <div class="badge badge-blue">SaltStack</div>
+    <h1 class="step-title">Salt master + minion bootstrap</h1>
+    <p class="step-subtitle">One-click onboarding: node picker discovers the target, installs the Salt minion over SSH, accepts keys, and joins the fleet — no manual setup.</p>
+    <div class="grid-2">
+      <div>
+        <div class="feature-card" style="margin-bottom:12px">
+          <div class="feature-icon" style="background:#DBEAFE"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--accent-dark)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink: 0"><rect x="2" y="2" width="20" height="8" rx="2" ry="2"/><rect x="2" y="14" width="20" height="8" rx="2" ry="2"/><line x1="6" y1="6" x2="6.01" y2="6"/><line x1="6" y1="18" x2="6.01" y2="18"/></svg></div>
+          <h3>Salt Master</h3>
+          <p>Issues states via ZeroMQ (:4505 publish, :4506 request). Tracks accepted and pending minion keys in the UI.</p>
+        </div>
+        <div class="feature-card" style="margin-bottom:12px">
+          <div class="feature-icon" style="background:#D1FAE5"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--green)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink: 0"><circle cx="12" cy="12" r="5"/><path d="M12 2v4"/><path d="M12 18v4"/><path d="M4.93 4.93l2.83 2.83"/><path d="M16.24 16.24l2.83 2.83"/><path d="M2 12h4"/><path d="M18 12h4"/><path d="M4.93 19.07l2.83-2.83"/><path d="M16.24 7.76l2.83-2.83"/></svg></div>
+          <h3>Salt Minion (Auto-Installed)</h3>
+          <p>Installed automatically during bootstrap on macOS 12+ or Linux. Grains feed drift engine and package visibility.</p>
+        </div>
+        <div class="feature-card">
+          <div class="feature-icon" style="background:#CCFBF1"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--teal)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink: 0"><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><rect x="8" y="2" width="8" height="4" rx="1" ry="1"/><line x1="9" y1="12" x2="15" y2="12"/><line x1="9" y1="16" x2="15" y2="16"/><line x1="9" y1="8" x2="10" y2="8"/></svg></div>
+          <h3>+ Ansible Playbooks</h3>
+          <p>Unified run pipeline — kri executes; pulse authors CI playbooks (<code>/mnt/pulse</code>), hydra authors LLM roles (llm-mlx, otel-mac-agent).</p>
+        </div>
+      </div>
+      <div class="diagram-wrap">
+        <div class="diagram-label">Bootstrap flow — animated</div>
+        <svg viewBox="0 0 480 300" xmlns="http://www.w3.org/2000/svg">
+          <rect width="480" height="300" fill="var(--bg)"/>
+          <rect x="30" y="120" width="90" height="50" rx="8" fill="#fff" stroke="#2563EB" stroke-width="2"/>
+          <text x="75" y="150" text-anchor="middle" font-size="12" font-weight="600" fill="#1D4ED8">Web UI</text>
+          <rect x="170" y="120" width="90" height="50" rx="8" fill="#2563EB"/>
+          <text x="215" y="145" text-anchor="middle" font-size="12" font-weight="600" fill="#fff">API</text>
+          <text x="215" y="158" text-anchor="middle" font-size="11" fill="#EFF6FF">SSH Bootstrap</text>
+          <rect x="310" y="120" width="90" height="50" rx="8" fill="#fff" stroke="#059669" stroke-width="2"/>
+          <text x="355" y="145" text-anchor="middle" font-size="12" font-weight="600" fill="#065F46">New Node</text>
+          <text x="355" y="158" text-anchor="middle" font-size="11" fill="#065F46">Salt-Minion ✓</text>
+          <rect x="170" y="40" width="90" height="44" rx="8" fill="#EFF6FF" stroke="#2563EB"/>
+          <text x="215" y="68" text-anchor="middle" font-size="12" font-weight="600" fill="#1D4ED8">Salt Master</text>
+          <line x1="215" y1="84" x2="215" y2="120" stroke="#2563EB" stroke-width="1.5"/>
+          <path d="M 260 62 H 355 V 120" fill="none" stroke="#059669" stroke-width="1.5" stroke-dasharray="4 3"/>
+          <line x1="120" y1="145" x2="170" y2="145" stroke="#2563EB" stroke-width="2"/>
+          <line x1="260" y1="145" x2="310" y2="145" stroke="#059669" stroke-width="2"/>
+          <polygon points="170,141 178,145 170,149" fill="#2563EB"/>
+          <polygon points="310,141 318,145 310,149" fill="#059669"/>
+          <defs>
+            <path id="boot1" d="M120,145 L170,145"/>
+            <path id="boot2" d="M260,145 L310,145"/>
+          </defs>
+          <circle r="4" fill="#2563EB"><animateMotion dur="1.5s" repeatCount="indefinite"><mpath href="#boot1"/></animateMotion></circle>
+          <circle r="4" fill="#059669"><animateMotion dur="1.5s" repeatCount="indefinite" begin="0.5s"><mpath href="#boot2"/></animateMotion></circle>
+          <text x="240" y="230" text-anchor="middle" font-size="12" font-weight="600" fill="var(--text-muted)">Discover → Install Minion → Accept Key → Apply States</text>
+        </svg>
+      </div>
+    </div>
+  </div>
+
+  <!-- SLIDE 6: Drift + Packages + Licensing -->
+  <div id="drift-packages" class="step" data-x="7000" data-y="0">
+    <span class="slide-num">6 / 17</span>
+    <div class="badge badge-amber">Compliance</div>
+    <h1 class="step-title">Drift, packages &amp; licensing</h1>
+    <p class="step-subtitle">Every node scored against a baseline; installed packages visible from grains and SBOM scans; license risks surfaced via Trivy pipeline.</p>
+    <div class="grid-2">
+      <div class="diagram-wrap">
+        <div class="diagram-label">Drift engine — snapshot → diff → score</div>
+        <svg viewBox="0 0 520 260" xmlns="http://www.w3.org/2000/svg">
+          <rect width="520" height="260" fill="var(--bg)"/>
+          <rect x="30" y="40" width="120" height="70" rx="10" fill="#DBEAFE" stroke="#2563EB" stroke-width="2"/>
+          <text x="90" y="66" text-anchor="middle" font-size="12" font-weight="700" fill="#1D4ED8">Baseline</text>
+          <text x="90" y="86" text-anchor="middle" font-size="12" fill="#1E40AF">Declared State</text>
+          <rect x="200" y="40" width="120" height="70" rx="10" fill="#fff" stroke="var(--border)" stroke-width="2"/>
+          <text x="260" y="66" text-anchor="middle" font-size="12" font-weight="700" fill="var(--text)">Snapshot</text>
+          <text x="260" y="86" text-anchor="middle" font-size="12" fill="var(--text-muted)">Salt Grains</text>
+          <rect x="370" y="40" width="120" height="70" rx="10" fill="#FEF3C7" stroke="#F59E0B" stroke-width="2"/>
+          <text x="430" y="66" text-anchor="middle" font-size="12" font-weight="700" fill="#92400E">Diff Engine</text>
+          <text x="430" y="86" text-anchor="middle" font-size="12" fill="#B45309">Per-Key Score</text>
+          <line x1="150" y1="75" x2="200" y2="75" stroke="#2563EB" stroke-width="2"/>
+          <line x1="320" y1="75" x2="370" y2="75" stroke="#F59E0B" stroke-width="2"/>
+          <defs>
+            <path id="drift1" d="M150,75 L200,75"/>
+            <path id="drift2" d="M320,75 L370,75"/>
+          </defs>
+          <circle r="4" fill="#2563EB"><animateMotion dur="1.4s" repeatCount="indefinite"><mpath href="#drift1"/></animateMotion></circle>
+          <circle r="4" fill="#F59E0B"><animateMotion dur="1.4s" repeatCount="indefinite" begin="0.5s"><mpath href="#drift2"/></animateMotion></circle>
+          <rect x="60" y="140" width="400" height="90" rx="12" fill="#fff" stroke="var(--border)"/>
+          <text x="260" y="165" text-anchor="middle" font-size="12" font-weight="600" fill="var(--text-muted)">TimescaleDB Hypertable — Drift Trends Over Any Window</text>
+          <polyline points="80,210 140,200 200,195 260,185 320,190 380,175 420,180" fill="none" stroke="#2563EB" stroke-width="2.5"/>
+          <circle cx="420" cy="180" r="5" fill="#DC2626"><animate attributeName="opacity" values="1;0.4;1" dur="1.5s" repeatCount="indefinite"/></circle>
+        </svg>
+      </div>
+      <div>
+        <div class="feature-card" style="margin-bottom:10px">
+          <h3><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align: middle; margin-right: 6px; margin-bottom: 2px; flex-shrink: 0"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/></svg>Installed Packages</h3>
+          <p>Per-node package list from Salt grains (<code>pkgs</code>, <code>brew_pkgs</code>). Fleet-wide common-packages API from latest SBOM scans.</p>
+        </div>
+        <div class="feature-card" style="margin-bottom:10px">
+          <h3><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align: middle; margin-right: 6px; margin-bottom: 2px; flex-shrink: 0"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>SBOM / Trivy Pipeline</h3>
+          <p>CycloneDX SBOM ingested via Celery <code>sbom</code> queue. Trivy security scanning. Components indexed per node.</p>
+        </div>
+        <div class="feature-card">
+          <h3><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align: middle; margin-right: 6px; margin-bottom: 2px; flex-shrink: 0"><path d="M16 16v1a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2h11a2 2 0 0 1 2 2v1"/><path d="M18 8h4"/><path d="M18 12h4"/><path d="m15 11-3 3-2-2"/></svg>License Policy</h3>
+          <p>Configurable <code>license_policy</code> (permissive / strict). Security dashboard aggregates license risks and vulnerability findings per node.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- SLIDE 7: Fleet Operations -->
+  <div id="fleet-ops" class="step" data-x="8400" data-y="0" data-rotate-y="5">
+    <span class="slide-num">7 / 17</span>
+    <div class="badge badge-teal">Fleet Operations</div>
+    <h1 class="step-title">Operate without leaving the browser</h1>
+    <p class="step-subtitle">SSH terminal, VNC desktop, process manager, and group-based bulk ops — all from the React UI.</p>
+    <div class="grid-3">
+      <div class="feature-card">
+        <div class="feature-icon" style="background:#DBEAFE"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--accent-dark)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink: 0"><polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/></svg></div>
+        <h3>SSH Terminal</h3>
+        <p>Tabbed in-browser SSH via asyncssh + xterm.js. Multi-session per node.</p>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon" style="background:#EDE9FE"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--purple)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink: 0"><rect x="2" y="3" width="20" height="14" rx="2" ry="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg></div>
+        <h3>VNC Desktop</h3>
+        <p>Browser-based VNC via noVNC — remote desktop to any fleet node.</p>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon" style="background:#D1FAE5"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--green)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink: 0"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg></div>
+        <h3>Process Manager</h3>
+        <p>Per-node CPU, memory, disk, IO. launchctl (macOS) and systemd (Linux).</p>
+      </div>
+    </div>
+    <div class="diagram-wrap" style="margin-top:16px">
+      <div class="diagram-label">Remote access paths</div>
+      <svg viewBox="0 0 1080 140" xmlns="http://www.w3.org/2000/svg">
+        <rect width="1080" height="140" fill="var(--bg)"/>
+        <rect x="80" y="40" width="180" height="60" rx="10" fill="#fff" stroke="#2563EB" stroke-width="2"/>
+        <text x="170" y="64" text-anchor="middle" font-size="13" font-weight="600" fill="#1D4ED8">React Web UI</text>
+        <text x="170" y="84" text-anchor="middle" font-size="12" fill="var(--text-muted)">Operator Browser</text>
+        <rect x="420" y="40" width="160" height="60" rx="10" fill="#2563EB"/>
+        <text x="500" y="64" text-anchor="middle" font-size="13" font-weight="600" fill="#fff">kri API</text>
+        <text x="500" y="84" text-anchor="middle" font-size="12" fill="#EFF6FF">WebSocket Proxy</text>
+        <rect x="720" y="20" width="160" height="44" rx="8" fill="#F0FDF4" stroke="#059669"/>
+        <text x="800" y="48" text-anchor="middle" font-size="12" font-weight="600" fill="#065F46">SSH (xterm.js)</text>
+        <rect x="720" y="76" width="160" height="44" rx="8" fill="#EDE9FE" stroke="#7C3AED"/>
+        <text x="800" y="104" text-anchor="middle" font-size="12" font-weight="600" fill="#5B21B6">VNC (noVNC)</text>
+        <path d="M 260 70 H 420" fill="none" stroke="#2563EB" stroke-width="2"/>
+        <path d="M 580 70 H 650 V 42 H 720" fill="none" stroke="#059669" stroke-width="2"/>
+        <path d="M 580 70 H 650 V 98 H 720" fill="none" stroke="#7C3AED" stroke-width="2"/>
+        <defs>
+          <path id="ops1" d="M 260 70 H 650 V 42 H 720"/>
+          <path id="ops2" d="M 580 70 H 650 V 98 H 720"/>
+        </defs>
+        <circle r="4" fill="#059669"><animateMotion dur="2s" repeatCount="indefinite"><mpath href="#ops1"/></animateMotion></circle>
+        <circle r="4" fill="#7C3AED"><animateMotion dur="2s" repeatCount="indefinite" begin="0.7s"><mpath href="#ops2"/></animateMotion></circle>
+      </svg>
+    </div>
+  </div>
+
+  <!-- SLIDE 8: Observability & Security -->
+  <div id="observability" class="step" data-x="9800" data-y="0">
+    <span class="slide-num">8 / 17</span>
+    <div class="badge badge-green">Observability &amp; Security</div>
+    <h1 class="step-title">See everything. Trust the audit trail.</h1>
+    <p class="step-subtitle">Production-grade observability — kri runs one stack per cluster; pulse and hydra publish dashboards and scrape configs (ARCH-001 step 2).</p>
+    <div class="grid-2">
+      <div class="grid-2" style="gap:12px">
+        <div class="feature-card"><div class="feature-icon" style="background:#DBEAFE"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--accent-dark)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink: 0"><path d="M3 3v18h18"/><path d="M18.7 8l-5.1 5.2-2.8-2.7L7 14.3"/></svg></div><h3>Prometheus + Grafana</h3><p>Per-node and fleet-wide metrics. OTEL throughout.</p></div>
+        <div class="feature-card"><div class="feature-icon" style="background:#D1FAE5"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--green)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink: 0"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="m9 11 2 2 4-4"/></svg></div><h3>RBAC</h3><p>Viewer / operator / admin tiers. JWT sessions.</p></div>
+        <div class="feature-card"><div class="feature-icon" style="background:#FEF3C7"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--amber)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink: 0"><path d="m21 2-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.778 5.5 5.5 0 0 1 7.777-7.777zm0 0L15.5 7.5m0 0 3 3L22 7l-3-3m-3.5 3.5L19 4"/></svg></div><h3>Encrypted Secrets</h3><p>Per-node and per-group. Role-scoped access.</p></div>
+        <div class="feature-card"><div class="feature-icon" style="background:#EDE9FE"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--purple)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink: 0"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><polyline points="3 3 3 8 8 8"/><line x1="12" y1="7" x2="12" y2="12"/><line x1="12" y1="12" x2="16" y2="14"/></svg></div><h3>Audit Trail</h3><p>Immutable record of every platform action.</p></div>
+        <div class="feature-card"><div class="feature-icon" style="background:#CCFBF1"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--teal)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink: 0"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/></svg></div><h3>SBOM Pipeline</h3><p>Software bills of materials per node via Trivy.</p></div>
+        <div class="feature-card"><div class="feature-icon" style="background:#FEE2E2"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--red)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink: 0"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg></div><h3>URL Health</h3><p>Auto-ping endpoints. Surface availability.</p></div>
+      </div>
+      <div class="diagram-wrap">
+        <div class="diagram-label">Security layers</div>
+        <svg viewBox="0 0 560 320" xmlns="http://www.w3.org/2000/svg">
+          <rect width="560" height="320" fill="var(--bg)"/>
+          <circle cx="280" cy="160" r="130" fill="none" stroke="var(--border)" stroke-width="2"/>
+          <circle cx="280" cy="160" r="100" fill="#F0FDF4" stroke="#059669" stroke-width="2" opacity="0.5"/>
+          <circle cx="280" cy="160" r="70" fill="#EFF6FF" stroke="#2563EB" stroke-width="2" opacity="0.7"/>
+          <circle cx="280" cy="160" r="40" fill="#E8F0FE" stroke="#5B8DEF" stroke-width="2"/>
+          <text x="280" y="154" text-anchor="middle" font-size="12" font-weight="700" fill="#3B6FD9">Fleet</text>
+          <text x="280" y="174" text-anchor="middle" font-size="12" fill="#64748B">Data</text>
+          <text x="280" y="50" text-anchor="middle" font-size="12" font-weight="600" fill="var(--text)">RBAC + JWT</text>
+          <text x="470" y="156" text-anchor="middle" font-size="12" font-weight="600" fill="var(--text)">Encrypted</text>
+          <text x="470" y="172" text-anchor="middle" font-size="12" font-weight="600" fill="var(--text)">Secrets</text>
+          <text x="280" y="278" text-anchor="middle" font-size="12" font-weight="600" fill="var(--text)">Audit Trail</text>
+          <text x="90" y="164" text-anchor="middle" font-size="12" font-weight="600" fill="var(--text)">SBOM</text>
+          <circle cx="280" cy="160" r="130" fill="none" stroke="#059669" stroke-width="1.5" stroke-dasharray="8 6" opacity="0.6">
+            <animateTransform attributeName="transform" type="rotate" from="0 280 160" to="360 280 160" dur="20s" repeatCount="indefinite"/>
+          </circle>
+        </svg>
+      </div>
+    </div>
+    <a class="ref-link" href="../blog/testing-and-ci-strategy.html" target="_blank"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align: middle; margin-right: 6px; margin-bottom: 2px"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>Blog: How kri ships with confidence</a>
+  </div>
+
+  <!-- SLIDE 9: LLM Installation + hardware challenge -->
+  <div id="llm-install" class="step" data-x="11200" data-y="0" data-rotate-y="-8">
+    <span class="slide-num">9 / 17</span>
+    <div class="badge badge-purple">LLM Installation</div>
+    <h1 class="step-title">Bring your own model</h1>
+    <p class="step-subtitle">Local-first LLM backends on fleet nodes — hydra drives production inference at scale (28× M4, air-gapped). kri routes to any OpenAI-compatible endpoint.</p>
+    <div class="grid-2">
+      <div>
+        <div class="grid-2" style="gap:10px;margin-bottom:12px">
+          <div class="feature-card"><h3>SGLang (sgllm)</h3><p>High-throughput local inference server — cluster pools</p></div>
+          <div class="feature-card"><h3>llmd</h3><p>macOS LLM daemon — OpenAI-compatible local endpoint</p></div>
+          <div class="feature-card"><h3>vLLM-MLX</h3><p>Production path — batching, /metrics, prefix cache</p></div>
+          <div class="feature-card"><h3>MLX (dev)</h3><p><code>mlx_lm.server</code> — not for prod at scale</p></div>
+          <div class="feature-card"><h3>Model registry</h3><p>hydra offline registry via JFrog + MinIO schema</p></div>
+        </div>
+        <div class="mono-snippet">mlx_lm.server --model mlx-community/Qwen3.5-4B-MLX-8bit</div>
+        <div class="callout-red">
+          <strong>[METAL] Hardware challenge — 16 GB M4 unified memory</strong>
+          Weight ceiling ~9.6 GB (60% rule) · Prompt cache ~3.78–3.94 GB → OOM abort<br>
+          hydra plan: vllm-mlx + OOM guardrails · Salt reactor auto-restart on SIGABRT
+        </div>
+        <div class="callout-info">
+          <strong>Neysa Velocis</strong> — sovereign AI cloud (H100/H200/MI300X). Optional offload when local Metal exhausted — OpenAI-compatible, not integrated today.
+        </div>
+      </div>
+      <div class="diagram-wrap">
+        <div class="diagram-label">LLM backends on fleet nodes</div>
+        <svg viewBox="0 0 480 320" xmlns="http://www.w3.org/2000/svg">
+          <rect width="480" height="320" fill="var(--bg)"/>
+          <rect x="140" y="20" width="200" height="50" rx="10" fill="#2563EB"/>
+          <text x="240" y="40" text-anchor="middle" font-size="12" font-weight="600" fill="#fff">kri AI Plane</text>
+          <text x="240" y="58" text-anchor="middle" font-size="12" fill="#EFF6FF">OpenAI-Compatible Routing</text>
+          <rect x="30" y="110" width="95" height="50" rx="8" fill="#EDE9FE" stroke="#7C3AED"/>
+          <text x="77" y="140" text-anchor="middle" font-size="12" font-weight="600" fill="#5B21B6">SGLang</text>
+          <rect x="140" y="110" width="95" height="50" rx="8" fill="#EDE9FE" stroke="#7C3AED"/>
+          <text x="187" y="140" text-anchor="middle" font-size="12" font-weight="600" fill="#5B21B6">llmd</text>
+          <rect x="250" y="110" width="95" height="50" rx="8" fill="#EDE9FE" stroke="#7C3AED"/>
+          <text x="297" y="140" text-anchor="middle" font-size="12" font-weight="600" fill="#5B21B6">vLLM</text>
+          <rect x="360" y="110" width="95" height="50" rx="8" fill="#FEF3C7" stroke="#F59E0B"/>
+          <text x="407" y="132" text-anchor="middle" font-size="12" font-weight="600" fill="#92400E">MLX</text>
+          <text x="407" y="148" text-anchor="middle" font-size="11" fill="#B45309">Mac Only</text>
+          <rect x="80" y="210" width="320" height="80" rx="10" fill="#fff" stroke="#059669" stroke-width="2"/>
+          <text x="240" y="238" text-anchor="middle" font-size="12" font-weight="600" fill="#065F46">Mac Mini / Studio / Linux GPU Nodes</text>
+          <text x="240" y="260" text-anchor="middle" font-size="12" fill="var(--text-muted)">hydra: otel-mac-agent · llm-mlx · llm-discovery · FastPool/ReasonPool</text>
+          <path d="M 240 70 V 90 H 77 V 110" fill="none" stroke="#7C3AED" stroke-width="1.5"/>
+          <path d="M 240 70 V 90 H 187 V 110" fill="none" stroke="#7C3AED" stroke-width="1.5"/>
+          <path d="M 240 70 V 90 H 297 V 110" fill="none" stroke="#7C3AED" stroke-width="1.5"/>
+          <path d="M 240 70 V 90 H 407 V 110" fill="none" stroke="#F59E0B" stroke-width="1.5"/>
+          <path d="M 407 160 V 185 H 240 V 210" fill="none" stroke="#F59E0B" stroke-width="1.5" stroke-dasharray="4 3"/>
+          <defs><path id="llm1" d="M 240 70 V 90 H 407 V 110 V 160 V 185 H 240 V 210"/></defs>
+          <circle r="4" fill="#F59E0B"><animateMotion dur="2.5s" repeatCount="indefinite"><mpath href="#llm1"/></animateMotion></circle>
+        </svg>
+      </div>
+    </div>
+  </div>
+
+  <!-- SLIDE 10: OpenCode + MLX -->
+  <div id="opencode-mlx" class="step" data-x="12600" data-y="0" data-rotate-y="5">
+    <span class="slide-num">10 / 17</span>
+    <div class="badge badge-purple">Developer Workflow</div>
+    <h1 class="step-title">OpenCode + MLX on the fleet</h1>
+    <p class="step-subtitle">Local AI coding agent pointed at on-prem inference — same Mac Minis that kri operates and hydra serves tokens from.</p>
+    <div class="grid-2">
+      <div>
+        <div class="feature-card" style="margin-bottom:10px">
+          <h3>OpenCode</h3>
+          <p>Terminal/IDE coding agent — OpenAI-compatible API. Edits repos, runs tools, stays on-prem when pointed at local endpoints.</p>
+        </div>
+        <div class="feature-card" style="margin-bottom:10px">
+          <h3>MLX / vllm-mlx</h3>
+          <p><code>mlx_lm.server</code> or hydra vllm-mlx on Apple Silicon — FastPool for chat, ReasonPool for codegen.</p>
+        </div>
+        <div class="feature-card" style="margin-bottom:10px">
+          <h3>kri grounds context</h3>
+          <p>RAG over fleet state; agentic Salt/Ansible codegen with approval gates — OpenCode handles repo edits, kri handles infra.</p>
+        </div>
+        <div class="mono-snippet">opencode --model mlx-community/Qwen3.5-4B-MLX-8bit --base-url http://mm1:8080/v1</div>
+        <div class="callout-info" style="margin-top:10px">
+          <strong>Same hardware constraint</strong> — Metal OOM on 16 GB M4 applies: fleet ops + LLM + OpenCode share unified memory.
+        </div>
+      </div>
+      <div class="diagram-wrap">
+        <div class="diagram-label">OpenCode → local MLX → fleet node</div>
+        <svg viewBox="0 0 480 320" xmlns="http://www.w3.org/2000/svg">
+          <rect width="480" height="320" fill="var(--bg)"/>
+          <rect x="30" y="30" width="120" height="56" rx="10" fill="#EFF6FF" stroke="#2563EB" stroke-width="2"/>
+          <text x="90" y="54" text-anchor="middle" font-size="12" font-weight="700" fill="#1D4ED8">OpenCode</text>
+          <text x="90" y="72" text-anchor="middle" font-size="11" fill="#64748B">Dev terminal</text>
+          <rect x="180" y="30" width="120" height="56" rx="10" fill="#EDE9FE" stroke="#7C3AED" stroke-width="2"/>
+          <text x="240" y="54" text-anchor="middle" font-size="12" font-weight="700" fill="#5B21B6">SGLang / llmd</text>
+          <text x="240" y="72" text-anchor="middle" font-size="11" fill="#64748B">OpenAI API</text>
+          <rect x="330" y="30" width="120" height="56" rx="10" fill="#FEF3C7" stroke="#F59E0B" stroke-width="2"/>
+          <text x="390" y="54" text-anchor="middle" font-size="12" font-weight="700" fill="#92400E">MLX</text>
+          <text x="390" y="72" text-anchor="middle" font-size="11" fill="#B45309">Apple Silicon</text>
+          <line x1="150" y1="58" x2="180" y2="58" stroke="#2563EB" stroke-width="2"/>
+          <line x1="300" y1="58" x2="330" y2="58" stroke="#7C3AED" stroke-width="2"/>
+          <polygon points="180,54 188,58 180,62" fill="#2563EB"/>
+          <polygon points="330,54 338,58 330,62" fill="#7C3AED"/>
+          <rect x="80" y="130" width="320" height="70" rx="12" fill="#fff" stroke="#059669" stroke-width="2"/>
+          <text x="240" y="158" text-anchor="middle" font-size="12" font-weight="600" fill="#065F46">Mac Mini M4 — kri-managed node</text>
+          <text x="240" y="178" text-anchor="middle" font-size="11" fill="#64748B">Salt minion · otel-mac-agent · llm-mlx role</text>
+          <rect x="80" y="230" width="150" height="60" rx="10" fill="#E8F0FE" stroke="#C5D9FA" stroke-width="1.5"/>
+          <text x="155" y="256" text-anchor="middle" font-size="11" font-weight="700" fill="#3B6FD9">kri RAG</text>
+          <text x="155" y="274" text-anchor="middle" font-size="10" fill="#64748B">Fleet context</text>
+          <rect x="250" y="230" width="150" height="60" rx="10" fill="#F3EDFC" stroke="#D9C8F5" stroke-width="1.5"/>
+          <text x="325" y="256" text-anchor="middle" font-size="11" font-weight="700" fill="#7E5BBE">hydra cluster</text>
+          <text x="325" y="274" text-anchor="middle" font-size="10" fill="#64748B">28× M4 inference</text>
+          <path d="M 240 200 V 230" fill="none" stroke="#059669" stroke-width="1.5"/>
+          <path d="M 155 230 V 210 H 240" fill="none" stroke="#3B6FD9" stroke-width="1.5" stroke-dasharray="4 3"/>
+          <path d="M 325 230 V 210 H 240" fill="none" stroke="#7E5BBE" stroke-width="1.5" stroke-dasharray="4 3"/>
+          <defs><path id="oc1" d="M150,58 L180,58 L300,58 L330,58 L390,58 L390,120 L240,120 L240,200"/></defs>
+          <circle r="4" fill="#F59E0B"><animateMotion dur="2.5s" repeatCount="indefinite"><mpath href="#oc1"/></animateMotion></circle>
+        </svg>
+      </div>
+    </div>
+  </div>
+
+  <!-- SLIDE 11: LLM RCA + Open Code -->
+  <div id="llm-rca" class="step" data-x="14000" data-y="0">
+    <span class="slide-num">11 / 17</span>
+    <div class="badge badge-purple">AI &amp; Automation</div>
+    <h1 class="step-title">LLM RCA + agentic generation</h1>
+    <p class="step-subtitle">Root-cause analysis via RAG over fleet state, drift records, and job history — plus agentic Salt state and Ansible playbook generation with human approval gates.</p>
+    <div class="diagram-wrap">
+      <div class="diagram-label">AI assistant pipeline — RAG + agentic paths</div>
+      <svg viewBox="0 0 1080 220" xmlns="http://www.w3.org/2000/svg">
+        <rect width="1080" height="220" fill="var(--bg)"/>
+        <rect x="30" y="70" width="130" height="80" rx="10" fill="#fff" stroke="#7C3AED" stroke-width="2"/>
+        <text x="95" y="102" text-anchor="middle" font-size="12" font-weight="600" fill="#5B21B6">User Query</text>
+        <text x="95" y="124" text-anchor="middle" font-size="12" fill="#7C3AED">"Why Did Node X Drift?"</text>
+        <rect x="200" y="70" width="150" height="80" rx="10" fill="#EDE9FE" stroke="#7C3AED"/>
+        <text x="275" y="102" text-anchor="middle" font-size="12" font-weight="600" fill="#5B21B6">Intent Classifier</text>
+        <text x="275" y="124" text-anchor="middle" font-size="12" fill="#6D28D9">Query · State · Playbook</text>
+        <rect x="390" y="70" width="150" height="80" rx="10" fill="#F3EDFC" stroke="#D9C8F5" stroke-width="2"/>
+        <text x="465" y="102" text-anchor="middle" font-size="13" font-weight="700" fill="#6B4FA0">pgvector RAG</text>
+        <text x="465" y="124" text-anchor="middle" font-size="12" fill="#8B7AAB">BM25 + Vector + RRF</text>
+        <circle cx="465" cy="130" r="6" fill="#444CE7">
+          <animate attributeName="r" values="6;14;6" dur="2s" repeatCount="indefinite"/>
+          <animate attributeName="opacity" values="0.8;0;0.8" dur="2s" repeatCount="indefinite"/>
+        </circle>
+        <rect x="580" y="70" width="150" height="80" rx="10" fill="#EFF6FF" stroke="#2563EB"/>
+        <text x="655" y="102" text-anchor="middle" font-size="12" font-weight="600" fill="#1D4ED8">Context Assembly</text>
+        <text x="655" y="124" text-anchor="middle" font-size="12" fill="#2563EB">Drift · Jobs · Grains</text>
+        <rect x="770" y="70" width="130" height="80" rx="10" fill="#fff" stroke="#059669" stroke-width="2"/>
+        <text x="835" y="102" text-anchor="middle" font-size="12" font-weight="600" fill="#065F46">LLM</text>
+        <text x="835" y="124" text-anchor="middle" font-size="12" fill="#059669">RCA or Codegen</text>
+        <rect x="940" y="70" width="110" height="80" rx="10" fill="#F0FDF4" stroke="#059669"/>
+        <text x="995" y="102" text-anchor="middle" font-size="12" font-weight="600" fill="#065F46">Output</text>
+        <text x="995" y="124" text-anchor="middle" font-size="12" fill="#059669">Cited RCA / Draft</text>
+        <line x1="160" y1="110" x2="200" y2="110" stroke="#7C3AED" stroke-width="2"/>
+        <line x1="350" y1="110" x2="390" y2="110" stroke="#444CE7" stroke-width="2"/>
+        <line x1="540" y1="110" x2="580" y2="110" stroke="#2563EB" stroke-width="2"/>
+        <line x1="730" y1="110" x2="770" y2="110" stroke="#059669" stroke-width="2"/>
+        <line x1="900" y1="110" x2="940" y2="110" stroke="#059669" stroke-width="2"/>
+        <defs>
+          <path id="ai1" d="M160,110 L200,110 L350,110 L390,110"/>
+          <path id="ai2" d="M540,110 L580,110 L730,110 L770,110 L900,110 L940,110"/>
+        </defs>
+        <circle r="4" fill="#7C3AED"><animateMotion dur="2s" repeatCount="indefinite"><mpath href="#ai1"/></animateMotion></circle>
+        <circle r="4" fill="#059669"><animateMotion dur="2s" repeatCount="indefinite" begin="0.8s"><mpath href="#ai2"/></animateMotion></circle>
+        <text x="540" y="195" text-anchor="middle" font-size="12" fill="var(--text-muted)">RCA: Fleet State + Drift + Job History · Agentic: Salt States &amp; Ansible Playbooks with Approval Gates</text>
+      </svg>
+    </div>
+    <div class="grid-2" style="margin-top:14px">
+      <div class="feature-card">
+        <h3>LLM RCA (kri + hydra)</h3>
+        <p>RAG over nodes, playbooks, salt states, drift records, and job history. Hydra Opik traces inference latency; kri cites fleet provenance.</p>
+      </div>
+      <div class="feature-card">
+        <h3>LLM RCA (pulse — separate project)</h3>
+        <p>Jenkins <code>llm-analysis.sh</code> on build failure — queries SGLang / llmd endpoints, ranks models, embeds analysis in failure email. Independent of kri+hydra stack.</p>
+      </div>
+      <div class="feature-card" style="grid-column: span 2">
+        <h3>Agentic Open Code</h3>
+        <p>LLM proposes Salt states and Ansible playbooks. Untrusted actor model: denylist → dry-run → operator confirm → admin approval before any WRITE executes.</p>
+      </div>
+    </div>
+    <a class="ref-link" href="../rag-llm-agentic-architecture.html" target="_blank"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align: middle; margin-right: 6px; margin-bottom: 2px"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>Full RAG + Agentic LLM architecture with animated diagrams</a>
+  </div>
+
+  <!-- SLIDE 12: Accomplished — kri + hydra -->
+  <div id="accomplished-unified" class="step" data-x="15400" data-y="0" data-rotate-y="5">
+    <span class="slide-num">12 / 17</span>
+    <div class="badge badge-purple">Accomplished</div>
+    <h1 class="step-title">What we've shipped — kri + hydra</h1>
+    <p class="step-subtitle">Project A milestones — fleet platform and LLM inference moving together.</p>
+    <div class="accomplish-grid">
+      <div class="accomplish-item accomplish-kri">
+        <h4>RAG pipeline live</h4>
+        <p>pgvector hybrid retrieval (BM25 + vector + RRF) over nodes, playbooks, salt states, and drift records.</p>
+      </div>
+      <div class="accomplish-item accomplish-kri">
+        <h4>Drift + compliance stack</h4>
+        <p>Per-key drift scoring, TimescaleDB time-series, SBOM/Trivy pipeline, license policy, macOS config profiles.</p>
+      </div>
+      <div class="accomplish-item accomplish-kri">
+        <h4>Fleet operations UI</h4>
+        <p>One-click bootstrap, SSH terminal, VNC, process manager, group ops — macOS and Linux.</p>
+      </div>
+      <div class="accomplish-item accomplish-kri">
+        <h4>Platform hardening</h4>
+        <p>Salt-api FD exhaustion fix, masters badge from config, exec demo deck, agentic transformation epic docs.</p>
+      </div>
+      <div class="accomplish-item accomplish-hydra">
+        <h4>28× M4 cluster reaudit</h4>
+        <p>10GbE + RDMA topology, zero-internet air-gap design, model registry with offline JFrog path.</p>
+      </div>
+      <div class="accomplish-item accomplish-hydra">
+        <h4>Monitoring + automation roles</h4>
+        <p>otel-mac-agent, jenkins-ios-agent Ansible roles, animated architecture SVG, 50+ alert rules.</p>
+      </div>
+      <div class="accomplish-item accomplish-hydra">
+        <h4>LLM engine integration</h4>
+        <p>SGLang, llmd, vLLM-MLX, MLX, LiteLLM, Opik tracing — multi-pool cluster (Fast/Reason/Vision/Embed).</p>
+      </div>
+      <div class="accomplish-item accomplish-hydra">
+        <h4>MLX cluster automation plan</h4>
+        <p>vllm-mlx production path, OOM guardrails, Salt crash reactor, JFrog wheel pipeline documented.</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- SLIDE 13: Accomplished — pulse -->
+  <div id="accomplished-pulse" class="step" data-x="16800" data-y="0">
+    <span class="slide-num">13 / 17</span>
+    <div class="badge badge-teal">Accomplished</div>
+    <h1 class="step-title">What we've shipped — pulse</h1>
+    <p class="step-subtitle">Project B — independent CI/CD on k0s cluster <em>cylon</em>.</p>
+    <div class="accomplish-grid">
+      <div class="accomplish-item accomplish-pulse">
+        <h4>Jenkins on Kubernetes</h4>
+        <p>Controller + Android container agent + iOS static JNLP agent via Tailscale on Mac Mini M2.</p>
+      </div>
+      <div class="accomplish-item accomplish-pulse">
+        <h4>Android pipeline</h4>
+        <p>Checkout → Build → SAST (Semgrep) → SCA → License compliance → SonarQube → Nexus/JFrog upload.</p>
+      </div>
+      <div class="accomplish-item accomplish-pulse">
+        <h4>LLM failure analysis</h4>
+        <p><code>llm-analysis.sh</code> queries SGLang / llmd endpoints on failure, ranks models, embeds RCA in email.</p>
+      </div>
+      <div class="accomplish-item accomplish-pulse">
+        <h4>iOS agent provisioning</h4>
+        <p>Headless HOME fix, openssl smime (no keychain), Python 3.9 typing compat for agent setup.</p>
+      </div>
+      <div class="accomplish-item accomplish-pulse">
+        <h4>Mac Mini build optimization</h4>
+        <p><code>optimize_build_mac.sh</code> — tuning script for iOS build Mac Minis (latest pull).</p>
+      </div>
+      <div class="accomplish-item accomplish-pulse">
+        <h4>Supporting services</h4>
+        <p>Nexus, SonarQube, JFrog Artifactory, Postfix SMTP, PostgreSQL — all on utilities namespace.</p>
+      </div>
+      <div class="accomplish-item accomplish-pulse">
+        <h4>Disk management</h4>
+        <p>Daily cleanup CronJob at 02:00 UTC, auto-removes disk-pressure taint on nodes.</p>
+      </div>
+      <div class="accomplish-item accomplish-pulse">
+        <h4>Network + security</h4>
+        <p>Calico NetworkPolicy, NodePort ingress for Jenkins JNLP, Mailtrap live SMTP relay.</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- SLIDE 14: Roadmap -->
+  <div id="roadmap" class="step" data-x="18200" data-y="0" data-rotate-y="-5">
+    <span class="slide-num">14 / 17</span>
+    <div class="badge badge-blue">Roadmap</div>
+    <h1 class="step-title">Where we're going</h1>
+    <p class="step-subtitle">Now → Next → Later for both projects.</p>
+    <div class="grid-3">
+      <div class="roadmap-col roadmap-now">
+        <h3>Now</h3>
+        <ul>
+          <li><span class="project-tag tag-unified">kri+hydra</span> RAG + agentic docs live</li>
+          <li><span class="project-tag tag-unified">kri+hydra</span> ARCH-001 step 1: exporter → kri</li>
+          <li><span class="project-tag tag-unified">kri+hydra</span> otel-mac-agent deployed</li>
+          <li><span class="project-tag tag-pulse">pulse</span> iOS agent + optimize_build_mac.sh</li>
+          <li><span class="project-tag tag-pulse">pulse</span> LLM analysis in failure emails</li>
+        </ul>
+      </div>
+      <div class="roadmap-col roadmap-next">
+        <h3>Next</h3>
+        <ul>
+          <li><span class="project-tag tag-unified">kri+hydra</span> MLX cluster automation (vllm-mlx)</li>
+          <li><span class="project-tag tag-unified">kri+hydra</span> Cylon → kri reference Grafana stack</li>
+          <li><span class="project-tag tag-unified">kri+hydra</span> hydra LLM roles → kri registry</li>
+          <li><span class="project-tag tag-unified">kri+hydra</span> Salt crash reactor + OOM guardrails</li>
+          <li><span class="project-tag tag-pulse">pulse</span> Mac agents via kri bootstrap</li>
+        </ul>
+      </div>
+      <div class="roadmap-col roadmap-later">
+        <h3>Later</h3>
+        <ul>
+          <li><span class="project-tag tag-unified">kri+hydra</span> Agentic codegen + token budget</li>
+          <li><span class="project-tag tag-unified">kri+hydra</span> LLM fine-tuning on fleet telemetry</li>
+          <li><span class="project-tag tag-unified">kri+hydra</span> Multi-tenant RBAC · cost per node</li>
+          <li><span class="project-tag tag-pulse">pulse</span> CI consolidation — pulse owns pipeline</li>
+          <li><span class="project-tag tag-pulse">pulse</span> GitHub Actions → Jenkins triggers</li>
+        </ul>
+      </div>
+    </div>
+    <div class="diagram-wrap" style="margin-top:16px">
+      <div class="diagram-label">ARCH-001 migration path — smallest blast radius first</div>
+      <svg viewBox="0 0 1080 100" xmlns="http://www.w3.org/2000/svg">
+        <rect width="1080" height="100" fill="#FAFBFE"/>
+        <rect x="30" y="30" width="180" height="44" rx="10" fill="#E6F7EF" stroke="#B8E6CF" stroke-width="1.5"/>
+        <text x="120" y="58" text-anchor="middle" font-size="12" font-weight="600" fill="#2D8A58">1 Exporter → kri</text>
+        <rect x="240" y="30" width="180" height="44" rx="10" fill="#E8F0FE" stroke="#C5D9FA" stroke-width="1.5"/>
+        <text x="330" y="58" text-anchor="middle" font-size="12" font-weight="600" fill="#3B6FD9">2 Shared Grafana</text>
+        <rect x="450" y="30" width="200" height="44" rx="10" fill="#F3EDFC" stroke="#D9C8F5" stroke-width="1.5"/>
+        <text x="550" y="58" text-anchor="middle" font-size="12" font-weight="600" fill="#7E5BBE">3 pulse → kri agents</text>
+        <rect x="680" y="30" width="180" height="44" rx="10" fill="#FEF3EC" stroke="#F5D0BC" stroke-width="1.5"/>
+        <text x="770" y="58" text-anchor="middle" font-size="12" font-weight="600" fill="#C4785A">4 hydra roles → kri</text>
+        <rect x="890" y="30" width="160" height="44" rx="10" fill="#FEF6E4" stroke="#F5DFA8" stroke-width="1.5"/>
+        <text x="970" y="58" text-anchor="middle" font-size="12" font-weight="600" fill="#B8860B">5 CI consolidate</text>
+        <line x1="210" y1="52" x2="240" y2="52" stroke="#CBD5E1" stroke-width="2"/>
+        <line x1="420" y1="52" x2="450" y2="52" stroke="#CBD5E1" stroke-width="2"/>
+        <line x1="650" y1="52" x2="680" y2="52" stroke="#CBD5E1" stroke-width="2"/>
+        <line x1="860" y1="52" x2="890" y2="52" stroke="#CBD5E1" stroke-width="2"/>
+        <circle r="4" fill="#5B8DEF"><animateMotion dur="3s" repeatCount="indefinite" path="M210,52 L970,52"/></animateMotion></circle>
+      </svg>
+    </div>
+  </div>
+
+  <!-- SLIDE 15: Blockers -->
+  <div id="blockers" class="step" data-x="19600" data-y="0">
+    <span class="slide-num">15 / 17</span>
+    <div class="badge badge-amber">Blockers</div>
+    <h1 class="step-title">What's blocking us</h1>
+    <p class="step-subtitle">Real constraints on heterogeneous Apple Silicon hardware and multi-repo integration.</p>
+    <div class="grid-2">
+      <div>
+        <div class="blocker-card">
+          <h4>Metal OOM on 16 GB M4</h4>
+          <p>MLX prompt cache ~3.8–4 GB exhausts unified memory. <code>mlx_lm.server</code> aborts with Insufficient Memory. Weight ceiling ~9.6 GB (60% rule).</p>
+        </div>
+        <div class="blocker-card">
+          <h4>Air-gap dependency chain</h4>
+          <p>Zero-internet cluster — all Python wheels must flow through on-prem JFrog Artifactory. No public PyPI fallback in production.</p>
+        </div>
+        <div class="blocker-card">
+          <h4>Platform code duplication</h4>
+          <p>Parallel bootstrap, monitoring, and secrets in kri/hydra/pulse until ARCH-001 migration completes. Drift risk across repos.</p>
+        </div>
+      </div>
+      <div>
+        <div class="blocker-card">
+          <h4>vllm-mlx pre-release</h4>
+          <p>Recommended production path is still rc — needs validation on full 28-node cluster before cutover from mlx_lm.server.</p>
+        </div>
+        <div class="blocker-card">
+          <h4>pulse ↔ kri secrets boundary</h4>
+          <p>iOS provisioning profiles need kri secrets API at build time — auth scope (Jenkins agent token → secret-API) undefined.</p>
+        </div>
+        <div class="blocker-card">
+          <h4>Single control-plane SPOF</h4>
+          <p>kri becomes release-cadence bottleneck as platform absorbs hydra roles. Needs stable API + version pinning for tenants.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- SLIDE 16: Support Needed + Budget -->
+  <div id="support" class="step" data-x="21000" data-y="0" data-rotate-y="5">
+    <span class="slide-num">16 / 17</span>
+    <div class="badge badge-green">Support Needed</div>
+    <h1 class="step-title">What we need from leadership</h1>
+    <p class="step-subtitle">Community, recognition, and budget to execute without friction.</p>
+    <div class="grid-2">
+      <div class="status-quad quad-support" style="min-height:280px">
+        <h3>Support Needed</h3>
+        <ul>
+          <li><strong>Blogging on forums</strong> — visibility for the kri+hydra fleet+LLM story</li>
+          <li><strong>OSS = professional accomplishments</strong> — team and personal contributions count</li>
+          <li><strong>Contributor rewards program</strong> — recognize active open-source work</li>
+          <li><strong>Conference + community presence</strong> — talks, demos, forum engagement</li>
+          <li><strong>Neysa Velocis evaluation</strong> — optional GPU offload if Metal stays constrained</li>
+        </ul>
+      </div>
+      <div class="status-quad quad-road" style="min-height:280px;background:linear-gradient(135deg,#E8F0FE 0%,#F3EDFC 100%)">
+        <h3>Budget Ask</h3>
+        <ul>
+          <li><strong>Complete autonomy</strong> — infrastructure, tooling, community investment without micromanagement</li>
+          <li><strong>Experience is not a gate</strong> — merit measured by shipped code, test coverage, fleet outcomes</li>
+          <li><strong>Define the budget</strong> — so kri+hydra cluster and pulse CI scale without ad-hoc approvals</li>
+          <li>Hardware: 28× M4 Mac Minis, 10GbE switching, JFrog license, optional Neysa GPU hours</li>
+          <li>Headcount flexibility — hire on output, not tenure</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <!-- SLIDE 17: Close / Q&A -->
+  <div id="closing" class="step" data-x="22400" data-y="0" data-scale="1.1">
+    <span class="slide-num">17 / 17</span>
+    <div class="badge badge-blue">Next Steps</div>
+    <h1 class="step-title" style="font-size:2.8rem">Ready to see it live?</h1>
+    <p class="step-subtitle" style="font-size:1.2rem">Project A: one Docker Compose stack for kri+hydra. Project B: pulse Jenkins on cylon. Your infrastructure, your data.</p>
+    <div class="grid-2" style="margin-top:24px">
+      <div class="feature-card" style="padding:28px">
+        <h3 style="font-size:1.1rem;margin-bottom:12px">Quick Start</h3>
+        <p style="font-family:monospace;font-size:0.75rem;background:#F1F5F9;padding:14px;border-radius:8px;color:#334155;line-height:1.8">
+          git clone github.com/hellodk/kri<br>
+          cp .env.docker.example .env.docker<br>
+          docker compose -f deploy/docker-compose.yml up -d<br>
+          open http://localhost
+        </p>
+      </div>
+      <div class="feature-card" style="padding:28px">
+        <h3 style="font-size:1.1rem;margin-bottom:12px">Learn More</h3>
+        <p style="margin-bottom:10px"><strong style="color:#7E5BBE">kri + hydra:</strong> <a href="https://github.com/hellodk/kri" style="color:var(--accent);font-weight:600;text-decoration:none">kri</a> · <a href="https://github.com/hellodk/vllm" style="color:var(--accent);font-weight:600;text-decoration:none">hydra</a></p>
+        <p style="margin-bottom:10px"><strong style="color:#C4785A">pulse:</strong> <a href="https://github.com/hellodk/pulse" style="color:var(--accent);font-weight:600;text-decoration:none">pulse</a></p>
+        <p style="margin-bottom:10px"><a href="../index.html" style="color:var(--accent);font-weight:600;text-decoration:none">Engineering docs &amp; articles</a></p>
+        <p style="margin-bottom:10px"><a href="../rag-llm-agentic-architecture.html" style="color:var(--accent);font-weight:600;text-decoration:none">RAG + LLM visual guide</a></p>
+        <p style="margin-bottom:10px"><a href="kri-chat-epic.html" style="color:var(--accent);font-weight:600;text-decoration:none">Agentic transformation epic</a></p>
+        <p><a href="../blog/testing-and-ci-strategy.html" style="color:var(--accent);font-weight:600;text-decoration:none">Blog: Testing &amp; CI strategy</a></p>
+      </div>
+    </div>
+    <p style="margin-top:32px;text-align:center;font-size:1.5rem;font-weight:700;color:var(--accent)">Questions?</p>
+  </div>
+
+  <!-- Overview slide (hidden until O key) -->
+  <div id="overview" class="step" data-x="10500" data-y="1400" data-scale="9" data-transition-duration="1000">
+    <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:6px;width:100%;font-size:0.45rem">
+      <div style="background:#E8F0FE;padding:6px;border-radius:5px;text-align:center;color:#3B6FD9">1 Title</div>
+      <div style="background:#FEF3EC;padding:6px;border-radius:5px;text-align:center;color:#C4785A">2 Projects</div>
+      <div style="background:#F3EDFC;padding:6px;border-radius:5px;text-align:center;color:#7E5BBE">3 kri+hydra</div>
+      <div style="background:#E4F5F3;padding:6px;border-radius:5px;text-align:center;color:#4DB6AC">4 Deploy</div>
+      <div style="background:#E8F0FE;padding:6px;border-radius:5px;text-align:center;color:#3B6FD9">5 Salt</div>
+      <div style="background:#FEF6E4;padding:6px;border-radius:5px;text-align:center;color:#B8860B">6 Drift</div>
+      <div style="background:#E4F5F3;padding:6px;border-radius:5px;text-align:center;color:#4DB6AC">7 Fleet Ops</div>
+      <div style="background:#E6F7EF;padding:6px;border-radius:5px;text-align:center;color:#2D8A58">8 Security</div>
+      <div style="background:#F3EDFC;padding:6px;border-radius:5px;text-align:center;color:#7E5BBE">9 LLM</div>
+      <div style="background:#EDE9FE;padding:6px;border-radius:5px;text-align:center;color:#6B4FA0">10 OpenCode</div>
+      <div style="background:#F3EDFC;padding:6px;border-radius:5px;text-align:center;color:#7E5BBE">11 RCA</div>
+      <div style="background:#E6F7EF;padding:6px;border-radius:5px;text-align:center;color:#2D8A58">12 Done A</div>
+      <div style="background:#FEF3EC;padding:6px;border-radius:5px;text-align:center;color:#C4785A">13 Done B</div>
+      <div style="background:#E8F0FE;padding:6px;border-radius:5px;text-align:center;color:#3B6FD9">14 Roadmap</div>
+      <div style="background:#FEF6E4;padding:6px;border-radius:5px;text-align:center;color:#B8860B">15 Blockers</div>
+      <div style="background:#F3EDFC;padding:6px;border-radius:5px;text-align:center;color:#7E5BBE">16 Support</div>
+      <div style="background:#5B8DEF;color:#fff;padding:6px;border-radius:5px;text-align:center">17 Q&amp;A</div>
+    </div>
+  </div>
+
+</div>
+
+<script src="https://cdn.jsdelivr.net/gh/impress/impress.js@2.0.0/js/impress.js"></script>
+<script>
+  if (document.getElementById('impress')) {
+    impress().init();
+    document.body.classList.remove('impress-not-supported');
+    document.body.classList.add('impress-supported');
+  }
+</script>
+</body>
+</html>

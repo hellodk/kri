@@ -1,3 +1,4 @@
+from fleet_platform.models.agent_session import AgentSession
 from fleet_platform.models.alert import AlertEvent, AlertRule, WebhookConfig
 from fleet_platform.models.ansible_job import AnsibleJob
 from fleet_platform.models.audit import AuditEvent
@@ -37,6 +38,7 @@ from fleet_platform.models.user import User
 __all__ = [
     "Base",
     "TimestampMixin",
+    "AgentSession",
     "User",
     "Node",
     "Tag",

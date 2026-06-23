@@ -2,7 +2,7 @@
 
 Tests:
   - parse_nc_reachability: rc 0 → True; non-zero → False; mixed list.
-  - bootstrap_mac_mini.yml: contains node-side nc -z check over salt_masters
+  - bootstrap_node.yml: contains node-side nc -z check over salt_masters
     and a fail-when-none-reachable guard before the minion-config write.
 """
 
@@ -66,10 +66,10 @@ class TestParseNcReachability:
 
 
 # ---------------------------------------------------------------------------
-# bootstrap_mac_mini.yml source assertions (#536)
+# bootstrap_node.yml source assertions (#536)
 # ---------------------------------------------------------------------------
 
-_PLAYBOOK_PATH = Path(__file__).parents[2] / "playbooks" / "bootstrap_mac_mini.yml"
+_PLAYBOOK_PATH = Path(__file__).parents[2] / "playbooks" / "bootstrap_node.yml"
 
 
 @pytest.fixture(scope="module")
@@ -83,32 +83,32 @@ class TestBootstrapPlaybookNodeVantage:
 
     def test_nc_z_check_present(self, playbook_text: str) -> None:
         """Playbook must contain an nc -z check iterating over salt_masters."""
-        assert "nc -z" in playbook_text, "bootstrap_mac_mini.yml must contain 'nc -z' for node-vantage TCP probe"
+        assert "nc -z" in playbook_text, "bootstrap_node.yml must contain 'nc -z' for node-vantage TCP probe"
 
     def test_nc_loops_over_salt_masters(self, playbook_text: str) -> None:
         """The nc check must loop over the salt_masters variable."""
-        assert "salt_masters" in playbook_text, "bootstrap_mac_mini.yml must reference 'salt_masters' for the nc loop"
+        assert "salt_masters" in playbook_text, "bootstrap_node.yml must reference 'salt_masters' for the nc loop"
         # The loop + nc should both appear together (not just incidentally)
         assert "loop:" in playbook_text or "with_items:" in playbook_text, (
-            "bootstrap_mac_mini.yml must use a loop construct for the nc checks"
+            "bootstrap_node.yml must use a loop construct for the nc checks"
         )
 
     def test_nc_checks_port_4505(self, playbook_text: str) -> None:
-        assert "4505" in playbook_text, "bootstrap_mac_mini.yml must probe port 4505 (Salt publish)"
+        assert "4505" in playbook_text, "bootstrap_node.yml must probe port 4505 (Salt publish)"
 
     def test_nc_checks_port_4506(self, playbook_text: str) -> None:
-        assert "4506" in playbook_text, "bootstrap_mac_mini.yml must probe port 4506 (Salt return)"
+        assert "4506" in playbook_text, "bootstrap_node.yml must probe port 4506 (Salt return)"
 
     def test_fail_when_none_reachable_guard_present(self, playbook_text: str) -> None:
         """Playbook must fail the play if no master is reachable."""
         assert "fail:" in playbook_text or "ansible.builtin.fail:" in playbook_text, (
-            "bootstrap_mac_mini.yml must have a 'fail:' task when no master is reachable"
+            "bootstrap_node.yml must have a 'fail:' task when no master is reachable"
         )
 
     def test_fail_guard_message_mentions_network_firewall(self, playbook_text: str) -> None:
         """The failure message must mention network/firewall to aid diagnosis."""
         assert "network" in playbook_text.lower() or "firewall" in playbook_text.lower(), (
-            "bootstrap_mac_mini.yml fail task must mention 'network' or 'firewall'"
+            "bootstrap_node.yml fail task must mention 'network' or 'firewall'"
         )
 
     def test_nc_check_appears_before_minion_config_write(self, playbook_text: str) -> None:

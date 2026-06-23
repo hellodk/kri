@@ -31,7 +31,7 @@ class SaltMaster(Base, TimestampMixin):
     ret_port: Mapped[int] = mapped_column(Integer, nullable=False, default=4506)
 
     # SSoT api_url fields (#562): api_url is DERIVED from these — never store free-text api_url.
-    salt_api_port: Mapped[int] = mapped_column(Integer, nullable=False, default=8080)
+    salt_api_port: Mapped[int] = mapped_column(Integer, nullable=False, default=4507)
     use_tls: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
 
     # Control mode: 'salt_api' | 'cli' | etc. — not user-editable (server default)

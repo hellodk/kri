@@ -4,6 +4,7 @@ Covers the DB-driven refactor: task reads connection details from the default
 enabled SaltMaster row instead of env vars.
 """
 
+import uuid
 from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
@@ -52,6 +53,8 @@ def test_runner_call_parses_dict_response():
 
 def _make_master(**kwargs) -> SimpleNamespace:
     defaults = dict(
+        id=uuid.uuid4(),
+        name="mm",
         api_url="https://salt.local:8080",
         api_user="saltadmin",
         api_eauth="pam",
@@ -64,10 +67,10 @@ def _make_master(**kwargs) -> SimpleNamespace:
     return SimpleNamespace(**defaults)
 
 
-def _make_db_with_master(master):
-    """Return a context-manager mock whose execute() yields the given master (or None)."""
+def _make_db_with_masters(masters):
+    """Return a context-manager mock whose execute() yields the given master list."""
     scalar = MagicMock()
-    scalar.scalar_one_or_none.return_value = master
+    scalar.scalars.return_value.all.return_value = list(masters)
     execute_mock = MagicMock(return_value=scalar)
     db = MagicMock()
     db.execute = execute_mock
@@ -80,23 +83,23 @@ def _make_db_with_master(master):
 
 
 def test_sync_presence_skips_when_no_master():
-    """Returns 'skipped' when no default enabled master is in the DB."""
+    """Returns 'skipped' when no enabled master is in the DB."""
     import fleet_platform.workers.salt_presence_tasks as mod
 
-    ctx = _make_db_with_master(None)
+    ctx = _make_db_with_masters([])
     with patch("fleet_platform.workers.salt_presence_tasks.get_sync_db", return_value=ctx):
         result = mod.sync_minion_presence()
 
     assert result["status"] == "skipped"
-    assert "no default enabled" in result["reason"]
+    assert "no enabled salt master" in result["reason"]
 
 
 def test_sync_presence_skips_when_api_url_missing():
-    """Returns 'skipped' when the master row has no api_url."""
+    """Returns 'skipped' when no enabled master has api_url configured."""
     import fleet_platform.workers.salt_presence_tasks as mod
 
-    master = _make_master(api_url="", api_user="admin")
-    ctx = _make_db_with_master(master)
+    master = _make_master(name="mm", api_url="", api_user="admin")
+    ctx = _make_db_with_masters([master])
     with patch("fleet_platform.workers.salt_presence_tasks.get_sync_db", return_value=ctx):
         result = mod.sync_minion_presence()
 
@@ -105,11 +108,11 @@ def test_sync_presence_skips_when_api_url_missing():
 
 
 def test_sync_presence_skips_when_api_user_missing():
-    """Returns 'skipped' when the master row has no api_user."""
+    """Returns 'skipped' when no enabled master has api_user configured."""
     import fleet_platform.workers.salt_presence_tasks as mod
 
-    master = _make_master(api_user="")
-    ctx = _make_db_with_master(master)
+    master = _make_master(name="mm", api_user="")
+    ctx = _make_db_with_masters([master])
     with patch("fleet_platform.workers.salt_presence_tasks.get_sync_db", return_value=ctx):
         result = mod.sync_minion_presence()
 
@@ -128,14 +131,14 @@ def test_sync_presence_marks_nodes_online():
 
     master = _make_master()
 
-    # First DB call returns the master; second returns matching nodes.
+    # First DB call returns the enabled masters; second returns matching nodes.
     node_a = MagicMock()
     node_a.minion_id = "mm1"
     node_a.maintenance_mode = False
 
     # Build two separate DB context mocks for the two get_sync_db() calls.
     scalar_master = MagicMock()
-    scalar_master.scalar_one_or_none.return_value = master
+    scalar_master.scalars.return_value.all.return_value = [master]
     db_master = MagicMock()
     db_master.execute.return_value = scalar_master
     ctx_master = MagicMock()
@@ -179,7 +182,7 @@ def test_sync_presence_skips_maintenance_mode_nodes():
     node_m.maintenance_mode = True
 
     scalar_master = MagicMock()
-    scalar_master.scalar_one_or_none.return_value = master
+    scalar_master.scalars.return_value.all.return_value = [master]
     db_master = MagicMock()
     db_master.execute.return_value = scalar_master
     ctx_master = MagicMock()
@@ -210,6 +213,223 @@ def test_sync_presence_skips_maintenance_mode_nodes():
     assert result["online"] == 0
     # status must NOT have been set online
     assert node_m.status != "online"
+
+
+# ---------------------------------------------------------------------------
+# sync_minion_presence — multi-master union (#689)
+# ---------------------------------------------------------------------------
+
+
+def _ctx_factory_two_phase(masters, nodes):
+    """Build a get_sync_db side_effect: 1st call yields masters, 2nd yields nodes."""
+    scalar_master = MagicMock()
+    scalar_master.scalars.return_value.all.return_value = list(masters)
+    db_master = MagicMock()
+    db_master.execute.return_value = scalar_master
+    ctx_master = MagicMock()
+    ctx_master.__enter__ = MagicMock(return_value=db_master)
+    ctx_master.__exit__ = MagicMock(return_value=False)
+
+    scalar_nodes = MagicMock()
+    scalar_nodes.scalars.return_value.all.return_value = list(nodes)
+    db_nodes = MagicMock()
+    db_nodes.execute.return_value = scalar_nodes
+    ctx_nodes = MagicMock()
+    ctx_nodes.__enter__ = MagicMock(return_value=db_nodes)
+    ctx_nodes.__exit__ = MagicMock(return_value=False)
+
+    state = {"n": 0}
+
+    def factory():
+        state["n"] += 1
+        return ctx_master if state["n"] == 1 else ctx_nodes
+
+    return factory
+
+
+def test_sync_presence_unions_across_masters():
+    """A minion up on the NON-default master refreshes its node (#689)."""
+    import fleet_platform.workers.salt_presence_tasks as mod
+
+    mm = _make_master(name="mm", is_default=True)
+    cylon = _make_master(name="cylon", is_default=False, api_url="https://cylon.local:8080")
+
+    # node lives on cylon (the non-default master)
+    node = MagicMock()
+    node.minion_id = "node-on-cylon"
+    node.maintenance_mode = False
+
+    # mm reports nobody; cylon reports the node.
+    def runner_side_effect(api_url, *args, **kwargs):
+        return ["node-on-cylon"] if "cylon" in api_url else []
+
+    with (
+        patch(
+            "fleet_platform.workers.salt_presence_tasks.get_sync_db",
+            side_effect=_ctx_factory_two_phase([mm, cylon], [node]),
+        ),
+        patch("fleet_platform.workers.salt_presence_tasks._runner_call", side_effect=runner_side_effect),
+    ):
+        result = mod.sync_minion_presence()
+
+    assert result["status"] == "ok"
+    assert result["online"] == 1
+    assert result["masters"] == 2
+    assert node.status == "online"
+    assert node.last_seen_at is not None
+
+
+def test_sync_presence_one_master_unreachable_other_works():
+    """One unreachable master must not abort the sweep — the reachable one still syncs."""
+    import fleet_platform.workers.salt_presence_tasks as mod
+
+    mm = _make_master(name="mm", is_default=True)
+    cylon = _make_master(name="cylon", is_default=False, api_url="https://cylon.local:8080")
+
+    node = MagicMock()
+    node.minion_id = "mm1"
+    node.maintenance_mode = False
+
+    # mm unreachable (None); cylon reachable with mm1.
+    def runner_side_effect(api_url, *args, **kwargs):
+        return None if "salt.local" in api_url else ["mm1"]
+
+    with (
+        patch(
+            "fleet_platform.workers.salt_presence_tasks.get_sync_db",
+            side_effect=_ctx_factory_two_phase([mm, cylon], [node]),
+        ),
+        patch("fleet_platform.workers.salt_presence_tasks._runner_call", side_effect=runner_side_effect),
+    ):
+        result = mod.sync_minion_presence()
+
+    assert result["status"] == "ok"
+    assert result["online"] == 1
+    assert result["masters"] == 1  # only one master was reachable
+    assert node.status == "online"
+
+
+def test_sync_presence_error_when_all_masters_unreachable():
+    """status=error when no enabled master is reachable (fleet-wide signal preserved)."""
+    import fleet_platform.workers.salt_presence_tasks as mod
+
+    mm = _make_master(name="mm", is_default=True)
+    cylon = _make_master(name="cylon", is_default=False, api_url="https://cylon.local:8080")
+
+    ctx = _make_db_with_masters([mm, cylon])
+    with (
+        patch("fleet_platform.workers.salt_presence_tasks.get_sync_db", return_value=ctx),
+        patch("fleet_platform.workers.salt_presence_tasks._runner_call", return_value=None),
+    ):
+        result = mod.sync_minion_presence()
+
+    assert result["status"] == "error"
+    assert "reachable" in result["reason"]
+
+
+# ---------------------------------------------------------------------------
+# sync_minion_presence — master attribution / reassignment (#707)
+# ---------------------------------------------------------------------------
+
+
+def _make_node(minion_id: str, salt_master_id=None) -> SimpleNamespace:
+    return SimpleNamespace(
+        minion_id=minion_id,
+        maintenance_mode=False,
+        status="unknown",
+        last_seen_at=None,
+        salt_master_id=salt_master_id,
+    )
+
+
+def test_sync_presence_reassigns_stale_master():
+    """A node pinned to a master that no longer reports it is repointed to the
+    master that actually does (#707 — fixes the migration-041 backfill pin)."""
+    import fleet_platform.workers.salt_presence_tasks as mod
+
+    mm = _make_master(name="mm", is_default=True)
+    cylon = _make_master(name="cylon", is_default=False, api_url="https://cylon.local:8080")
+
+    # node is wrongly pinned to cylon but only mm reports it.
+    node = _make_node("mm", salt_master_id=cylon.id)
+
+    def runner_side_effect(api_url, *args, **kwargs):
+        return ["mm"] if "salt.local" in api_url else []
+
+    with (
+        patch(
+            "fleet_platform.workers.salt_presence_tasks.get_sync_db",
+            side_effect=_ctx_factory_two_phase([mm, cylon], [node]),
+        ),
+        patch("fleet_platform.workers.salt_presence_tasks._runner_call", side_effect=runner_side_effect),
+    ):
+        result = mod.sync_minion_presence()
+
+    assert result["status"] == "ok"
+    assert result["reassigned"] == 1
+    assert node.salt_master_id == mm.id
+
+
+def test_sync_presence_keeps_correct_master():
+    """A node already assigned to a master that reports it is left untouched."""
+    import fleet_platform.workers.salt_presence_tasks as mod
+
+    mm = _make_master(name="mm", is_default=True)
+    node = _make_node("mm", salt_master_id=mm.id)
+
+    with (
+        patch(
+            "fleet_platform.workers.salt_presence_tasks.get_sync_db",
+            side_effect=_ctx_factory_two_phase([mm], [node]),
+        ),
+        patch("fleet_platform.workers.salt_presence_tasks._runner_call", return_value=["mm"]),
+    ):
+        result = mod.sync_minion_presence()
+
+    assert result["status"] == "ok"
+    assert result["reassigned"] == 0
+    assert node.salt_master_id == mm.id
+
+
+def test_sync_presence_assigns_unlinked_node():
+    """A node with no master gets linked to the reporting master."""
+    import fleet_platform.workers.salt_presence_tasks as mod
+
+    mm = _make_master(name="mm", is_default=True)
+    node = _make_node("mm", salt_master_id=None)
+
+    with (
+        patch(
+            "fleet_platform.workers.salt_presence_tasks.get_sync_db",
+            side_effect=_ctx_factory_two_phase([mm], [node]),
+        ),
+        patch("fleet_platform.workers.salt_presence_tasks._runner_call", return_value=["mm"]),
+    ):
+        result = mod.sync_minion_presence()
+
+    assert result["reassigned"] == 1
+    assert node.salt_master_id == mm.id
+
+
+def test_sync_presence_prefers_default_master_when_multiple_report():
+    """When several masters report the same minion, the default master wins."""
+    import fleet_platform.workers.salt_presence_tasks as mod
+
+    mm = _make_master(name="mm", is_default=True)
+    cylon = _make_master(name="cylon", is_default=False, api_url="https://cylon.local:8080")
+    node = _make_node("shared", salt_master_id=None)
+
+    with (
+        patch(
+            "fleet_platform.workers.salt_presence_tasks.get_sync_db",
+            side_effect=_ctx_factory_two_phase([mm, cylon], [node]),
+        ),
+        patch("fleet_platform.workers.salt_presence_tasks._runner_call", return_value=["shared"]),
+    ):
+        result = mod.sync_minion_presence()
+
+    assert result["reassigned"] == 1
+    assert node.salt_master_id == mm.id  # default preferred over cylon
 
 
 # ---------------------------------------------------------------------------

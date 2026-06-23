@@ -76,7 +76,7 @@
     - name: Remind to update minion master addresses
       debug:
         msg: |
-          Minion configs (bootstrap_mac_mini.yml) already set salt_master_address.
+          Minion configs (bootstrap_node.yml) already set salt_master_address.
           Update playbooks/group_vars/all.yml:
             salt_master_address: "100.102.68.75"
           Then re-run bootstrap or update /etc/salt/minion on each node.

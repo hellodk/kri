@@ -316,14 +316,21 @@ async def set_setting(db: AsyncSession, key: str, value: str, encrypt: bool = Fa
     await db.commit()
 
 
-# Map from env-var name → (setting_key, is_encrypted)
+# Map from env-var name → setting_key.
 # Only non-secret settings belong here — secrets must be set via the UI.
+# Anything listed here is restored from the environment on startup whenever its
+# DB row is missing (e.g. after a DB wipe / fresh deploy), so it does not silently
+# revert to a default. Existing DB values always win (see seed_settings_from_env).
 _ENV_DEFAULTS: list[tuple[str, str]] = [
     ("KRI_API_URL", KRI_API_URL),
     ("SALT_MASTER_ADDRESS", SALT_MASTER),
     ("PLAYBOOKS_DIR", PLAYBOOKS_DIR),
     ("PILLAR_DIR", PILLAR_DIR),
     ("SSH_BOOTSTRAP_USERNAME", SSH_USERNAME),
+    # RAG / LLM settings — kept here so the embedding endpoint survives redeploys
+    # and DB resets instead of defaulting to empty every time (#embed-persist).
+    ("LLM_EMBED_BASE_URL", LLM_EMBED_BASE_URL),
+    ("LLM_INCLUDE_NODE_IPS", LLM_INCLUDE_NODE_IPS),
 ]
 
 

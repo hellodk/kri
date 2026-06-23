@@ -350,7 +350,7 @@ export function PlaybooksPage() {
             <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 text-sm select-none">⌕</span>
             <input
               type="search"
-              placeholder="Search playbooks and roles… (fuzzy: type 'bsmc' to match 'bootstrap_mac_mini')"
+              placeholder="Search playbooks and roles… (fuzzy: type 'bsn' to match 'bootstrap_node')"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               className="w-full pl-8 pr-4 py-2.5 bg-white border border-gray-200 rounded-xl text-sm text-gray-900 placeholder-gray-400 shadow-sm focus:outline-none focus:border-brand-500 focus:ring-1 focus:ring-brand-500 transition-colors"

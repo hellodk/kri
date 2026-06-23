@@ -193,7 +193,7 @@ def bootstrap_node(
     ssh_username: str | None = None,
     salt_master_ids: list[str] | None = None,
 ) -> dict:
-    """Run bootstrap_mac_mini.yml against a single Mac Mini.
+    """Run bootstrap_node.yml against a fleet node (macOS or Linux).
 
     salt_master_ids — optional list of SaltMaster UUIDs to use for this bootstrap.
     When None (default), all *enabled* SaltMaster rows are used (HA failover).
@@ -441,7 +441,7 @@ def bootstrap_node(
 
             thread, runner = ansible_runner.run_async(
                 private_data_dir=tmpdir,
-                playbook=str(_PLAYBOOKS_DIR / "bootstrap_mac_mini.yml"),
+                playbook=str(_PLAYBOOKS_DIR / "bootstrap_node.yml"),
                 inventory=str(inv_path),
                 extravars={
                     # Multi-master HA list (#534): playbook renders master: [list] + failover settings.
@@ -514,10 +514,10 @@ def bootstrap_node(
                 f"Timed out after 10 minutes. Last task: {last_task}" if last_task else "Timed out after 10 minutes."
             )
         elif final_status != "successful" or runner.rc != 0:
-            if "UNREACHABLE" in full_stdout:
-                bootstrap_error = f"SSH unreachable: check IP {target_ip} and SSH credentials in Settings"
-            elif "Authentication failure" in full_stdout or "Permission denied" in full_stdout:
+            if "Authentication failure" in full_stdout or "Permission denied" in full_stdout:
                 bootstrap_error = "SSH auth failed: check SSH username/password in Settings → Bootstrap"
+            elif "UNREACHABLE" in full_stdout:
+                bootstrap_error = f"SSH unreachable: check IP {target_ip} and SSH credentials in Settings"
             elif "No such file or directory" in full_stdout and "salt" in full_stdout:
                 bootstrap_error = "Salt package not found on target node"
             elif "Could not match supplied host pattern" in full_stdout:
@@ -651,6 +651,161 @@ def bootstrap_node(
     return {"status": runner.status if runner is not None else "error", "rc": rc_display, "node_id": node_id}
 
 
+def _resolve_node_master_creds(db, node) -> dict | None:
+    """Resolve salt-api creds for the node's master (or the default master).
+
+    Returns {api_url, api_user, api_password, api_eauth, tls_verify} or None
+    when no enabled master is configured. Used by collect_node_grains to fetch
+    grains over salt-api instead of SSH (#708).
+    """
+    from fleet_platform.services.platform_settings_svc import decrypt_secret
+
+    master = None
+    if node.salt_master_id is not None:
+        master = db.execute(
+            select(SaltMaster).where(SaltMaster.id == node.salt_master_id).where(SaltMaster.enabled.is_(True))
+        ).scalar_one_or_none()
+    if master is None:
+        master = db.execute(
+            select(SaltMaster).where(SaltMaster.is_default.is_(True)).where(SaltMaster.enabled.is_(True)).limit(1)
+        ).scalar_one_or_none()
+    if master is None:
+        master = db.execute(select(SaltMaster).where(SaltMaster.enabled.is_(True)).limit(1)).scalar_one_or_none()
+    if master is None:
+        return None
+
+    api_password = ""
+    if master.api_password_enc:
+        try:
+            api_password = decrypt_secret(master.api_password_enc)
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("collect_node_grains: cannot decrypt api_password for master %s: %s", master.name, exc)
+    return {
+        "api_url": (master.api_url or "").rstrip("/"),
+        "api_user": master.api_user or "",
+        "api_password": api_password,
+        "api_eauth": master.api_eauth or "pam",
+        "tls_verify": bool(getattr(master, "tls_verify", False)),
+    }
+
+
+def _grains_via_salt_api(creds: dict, minion_id: str, timeout: int = 30) -> tuple[dict | None, str | None]:
+    """Fetch grains.items for one minion via the salt-api local client (#708).
+
+    The master already manages the minion, so no SSH and no controller key are
+    needed. Returns (grains, None) on success, or (None, reason) when the call
+    fails or the minion is not currently connected to its master.
+    """
+    import requests
+
+    api_url = creds.get("api_url") or ""
+    if not api_url or not creds.get("api_user"):
+        return None, "master api_url/api_user not configured"
+    try:
+        resp = requests.post(
+            f"{api_url}/run",
+            json={
+                "client": "local",
+                "tgt": minion_id,
+                "tgt_type": "glob",
+                "fun": "grains.items",
+                "username": creds["api_user"],
+                "password": creds.get("api_password", ""),
+                "eauth": creds.get("api_eauth", "pam"),
+            },
+            timeout=timeout,
+            verify=creds.get("tls_verify", False),
+        )
+        resp.raise_for_status()
+        ret = resp.json().get("return", [{}])
+        inner = ret[0] if isinstance(ret, list) and ret else {}
+        if not isinstance(inner, dict):
+            return None, "unexpected salt-api response shape"
+        grains = inner.get(minion_id)
+        if isinstance(grains, dict) and grains:
+            return grains, None
+        # Empty return = minion offline / key not accepted / not on this master.
+        return None, "minion not connected to master (empty grains.items)"
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("collect_node_grains: salt-api grains.items failed for %s: %s", minion_id, exc)
+        return None, str(exc)[:200]
+
+
+def _grains_via_ssh(target_ip, ssh_user, minion_id, ssh_host_key) -> tuple[dict | None, str | None]:
+    """Legacy fallback: SSH in via the controller key and run salt-call --local.
+
+    Only used when the minion can't be reached through its master (e.g. key not
+    yet accepted). Requires ~/.kri/id_rsa to be readable by the worker process.
+    """
+    import json as _json
+    import os as _os2
+
+    controller_priv = Path.home() / ".kri" / "id_rsa"
+    with tempfile.TemporaryDirectory(prefix="kri-grains-") as tmpdir:
+        if not controller_priv.exists():
+            return None, "no controller key present (~/.kri/id_rsa)"
+        tmp_key = Path(tmpdir) / "id_ctrl"
+        try:
+            tmp_key.write_bytes(controller_priv.read_bytes())
+        except OSError as exc:
+            return None, f"controller key unreadable by worker: {exc}"
+        tmp_key.chmod(0o600)
+        key_file_path = str(tmp_key)
+
+        # TOFU: use node's stored host key for strict verification if available.
+        grains_known_hosts_file: str | None = None
+        if ssh_host_key:
+            tmp_kh2 = tempfile.NamedTemporaryFile(mode="w", suffix=".known_hosts", delete=False)
+            tmp_kh2.write(f"{target_ip} {ssh_host_key}\n")
+            tmp_kh2.close()
+            grains_known_hosts_file = tmp_kh2.name
+            grains_strict_opts = [
+                "-o",
+                "StrictHostKeyChecking=yes",
+                "-o",
+                f"UserKnownHostsFile={grains_known_hosts_file}",
+            ]
+        else:
+            grains_strict_opts = ["-o", "StrictHostKeyChecking=accept-new"]
+
+        ssh_cmd = [
+            "ssh",
+            "-F",
+            "/dev/null",  # skip mounted ~/.ssh/config (UID mismatch in container)
+            *grains_strict_opts,
+            "-o",
+            "ConnectTimeout=15",
+            "-o",
+            "BatchMode=yes",
+            "-i",
+            key_file_path,
+            f"{ssh_user}@{target_ip}",
+            (
+                "sudo /opt/homebrew/bin/salt-call --local grains.items --out=json --log-level=warning 2>/dev/null"
+                " || sudo /usr/local/bin/salt-call --local grains.items --out=json --log-level=warning 2>/dev/null"
+            ),
+        ]
+        try:
+            proc = subprocess.run(ssh_cmd, capture_output=True, text=True, timeout=30)
+            if proc.returncode != 0:
+                return None, f"ssh failed: {proc.stderr[:200]}"
+            parsed = _json.loads(proc.stdout.strip())
+            grains = parsed.get("local", parsed)
+            if isinstance(grains, dict) and grains:
+                return grains, None
+            return None, "empty grains from salt-call"
+        except subprocess.TimeoutExpired:
+            return None, "ssh timeout"
+        except Exception as e:  # noqa: BLE001
+            return None, str(e)[:200]
+        finally:
+            if grains_known_hosts_file:
+                try:
+                    _os2.unlink(grains_known_hosts_file)
+                except OSError:
+                    pass
+
+
 @celery_app.task(
     name="fleet_platform.workers.ansible_tasks.collect_node_grains",
     bind=True,
@@ -658,9 +813,15 @@ def bootstrap_node(
     queue="maintenance",
 )
 def collect_node_grains(self, node_id: str) -> dict:
-    """SSH into node via controller key, run salt-call grains, push to ingest API."""
+    """Collect a node's grains and push them to the ingest API.
+
+    Primary path (#708): fetch grains over salt-api (``grains.items`` via the
+    local client) using the node's master — no SSH and no controller key, so it
+    works for every connected minion regardless of the worker container's uid.
+    Falls back to SSH ``salt-call --local`` only when the minion can't be
+    reached through its master (e.g. key not yet accepted).
+    """
     import json as _json
-    import subprocess
 
     node_uuid = _uuid.UUID(node_id)
     with get_sync_db() as db:
@@ -669,10 +830,12 @@ def collect_node_grains(self, node_id: str) -> dict:
             return {"status": "error", "reason": "node_not_found"}
 
         target_ip = node.bootstrap_ip
-        node_user, node_password, node_auth_mode = _get_node_credentials(node)
+        node_user, _node_password, _node_auth_mode = _get_node_credentials(node)
         ssh_user = node_user or "admin"
         minion_id = node.minion_id
+        ssh_host_key = node.ssh_host_key
         pillar_dir = _get_pillar_dir(db)
+        master_creds = _resolve_node_master_creds(db, node)
 
         # Prefer kri_api_url for ingest; no salt_master address fallback (#562)
         from fleet_platform.services.platform_settings_svc import KRI_API_URL
@@ -688,106 +851,62 @@ def collect_node_grains(self, node_id: str) -> dict:
     ingest_base = kri_api_url or "http://localhost"
     ingest_url = f"{ingest_base}/api/v1/ingest"
 
-    # Controller private key — deployed to every bootstrapped node
-    # Must be copied to a tmp file so SSH doesn't reject it for wrong ownership
-    # (the ~/.kri volume is mounted from host uid != container uid)
-    controller_priv = Path.home() / ".kri" / "id_rsa"
+    # 1) Primary: salt-api grains.items (no SSH, no controller key) — #708
+    grains: dict | None = None
+    via = ""
+    failures: list[str] = []
+    if master_creds and master_creds.get("api_url"):
+        grains, reason = _grains_via_salt_api(master_creds, minion_id)
+        if grains is not None:
+            via = "salt-api"
+        elif reason:
+            failures.append(f"salt-api: {reason}")
+    else:
+        failures.append("salt-api: node has no enabled master configured")
 
-    with tempfile.TemporaryDirectory(prefix="kri-grains-") as tmpdir:
-        key_file_path: str | None = None
-        if controller_priv.exists():
-            tmp_key = Path(tmpdir) / "id_ctrl"
-            tmp_key.write_bytes(controller_priv.read_bytes())
-            tmp_key.chmod(0o600)
-            key_file_path = str(tmp_key)
-
-        # TOFU: use node's stored host key for strict verification if available,
-        # otherwise accept on first connection.
-        import os as _os2
-
-        grains_known_hosts_file: str | None = None
-        if node.ssh_host_key:
-            tmp_kh2 = tempfile.NamedTemporaryFile(mode="w", suffix=".known_hosts", delete=False)
-            tmp_kh2.write(f"{target_ip} {node.ssh_host_key}\n")
-            tmp_kh2.close()
-            grains_known_hosts_file = tmp_kh2.name
-            grains_strict_opts = [
-                "-o",
-                "StrictHostKeyChecking=yes",
-                "-o",
-                f"UserKnownHostsFile={grains_known_hosts_file}",
-            ]
-        else:
-            grains_strict_opts = ["-o", "StrictHostKeyChecking=accept-new"]
-
-        ssh_opts = [
-            "ssh",
-            "-F",
-            "/dev/null",  # skip mounted ~/.ssh/config (UID mismatch in container)
-            *grains_strict_opts,
-            "-o",
-            "ConnectTimeout=15",
-            "-o",
-            "BatchMode=yes",
-        ]
-        if key_file_path:
-            ssh_opts += ["-i", key_file_path]
-
-        ssh_cmd = ssh_opts + [
-            f"{ssh_user}@{target_ip}",
-            (
-                "sudo /opt/homebrew/bin/salt-call --local grains.items --out=json --log-level=warning 2>/dev/null"
-                " || sudo /usr/local/bin/salt-call --local grains.items --out=json --log-level=warning 2>/dev/null"
-            ),
-        ]
-
+    # 2) Fallback: SSH salt-call --local (legacy; requires controller key)
+    if grains is None:
         try:
-            proc = subprocess.run(ssh_cmd, capture_output=True, text=True, timeout=30)
-            if proc.returncode != 0:
-                return {"status": "error", "reason": f"ssh failed: {proc.stderr[:200]}"}
-
-            raw = proc.stdout.strip()
-            parsed = _json.loads(raw)
-            grains = parsed.get("local", parsed)
-
-            # Read node token from pillar file
-            pillar_file = pillar_dir / f"{minion_id}.sls"
-            node_token = ""
-            if pillar_file.exists():
-                for line in pillar_file.read_text().splitlines():
-                    if "node_token:" in line:
-                        node_token = line.split("node_token:")[-1].strip()
-                        break
-
-            if not node_token:
-                return {"status": "error", "reason": "no node_token found in pillar"}
-
-            import urllib.request
-
-            payload = _json.dumps({"minion_id": minion_id, "grains": grains}).encode()
-            req = urllib.request.Request(
-                f"{ingest_url}/grains",
-                data=payload,
-                headers={"Content-Type": "application/json", "X-Node-Token": node_token},
-                method="POST",
-            )
-            with urllib.request.urlopen(req, timeout=15) as resp:  # nosec B310
-                return {"status": "ok", "http_status": resp.status, "node_id": node_id}
-
-        except subprocess.TimeoutExpired:
-            return {"status": "error", "reason": "ssh timeout"}
+            grains, reason = _grains_via_ssh(target_ip, ssh_user, minion_id, ssh_host_key)
+            if grains is not None:
+                via = "ssh"
+            elif reason:
+                failures.append(f"ssh: {reason}")
         except SoftTimeLimitExceeded:
-            # Log + clean exit — no DB status to update for grain tasks (#471)
             logger.warning("collect_node_grains: soft time limit exceeded for node_id=%s — clean exit", node_id)
             return {"status": "timeout", "node_id": node_id}
-        except Exception as e:
-            return {"status": "error", "reason": str(e)[:200]}
-        finally:
-            if grains_known_hosts_file:
-                try:
-                    _os2.unlink(grains_known_hosts_file)
-                except OSError:
-                    pass
+
+    if grains is None:
+        return {"status": "error", "reason": "; ".join(failures) or "grain collection failed"}
+
+    # 3) Push grains to ingest (node token from pillar)
+    try:
+        pillar_file = pillar_dir / f"{minion_id}.sls"
+        node_token = ""
+        if pillar_file.exists():
+            for line in pillar_file.read_text().splitlines():
+                if "node_token:" in line:
+                    node_token = line.split("node_token:")[-1].strip()
+                    break
+        if not node_token:
+            return {"status": "error", "reason": "no node_token found in pillar"}
+
+        import urllib.request
+
+        payload = _json.dumps({"minion_id": minion_id, "grains": grains}).encode()
+        req = urllib.request.Request(
+            f"{ingest_url}/grains",
+            data=payload,
+            headers={"Content-Type": "application/json", "X-Node-Token": node_token},
+            method="POST",
+        )
+        with urllib.request.urlopen(req, timeout=15) as resp:  # nosec B310
+            return {"status": "ok", "http_status": resp.status, "node_id": node_id, "via": via}
+    except SoftTimeLimitExceeded:
+        logger.warning("collect_node_grains: soft time limit exceeded for node_id=%s — clean exit", node_id)
+        return {"status": "timeout", "node_id": node_id}
+    except Exception as e:
+        return {"status": "error", "reason": str(e)[:200]}
 
 
 @celery_app.task(
@@ -1140,10 +1259,10 @@ def provision_master(self, salt_master_id: str, action: str = "install") -> dict
                 else f"Timed out after {_prov_timeout_min} minutes."
             )
         elif final_status != "successful" or runner.rc != 0:
-            if "UNREACHABLE" in full_stdout:
-                provision_error = f"SSH unreachable: check ssh_host ({ssh_host}) and SSH credentials"
-            elif "Authentication failure" in full_stdout or "Permission denied" in full_stdout:
+            if "Authentication failure" in full_stdout or "Permission denied" in full_stdout:
                 provision_error = "SSH auth failed: check SSH username/password on the master record"
+            elif "UNREACHABLE" in full_stdout:
+                provision_error = f"SSH unreachable: check ssh_host ({ssh_host}) and SSH credentials"
             else:
                 provision_error = f"ansible rc={rc_display} status={final_status}"
 

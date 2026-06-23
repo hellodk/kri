@@ -8,6 +8,24 @@ import pytest
 from fleet_platform.models.pending_action import PendingAction
 
 
+def _db_with_rowcounts(*rowcounts: int) -> AsyncMock:
+    """AsyncMock DB whose successive execute() calls return the given rowcounts.
+
+    approve()/reject() now perform an atomic compare-and-swap UPDATE and branch
+    on ``result.rowcount`` (TOCTOU-safe, #644), so tests drive that directly.
+    """
+    db = AsyncMock()
+    db.commit = AsyncMock()
+    db.refresh = AsyncMock()
+    results = []
+    for rc in rowcounts:
+        r = MagicMock()
+        r.rowcount = rc
+        results.append(r)
+    db.execute = AsyncMock(side_effect=results)
+    return db
+
+
 def test_forbidden_action_blocked():
     assert PendingAction.is_forbidden("process_kill") is True
     assert PendingAction.is_forbidden("process_stop") is False
@@ -46,64 +64,52 @@ async def test_create_pending_action():
 
 @pytest.mark.asyncio
 async def test_expire_does_not_approve_expired():
-    from datetime import UTC, datetime, timedelta
-
+    """Expired pending action: claim CAS matches 0 rows, then it's settled expired (#644)."""
     from fleet_platform.services.pending_action_svc import approve
 
-    db = AsyncMock()
-    db.commit = AsyncMock()
-    db.refresh = AsyncMock()
-
+    # 1st execute (claim) affects 0 rows; 2nd execute (expire) affects 1 row.
+    db = _db_with_rowcounts(0, 1)
     action = MagicMock()
-    action.status = "pending"
-    action.expires_at = datetime.now(UTC) - timedelta(minutes=1)
-    result = await approve(db, action)
-    assert result.status == "expired"
+    _, claimed = await approve(db, action)
+    assert claimed is False
+    assert db.execute.await_count == 2
 
 
 @pytest.mark.asyncio
 async def test_approve_marks_approved():
-    from datetime import UTC, datetime, timedelta
-
+    """The single caller that wins the pending->approved CAS is claimed=True (#644)."""
     from fleet_platform.services.pending_action_svc import approve
 
-    db = AsyncMock()
-    db.commit = AsyncMock()
-    db.refresh = AsyncMock()
-
+    db = _db_with_rowcounts(1)  # claim wins
     action = MagicMock()
-    action.status = "pending"
-    action.expires_at = datetime.now(UTC) + timedelta(minutes=10)
-    result = await approve(db, action)
-    assert result.status == "approved"
-    db.commit.assert_called_once()
+    out, claimed = await approve(db, action)
+    assert claimed is True
+    assert out is action
+    db.commit.assert_awaited()
 
 
 @pytest.mark.asyncio
 async def test_approve_noop_when_already_approved():
+    """A losing/duplicate approve gets claimed=False and never re-dispatches (#644)."""
     from fleet_platform.services.pending_action_svc import approve
 
-    db = AsyncMock()
+    db = _db_with_rowcounts(0, 0)  # claim loses, nothing to expire
     action = MagicMock()
-    action.status = "approved"  # already done
-    result = await approve(db, action)
-    assert result.status == "approved"
-    db.commit.assert_not_called()
+    _, claimed = await approve(db, action)
+    assert claimed is False
 
 
 @pytest.mark.asyncio
 async def test_reject_marks_rejected():
+    """The caller that wins the pending->rejected CAS is claimed=True (#644)."""
     from fleet_platform.services.pending_action_svc import reject
 
-    db = AsyncMock()
-    db.commit = AsyncMock()
-    db.refresh = AsyncMock()
-
+    db = _db_with_rowcounts(1)
     action = MagicMock()
-    action.status = "pending"
-    result = await reject(db, action)
-    assert result.status == "rejected"
-    db.commit.assert_called_once()
+    out, claimed = await reject(db, action)
+    assert claimed is True
+    assert out is action
+    db.commit.assert_awaited()
 
 
 @pytest.mark.asyncio
@@ -150,25 +156,21 @@ async def test_expire_old_returns_count():
 
 @pytest.mark.asyncio
 async def test_reject_noop_when_already_approved():
-    """reject() must not overwrite an already-approved action (audit integrity)."""
+    """reject() must not overwrite a non-pending action: CAS matches 0 rows, claimed=False (#644)."""
     from fleet_platform.services.pending_action_svc import reject
 
-    db = AsyncMock()
+    db = _db_with_rowcounts(0)  # already approved → no pending row to transition
     action = MagicMock()
-    action.status = "approved"
-    result = await reject(db, action)
-    assert result.status == "approved"
-    db.commit.assert_not_called()
+    _, claimed = await reject(db, action)
+    assert claimed is False
 
 
 @pytest.mark.asyncio
 async def test_reject_noop_when_already_rejected():
-    """Idempotent: rejecting an already-rejected action is a no-op."""
+    """Idempotent: rejecting an already-rejected action transitions nothing (claimed=False) (#644)."""
     from fleet_platform.services.pending_action_svc import reject
 
-    db = AsyncMock()
+    db = _db_with_rowcounts(0)
     action = MagicMock()
-    action.status = "rejected"
-    result = await reject(db, action)
-    assert result.status == "rejected"
-    db.commit.assert_not_called()
+    _, claimed = await reject(db, action)
+    assert claimed is False

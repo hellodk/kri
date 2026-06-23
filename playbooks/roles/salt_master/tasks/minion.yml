@@ -1,0 +1,67 @@
+---
+# tasks/minion.yml — co-locate a salt-minion on the salt-master host (#707)
+#
+# A salt-master is not, by default, a managed node of itself. kri expects every
+# master to also appear as a minion (so it shows under its own master in the UI
+# and can be targeted by states). This task installs no new packages — the salt
+# onedir bundle already ships the minion binary alongside the master — it just
+# points a local minion at 127.0.0.1, starts it, and auto-accepts its key.
+#
+# Disable with: -e salt_master_install_minion=false
+
+- name: Create /etc/salt/minion.d directory
+  file:
+    path: /etc/salt/minion.d
+    state: directory
+    owner: root
+    group: "{{ 'wheel' if ansible_system == 'Darwin' else 'root' }}"
+    mode: "0755"
+  become: true
+
+- name: Write co-located minion configuration (points at local master)
+  copy:
+    dest: /etc/salt/minion.d/kri.conf
+    owner: root
+    group: "{{ 'wheel' if ansible_system == 'Darwin' else 'root' }}"
+    mode: "0644"
+    content: |
+      # Managed by kri salt_master role (tasks/minion.yml) — co-located minion.
+      master: {{ salt_minion_master_address }}
+      id: {{ salt_master_minion_id }}
+  become: true
+
+- name: Ensure salt-minion launchd job is loaded (macOS)
+  command: launchctl bootstrap system /Library/LaunchDaemons/com.saltstack.salt.minion.plist
+  register: _minion_bootstrap
+  changed_when: "'service already loaded' not in (_minion_bootstrap.stderr | default(''))"
+  failed_when:
+    - _minion_bootstrap.rc != 0
+    - "'service already loaded' not in (_minion_bootstrap.stderr | default(''))"
+  when: ansible_system == 'Darwin'
+  become: true
+
+- name: Restart salt-minion to pick up local master config (macOS)
+  command: launchctl kickstart -k system/com.saltstack.salt.minion
+  changed_when: true
+  when: ansible_system == 'Darwin'
+  become: true
+
+- name: Enable and (re)start salt-minion (Linux systemd)
+  systemd:
+    name: salt-minion
+    enabled: true
+    state: restarted
+    daemon_reload: true
+  when: ansible_system != 'Darwin'
+  become: true
+
+- name: Accept the co-located minion key on the master
+  command: "{{ salt_key_bin }} -a {{ salt_master_minion_id }} -y"
+  register: _minion_key_accept
+  changed_when: "'Key for minion' in (_minion_key_accept.stdout | default(''))"
+  # The minion needs a moment to connect before its key appears as pending.
+  retries: 6
+  delay: 5
+  until: _minion_key_accept.rc == 0
+  failed_when: false
+  become: true

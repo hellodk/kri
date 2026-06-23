@@ -27,7 +27,7 @@
 # ─── After running ───────────────────────────────────────────────────────────
 #
 #   1. Open the kri UI → Settings → Salt Masters and add the new master:
-#        URL:      https://<target_host>:8080
+#        URL:      https://<target_host>:4507
 #        User:     krisalt
 #        Password: <kri_salt_api_password>
 #
@@ -92,7 +92,7 @@
           ║
           ║  1. Add this master in the kri UI:
           ║       Settings → Salt Masters → Add
-          ║         URL:      https://{{ target_host }}:{{ salt_api_port | default(8080) }}
+          ║         URL:      https://{{ target_host }}:{{ salt_api_port | default(4507) }}
           ║         User:     {{ salt_api_user | default('krisalt') }}
           ║         Password: <kri_salt_api_password>
           ║

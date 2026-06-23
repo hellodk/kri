@@ -4,7 +4,7 @@ import secrets
 import uuid
 from datetime import datetime
 
-from sqlalchemy import DateTime, Index, String, Text
+from sqlalchemy import Boolean, DateTime, ForeignKey, Index, Integer, String, Text
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -29,9 +29,34 @@ class PendingAction(Base):
     expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     executed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
+    # Agent write-path fields (#710 → executor #711, apply-with-approval #714).
+    # When an agent proposes a gated action these carry the originating session,
+    # the tool name, how many targets it hits (co-sign threshold), the captured
+    # dry-run output shown to the approver, and whether a second admin must co-sign.
+    session_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("agent_sessions.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+    proposed_by_agent: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False, server_default="false")
+    tool_name: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    target_count: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    dry_run_result: Mapped[str | None] = mapped_column(Text, nullable=True)
+    co_sign_required: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False, server_default="false")
+    # Co-sign audit trail (#714): first approver + (when co_sign_required) admin co-signer.
+    approved_by: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    approved_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    co_signed_by: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    co_signed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+    # Agent-proposed live actions that hit more than this many targets require a
+    # second admin co-sign on top of the first approval (#714, #716 decision d5).
+    CO_SIGN_THRESHOLD = 8
+
     __table_args__ = (
         Index("idx_pending_actions_token", "approval_token", unique=True),
         Index("idx_pending_actions_status", "status"),
+        Index("idx_pending_actions_session_id", "session_id"),
     )
 
     # Destructive actions that require email approval

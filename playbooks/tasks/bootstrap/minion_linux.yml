@@ -1,0 +1,58 @@
+---
+# playbooks/tasks/bootstrap/minion_linux.yml
+# Install salt-minion on Debian/Ubuntu (apt) or RHEL/Rocky (dnf).
+# Called from bootstrap_node.yml when ansible_os_family in ['Debian', 'RedHat'].
+# Does NOT start the service — bootstrap_node.yml handles systemd enable+start
+# after the shared minion config write.
+
+# ── Debian / Ubuntu ───────────────────────────────────────────────────────────
+- name: Ensure keyrings dir exists (Debian)
+  file:
+    path: /etc/apt/keyrings
+    state: directory
+    mode: "0755"
+  become: true
+  when: ansible_os_family == 'Debian'
+
+- name: Add Salt project repo key (Debian)
+  get_url:
+    url: "{{ salt_deb_gpg_url }}"
+    dest: /etc/apt/keyrings/salt-archive-keyring.pgp
+    mode: "0644"
+  become: true
+  when: ansible_os_family == 'Debian'
+
+- name: Add Salt apt source (Debian)
+  apt_repository:
+    repo: "deb [signed-by=/etc/apt/keyrings/salt-archive-keyring.pgp] {{ salt_deb_repo_url }} stable main"
+    filename: salt
+    state: present
+  become: true
+  when: ansible_os_family == 'Debian'
+
+- name: Install salt-minion (Debian/Ubuntu)
+  apt:
+    name: "salt-minion={{ salt_version }}*"
+    update_cache: true
+    state: present
+  become: true
+  when: ansible_os_family == 'Debian'
+
+# ── RHEL / Rocky Linux ────────────────────────────────────────────────────────
+- name: Add Salt project dnf repo (RedHat)
+  yum_repository:
+    name: salt
+    description: Salt repo
+    baseurl: "{{ salt_rpm_repo_baseurl }}"
+    gpgcheck: true
+    gpgkey: "{{ salt_rpm_gpg_url }}"
+    enabled: true
+  become: true
+  when: ansible_os_family == 'RedHat'
+
+- name: Install salt-minion (RHEL/Rocky)
+  dnf:
+    name: "salt-minion-{{ salt_version }}"
+    state: present
+  become: true
+  when: ansible_os_family == 'RedHat'

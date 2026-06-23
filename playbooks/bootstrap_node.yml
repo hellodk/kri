@@ -1,6 +1,6 @@
 ---
-# playbooks/bootstrap_mac_mini.yml
-# Bootstraps a Mac Mini into the kri fleet.
+# playbooks/bootstrap_node.yml
+# Bootstraps a fleet node (macOS or Linux) into the kri fleet.
 #
 # Required variables (set in host_vars or pass -e):
 #   salt_masters           — List of Salt master addresses (Tailscale IP / hostname).
@@ -17,7 +17,7 @@
 #
 # Version pins: see group_vars/all.yml
 
-- name: Bootstrap Mac Mini into kri fleet
+- name: Bootstrap fleet node into kri fleet
   hosts: targets
   gather_facts: false
   vars:
@@ -33,15 +33,24 @@
       register: uname_result
       changed_when: false
 
-    - name: Set architecture facts
+    - name: Set cpu_arch and ne_arch facts
       set_fact:
         cpu_arch: "{{ 'arm64' if 'arm64' in uname_result.stdout else 'x86_64' }}"
-        brew_prefix: "{{ brew_prefix_arm64 if 'arm64' in uname_result.stdout else brew_prefix_x86 }}"
+        ne_arch: "{{ 'arm64' if 'arm64' in uname_result.stdout else 'amd64' }}"
 
-    # ── Minimal fact collection ──────────────────────────────────────────────
-    - name: Gather minimal facts
+    # ── Fact collection (detects OS family for all subsequent conditionals) ──
+    - name: Gather OS and hardware facts
       setup:
-        gather_subset: [min]
+        gather_subset: ['min', 'hardware']
+
+    # ── Set OS-specific runtime facts ────────────────────────────────────────
+    - name: Set OS-specific facts
+      set_fact:
+        ne_os: "{{ 'darwin' if ansible_os_family == 'Darwin' else 'linux' }}"
+        salt_call_bin: "{{ '/opt/salt/salt-call' if ansible_os_family == 'Darwin' else 'salt-call' }}"
+        salt_group: "{{ 'wheel' if ansible_os_family == 'Darwin' else 'root' }}"
+        brew_prefix: >-
+          {{ brew_prefix_arm64 if cpu_arch == 'arm64' else brew_prefix_x86 }}
 
     # ── Node-vantage master reachability gate (#536, epic #537) ─────────────
     # Check that THIS NODE can reach each configured salt-master on ports
@@ -81,24 +90,28 @@
       when: nc_4505_results.results | selectattr('rc', 'eq', 0) | list | length == 0
             and nc_4506_results.results | selectattr('rc', 'eq', 0) | list | length == 0
 
-    # ── Detect actual macOS user (even when SSH'd in as root) ────────────────
+    # ── macOS: Detect actual user (even when SSH'd as root) ─────────────────
     - name: Get logged-in macOS user from console
       shell: stat -f "%Su" /dev/console
       register: mac_console_user
       changed_when: false
       become: false
+      failed_when: false
+      when: ansible_os_family == 'Darwin'
 
-    - name: Set brew_user fact
+    - name: Set brew_user fact (macOS)
       set_fact:
         brew_user: "{{ ansible_user if ansible_user != 'root' else mac_console_user.stdout }}"
+      when: ansible_os_family == 'Darwin'
 
-    # ── Xcode Command Line Tools ─────────────────────────────────────────────
+    # ── macOS: Xcode Command Line Tools ──────────────────────────────────────
     - name: Check if Xcode CLT is installed
       command: xcode-select -p
       register: xcode_check
       failed_when: false
       changed_when: false
       become: false
+      when: ansible_os_family == 'Darwin'
 
     - name: Install Xcode Command Line Tools (headless via softwareupdate)
       shell: |
@@ -108,82 +121,72 @@
           softwareupdate -i "$LABEL" --agree-to-license
         fi
         rm -f /tmp/.com.apple.dt.CommandLineTools.installondemand.in-progress
-      when: xcode_check.rc != 0
+      when: ansible_os_family == 'Darwin' and xcode_check.rc != 0
       become: true
       timeout: 600
       register: clt_install
       changed_when: clt_install.rc == 0
 
-    # ── Salt-minion via official pkg (pinned version, air-gap ready) ─────────
+    # ── macOS: Salt-minion via official onedir pkg (pinned, air-gap ready) ──
     # Uses the Salt Project's onedir installer — installs to /opt/salt/
     # Not Homebrew: Homebrew does not allow pinning specific salt versions.
     # For air-gap: set artifactory_binary_url in group_vars/all.yml or host_vars/.
 
-    - name: Resolve salt pkg filename for this arch
+    - name: Resolve salt pkg filename for this arch (macOS)
       set_fact:
         salt_pkg_filename: "{{ salt_pkg_arm64 if cpu_arch == 'arm64' else salt_pkg_x86_64 }}"
         salt_checksum_filename: "{{ salt_pkg_checksum_arm64 if cpu_arch == 'arm64' else salt_pkg_checksum_x86_64 }}"
+      when: ansible_os_family == 'Darwin'
 
-    - name: Set download URL (Artifactory if configured, else official)
+    # Resolution precedence: salt_pkg_url_override > artifactory_binary_url +
+    # artifactory_salt_path > salt_pkg_official_base. Defaults (artifactory_salt_path
+    # = salt/{{ salt_version }}) reproduce the previous URL exactly. The checksum
+    # follows the same tiers; when the pkg is fully overridden, the checksum is
+    # taken from the same directory (override | dirname) since it is a sibling file.
+    - name: Set download URL (override > Artifactory > official) (macOS)
       set_fact:
         salt_pkg_url: >-
-          {%- if artifactory_binary_url -%}
-            {{ artifactory_binary_url.rstrip('/') }}/salt/{{ salt_version }}/{{ salt_pkg_filename }}
-          {%- else -%}
-            {{ salt_pkg_official_base }}/{{ salt_pkg_filename }}
+          {%- if salt_pkg_url_override -%}{{ salt_pkg_url_override }}
+          {%- elif artifactory_binary_url -%}{{ artifactory_binary_url.rstrip('/') }}/{{ artifactory_salt_path }}/{{ salt_pkg_filename }}
+          {%- else -%}{{ salt_pkg_official_base }}/{{ salt_pkg_filename }}
           {%- endif -%}
         salt_checksum_url: >-
-          {%- if artifactory_binary_url -%}
-            {{ artifactory_binary_url.rstrip('/') }}/salt/{{ salt_version }}/{{ salt_checksum_filename }}
-          {%- else -%}
-            {{ salt_pkg_official_base }}/{{ salt_checksum_filename }}
+          {%- if salt_pkg_url_override -%}{{ salt_pkg_url_override | dirname }}/{{ salt_checksum_filename }}
+          {%- elif artifactory_binary_url -%}{{ artifactory_binary_url.rstrip('/') }}/{{ artifactory_salt_path }}/{{ salt_checksum_filename }}
+          {%- else -%}{{ salt_pkg_official_base }}/{{ salt_checksum_filename }}
           {%- endif -%}
+      when: ansible_os_family == 'Darwin'
 
-    - name: Check installed salt version
-      shell: /opt/salt/salt-minion --version 2>/dev/null | awk '{print $2}'
+    # NOTE: do NOT use `/opt/salt/salt-minion --version` for detection — on the
+    # macOS onedir build it prints the version then continues booting the daemon
+    # (never reaches EOF), so a piped `| awk` hangs until ANSIBLE_TASK_TIMEOUT.
+    # pkgutil reads the installed .pkg receipt and exits cleanly+instantly.
+    - name: Check installed salt version (macOS)
+      shell: pkgutil --pkg-info com.saltstack.salt 2>/dev/null | awk '/^version:/ {print $2}'
       register: installed_salt_version
       changed_when: false
       failed_when: false
       become: false
+      when: ansible_os_family == 'Darwin'
 
-    - name: Download salt pkg checksum
+    - name: Download salt pkg checksum (macOS)
       get_url:
         url: "{{ salt_checksum_url }}"
         dest: "/tmp/{{ salt_checksum_filename }}"
         mode: "0644"
         force: true
-      when: installed_salt_version.stdout.strip() != salt_version
+      when: ansible_os_family == 'Darwin' and installed_salt_version.stdout.strip() != salt_version
       become: false
 
-    - name: Download salt pkg
+    - name: Download salt pkg with verified checksum (macOS)
       get_url:
         url: "{{ salt_pkg_url }}"
         dest: "/tmp/{{ salt_pkg_filename }}"
         mode: "0644"
-        checksum: "sha512:{{ lookup('file', '/tmp/' + salt_checksum_filename) | regex_search('[0-9a-f]{128}') }}"
-        force: false
-      when: installed_salt_version.stdout.strip() != salt_version
-      become: false
-      vars:
-        # Checksum is read from the already-downloaded file via a local lookup
-        # If the file is on the remote host, use slurp instead
-        _checksum_raw: "{{ lookup('pipe', 'cat /tmp/' + salt_checksum_filename + ' 2>/dev/null || echo \"\"') }}"
-
-    - name: Verify and read checksum from downloaded file
-      slurp:
-        src: "/tmp/{{ salt_checksum_filename }}"
-      register: salt_checksum_raw
-      when: installed_salt_version.stdout.strip() != salt_version
-
-    - name: Download salt pkg with verified checksum
-      get_url:
-        url: "{{ salt_pkg_url }}"
-        dest: "/tmp/{{ salt_pkg_filename }}"
-        mode: "0644"
-      when: installed_salt_version.stdout.strip() != salt_version
+      when: ansible_os_family == 'Darwin' and installed_salt_version.stdout.strip() != salt_version
       become: false
 
-    - name: Verify salt pkg checksum
+    - name: Verify salt pkg checksum (macOS)
       shell: |
         EXPECTED=$(cat /tmp/{{ salt_checksum_filename }} | awk '{print $1}')
         ACTUAL=$(shasum -a 512 /tmp/{{ salt_pkg_filename }} | awk '{print $1}')
@@ -192,38 +195,44 @@
           exit 1
         fi
         echo "Checksum OK: $ACTUAL"
-      when: installed_salt_version.stdout.strip() != salt_version
+      when: ansible_os_family == 'Darwin' and installed_salt_version.stdout.strip() != salt_version
       changed_when: false
       become: false
 
-    - name: Stop salt-minion service before upgrade
+    - name: Stop salt-minion service before upgrade (macOS)
       shell: launchctl stop com.saltstack.salt.minion 2>/dev/null || true
-      when: installed_salt_version.stdout.strip() != salt_version
+      when: ansible_os_family == 'Darwin' and installed_salt_version.stdout.strip() != salt_version
       become: true
       changed_when: false
 
-    - name: Install salt pkg
+    - name: Install salt pkg (macOS)
       shell: installer -pkg /tmp/{{ salt_pkg_filename }} -target /
-      when: installed_salt_version.stdout.strip() != salt_version
+      when: ansible_os_family == 'Darwin' and installed_salt_version.stdout.strip() != salt_version
       become: true
       register: salt_install_result
       changed_when: salt_install_result.rc == 0
 
-    - name: Confirm installed salt version matches expected
-      shell: /opt/salt/salt-minion --version 2>/dev/null | awk '{print $2}'
+    # Use pkgutil (clean exit) instead of `salt-minion --version` (boots daemon → hangs).
+    - name: Confirm installed salt version matches expected (macOS)
+      shell: pkgutil --pkg-info com.saltstack.salt 2>/dev/null | awk '/^version:/ {print $2}'
       register: verified_salt_version
       changed_when: false
       failed_when: verified_salt_version.stdout.strip() != salt_version
       become: false
-      when: salt_install_result is defined and salt_install_result.changed
+      when: ansible_os_family == 'Darwin' and salt_install_result is defined and salt_install_result.changed
 
-    # ── Salt configuration ────────────────────────────────────────────────────
+    # ── Linux: Install salt-minion via apt or dnf ────────────────────────────
+    - name: Install salt-minion (Linux)
+      include_tasks: tasks/bootstrap/minion_linux.yml
+      when: ansible_os_family in ['Debian', 'RedHat']
+
+    # ── Salt configuration (shared macOS + Linux) ────────────────────────────
     - name: Create /etc/salt directory
       file:
         path: /etc/salt
         state: directory
         owner: root
-        group: wheel
+        group: "{{ salt_group }}"
         mode: "0755"
       become: true
 
@@ -232,7 +241,7 @@
         path: /etc/salt/pki/minion
         state: directory
         owner: root
-        group: wheel
+        group: "{{ salt_group }}"
         mode: "0700"
       become: true
 
@@ -240,7 +249,7 @@
       copy:
         dest: /etc/salt/minion
         owner: root
-        group: wheel
+        group: "{{ salt_group }}"
         mode: "0644"
         content: |
           master:
@@ -266,7 +275,7 @@
         dest: /etc/salt/pki/minion/minion_master.pub
         content: "{{ salt_master_pub_key }}"
         owner: root
-        group: wheel
+        group: "{{ salt_group }}"
         mode: "0644"
       become: true
       # Pre-seed only when a master pubkey is supplied (#549). Omitted in
@@ -277,15 +286,26 @@
       when: salt_master_pub_key is defined
 
     # ── Start or restart salt-minion ─────────────────────────────────────────
-    - name: Load salt-minion launchd service
+    - name: Load salt-minion launchd service (macOS)
       shell: launchctl load -w /Library/LaunchDaemons/com.saltstack.salt.minion.plist 2>/dev/null || true
       become: true
       changed_when: false
+      when: ansible_os_family == 'Darwin'
 
-    - name: Start salt-minion service
+    - name: Start salt-minion service (macOS)
       shell: launchctl start com.saltstack.salt.minion 2>/dev/null || true
       become: true
       changed_when: false
+      when: ansible_os_family == 'Darwin'
+
+    - name: Enable and start salt-minion via systemd (Linux)
+      systemd:
+        name: salt-minion
+        enabled: true
+        state: started
+        daemon_reload: true
+      become: true
+      when: ansible_os_family in ['Debian', 'RedHat']
 
     - name: Verify salt-minion process is running
       shell: ps aux | grep -v grep | grep salt-minion
@@ -313,7 +333,7 @@
       become: false
       when: controller_pubkey is defined
 
-    # ── Enable macOS Screen Sharing (VNC) ─────────────────────────────────────
+    # ── macOS: Enable Screen Sharing (VNC) ────────────────────────────────────
     - name: Enable macOS Screen Sharing (VNC on port 5900)
       shell: |
         /bin/launchctl load -w /System/Library/LaunchDaemons/com.apple.screensharing.plist 2>/dev/null || true
@@ -321,30 +341,34 @@
       become: true
       failed_when: false
       changed_when: false
+      when: ansible_os_family == 'Darwin'
 
-    # ── Push initial grains to kri Fleet Platform ─────────────────────────────
+    # ── macOS: Collect grains ─────────────────────────────────────────────────
     - name: Collect macOS version
       shell: sw_vers -productVersion 2>/dev/null || true
       register: sw_vers_result
       changed_when: false
       become: false
       failed_when: false
+      when: ansible_os_family == 'Darwin'
 
-    - name: Collect CPU core count
+    - name: Collect CPU core count (macOS)
       shell: sysctl -n hw.logicalcpu 2>/dev/null || echo "0"
       register: cpu_cores_result
       changed_when: false
       become: false
       failed_when: false
+      when: ansible_os_family == 'Darwin'
 
-    - name: Collect RAM in MB
+    - name: Collect RAM in MB (macOS)
       shell: "python3 -c \"import subprocess; r=subprocess.run(['sysctl','-n','hw.memsize'],capture_output=True,text=True); print(int(r.stdout.strip())//1024//1024)\" 2>/dev/null || echo '0'"
       register: ram_mb_result
       changed_when: false
       become: false
       failed_when: false
+      when: ansible_os_family == 'Darwin'
 
-    - name: Collect hardware model
+    - name: Collect hardware model (macOS)
       shell: |
         sysctl -n hw.model 2>/dev/null ||
         system_profiler SPHardwareDataType 2>/dev/null | awk -F': ' '/Model Identifier/{print $2}' ||
@@ -353,8 +377,9 @@
       changed_when: false
       become: false
       failed_when: false
+      when: ansible_os_family == 'Darwin'
 
-    - name: Collect serial number
+    - name: Collect serial number (macOS)
       shell: |
         system_profiler SPHardwareDataType 2>/dev/null | awk -F': ' '/Serial Number/{print $2}' | tr -d ' \n\r' ||
         echo ''
@@ -362,8 +387,9 @@
       changed_when: false
       become: false
       failed_when: false
+      when: ansible_os_family == 'Darwin'
 
-    - name: Collect installed Homebrew packages
+    - name: Collect installed Homebrew packages (macOS)
       shell: "{{ brew_prefix }}/bin/brew list --versions 2>/dev/null || true"
       register: brew_list_result
       changed_when: false
@@ -373,12 +399,13 @@
         PATH: "{{ brew_prefix }}/bin:/usr/local/bin:/usr/bin:/bin"
         HOME: "/Users/{{ brew_user }}"
       failed_when: false
+      when: ansible_os_family == 'Darwin'
 
-    - name: Parse brew packages into dict
+    - name: Parse brew packages into dict (macOS)
       set_fact:
         brew_pkgs: "{{ brew_pkgs | default({}) | combine({item.split()[0]: item.split()[1] | default('')}) }}"
       loop: "{{ brew_list_result.stdout_lines | default([]) | select('match', '^[a-zA-Z].*') | list }}"
-      when: brew_list_result.rc == 0 and brew_list_result.stdout != ''
+      when: ansible_os_family == 'Darwin' and brew_list_result.rc == 0 and brew_list_result.stdout != ''
 
     # ── Install kri heartbeat schedule via Salt ───────────────────────────────
     # This runs base.heartbeat on the minion so grain_report is sent every
@@ -386,7 +413,7 @@
     # Waits for salt-master to accept the minion key first (may take ~10s).
     - name: Wait for salt-master to accept minion key
       command: >
-        /opt/salt/salt-call --local test.ping
+        {{ salt_call_bin }} --local test.ping
       register: salt_ping
       retries: 12
       delay: 5
@@ -397,7 +424,7 @@
 
     - name: Apply kri heartbeat schedule via salt-call
       shell: |
-        /opt/salt/salt-call state.apply base.heartbeat
+        {{ salt_call_bin }} state.apply base.heartbeat
       become: true
       changed_when: false
       failed_when: false
@@ -408,14 +435,14 @@
     # CPU/mem/io to the kri ingest API (Processes tab data source, #610/#625).
     - name: Apply kri process-report schedule via salt-call
       shell: |
-        /opt/salt/salt-call state.apply base.process_report_schedule
+        {{ salt_call_bin }} state.apply base.process_report_schedule
       become: true
       changed_when: false
       failed_when: false
       when: salt_ping.rc == 0
 
-    # ── Push initial grains to kri Fleet Platform ─────────────────────────────
-    - name: Push Ansible facts + packages as grains to kri ingest API
+    # ── Push initial grains to kri Fleet Platform (macOS) ────────────────────
+    - name: Push Ansible facts + packages as grains to kri ingest API (macOS)
       uri:
         url: "{{ ingest_url }}/grains"
         method: POST
@@ -450,4 +477,50 @@
       become: false
       no_log: true
       failed_when: false
-      when: ingest_url is defined and node_token is defined
+      when: ingest_url is defined and node_token is defined and ansible_os_family == 'Darwin'
+
+    # ── Push initial grains to kri Fleet Platform (Linux) ────────────────────
+    - name: Push Ansible facts as grains to kri ingest API (Linux)
+      uri:
+        url: "{{ ingest_url }}/grains"
+        method: POST
+        headers:
+          Content-Type: "application/json"
+          X-Node-Token: "{{ node_token }}"
+        body_format: json
+        body:
+          minion_id: "{{ minion_id }}"
+          grains:
+            id: "{{ minion_id }}"
+            host: "{{ ansible_hostname | default(minion_id) }}"
+            fqdn: "{{ ansible_fqdn | default(ansible_hostname) | default(minion_id) }}"
+            os: "{{ ansible_distribution | default('Linux') }}"
+            os_family: "{{ ansible_os_family | default('Linux') }}"
+            osfullname: "{{ ansible_distribution | default('Linux') }}"
+            osrelease: "{{ ansible_distribution_version | default('') }}"
+            kernel: "Linux"
+            kernelrelease: "{{ ansible_kernel | default('') }}"
+            cpuarch: "{{ cpu_arch }}"
+            num_cpus: "{{ ansible_processor_vcpus | default(0) }}"
+            mem_total: "{{ ansible_memtotal_mb | default(0) }}"
+            productname: "{{ ansible_product_name | default('') }}"
+            serialnumber: "{{ ansible_product_serial | default('') }}"
+            saltversion: "{{ salt_version }}"
+            ip4_interfaces:
+              "{{ ansible_default_ipv4.interface | default('eth0') }}":
+                - "{{ ansible_default_ipv4.address | default('') }}"
+        status_code: [200, 201, 204]
+        timeout: 30
+      become: false
+      no_log: true
+      failed_when: false
+      when: ingest_url is defined and node_token is defined and ansible_os_family != 'Darwin'
+
+    # ── node_exporter (Prometheus metrics on :9100) ───────────────────────────
+    - name: Install node_exporter (macOS)
+      include_tasks: tasks/bootstrap/node_exporter_macos.yml
+      when: ansible_os_family == 'Darwin'
+
+    - name: Install node_exporter (Linux)
+      include_tasks: tasks/bootstrap/node_exporter_linux.yml
+      when: ansible_os_family in ['Debian', 'RedHat']

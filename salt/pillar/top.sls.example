@@ -1,7 +1,28 @@
-# Salt pillar top file — managed by kri (auto-regenerated)
-# Do not edit manually; use kri Node Secrets / Group Secrets UI
+# salt/pillar/top.sls.example — MLX tier → minion mapping (#712).
+# Copy to salt/pillar/top.sls. Minion ids are assumed to be mm1..mm18.
+#
+# Each minion serves exactly one mlx_serve tier (one launchd label / port), so a
+# minion is assigned a single tier pillar. The embed sidecar runs on a dedicated
+# worker subset rather than co-resident with a serving model on the same key.
+#
+#   Planners: mm1, mm2            (Qwen2.5-14B-Instruct)
+#   Coders:   mm3–mm6             (Qwen2.5-Coder-14B)
+#   Workers:  mm7–mm16            (Qwen2.5-7B-Instruct)
+#   Embed:    mm17, mm18          (BGE-M3)
+
 base:
-  '*':
-    - common
-  'mm3':
-    - mm3
+  'mm1 or mm2':
+    - match: compound
+    - ml.tiers.planner
+
+  'mm3 or mm4 or mm5 or mm6':
+    - match: compound
+    - ml.tiers.coder
+
+  'mm7 or mm8 or mm9 or mm1[0-6]':
+    - match: compound
+    - ml.tiers.worker
+
+  'mm17 or mm18':
+    - match: compound
+    - ml.tiers.embed

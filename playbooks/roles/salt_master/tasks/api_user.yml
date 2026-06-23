@@ -1,7 +1,8 @@
 ---
 # tasks/api_user.yml — create the krisalt user for salt-api PAM authentication
 
-- name: Create krisalt system user for salt-api auth
+# macOS: use sysadminctl/dscl (Directory Services — no useradd on macOS)
+- name: Create krisalt system user for salt-api auth (macOS)
   shell: |
     if ! id "{{ salt_api_user }}" &>/dev/null; then
       sysadminctl -addUser "{{ salt_api_user }}" \
@@ -25,3 +26,32 @@
   register: api_user_result
   changed_when: "'created' in api_user_result.stdout"
   no_log: true
+  when: _salt_os == 'macos'
+
+# Linux: use ansible.builtin.user + chpasswd (PAM reads /etc/shadow)
+- name: Ensure krisalt group exists (Linux)
+  ansible.builtin.group:
+    name: "{{ salt_api_user }}"
+    system: true
+    state: present
+  become: true
+  when: _salt_os != 'macos'
+
+- name: Ensure krisalt system user exists (Linux)
+  ansible.builtin.user:
+    name: "{{ salt_api_user }}"
+    group: "{{ salt_api_user }}"
+    system: true
+    shell: /usr/sbin/nologin
+    create_home: false
+    comment: "kri Salt API"
+    state: present
+  become: true
+  when: _salt_os != 'macos'
+
+- name: Set krisalt password via chpasswd (Linux)
+  shell: echo "{{ salt_api_user }}:{{ kri_salt_api_password }}" | chpasswd
+  become: true
+  changed_when: false
+  no_log: true
+  when: _salt_os != 'macos'

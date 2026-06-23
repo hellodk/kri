@@ -1,12 +1,18 @@
 ---
 # playbooks/roles/salt_master/defaults/main.yml
 
-# Salt version — must match the minion version installed by bootstrap_mac_mini.yml
+# Salt version — must match the minion version installed by bootstrap_node.yml
 salt_version: "3007.14"
 
 # Download source: Artifactory mirror first, falls back to official URL
 artifactory_binary_url: "http://10.105.205.92:8082/artifactory/example-repo-local/salt"
 salt_pkg_official_base: "https://packages.broadcom.com/artifactory/saltproject-generic/onedir/{{ salt_version }}"
+
+# Linux salt package repos — override to point at an air-gapped Artifactory mirror
+salt_deb_repo_url: "https://packages.broadcom.com/artifactory/saltproject-deb/"
+salt_deb_gpg_url: "https://packages.broadcom.com/artifactory/api/security/keypair/SaltProjectKey/public"
+salt_rpm_repo_baseurl: "https://packages.broadcom.com/artifactory/saltproject-rpm/"
+salt_rpm_gpg_url: "https://packages.broadcom.com/artifactory/api/security/keypair/SaltProjectKey/public"
 
 # Directories on the salt-master host.
 # Everything lives under /etc/salt — consistent across macOS and Linux, and
@@ -17,7 +23,13 @@ salt_pillar_dir: /etc/salt/pillar
 salt_log_dir: /var/log/salt
 
 # salt-api HTTP port (used by kri API/worker for ad-hoc commands)
-salt_api_port: 8080
+salt_api_port: 4507
+
+# Open-file (descriptor) limit for the salt-api service. macOS launchd defaults
+# to a 256 soft limit, which salt-api's cheroot server exhausts under TLS
+# connection churn -> [Errno 24] Too many open files -> HTTP 500 on /login,/run.
+# Applied via SoftResourceLimits/HardResourceLimits in the launchd plist.
+salt_api_max_open_files: 10240
 
 # User created for kri to authenticate with salt-api (PAM auth)
 # Password is set via variable kri_salt_api_password (pass via vault or -e)
@@ -27,7 +39,7 @@ kri_salt_api_password: "changeme-set-in-vault"
 # salt-api TLS certificate and private key paths.
 # The api_tls.yml task generates a self-signed cert/key at these paths if absent.
 # kri must connect to salt-api via https://<addr>:<port> — update salt_masters.api_url
-# in the kri Masters UI accordingly (e.g. https://192.168.1.x:8080).
+# in the kri Masters UI accordingly (e.g. https://192.168.1.x:4507).
 # Do NOT commit generated cert/key files — they live only on the master host.
 salt_api_ssl_crt: /etc/salt/pki/api/salt-api.crt
 salt_api_ssl_key: /etc/salt/pki/api/salt-api.key
@@ -48,3 +60,15 @@ salt_master_interface: "0.0.0.0"
 # Presence events — used by kri to detect minion connect/disconnect
 salt_presence_events: true
 salt_loop_interval: 60
+
+# Co-locate a salt-minion on the master (#707) so the master is also a managed
+# node of itself (appears under its own master in the kri UI, targetable by
+# states). Disable with -e salt_master_install_minion=false.
+salt_master_install_minion: true
+# Address the co-located minion connects to (loopback = the local master).
+salt_minion_master_address: "127.0.0.1"
+# Minion id for the master's own minion. Defaults to the host's short hostname.
+salt_master_minion_id: "{{ ansible_hostname | default(inventory_hostname_short) }}"
+# salt-key binary used to accept the co-located minion's key.
+# macOS onedir installs under /opt/salt; Linux packages put it on PATH.
+salt_key_bin: "{{ '/opt/salt/salt-key' if ansible_system == 'Darwin' else 'salt-key' }}"

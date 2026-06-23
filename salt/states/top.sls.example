@@ -1,0 +1,10 @@
+# salt/states/top.sls.example — apply the MLX serving state to tier minions (#712).
+# Copy to salt/states/top.sls (merge with any existing highstate top).
+#
+# Each tier minion picks up its tier via pillar (see salt/pillar/top.sls) and
+# `ml.mlx_serve` reads ml:mlx_serve to launch the right model on the right port.
+
+base:
+  'mm1 or mm2 or mm3 or mm4 or mm5 or mm6 or mm7 or mm8 or mm9 or mm1[0-8]':
+    - match: compound
+    - ml.mlx_serve

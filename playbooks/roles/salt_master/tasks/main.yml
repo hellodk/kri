@@ -59,3 +59,11 @@
   when: _salt_os != 'macos'
 
 - import_tasks: verify.yml
+
+# Co-locate a salt-minion on the master so it is a managed node of itself (#707).
+# Runs last — the master + api must be up before the minion connects and we
+# accept its key. Promotion of a plain node to a master is a separate console
+# action; bootstrap never installs master components.
+- name: Co-locate a salt-minion on this master
+  include_tasks: minion.yml
+  when: salt_master_install_minion | default(true) | bool

@@ -1,0 +1,437 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>kri — Agentic Transformation Epic</title>
+<style>
+  :root{
+    --bg:#0b0f14; --bg2:#111824; --panel:#0f1620; --panel2:#152030;
+    --ink:#e6edf3; --muted:#93a4b8; --faint:#5d6b7d; --line:#1f2c3b;
+    --accent:#3ddc97; --accent2:#46b1ff; --amber:#f5b942; --red:#ff6b6b;
+    --violet:#b99cff; --mono:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+    --sans:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+  }
+  *{box-sizing:border-box}
+  html{scroll-behavior:smooth}
+  body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--sans);
+    line-height:1.6;-webkit-font-smoothing:antialiased;display:flex}
+  a{color:var(--accent2);text-decoration:none}
+  a:hover{text-decoration:underline}
+  code,kbd{font-family:var(--mono);font-size:.88em;background:var(--panel2);
+    border:1px solid var(--line);border-radius:5px;padding:.08em .4em;color:#cfe3ff}
+
+  /* sidebar */
+  nav.toc{position:sticky;top:0;height:100vh;width:268px;flex:0 0 268px;
+    background:linear-gradient(180deg,#0c121a,#0a0e13);border-right:1px solid var(--line);
+    padding:26px 18px;overflow-y:auto}
+  nav.toc .brand{display:flex;align-items:center;gap:10px;margin-bottom:6px}
+  nav.toc .dot{width:11px;height:11px;border-radius:50%;
+    background:radial-gradient(circle at 30% 30%,var(--accent),#1c8f63);box-shadow:0 0 14px var(--accent)}
+  nav.toc .brand b{font-size:15px;letter-spacing:.3px}
+  nav.toc .sub{color:var(--faint);font-size:11.5px;margin:0 0 20px 21px;text-transform:uppercase;letter-spacing:1.5px}
+  nav.toc a{display:block;color:var(--muted);font-size:13.5px;padding:7px 11px;border-radius:7px;
+    border-left:2px solid transparent;margin-bottom:2px;transition:.15s}
+  nav.toc a:hover{background:var(--panel2);color:var(--ink);text-decoration:none}
+  nav.toc a.on{color:var(--accent);border-left-color:var(--accent);background:rgba(61,220,151,.07)}
+  nav.toc a .n{color:var(--faint);font-family:var(--mono);font-size:11px;margin-right:8px}
+
+  /* content */
+  main{flex:1;min-width:0;max-width:1080px;margin:0 auto;padding:0 48px 140px}
+  section{padding-top:46px;margin-top:14px;border-top:1px solid transparent}
+  section>h2{font-size:13px;letter-spacing:2.5px;text-transform:uppercase;color:var(--accent);
+    margin:0 0 4px;font-weight:700}
+  section>h2 .x{color:var(--faint);font-family:var(--mono);margin-right:10px}
+  section>.lead{font-size:25px;font-weight:680;letter-spacing:-.4px;margin:0 0 22px;line-height:1.25}
+  h3{font-size:17px;margin:30px 0 10px;color:#fff}
+  p{margin:0 0 14px;color:#cdd9e5}
+  .muted{color:var(--muted)}
+  .small{font-size:13px}
+
+  /* hero */
+  header.hero{padding:70px 0 26px}
+  header.hero .kicker{font-family:var(--mono);font-size:12.5px;letter-spacing:3px;
+    text-transform:uppercase;color:var(--accent)}
+  header.hero h1{font-size:46px;line-height:1.05;letter-spacing:-1.4px;margin:14px 0 16px;font-weight:800}
+  header.hero h1 .grad{background:linear-gradient(95deg,var(--accent),var(--accent2) 60%,var(--violet));
+    -webkit-background-clip:text;background-clip:text;color:transparent}
+  header.hero p.tag{font-size:17.5px;color:var(--muted);max-width:760px}
+  .pillbar{display:flex;flex-wrap:wrap;gap:9px;margin-top:24px}
+  .pill{font-size:12.5px;font-family:var(--mono);padding:6px 12px;border-radius:999px;
+    border:1px solid var(--line);background:var(--panel);color:var(--muted)}
+  .pill b{color:var(--ink)}
+
+  /* progress bar */
+  .prog{margin:30px 0;background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:22px 24px}
+  .prog .bar{height:14px;border-radius:8px;background:var(--panel2);overflow:hidden;position:relative;margin:10px 0}
+  .prog .bar i{position:absolute;left:0;top:0;bottom:0;width:30%;
+    background:linear-gradient(90deg,var(--accent),#2a9d6f);border-radius:8px}
+  .prog .lbls{display:flex;justify-content:space-between;font-size:12.5px;color:var(--faint);font-family:var(--mono)}
+
+  /* cards / grid */
+  .grid{display:grid;gap:14px}
+  .g2{grid-template-columns:1fr 1fr}
+  .g3{grid-template-columns:repeat(3,1fr)}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:13px;padding:18px 20px}
+  .card h4{margin:0 0 7px;font-size:15px;color:#fff;display:flex;align-items:center;gap:8px}
+  .card p{font-size:13.5px;margin:0;color:var(--muted)}
+  .tagdot{width:8px;height:8px;border-radius:50%;flex:0 0 8px}
+  .t-good{background:var(--accent)} .t-warn{background:var(--amber)} .t-bad{background:var(--red)}
+  .t-info{background:var(--accent2)}
+
+  /* tables */
+  .tbl{width:100%;border-collapse:collapse;margin:8px 0 6px;font-size:13.5px;
+    border:1px solid var(--line);border-radius:12px;overflow:hidden}
+  .tbl th{background:var(--panel2);text-align:left;padding:10px 13px;color:var(--ink);
+    font-weight:650;font-size:12px;text-transform:uppercase;letter-spacing:.6px}
+  .tbl td{padding:10px 13px;border-top:1px solid var(--line);color:var(--muted);vertical-align:top}
+  .tbl tr:nth-child(even) td{background:rgba(255,255,255,.012)}
+  .tbl td b{color:var(--ink)}
+  .badge{font-family:var(--mono);font-size:11px;padding:2px 7px;border-radius:5px;white-space:nowrap}
+  .b-r{background:rgba(70,177,255,.13);color:#8fd0ff} .b-w{background:rgba(245,185,66,.14);color:var(--amber)}
+  .b-x{background:rgba(255,107,107,.14);color:#ff9d9d} .b-e{background:rgba(185,156,255,.14);color:var(--violet)}
+
+  /* phase timeline */
+  .phases{display:grid;gap:12px;margin-top:8px}
+  .phase{display:grid;grid-template-columns:54px 1fr;gap:16px;background:var(--panel);
+    border:1px solid var(--line);border-radius:13px;padding:16px 18px;position:relative;overflow:hidden}
+  .phase .ltr{font-size:30px;font-weight:800;font-family:var(--mono);color:var(--accent);
+    line-height:1;opacity:.85}
+  .phase.b .ltr{color:var(--accent2)} .phase.c .ltr{color:var(--violet)}
+  .phase.d .ltr{color:var(--amber)} .phase.e .ltr{color:#ff8fb0} .phase.f .ltr{color:#7fe0c4}
+  .phase h4{margin:0 0 4px;font-size:15.5px;color:#fff}
+  .phase .sp{position:absolute;right:16px;top:14px;font-family:var(--mono);font-size:11.5px;
+    color:var(--faint);border:1px solid var(--line);padding:3px 9px;border-radius:999px}
+  .phase ul{margin:8px 0 0;padding-left:18px;font-size:13px;color:var(--muted)}
+  .phase li{margin:3px 0}
+
+  /* flow */
+  .flow{display:flex;flex-wrap:wrap;align-items:center;gap:9px;margin:14px 0;
+    background:var(--panel);border:1px solid var(--line);border-radius:13px;padding:18px}
+  .flow .step{font-size:12.5px;font-family:var(--mono);padding:8px 12px;border-radius:8px;
+    background:var(--panel2);border:1px solid var(--line);color:var(--ink)}
+  .flow .step.q{border-color:#2c4a3f;color:#bdfae0;background:rgba(61,220,151,.07)}
+  .flow .step.gate{border-color:#5a4a1f;color:#ffe2a6;background:rgba(245,185,66,.08)}
+  .flow .arr{color:var(--faint)}
+
+  /* callout */
+  .note{border-left:3px solid var(--accent);background:rgba(61,220,151,.05);
+    padding:13px 18px;border-radius:0 10px 10px 0;margin:18px 0;font-size:14px;color:#d7e4ee}
+  .note.warn{border-left-color:var(--amber);background:rgba(245,185,66,.05)}
+  .note.bad{border-left-color:var(--red);background:rgba(255,107,107,.05)}
+  .note b{color:#fff}
+
+  .topo{font-family:var(--mono);font-size:12px;white-space:pre;background:var(--panel);
+    border:1px solid var(--line);border-radius:12px;padding:18px;overflow-x:auto;color:#a9c6dd;line-height:1.5}
+
+  ul.clean{list-style:none;padding:0;margin:6px 0}
+  ul.clean li{padding:8px 0 8px 26px;position:relative;border-bottom:1px solid var(--line);font-size:14px;color:#cdd9e5}
+  ul.clean li:before{content:"";position:absolute;left:4px;top:15px;width:7px;height:7px;
+    border-radius:50%;background:var(--accent)}
+  ul.clean li.x:before{background:var(--red)} ul.clean li.q:before{background:var(--amber)}
+
+  footer{margin-top:70px;padding-top:24px;border-top:1px solid var(--line);
+    color:var(--faint);font-size:12.5px}
+  .kfig{font-family:var(--mono);color:var(--accent);font-weight:700}
+  @media(max-width:900px){nav.toc{display:none}main{padding:0 22px 90px}header.hero h1{font-size:34px}
+    .g2,.g3{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<nav class="toc">
+  <div class="brand"><span class="dot"></span><b>kri · Agentic Epic</b></div>
+  <div class="sub">Audit &amp; A–F roadmap</div>
+  <a href="#tldr" class="on"><span class="n">00</span>TL;DR</a>
+  <a href="#today"><span class="n">01</span>The surface today</a>
+  <a href="#gaps"><span class="n">02</span>Critical gaps</a>
+  <a href="#arch"><span class="n">03</span>Target architecture</a>
+  <a href="#scenarios"><span class="n">04</span>Operator scenarios</a>
+  <a href="#mlx"><span class="n">05</span>Local MLX plan</a>
+  <a href="#security"><span class="n">06</span>Security &amp; boundaries</a>
+  <a href="#roadmap"><span class="n">07</span>Roadmap A–F</a>
+  <a href="#decisions"><span class="n">08</span>Open decisions</a>
+  <a href="#metrics"><span class="n">09</span>Success metrics</a>
+  <a href="#finish"><span class="n">10</span>12-week outcome</a>
+</nav>
+<main>
+<header class="hero">
+  <div class="kicker">Principal-engineer audit · transformation plan</div>
+  <h1>Turning kri from a chat assistant into a <span class="grad">real agentic system</span>.</h1>
+  <p class="tag">kri already ships the <em>parser half</em> of an agent and a solid LLM I/O surface.
+  The missing 70% — an executor, a tool registry, a safe write surface, RBAC-in-dispatch, and
+  prompt-injection hardening — is what this epic delivers, across six sequenced phases (A–F),
+  served by local LLMs running on the very fleet kri manages.</p>
+  <div class="pillbar">
+    <span class="pill"><b>~30%</b> there today</span>
+    <span class="pill"><b>6</b> phases (A–F)</span>
+    <span class="pill"><b>~83</b> story points</span>
+    <span class="pill"><b>4–5 wks</b> · 2 engineers</span>
+    <span class="pill"><b>18×</b> M4 minis, local inference</span>
+  </div>
+</header>
+
+<section id="tldr">
+  <h2><span class="x">00</span>TL;DR</h2>
+  <p class="lead">The platform is roughly a third of the way to an agent. The remaining work is the
+  hard, safety-critical two-thirds.</p>
+  <div class="prog">
+    <div class="lbls"><span>Built today</span><span>Remaining (this epic)</span></div>
+    <div class="bar"><i></i></div>
+    <div class="lbls"><span class="kfig">~30% — parser, I/O, prompt builder, dry-run, approvals</span><span>~70% — executor, registry, write surface, policy</span></div>
+  </div>
+  <div class="grid g2">
+    <div class="card"><h4><span class="tagdot t-good"></span>What exists and is good</h4>
+      <p>A backend-agnostic tool-call normalizer (<code>tool_calling.py</code>), SSE streaming with an
+      extensible event envelope, a fleet-snapshot prompt builder, context-window-aware truncation that
+      pins the <code>## Rules</code> tail, the <code>PendingAction</code> email-approval gate, first-class
+      Salt <code>test=True</code> dry-run, and an existing <code>mlx_cluster</code> Salt state that lets
+      the fleet self-deploy MLX.</p></div>
+    <div class="card"><h4><span class="tagdot t-bad"></span>What is missing</h4>
+      <p>No executor, no agent loop, no tool registry, no write surface for playbooks / Salt states, no
+      RBAC propagation into tool dispatch, and no prompt-injection hardening on fleet-controlled strings
+      that already land verbatim in the system prompt. <code>tool_mode</code> is dead schema; the regex
+      intent classifier is "regex-and-prayers."</p></div>
+  </div>
+  <div class="note"><b>Three load-bearing decisions.</b> (1) A typed JSON-Schema <b>tool registry</b>
+  with RBAC-gated, read-only tools first. (2) A <b>quarantine filesystem</b>
+  (<code>/srv/kri/agent-quarantine/&lt;user&gt;/&lt;session&gt;/</code>) for LLM-generated artifacts that
+  <em>never</em> auto-promote into live <code>playbooks/</code> or <code>salt/states/</code>. (3) Extend
+  the existing <code>PendingAction</code> approval gate into the agent write path — reuse the trust
+  primitive operators already know, don't build a parallel one.</p></div>
+</section>
+
+<section id="today">
+  <h2><span class="x">01</span>The AI surface today</h2>
+  <p class="lead">Real, well-factored work — but the executor never consumes any of it yet.</p>
+  <table class="tbl">
+    <tr><th>Component</th><th>Purpose</th><th>Maturity</th></tr>
+    <tr><td><b>tool_calling.py</b></td><td>Backend-agnostic tool-call normalizer + streaming accumulator (OpenAI, Anthropic tool_use, Llama/exo, inline <code>&lt;|python_tag|&gt;</code>). Pure parse, no I/O.</td><td><span class="badge b-r">solid · unused</span></td></tr>
+    <tr><td><b>llm_caller.py</b></td><td>OpenAI-compat &amp; Anthropic call/stream; context-window-aware truncation that protects the pinned Rules tail.</td><td><span class="badge b-w">no tools=[…] yet</span></td></tr>
+    <tr><td><b>llm_context.py</b></td><td><code>build_fleet_context()</code> — system prompt with fleet snapshot, optional RAG, grounding rules; <code>_sanitize_cell</code> strips <code>|</code>/newlines.</td><td><span class="badge b-r">good</span></td></tr>
+    <tr><td><b>llm_intent.py</b></td><td>Regex intent classifier → {salt_state, ansible_playbook, fleet_command, explain, fleet_query}.</td><td><span class="badge b-x">brittle</span></td></tr>
+    <tr><td><b>llm.py routes</b></td><td>Endpoint CRUD, query/stream, SSE with <code>[DONE]</code>; RBAC + 10/min limit.</td><td><span class="badge b-r">mature for Q&amp;A</span></td></tr>
+    <tr><td><b>llm_endpoint.py</b></td><td>ORM with <code>tool_mode</code> column…</td><td><span class="badge b-x">dead schema</span></td></tr>
+    <tr><td><b>pending_action.py</b></td><td>Tokenized email-approval gate (#291); DESTRUCTIVE / FORBIDDEN / PROTECTED_TARGETS sets.</td><td><span class="badge b-r">reusable primitive</span></td></tr>
+    <tr><td><b>salt_ops.py / salt_tasks.py</b></td><td><code>apply</code> with <code>test=True</code> dry-run; <code>cmd</code> with function allowlist; strict regex validation.</td><td><span class="badge b-r">dry-run = key</span></td></tr>
+    <tr><td><b>playbook_library.py</b></td><td>List / enable / disable / favorite only.</td><td><span class="badge b-x">no write path</span></td></tr>
+    <tr><td><b>mlx_cluster/init.sls</b></td><td>Installs mlx + mlx-lm, writes cluster config, pillar-driven.</td><td><span class="badge b-w">half-built asset</span></td></tr>
+    <tr><td><b>LLMAssistant.tsx</b></td><td>Draggable chat widget; <code>fetch</code> + ReadableStream SSE; abort propagates upstream.</td><td><span class="badge b-r">good UX base</span></td></tr>
+  </table>
+  <div class="note warn"><b>Intent is a prompt-template selector dressed up as a router.</b> It changes one
+  addendum block and nothing else — no model routing, no tool exposure, no safety policy. Once the planner
+  LLM is in the loop it decides what to do; intent should be retired or repurposed as a read-only
+  <em>capability gate</em>.</div>
+</section>
+
+<section id="gaps">
+  <h2><span class="x">02</span>Critical gaps to becoming agentic</h2>
+  <p class="lead">Seven things stand between "fancy chat with a schema" and an agent.</p>
+  <div class="grid g2">
+    <div class="card"><h4><span class="tagdot t-bad"></span>1 · No tool executor + loop</h4><p>Nothing consumes the parsed <code>ToolCall</code> list; no <code>tools=[…]</code> is ever sent. MVP ≈ 400 lines: registry, executor with per-tool RBAC, a bounded <code>AgentLoop</code>, new SSE events.</p></div>
+    <div class="card"><h4><span class="tagdot t-bad"></span>2 · No write surface</h4><p>No create/update endpoint for playbooks or <code>.sls</code> files. The central missing capability for "agent authors and deploys" — and it must target quarantine, never the live tree.</p></div>
+    <div class="card"><h4><span class="tagdot t-bad"></span>3 · No RBAC in dispatch</h4><p>Role is checked once at the route. The instant tools dispatch, the caller's role must propagate into every tool, every Celery task, every audit row.</p></div>
+    <div class="card"><h4><span class="tagdot t-warn"></span>4 · Prompt-injection exposure</h4><p><code>_sanitize_cell</code> strips <code>|</code>/newlines but not code fences, imperative text, tool-call-shaped payloads, or bidi/control Unicode in node fields injected into the prompt.</p></div>
+    <div class="card"><h4><span class="tagdot t-warn"></span>5 · Stale regex intent</h4><p>Fails on multi-turn, negation, synonyms, languages. Becomes obsolete once the planner is the router; keep only as a confident read-only gate.</p></div>
+    <div class="card"><h4><span class="tagdot t-warn"></span>6 · Audit/observability gaps</h4><p>One flat query-log row can't represent a 4-tool / 3-iteration run. Need <code>parent_query_id</code>, a <code>tool_calls</code> JSON column, per-dispatch audit rows, OTEL spans, a run timeline.</p></div>
+    <div class="card"><h4><span class="tagdot t-info"></span>7 · <code>tool_mode</code> unused</h4><p>Should drive native vs json vs anthropic vs none tool calling per endpoint. Until read, every endpoint gets the same prompt-only treatment — a quality &amp; latency cliff.</p></div>
+  </div>
+</section>
+
+<section id="arch">
+  <h2><span class="x">03</span>Target architecture</h2>
+  <p class="lead">A typed registry feeds a bounded loop; an executor enforces RBAC, dry-run, idempotency and audit on every call.</p>
+  <div class="grid g3">
+    <div class="card"><h4>Tool registry</h4><p>Every tool is a frozen <code>ToolSpec</code>: JSON-Schema params (<code>additionalProperties:false</code>, enums, <code>maxLength</code>), <code>required_role</code>, <code>side_effect</code>, <code>requires_approval</code>, <code>requires_dry_run_first</code>. Exports <code>to_openai_tools()</code> / <code>to_anthropic_tools()</code> / <code>to_prompt_section()</code>.</p></div>
+    <div class="card"><h4>Executor</h4><p><code>dispatch(call, ctx)</code>: re-check role → validate args → queue PendingAction if approval needed → enforce prior dry-run → idempotency cache → run handler → <b>audit with actor=operator email</b>.</p></div>
+    <div class="card"><h4>Agent loop</h4><p>Bounded: <code>MAX_ITERATIONS=6</code>, <code>MAX_TOOL_CALLS=12</code>, token caps. Streams <code>step_start</code> / <code>tool_call</code> / <code>tool_result</code> / <code>awaiting_approval</code> events; checks client disconnect each iteration.</p></div>
+  </div>
+
+  <h3>Write surface: quarantine → review → promote</h3>
+  <p>The load-bearing safety property of the whole system. The agent can <em>write to quarantine</em>; it can <em>never promote</em>.</p>
+  <div class="flow">
+    <span class="step q">generate_salt_state</span><span class="arr">→</span>
+    <span class="step">validate YAML + schema + dangerous-pattern scan</span><span class="arr">→</span>
+    <span class="step q">write to /srv/kri/agent-quarantine/&lt;user&gt;/&lt;session&gt;/</span><span class="arr">→</span>
+    <span class="step">diff vs live</span><span class="arr">→</span>
+    <span class="step">dry-run (test=True)</span><span class="arr">→</span>
+    <span class="step gate">human reviews diff + dry-run</span><span class="arr">→</span>
+    <span class="step gate">admin clicks Promote</span><span class="arr">→</span>
+    <span class="step">copy to live + apply</span>
+  </div>
+  <div class="note"><b>Promotion is NOT a tool.</b> It's an explicit admin-only <code>POST /agent/artifacts/{id}/promote</code>. Quarantine is per-session, 0700, quota'd (5&nbsp;MB/session, 50&nbsp;MB/user), TTL 24h, path-traversal-validated, symlink-rejected. No file reaches the live tree without a human click.</div>
+
+  <h3>RBAC propagation — role-to-tool matrix</h3>
+  <table class="tbl">
+    <tr><th>Role</th><th>Read</th><th>Write-quarantine</th><th>Write-live</th><th>Approval-gated</th></tr>
+    <tr><td><b>viewer</b></td><td><span class="badge b-r">yes</span></td><td>—</td><td>—</td><td>—</td></tr>
+    <tr><td><b>operator</b></td><td><span class="badge b-r">yes</span></td><td><span class="badge b-w">yes</span></td><td><span class="badge b-w">non-destructive</span></td><td><span class="badge b-e">operator + admin co-sign &gt;N</span></td></tr>
+    <tr><td><b>admin</b></td><td><span class="badge b-r">yes</span></td><td><span class="badge b-w">yes</span></td><td><span class="badge b-x">yes</span></td><td><span class="badge b-e">self-approve ≤N</span></td></tr>
+  </table>
+  <p class="small muted">The model never sees a tool it can't call (<code>get_tools_for_role</code>); the executor re-checks at dispatch (belt-and-suspenders). Approval reuses <code>PendingAction</code>, extended with <code>session_id</code>, <code>proposed_by_agent</code>, <code>tool_name</code>, <code>target_count</code>, <code>dry_run_result</code>, <code>co_sign_required</code>.</p>
+</section>
+
+<section id="scenarios">
+  <h2><span class="x">04</span>Operator scenarios</h2>
+  <p class="lead">What "agentic kri" feels like, end-to-end.</p>
+  <ul class="clean">
+    <li><b>A — "Install Xcode 16 on all Darwin nodes in ios-builders, dry-run first."</b> Planner: <code>list_nodes</code> → <code>read_existing_state</code> → <code>generate_salt_state</code> (quarantine) → lint/scan gate → <code>apply_salt_state_dry_run</code> → operator reviews diff → tokenized approval → real apply, one audit row per node.</li>
+    <li><b>B — "Write a playbook that installs node_exporter and run it on the new build group."</b> Lands in quarantine, <code>ansible-lint</code>'d, diffed against the live playbook; only a human "Promote" lifts it into <code>playbooks/</code>.</li>
+    <li><b>C — "Why is mm7 degraded and what would fix it?"</b> Pure read: <code>get_node</code> + <code>get_recent_audit</code> + <code>search_playbooks</code> → synthesized answer. No write tools exposed, no gate, target &lt;8&nbsp;s.</li>
+    <li><b>D — "Spin up an MLX cluster on the 18 minis, mm1 coordinator."</b> <code>set_pillar</code> loop → <code>apply_salt_state_dry_run(ml.mlx_cluster)</code> → approve → rollout. Special guard: a planner session may not deplane its own planner minis.</li>
+    <li><b>E — "Bring mm12 back into rotation."</b> <code>get_node</code> → <code>ping_node</code> → <code>enable_node</code> → <code>run_salt_cmd(test.ping)</code>. <code>enable_node</code> needs operator role but not email approval.</li>
+  </ul>
+  <div class="note bad"><b>The agent will never:</b> read secrets, delete nodes, <code>process_kill</code>, touch PROTECTED_TARGETS (salt-master, sshd, launchd, windowserver, exo…), write outside quarantine, run shell off the Salt allowlist, modify its own config/RBAC/audit, reach the public internet, or act for two operators on the same target at once.</div>
+</section>
+
+<section id="mlx">
+  <h2><span class="x">05</span>Local LLM plan — 18× M4 minis (16 GB)</h2>
+  <p class="lead">Serve the planner, coder and worker tiers from the fleet itself. Build for ~88% tool-call accuracy, not 99%.</p>
+  <table class="tbl">
+    <tr><th>Tier</th><th>Model (MLX 4-bit)</th><th>RAM</th><th>Throughput</th><th>Role</th></tr>
+    <tr><td><b>Planner</b></td><td>Qwen 2.5 14B Instruct</td><td>~8.5 GB</td><td>18–25 tok/s</td><td>mm1, mm2 — strong tool-calling</td></tr>
+    <tr><td><b>Coder</b></td><td>Qwen 2.5 Coder 14B</td><td>~8.5 GB</td><td>18–25 tok/s</td><td>mm3–mm6 — YAML/SLS generation only</td></tr>
+    <tr><td><b>Worker</b></td><td>Qwen 2.5 7B Instruct</td><td>~4.5 GB</td><td>35–45 tok/s</td><td>mm7–mm18 — fast read-only Q&amp;A</td></tr>
+    <tr><td><b>Embed</b></td><td>BGE-M3</td><td>~1.2 GB</td><td>p95 ≤200 ms</td><td>RAG sidecar (on worker minis)</td></tr>
+  </table>
+  <div class="topo">              ┌─────────────────────────────┐
+              │      kri API (Router)       │  picks endpoint per call
+              └──────────────┬──────────────┘
+        ┌────────────────────┼────────────────────┐
+        ▼                    ▼                    ▼
+   ┌──────────┐        ┌──────────┐         ┌──────────────┐
+   │ Planner  │        │  Coder   │         │ Worker pool  │
+   │ mm1,mm2  │        │ mm3–mm6  │         │  mm7–mm18    │
+   │ Qwen 14B │        │ Coder14B │         │  Qwen 7B     │
+   └──────────┘        └──────────┘         └──────────────┘
+        └── all serve OpenAI-compatible /v1/chat/completions ──┘
+                    + /v1/embeddings (BGE-M3 sidecar)</div>
+  <p class="small muted">Default topology: round-robin <code>mlx_lm.server</code> per node (18 independent OpenAI-compatible endpoints, discovered + health-cached). The router picks by capability tag (planner/coder_yaml/fast_summarize/embed), then health, then least-loaded, with a fallback chain ending at an optional admin-gated cloud endpoint. The existing <code>mlx_cluster</code> Salt state is extended (launchd plist, model pre-download, health probe) — itself a textbook first dogfooding target for the agent's write tools.</p>
+  <div class="note warn"><b>16 GB is tight for a 14B planner.</b> Mitigate with <code>max_concurrent:1</code> on planner minis, an 8K per-session context cap, embedding sidecar moved off planners, and a hard <code>MAX_ITERATIONS=6</code> so a confused planner fails loudly rather than looping. Expect ~1-in-10 tool calls wrong — feed schema errors back ("did you mean apply_salt_state?") to self-correct in one extra step.</div>
+</section>
+
+<section id="security">
+  <h2><span class="x">06</span>Security &amp; boundaries</h2>
+  <p class="lead">The agent is only as safe as the worst tool it can call — so this gets the most rigor.</p>
+  <h3>Tool risk tiers (34 tools total)</h3>
+  <table class="tbl">
+    <tr><th>Tier</th><th>Examples</th><th>Role</th><th>Gate</th></tr>
+    <tr><td><span class="badge b-r">read</span></td><td>list_nodes, get_node, get_recent_audit, read_playbook, rag_search, embed_text</td><td>viewer–operator</td><td>none</td></tr>
+    <tr><td><span class="badge b-r">execute-read</span></td><td>ping_node, run_salt_cmd (allowlist), apply_salt_state_dry_run, lint_artifact</td><td>operator</td><td>approval if &gt;3 minions</td></tr>
+    <tr><td><span class="badge b-w">write-quarantine</span></td><td>generate_ansible_playbook, generate_salt_state</td><td>operator</td><td>validation pipeline only</td></tr>
+    <tr><td><span class="badge b-x">write-live</span></td><td>apply_salt_state, set_pillar, restart_service, bootstrap_node</td><td>operator/admin</td><td><b>dry-run + approval, always</b></td></tr>
+    <tr><td><span class="badge b-x">promote</span></td><td>promote_artifact</td><td>admin</td><td>explicit admin click — not a tool</td></tr>
+    <tr><td><span class="badge b-x">never defined</span></td><td>read_*_secret, decrypt_anything, set_user_role, delete_node, delete_audit_log_row</td><td>—</td><td>no tool exists, by construction</td></tr>
+  </table>
+  <h3>Defense layers</h3>
+  <div class="grid g2">
+    <div class="card"><h4><span class="tagdot t-warn"></span>Prompt-injection stack</h4><p>Field-level sanitize at ingest <em>and</em> prompt-build (reject <code>&lt;|</code>, code fences, <code>tool_call</code>, Cc/Cf/Co/Cs + bidi Unicode); wrap node data in <code>&lt;NODE_FIELD&gt;</code> "treat as data" framing; re-sanitize every tool result before feedback.</p></div>
+    <div class="card"><h4><span class="tagdot t-warn"></span>Output validation</h4><p>Generated YAML/SLS runs: safe_load → shape schema → dangerous-pattern scan (<code>rm -rf /</code>, forkbomb, <code>dd</code> to device, <code>curl|sh</code>, TLS bypass, egress) → forbidden-module scan → 64 KB cap → ansible-lint/salt-lint. <b>Never auto-promote.</b></p></div>
+    <div class="card"><h4><span class="tagdot t-good"></span>Confused-deputy avoidance</h4><p>Every audit row, Celery header, approval email and OTEL span carries the <b>operator's email</b> — never "agent". One answer to "who fired this": <code>alice@org via agent session X</code>.</p></div>
+    <div class="card"><h4><span class="tagdot t-info"></span>Hard limits</h4><p>6 iterations · 12 tool calls/turn · 2 parallel writes/operator · co-sign &gt;8 nodes · 6/min rate · 32K input tokens · 4 KB tool-result cap · 4h approval expiry · cloud-fallback daily cap.</p></div>
+  </div>
+  <div class="note"><b>Rollout follows a trust curve, not a flip.</b> Month 1 = proposal-only (diffs &amp; dry-runs, zero live writes). Then apply-with-approval for single-node, then co-sign for 2–8 nodes, then full registry — each stage gated on zero agent-caused incidents for two weeks.</div>
+</section>
+
+<section id="roadmap">
+  <h2><span class="x">07</span>Implementation roadmap — six phases</h2>
+  <p class="lead">Sequenced A→B→C→D→E→F. C can parallelize with B. ~83 SP total; ~4–5 weeks with two engineers.</p>
+  <div class="phases">
+    <div class="phase a"><div class="ltr">A</div><div><span class="sp">~9 SP</span><h4>Foundations (finish the wired-but-dead primitives)</h4>
+      <ul><li>Wire <code>tool_mode</code> into the call path (native / json / none → 422)</li>
+      <li>Add <code>tool_calls</code> JSON, <code>parent_query_id</code>, <code>agent_session_id</code>; new <code>AgentSession</code> model</li>
+      <li>Extend <code>PendingAction</code> with agent fields; centralized role-rank helper</li>
+      <li>Quarantine root + perms; OTEL plumbing; stricter injection sanitizer (30-string test)</li></ul></div></div>
+    <div class="phase b"><div class="ltr">B</div><div><span class="sp">~18 SP</span><h4>Tool executor MVP — read-only tools</h4>
+      <ul><li><code>ToolSpec</code> / <code>ToolRegistry</code> / <code>ToolCtx</code>; executor with audit + idempotency + schema validation</li>
+      <li>Bounded <code>AgentLoop</code> with SSE events; read tools #1–#11</li>
+      <li><code>POST /api/v1/agent/run/stream</code>; frontend ToolStep / ToolResultCard + Q&amp;A↔Agent toggle</li></ul></div></div>
+    <div class="phase c"><div class="ltr">C</div><div><span class="sp">~13 SP</span><h4>Local MLX cluster online</h4>
+      <ul><li>Extend <code>mlx_cluster</code> (launchd plist, model pre-download); planner/coder/worker pillars + top.sls</li>
+      <li>Health state + mine.send; embedding sidecar; capability-tag router; bench harness; apply to 18 minis</li></ul></div></div>
+    <div class="phase d"><div class="ltr">D</div><div><span class="sp">~15 SP</span><h4>Write surface + quarantine + diff review UI</h4>
+      <ul><li>Quarantine service (quotas, sweeper); authoring tools with full validation pipeline; lint tools</li>
+      <li>Diff service; artifact routes; Monaco-based <code>ArtifactCard</code>; <code>apply_salt_state_dry_run</code> tool</li></ul></div></div>
+    <div class="phase e"><div class="ltr">E</div><div><span class="sp">~14 SP</span><h4>Apply-with-approval</h4>
+      <ul><li>Live apply tools (always approval); PendingAction email with dry-run + diff; approver dispatch as original actor</li>
+      <li>Co-sign workflow; <code>promote_artifact</code> (admin); service/node control + set_pillar tools with guards</li></ul></div></div>
+    <div class="phase f"><div class="ltr">F</div><div><span class="sp">~14 SP</span><h4>Hardening</h4>
+      <ul><li>Red-team injection corpus (60+); per-tool fuzz; rate/quota tests; append-only audit enforcement</li>
+      <li>Cost dashboard; incident runbook; chaos planner-failover test; operator/admin/threat-model docs</li></ul></div></div>
+  </div>
+  <div class="flow" style="margin-top:14px">
+    <span class="step">A · Foundations</span><span class="arr">→</span>
+    <span class="step">B · Read executor</span><span class="arr">→</span>
+    <span class="step">C · MLX cluster</span><span class="arr">→</span>
+    <span class="step">D · Write quarantine</span><span class="arr">→</span>
+    <span class="step">E · Apply w/ approval</span><span class="arr">→</span>
+    <span class="step">F · Hardening</span>
+  </div>
+</section>
+
+<section id="decisions">
+  <h2><span class="x">08</span>Open decisions for you</h2>
+  <p class="lead">Real forks, each one branches the implementation.</p>
+  <ul class="clean">
+    <li class="q"><b>Cloud fallback — on or off?</b> If on, name the provider (Claude 3.5 Sonnet = strongest tool-caller) and a daily $ cap.</li>
+    <li class="q"><b>Promotion to Git, or filesystem-only?</b> Default is filesystem; PR-on-promote needs a push-scoped service account.</li>
+    <li class="q"><b>Proposal-only audience (month 1)</b> — whole team, or a small alpha cohort?</li>
+    <li class="q"><b>Approvals via email, Slack, or in-app?</b> PendingAction is email today; Slack buttons convert better.</li>
+    <li class="q"><b>Co-sign threshold</b> — default 8 nodes (≈25% of 18 + headroom). Confirm or override.</li>
+    <li class="q"><b>promote_artifact</b> — admin-only (default), or two-tier with operator-to-staging?</li>
+    <li class="q"><b>Planner runtime</b> — MLX (recommended, +30% on Apple silicon) vs llama.cpp (portable)?</li>
+    <li class="q"><b>Planner escape valve</b> if all planner minis are down — cloud-for-planner, refuse-to-Q&amp;A, or cold-standby?</li>
+    <li class="q"><b>Per-tool kill switches</b> in addition to role gating? Cheap to add to the registry.</li>
+    <li class="q"><b>Agent-run transcript retention</b> — 90 days? 1 year? SOC2 driver?</li>
+  </ul>
+</section>
+
+<section id="metrics">
+  <h2><span class="x">09</span>Success metrics</h2>
+  <p class="lead">What "it works" is measured by.</p>
+  <table class="tbl">
+    <tr><th>Metric</th><th>Target</th><th>From phase</th></tr>
+    <tr><td>Agent run completion (no MAX_ITERATIONS hit)</td><td><b>≥ 90%</b></td><td>B+</td></tr>
+    <tr><td>Tool-call validation reject rate</td><td><b>≤ 10%</b></td><td>B+</td></tr>
+    <tr><td>Mean iterations per successful run</td><td><b>≤ 3</b></td><td>B+</td></tr>
+    <tr><td>Audit completeness (every dispatch → row)</td><td><b>100%</b></td><td>B+</td></tr>
+    <tr><td>Local-served queries (vs cloud fallback)</td><td><b>≥ 95%</b></td><td>C+</td></tr>
+    <tr><td>p95 first-token, local planner</td><td><b>≤ 2.5 s</b></td><td>C+</td></tr>
+    <tr><td>p95 wall-clock, 3-step run</td><td><b>≤ 25 s</b></td><td>C+</td></tr>
+    <tr><td>Secret-bearing fields in tool results</td><td><b>0</b></td><td>A+</td></tr>
+    <tr><td>Quarantine→live promotions without admin click</td><td><b>0</b></td><td>D+</td></tr>
+    <tr><td>Prompt-injection corpus pass rate</td><td><b>100%</b></td><td>F</td></tr>
+    <tr><td>Token cost / run (local-only)</td><td><b>$0</b></td><td>C+</td></tr>
+  </table>
+</section>
+
+<section id="finish">
+  <h2><span class="x">10</span>What success looks like in 12 weeks</h2>
+  <p class="lead">An operator types: <span class="muted">"create a state that installs htop on all online linux nodes, dry-run."</span></p>
+  <ul class="clean">
+    <li>Within ~15 s they watch the planner pick <code>list_nodes</code> and <code>generate_salt_state</code>, with linter and dry-run results streaming in.</li>
+    <li>They review the dry-run and click <b>Approve</b> in the email or UI.</li>
+    <li>A minute later htop is on every online Linux node — each install with an audit row attributed to <b>them</b>.</li>
+    <li>No secret was read, no protected target touched, no file written outside quarantine until Promote was clicked.</li>
+    <li>The entire run was served by an LLM running on the fleet they manage. <span class="kfig">That is what we are building.</span></li>
+  </ul>
+  <footer>
+    Source: <code>kri-chat.txt</code> — principal-engineer audit &amp; A–F agentic transformation plan.
+    This page is a synthesized briefing; the full document carries per-item story points, the complete
+    34-tool risk matrix, the threat model, and the file-by-file change inventory. Tracked as a separate
+    GitHub epic. · Rendered for kri fleet platform.
+  </footer>
+</section>
+</main>
+<script>
+  const links=[...document.querySelectorAll('nav.toc a')];
+  const secs=links.map(a=>document.querySelector(a.getAttribute('href')));
+  const io=new IntersectionObserver((es)=>{
+    es.forEach(e=>{if(e.isIntersecting){
+      const id='#'+e.target.id;
+      links.forEach(a=>a.classList.toggle('on',a.getAttribute('href')===id));
+    }});
+  },{rootMargin:'-45% 0px -50% 0px',threshold:0});
+  secs.forEach(s=>s&&io.observe(s));
+</script>
+</body>
+</html>

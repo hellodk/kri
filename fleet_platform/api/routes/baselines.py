@@ -130,7 +130,6 @@ async def create_baseline(
     claims: dict = Depends(require_role("admin")),
 ):
     from fleet_platform.core.audit import audit
-
     from fleet_platform.services.baseline_loader import _VALID_OS_FAMILIES
 
     if payload.os_family is not None and payload.os_family not in _VALID_OS_FAMILIES:

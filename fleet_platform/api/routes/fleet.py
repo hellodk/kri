@@ -29,6 +29,7 @@ from fleet_platform.services.node_import import (
     parse_paste,
     validate_row,
 )
+from fleet_platform.services.ssh_credential_link import upsert_owner_ssh_credential
 
 router = APIRouter(prefix="/api/v1/fleet")
 
@@ -172,10 +173,31 @@ async def import_commit(
     db: AsyncSession = Depends(get_db),
     claims: dict = Depends(require_role("operator", "admin")),
 ) -> ImportCommitResponse:
-    """Commit validated rows to the database, skipping duplicates and invalid rows."""
+    """Commit validated rows to the database, skipping duplicates and invalid rows.
+
+    When ``auto_bootstrap`` is set, each newly created node is queued for bootstrap
+    through the same path as the dedicated bootstrap endpoint (group enforcement,
+    credential persistence, audit, and Celery dispatch with the node's target IP).
+    """
+    # Bootstrap requires group membership; a single import applies one group to all
+    # rows, so demand the group up front rather than failing per-node in the worker.
+    if payload.auto_bootstrap and not payload.group_id:
+        raise HTTPException(
+            status_code=400,
+            detail="Select a group to bootstrap imported nodes — bootstrapping "
+            "requires the node to belong to a group with SSH credentials.",
+        )
+
+    # Resolve the global SSH auth mode once (per-row ssh_user can still override the
+    # username below). Secrets stay bound to locals — never sent to the broker (#495).
+    _ssh_pw = payload.ssh_password or None
+    _ssh_key = payload.ssh_key or None
+    _auth_mode = payload.ssh_auth_mode or ("key" if (_ssh_key and not _ssh_pw) else "password")
+
     new_rows = [r for r in payload.rows if r.status == "new"]
     skipped = len(payload.rows) - len(new_rows)
     created_ids: list[str] = []
+    created_nodes: list[Node] = []
 
     for r in new_rows:
         token_hash = await asyncio.to_thread(hash_password, secrets.token_urlsafe(32))
@@ -183,7 +205,6 @@ async def import_commit(
             minion_id=r.minion_id,
             hostname=r.hostname or r.minion_id,
             ip_address=r.ip or None,
-            ssh_username=payload.ssh_username or r.ssh_user or None,
             node_token_hash=token_hash,
             first_seen_at=datetime.now(UTC),
             status="unknown",
@@ -191,6 +212,23 @@ async def import_commit(
         db.add(node)
         await db.flush()
         created_ids.append(str(node.id))
+        created_nodes.append(node)
+
+        # SSH credentials (#725): persist username/password/key into the node's
+        # dedicated Credential row + FK instead of the deprecated inline columns.
+        _ssh_user = payload.ssh_username or r.ssh_user or None
+        if _ssh_user or _ssh_pw or _ssh_key:
+            _cred_id = await upsert_owner_ssh_credential(
+                db,
+                owner_name=f"node:{node.minion_id}",
+                current_credential_id=None,
+                ssh_username=_ssh_user,
+                ssh_password=_ssh_pw,
+                ssh_key=_ssh_key,
+                ssh_auth_mode=_auth_mode if (_ssh_pw or _ssh_key) else None,
+            )
+            if _cred_id is not None:
+                node.credential_id = _cred_id
 
         if payload.group_id:
             from fleet_platform.models.group import GroupMember
@@ -215,14 +253,32 @@ async def import_commit(
 
     bootstrap_queued = 0
     if payload.auto_bootstrap:
-        try:
-            from fleet_platform.workers.ansible_tasks import bootstrap_node
+        from fleet_platform.services.bootstrap_svc import (
+            BootstrapGroupRequired,
+            queue_node_bootstrap,
+        )
 
-            for nid in created_ids:
-                bootstrap_node.delay(nid)
+        for node in created_nodes:
+            # Can't SSH-bootstrap a node with no address — skip silently and let the
+            # operator supply an IP/hostname later via a targeted bootstrap.
+            target_ip = node.ip_address
+            if not target_ip:
+                continue
+            try:
+                await queue_node_bootstrap(
+                    db,
+                    node,
+                    target_ip=target_ip,
+                    actor=claims["email"],
+                    ssh_username=payload.ssh_username or None,
+                    ssh_password=_ssh_pw,
+                    ssh_key=_ssh_key,
+                )
                 bootstrap_queued += 1
-        except Exception:
-            pass
+            except BootstrapGroupRequired:
+                # group_id was enforced above, so this is unexpected; skip the node
+                # rather than aborting the whole (already-committed) import.
+                continue
 
     return ImportCommitResponse(
         created=len(created_ids),

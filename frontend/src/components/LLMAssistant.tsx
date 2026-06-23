@@ -1,6 +1,25 @@
 import { useState, useRef, useEffect, useCallback } from 'react'
 import { streamQuery } from '../api/llm'
+import { streamAgent, type AgentEvent } from '../api/agent'
+import { ToolStep, ToolResultCard, type ToolStepData } from './AgentToolStep'
+import { ArtifactsPanel } from './ArtifactsPanel'
+import { AgentApprovals } from './AgentApprovals'
 import { useLLMStore } from '../stores/llmStore'
+
+type AssistantMode = 'qa' | 'agent'
+
+type AgentItem = { kind: 'step'; iteration: number } | { kind: 'tool'; step: ToolStepData }
+
+interface AgentTurn {
+  prompt: string
+  model?: string
+  items: AgentItem[]
+  final?: string
+  note?: string
+  error?: string
+  meta?: { iterations: number; tool_calls: number; tokens_in: number; tokens_out: number; duration_ms: number }
+  running: boolean
+}
 
 function classifyIntentHint(prompt: string): string {
   const p = prompt.toLowerCase()
@@ -21,12 +40,29 @@ function loadPos(): { x: number; y: number } | null {
   }
 }
 
+// Clamp a stored position into the current viewport. A position saved on a
+// larger screen (or before a resize) can otherwise place the panel fully
+// off-screen and unreachable; we apply this at load, not only on resize (#666).
+function clampToViewport(p: { x: number; y: number }, w = 384, h = 56): { x: number; y: number } {
+  const maxX = Math.max(0, window.innerWidth - w)
+  const maxY = Math.max(0, window.innerHeight - h)
+  return { x: Math.max(0, Math.min(p.x, maxX)), y: Math.max(0, Math.min(p.y, maxY)) }
+}
+
 export default function LLMAssistant() {
   const [open, setOpen] = useState(false)
   const [prompt, setPrompt] = useState('')
   const [intentHint, setIntentHint] = useState('Fleet Query')
-  const [pos, setPos] = useState<{ x: number; y: number } | null>(loadPos)
+  // Clamp a stale stored position into the viewport at load, so a panel saved
+  // off-screen on a larger display is always reachable (#666).
+  const [pos, setPos] = useState<{ x: number; y: number } | null>(() => {
+    const p = loadPos()
+    return p ? clampToViewport(p) : null
+  })
   const [streaming, setStreaming] = useState(false)
+  const [mode, setMode] = useState<AssistantMode>('qa')
+  const [agentView, setAgentView] = useState<'run' | 'artifacts' | 'approvals'>('run')
+  const [agentTurns, setAgentTurns] = useState<AgentTurn[]>([])
   const { messages, addMessage, clearMessages, appendToLastMessage, patchLastMessage } = useLLMStore()
   const bottomRef = useRef<HTMLDivElement>(null)
   const intentDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -48,10 +84,11 @@ export default function LLMAssistant() {
 
   const panelRef = useRef<HTMLDivElement>(null)
   const iconRef = useRef<HTMLButtonElement>(null)
+  const textareaRef = useRef<HTMLTextAreaElement>(null)
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
-  }, [messages])
+  }, [messages, agentTurns])
 
   // Re-clamp pos into viewport on window resize
   useEffect(() => {
@@ -71,6 +108,74 @@ export default function LLMAssistant() {
     }
     window.addEventListener('resize', handleResize)
     return () => window.removeEventListener('resize', handleResize)
+  }, [])
+
+  // When the dialog opens, move focus into it; when it closes (and only on an
+  // actual open→close transition, never on first mount), return focus to the
+  // launcher icon so keyboard users aren't stranded (#666).
+  const prevOpenRef = useRef(open)
+  useEffect(() => {
+    if (open) {
+      textareaRef.current?.focus()
+    } else if (prevOpenRef.current) {
+      iconRef.current?.focus()
+    }
+    prevOpenRef.current = open
+  }, [open])
+
+  // Nudge the panel with the arrow keys (keyboard alternative to pointer drag),
+  // and reset to the default anchor with Home (#666).
+  const nudgePos = useCallback((dx: number, dy: number) => {
+    setPos(prev => {
+      const el = panelRef.current
+      const w = el ? el.offsetWidth : 384
+      const h = el ? el.offsetHeight : 56
+      const base = prev ?? { x: window.innerWidth - w - 24, y: window.innerHeight - h - 24 }
+      const next = clampToViewport({ x: base.x + dx, y: base.y + dy }, w, h)
+      localStorage.setItem('llm-assistant-pos', JSON.stringify(next))
+      return next
+    })
+  }, [])
+
+  const onHeaderKeyDown = useCallback((e: React.KeyboardEvent<HTMLDivElement>) => {
+    const STEP = 16
+    switch (e.key) {
+      case 'ArrowUp': e.preventDefault(); nudgePos(0, -STEP); break
+      case 'ArrowDown': e.preventDefault(); nudgePos(0, STEP); break
+      case 'ArrowLeft': e.preventDefault(); nudgePos(-STEP, 0); break
+      case 'ArrowRight': e.preventDefault(); nudgePos(STEP, 0); break
+      case 'Home':
+        e.preventDefault()
+        localStorage.removeItem('llm-assistant-pos')
+        setPos(null)
+        break
+    }
+  }, [nudgePos])
+
+  // Dialog-level keyboard: Escape closes; Tab is trapped within the panel (#666).
+  const onPanelKeyDown = useCallback((e: React.KeyboardEvent<HTMLDivElement>) => {
+    if (e.key === 'Escape') {
+      e.preventDefault()
+      setOpen(false)
+      return
+    }
+    if (e.key !== 'Tab') return
+    const panel = panelRef.current
+    if (!panel) return
+    const focusable = panel.querySelectorAll<HTMLElement>(
+      'a[href], button:not([disabled]), textarea:not([disabled]), input:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])',
+    )
+    if (focusable.length === 0) return
+    const first = focusable[0]
+    const last = focusable[focusable.length - 1]
+    const active = document.activeElement as HTMLElement | null
+    if (e.shiftKey && active === first) {
+      e.preventDefault()
+      last.focus()
+    } else if (!e.shiftKey && active === last) {
+      e.preventDefault()
+      first.focus()
+    }
   }, [])
 
   const startDrag = useCallback((e: React.PointerEvent<HTMLElement>, elemRef: React.RefObject<HTMLElement | null>) => {
@@ -138,9 +243,115 @@ export default function LLMAssistant() {
     }
   }, [])
 
+  const patchLastTurn = useCallback((fn: (t: AgentTurn) => AgentTurn) => {
+    setAgentTurns((prev) => {
+      if (prev.length === 0) return prev
+      const next = prev.slice()
+      next[next.length - 1] = fn(next[next.length - 1])
+      return next
+    })
+  }, [])
+
+  const handleAgentEvent = useCallback(
+    (ev: AgentEvent) => {
+      switch (ev.type) {
+        case 'session_start':
+          patchLastTurn((t) => ({ ...t, model: ev.model }))
+          break
+        case 'step_start':
+          patchLastTurn((t) => ({ ...t, items: [...t.items, { kind: 'step', iteration: ev.iteration }] }))
+          break
+        case 'tool_call':
+          patchLastTurn((t) => ({
+            ...t,
+            items: [...t.items, { kind: 'tool', step: { n: ev.n, name: ev.name, args: ev.args, pending: true } }],
+          }))
+          break
+        case 'tool_result':
+          patchLastTurn((t) => {
+            // Match the most recent still-pending tool item (dispatch is serial).
+            const items = t.items.slice()
+            for (let i = items.length - 1; i >= 0; i--) {
+              const it = items[i]
+              if (it.kind === 'tool' && it.step.pending) {
+                items[i] = {
+                  kind: 'tool',
+                  step: {
+                    ...it.step,
+                    pending: false,
+                    ok: ev.ok,
+                    status: ev.status,
+                    result: ev.result,
+                    error: ev.error,
+                    cached: ev.cached,
+                  },
+                }
+                break
+              }
+            }
+            return { ...t, items }
+          })
+          break
+        case 'awaiting_approval':
+          patchLastTurn((t) => ({ ...t, note: `Awaiting approval for ${ev.name} — open it in Pending Actions.` }))
+          break
+        case 'final':
+          patchLastTurn((t) => ({ ...t, final: ev.text }))
+          break
+        case 'limit_reached': {
+          const note =
+            ev.limit === 'no_progress'
+              ? 'Stopped early: the assistant kept repeating the same step without new information.'
+              : `Stopped: reached ${ev.limit} (${ev.value}).`
+          patchLastTurn((t) => ({ ...t, note }))
+          break
+        }
+        case 'error':
+          patchLastTurn((t) => ({ ...t, error: ev.error, running: false }))
+          break
+        case 'done':
+          patchLastTurn((t) => ({
+            ...t,
+            running: false,
+            meta: {
+              iterations: ev.iterations,
+              tool_calls: ev.tool_calls,
+              tokens_in: ev.input_tokens,
+              tokens_out: ev.output_tokens,
+              duration_ms: ev.duration_ms,
+            },
+          }))
+          setStreaming(false)
+          break
+      }
+    },
+    [patchLastTurn],
+  )
+
+  const handleAgentSubmit = (text: string) => {
+    setAgentTurns((prev) => [...prev, { prompt: text, items: [], running: true }])
+    setPrompt('')
+    setStreaming(true)
+    streamControllerRef.current?.abort()
+    streamControllerRef.current = streamAgent(
+      { prompt: text },
+      {
+        onEvent: handleAgentEvent,
+        onError: (msg) => {
+          patchLastTurn((t) => ({ ...t, error: msg, running: false }))
+          setStreaming(false)
+        },
+      },
+    )
+  }
+
   const handleSubmit = () => {
     const text = prompt.trim()
     if (!text || streaming) return
+    if (mode === 'agent') {
+      handleAgentSubmit(text)
+      return
+    }
     // Capture history BEFORE addMessage — prevents the new message appearing
     // in both history and prompt (duplicate turn bug, closes #303)
     const history = messages
@@ -184,7 +395,11 @@ export default function LLMAssistant() {
   const handleStop = () => {
     streamControllerRef.current?.abort()
     streamControllerRef.current = null
-    patchLastMessage({ streaming: false, error: 'cancelled' })
+    if (mode === 'agent') {
+      patchLastTurn((t) => ({ ...t, running: false, note: t.note ?? 'cancelled' }))
+    } else {
+      patchLastMessage({ streaming: false, error: 'cancelled' })
+    }
     setStreaming(false)
   }
 
@@ -237,27 +452,54 @@ export default function LLMAssistant() {
       <div
         ref={panelRef}
         style={posStyle}
+        role="dialog"
+        aria-modal="true"
+        aria-label="AI Fleet Assistant"
         aria-hidden={!open}
-        className={`fixed ${defaultAnchorClasses} z-50 w-96 max-h-[600px] flex flex-col bg-white/90 backdrop-blur-md border border-gray-200 rounded-xl shadow-2xl overflow-hidden transition-all duration-200 ${
+        onKeyDown={onPanelKeyDown}
+        className={`fixed ${defaultAnchorClasses} z-50 w-96 max-h-[600px] flex flex-col bg-white border border-gray-200 rounded-xl shadow-2xl overflow-hidden transition-all duration-200 ${
           open
             ? 'opacity-100 scale-100 pointer-events-auto visible'
             : 'opacity-0 scale-95 pointer-events-none invisible'
         }`}
       >
-        {/* Header — drag handle */}
+        {/* Header — drag handle (pointer) + arrow-key move (keyboard) */}
         <div
           onPointerDown={onPointerDownHeader}
           onPointerMove={e => onPointerMove(e as React.PointerEvent<HTMLElement>)}
           onPointerUp={e => onPointerUp(e as React.PointerEvent<HTMLElement>, false)}
-          className="flex items-center justify-between px-4 py-3 bg-blue-600 text-white cursor-move select-none"
+          onKeyDown={onHeaderKeyDown}
+          tabIndex={open ? 0 : -1}
+          role="button"
+          aria-label="Move assistant — use arrow keys to reposition, Home to reset"
+          className="flex items-center justify-between px-4 py-3 bg-blue-600 text-white cursor-move select-none focus:outline-none focus:ring-2 focus:ring-inset focus:ring-white/70"
         >
           <span className="font-semibold text-sm">AI Fleet Assistant</span>
           <div className="flex items-center gap-2">
-            {messages.length > 0 && (
+            {/* Q&A ↔ Agent mode toggle */}
+            <div className="flex rounded-md overflow-hidden border border-white/30 text-[11px] cursor-default select-auto">
               <button
-                onClick={clearMessages}
+                onClick={() => !streaming && setMode('qa')}
+                disabled={streaming}
+                className={`px-2 py-0.5 transition-colors ${mode === 'qa' ? 'bg-white text-blue-700' : 'text-white/80 hover:bg-white/10'} disabled:opacity-60`}
+                title="Single-shot Q&A"
+              >
+                Q&amp;A
+              </button>
+              <button
+                onClick={() => !streaming && setMode('agent')}
+                disabled={streaming}
+                className={`px-2 py-0.5 transition-colors ${mode === 'agent' ? 'bg-white text-blue-700' : 'text-white/80 hover:bg-white/10'} disabled:opacity-60`}
+                title="Multi-tool agent run"
+              >
+                Agent
+              </button>
+            </div>
+            {((mode === 'qa' && messages.length > 0) || (mode === 'agent' && agentTurns.length > 0)) && (
+              <button
+                onClick={() => (mode === 'agent' ? setAgentTurns([]) : clearMessages())}
                 className="text-white/70 hover:text-white text-xs px-2 py-0.5 rounded border border-white/30 hover:border-white/60 transition-colors cursor-default select-auto"
-                title="Clear chat history"
+                title="Clear history"
               >
                 Clear
               </button>
@@ -275,8 +517,83 @@ export default function LLMAssistant() {
         </div>
 
         <div className="flex-1 overflow-y-auto p-4 space-y-4 min-h-0">
+          {mode === 'agent' ? (
+            <>
+              <div className="flex gap-1 text-[11px] mb-1">
+                <button
+                  onClick={() => setAgentView('run')}
+                  className={`px-2 py-0.5 rounded ${agentView === 'run' ? 'bg-blue-100 text-blue-700' : 'text-gray-500 hover:bg-gray-100'}`}
+                >
+                  Run
+                </button>
+                <button
+                  onClick={() => setAgentView('artifacts')}
+                  className={`px-2 py-0.5 rounded ${agentView === 'artifacts' ? 'bg-blue-100 text-blue-700' : 'text-gray-500 hover:bg-gray-100'}`}
+                >
+                  Artifacts
+                </button>
+                <button
+                  onClick={() => setAgentView('approvals')}
+                  className={`px-2 py-0.5 rounded ${agentView === 'approvals' ? 'bg-blue-100 text-blue-700' : 'text-gray-500 hover:bg-gray-100'}`}
+                >
+                  Approvals
+                </button>
+              </div>
+              {agentView === 'artifacts' && <ArtifactsPanel />}
+              {agentView === 'approvals' && <AgentApprovals />}
+              {agentView === 'run' && agentTurns.length === 0 && (
+                <p className="text-sm text-gray-600 text-center mt-8">
+                  Agent mode runs read-only tools to investigate — e.g. “why is mm7 degraded?”
+                </p>
+              )}
+              {agentView === 'run' && agentTurns.map((turn, ti) => (
+                <div key={ti} className="space-y-2">
+                  <div className="flex justify-end">
+                    <div className="max-w-[85%] rounded-lg px-3 py-2 text-sm bg-blue-600 text-white">{turn.prompt}</div>
+                  </div>
+                  {turn.items.map((it, ii) =>
+                    it.kind === 'step' ? (
+                      <ToolStep key={ii} iteration={it.iteration} />
+                    ) : (
+                      <ToolResultCard key={ii} step={it.step} />
+                    ),
+                  )}
+                  {turn.running && turn.items.length === 0 && (
+                    <div className="flex space-x-1 py-1 px-1">
+                      <span className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
+                      <span className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
+                      <span className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
+                    </div>
+                  )}
+                  {turn.note && <p className="text-xs text-amber-600 px-1">{turn.note}</p>}
+                  {turn.final && (
+                    <div className="flex justify-start">
+                      <div className="max-w-[85%] rounded-lg px-3 py-2 text-sm bg-gray-100 text-gray-900">
+                        <pre className="whitespace-pre-wrap font-sans">{turn.final}</pre>
+                      </div>
+                    </div>
+                  )}
+                  {turn.error && (
+                    <div className="flex justify-start">
+                      <div className="max-w-[85%] rounded-lg px-3 py-2 text-sm bg-red-50 border border-red-200 text-red-700">
+                        ⚠ {turn.error}
+                      </div>
+                    </div>
+                  )}
+                  {turn.meta && (
+                    <div className="text-xs text-gray-600 px-1">
+                      {turn.model} · {turn.meta.iterations} steps · {turn.meta.tool_calls} tools ·{' '}
+                      {turn.meta.tokens_in}↑ {turn.meta.tokens_out}↓ · {turn.meta.duration_ms}ms
+                    </div>
+                  )}
+                </div>
+              ))}
+              <div ref={bottomRef} />
+            </>
+          ) : (
+          <>
           {messages.length === 0 && (
-            <p className="text-sm text-gray-400 text-center mt-8">
+            <p className="text-sm text-gray-600 text-center mt-8">
               Ask anything about your fleet — node status, drift, playbooks, health metrics…
             </p>
           )}
@@ -309,7 +626,7 @@ export default function LLMAssistant() {
                   </pre>
                 )}
                 {msg.meta && (
-                  <div className="mt-1 text-xs text-gray-400">
+                  <div className="mt-1 text-xs text-gray-600">
                     {msg.meta.model} · {msg.meta.tokens_in}↑ {msg.meta.tokens_out}↓ · {msg.meta.duration_ms}ms
                   </div>
                 )}
@@ -317,15 +634,18 @@ export default function LLMAssistant() {
             </div>
           ))}
           <div ref={bottomRef} />
+          </>
+          )}
         </div>
 
         <div className="border-t border-gray-200 p-3 space-y-1.5">
           <div className="flex gap-2">
             <textarea
+              ref={textareaRef}
               value={prompt}
               onChange={handlePromptChange}
               onKeyDown={handleKeyDown}
-              placeholder="Ask about your fleet… (Enter to send)"
+              placeholder={mode === 'agent' ? 'Investigate with tools… (Enter to run)' : 'Ask about your fleet… (Enter to send)'}
               rows={2}
               className="flex-1 resize-none border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 placeholder-gray-400"
               disabled={streaming}
@@ -348,8 +668,11 @@ export default function LLMAssistant() {
               </button>
             )}
           </div>
-          {prompt.trim() && (
-            <p className="text-xs text-gray-400">Detected: {intentHint}</p>
+          {prompt.trim() && mode === 'qa' && (
+            <p className="text-xs text-gray-600">Detected: {intentHint}</p>
+          )}
+          {mode === 'agent' && (
+            <p className="text-xs text-gray-600">Agent mode · read-only tools · bounded run</p>
           )}
         </div>
       </div>

@@ -112,7 +112,7 @@ const EMPTY_FORM: FormState = {
   is_default: false,
   publish_port: '4505',
   ret_port: '4506',
-  salt_api_port: '8080',
+  salt_api_port: '4507',
   use_tls: true,
   api_user: '',
   api_password: '',
@@ -140,7 +140,7 @@ function masterToForm(m: SaltMaster): FormState {
 /** Derive api_url preview from form fields — mirrors server logic (#562). */
 function deriveApiUrl(address: string, saltApiPort: string, useTls: boolean): string {
   const scheme = useTls ? 'https' : 'http'
-  const port = saltApiPort || '8080'
+  const port = saltApiPort || '4507'
   const addr = address.trim() || '<address>'
   return `${scheme}://${addr}:${port}`
 }
@@ -686,7 +686,7 @@ export function SaltMastersTab() {
       publish_port: parseInt(form.publish_port, 10),
       ret_port: parseInt(form.ret_port, 10),
       // SSoT fields (#562): api_url is derived server-side; never sent
-      salt_api_port: parseInt(form.salt_api_port, 10) || 8080,
+      salt_api_port: parseInt(form.salt_api_port, 10) || 4507,
       use_tls: form.use_tls,
       api_user: form.api_user.trim() || null,
       api_password: form.api_password || null,
@@ -707,7 +707,7 @@ export function SaltMastersTab() {
       publish_port: parseInt(form.publish_port, 10),
       ret_port: parseInt(form.ret_port, 10),
       // SSoT fields (#562): api_url is derived server-side; never sent
-      salt_api_port: parseInt(form.salt_api_port, 10) || 8080,
+      salt_api_port: parseInt(form.salt_api_port, 10) || 4507,
       use_tls: form.use_tls,
       api_user: form.api_user.trim() || null,
       // Only send api_password if the operator typed something new

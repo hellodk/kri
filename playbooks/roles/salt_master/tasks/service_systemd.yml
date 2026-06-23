@@ -8,10 +8,10 @@
     daemon_reload: true
   become: true
 
-- name: Enable and start salt-api (if installed)
+- name: Enable and start salt-api
   systemd:
     name: salt-api
     enabled: true
     state: restarted
+    daemon_reload: true
   become: true
-  failed_when: false

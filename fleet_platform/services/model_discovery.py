@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import asyncio
 import logging
 import time
 
@@ -13,7 +12,7 @@ from fleet_platform.services.llm_caller import normalize_openai_base_url
 
 _log = logging.getLogger(__name__)
 _TIMEOUT = 8.0
-_PROBE_TIMEOUT = 5.0
+_PROBE_TIMEOUT = 20.0
 
 
 async def discover_models(url: str, provider: str) -> list[dict]:
@@ -30,8 +29,15 @@ async def discover_models(url: str, provider: str) -> list[dict]:
     ]
 
 
-async def _probe_model(base_url: str, model_id: str, api_key: str | None) -> tuple[bool, int | None]:
-    """Send a 1-token chat request. Returns (healthy, latency_ms)."""
+async def _probe_model(base_url: str, model_id: str, api_key: str | None) -> tuple[bool | None, int | None]:
+    """Send a 1-token chat request. Returns a tristate (healthy, latency_ms).
+
+    - (True,  latency_ms) — probe succeeded; model is healthy.
+    - (False, None)       — definitive HTTP error (4xx/5xx); model is genuinely broken.
+    - (None,  None)       — timeout or connection error; server is busy (e.g. loading the
+                            model). The model is NOT marked unhealthy — it was listed by
+                            /v1/models so it exists; the caller treats None as healthy.
+    """
     t0 = time.monotonic()
     try:
         headers = {"Authorization": f"Bearer {api_key}"} if api_key else {}
@@ -47,8 +53,12 @@ async def _probe_model(base_url: str, model_id: str, api_key: str | None) -> tup
             )
             resp.raise_for_status()
         return True, int((time.monotonic() - t0) * 1000)
-    except Exception:
+    except httpx.HTTPStatusError:
+        # Definitive server-side error — the model is broken.
         return False, None
+    except Exception:
+        # Timeout, connection error, etc. — server is busy loading; not a failure.
+        return None, None
 
 
 async def discover_models_with_health(url: str, provider: str, api_key: str | None) -> list[dict]:
@@ -86,14 +96,16 @@ async def discover_models_with_health(url: str, provider: str, api_key: str | No
                     for m in raw_models
                 }
 
-        # probe all non-Ollama models concurrently
-        probes = await asyncio.gather(
-            *[_probe_model(base, mid, api_key) for mid in model_ids],
-            return_exceptions=False,
-        )
-
+        # Probe models SEQUENTIALLY — single-model-serving backends (MLX) cannot
+        # handle concurrent probes for different models (forces reload thrash).
         results = []
-        for mid, (healthy, latency_ms) in zip(model_ids, probes):
+        for mid in model_ids:
+            probe_healthy, latency_ms = await _probe_model(base, mid, api_key)
+            # A model listed by /v1/models demonstrably exists. A probe timeout
+            # (probe_healthy is None) means the server is busy loading, NOT that
+            # the model is unhealthy — keep it selectable. Only a definitive HTTP
+            # error (probe_healthy is False) marks it unhealthy.
+            healthy = True if probe_healthy is None else probe_healthy
             _cache.set_health(url, provider, mid, healthy=healthy, latency_ms=latency_ms)
             meta = model_meta[mid]
             results.append(

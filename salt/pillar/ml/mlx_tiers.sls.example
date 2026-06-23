@@ -1,0 +1,43 @@
+# salt/pillar/ml/mlx_tiers.sls.example
+# Per-tier MLX serving config (#712). Copy the relevant block into a pillar that
+# is targeted at the matching minions via pillar/top.sls. Models are 4-bit MLX.
+#
+# 16 GB is tight for a 14B planner: max_concurrent stays at 1 on planners, the
+# per-session context is capped at 8K, and the embedding sidecar runs on workers
+# (never on planners).
+
+# --- Planner tier (mm1, mm2) -------------------------------------------------
+# ml:
+#   mlx_serve:
+#     tier: planner
+#     model: mlx-community/Qwen2.5-14B-Instruct-4bit
+#     port: 8080
+#     max_concurrent: 1
+#     context_cap: 8192
+
+# --- Coder tier (mm3–mm6) ----------------------------------------------------
+# ml:
+#   mlx_serve:
+#     tier: coder
+#     model: mlx-community/Qwen2.5-Coder-14B-Instruct-4bit
+#     port: 8080
+#     max_concurrent: 1
+#     context_cap: 8192
+
+# --- Worker tier (mm7–mm18) --------------------------------------------------
+# ml:
+#   mlx_serve:
+#     tier: worker
+#     model: mlx-community/Qwen2.5-7B-Instruct-4bit
+#     port: 8080
+#     max_concurrent: 2
+#     context_cap: 8192
+
+# --- Embed sidecar (on workers, off planners) --------------------------------
+# ml:
+#   mlx_serve:
+#     tier: embed
+#     model: mlx-community/bge-m3-4bit
+#     port: 8081
+#     max_concurrent: 4
+#     context_cap: 512
