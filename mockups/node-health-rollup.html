@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Node Health — Unified Indicator Mockup</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<style>
+  body { font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+  .tip { visibility: hidden; opacity: 0; transition: opacity .12s ease; }
+  .tip-wrap:hover .tip { visibility: visible; opacity: 1; }
+  @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.45} }
+  .animate-pulse-dot { animation: pulse 1.6s ease-in-out infinite; }
+</style>
+</head>
+<body class="bg-gray-50 text-gray-800 p-8">
+<div class="max-w-6xl mx-auto">
+  <h1 class="text-2xl font-bold mb-1">Node status: today vs. unified health</h1>
+  <p class="text-gray-500 mb-8">One badge = worst-of all signals. Green only when everything's good. Hover for the breakdown.</p>
+
+  <!-- BEFORE -->
+  <div class="mb-10">
+    <h2 class="text-sm font-semibold uppercase tracking-wide text-gray-400 mb-3">Before — two stacked signals (noisy, no single read)</h2>
+    <div class="bg-white rounded-xl border border-gray-200 overflow-hidden shadow-sm">
+      <table class="w-full text-sm">
+        <thead class="bg-gray-50 text-gray-400 text-xs uppercase tracking-wide">
+          <tr><th class="text-left px-4 py-2 font-semibold">Node</th><th class="text-left px-4 py-2 font-semibold">Status</th></tr>
+        </thead>
+        <tbody class="divide-y divide-gray-100">
+          <tr>
+            <td class="px-4 py-3"><div class="font-medium">mac-studio-07</div><div class="text-gray-400 text-xs">10.0.4.27</div></td>
+            <td class="px-4 py-3">
+              <div class="flex flex-col gap-1.5">
+                <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium border bg-emerald-100 border-emerald-300 text-emerald-800 w-fit">
+                  <span class="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse-dot"></span>online
+                </span>
+                <div class="flex items-center gap-1.5 text-xs">
+                  <span class="text-[10px] font-semibold uppercase tracking-wide text-gray-400 w-7">SSH</span>
+                  <span class="w-2 h-2 rounded-full bg-amber-500"></span>
+                  <span class="text-amber-700">auth failed <span class="text-gray-300">· 6 minutes</span></span>
+                </div>
+              </div>
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+    <p class="text-xs text-gray-400 mt-2">↑ Salt says "online" (green) but SSH auth is failing (amber). Two colors, two rows — what's the actual health? Unclear at a glance.</p>
+  </div>
+
+  <!-- AFTER -->
+  <div>
+    <h2 class="text-sm font-semibold uppercase tracking-wide text-gray-400 mb-3">After — one rollup badge, hover for why</h2>
+    <div class="bg-white rounded-xl border border-gray-200 overflow-hidden shadow-sm">
+      <table class="w-full text-sm">
+        <thead class="bg-gray-50 text-gray-400 text-xs uppercase tracking-wide">
+          <tr>
+            <th class="text-left px-4 py-2 font-semibold">Node</th>
+            <th class="text-left px-4 py-2 font-semibold">Health</th>
+            <th class="text-left px-4 py-2 font-semibold">Salt presence</th>
+            <th class="text-left px-4 py-2 font-semibold">SSH</th>
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-gray-100" id="rows"></tbody>
+      </table>
+    </div>
+    <p class="text-xs text-gray-400 mt-2">Hover any Health badge → tooltip explains every dimension. The raw columns on the right are shown here for reference; in the Fleet table they collapse into the tooltip.</p>
+  </div>
+
+  <div class="mt-10 grid grid-cols-2 gap-4 text-sm">
+    <div class="bg-white rounded-lg border border-gray-200 p-4">
+      <div class="font-semibold mb-2">Rollup rule (worst-of)</div>
+      <ul class="space-y-1.5 text-gray-600">
+        <li><span class="inline-block w-2.5 h-2.5 rounded-full bg-emerald-500 mr-2"></span><b>Online</b> — Salt online AND SSH ok</li>
+        <li><span class="inline-block w-2.5 h-2.5 rounded-full bg-amber-500 mr-2"></span><b>Degraded</b> — stale, or SSH auth-failed / not verified</li>
+        <li><span class="inline-block w-2.5 h-2.5 rounded-full bg-red-500 mr-2"></span><b>Down</b> — offline OR SSH unreachable</li>
+        <li><span class="inline-block w-2.5 h-2.5 rounded-full bg-gray-400 mr-2"></span><b>Unknown</b> — never seen / never probed</li>
+        <li><span class="inline-block w-2.5 h-2.5 rounded-full bg-indigo-500 mr-2"></span><b>Maintenance</b> — overrides, neutral</li>
+      </ul>
+    </div>
+    <div class="bg-white rounded-lg border border-gray-200 p-4">
+      <div class="font-semibold mb-2">Why keep both signals underneath</div>
+      <p class="text-gray-600">Salt = agent phones home (push). SSH = we can reach it directly (pull). A node can be Salt-online but SSH-broken (creds rotated → ansible fails), or Salt-offline but SSH-ok (minion crashed, box still fixable). The rollup gives one read; the tooltip keeps the "why".</p>
+    </div>
+  </div>
+</div>
+
+<script>
+const HEALTH = {
+  online:      { label: 'Online',      bg: 'bg-emerald-100 border-emerald-300', text: 'text-emerald-800', dot: 'bg-emerald-500 animate-pulse-dot' },
+  degraded:    { label: 'Degraded',    bg: 'bg-amber-100 border-amber-300',     text: 'text-amber-800',   dot: 'bg-amber-500' },
+  down:        { label: 'Down',        bg: 'bg-red-100 border-red-300',         text: 'text-red-800',     dot: 'bg-red-500' },
+  unknown:     { label: 'Unknown',     bg: 'bg-gray-100 border-gray-300',       text: 'text-gray-700',    dot: 'bg-gray-400' },
+  maintenance: { label: 'Maintenance', bg: 'bg-indigo-100 border-indigo-300',   text: 'text-indigo-800',  dot: 'bg-indigo-500' },
+};
+const DOT = { ok:'bg-emerald-500', online:'bg-emerald-500', stale:'bg-amber-500', auth_failed:'bg-amber-500', offline:'bg-red-500', unreachable:'bg-red-500', unknown:'bg-gray-300', maintenance:'bg-indigo-500' };
+
+const nodes = [
+  { host:'mac-studio-01', ip:'10.0.4.21', health:'online',   salt:'online',  saltAge:'2m',  ssh:'ok',          sshAge:'3m',  detail:'TCP 22 open · auth succeeded' },
+  { host:'mac-studio-07', ip:'10.0.4.27', health:'degraded', salt:'online',  saltAge:'1m',  ssh:'auth_failed', sshAge:'6m',  detail:'port 22 open; key rejected — rotate credential' },
+  { host:'mac-mini-19',   ip:'10.0.4.39', health:'degraded', salt:'stale',   saltAge:'22m', ssh:'ok',          sshAge:'4m',  detail:'TCP 22 open · auth succeeded' },
+  { host:'mac-mini-33',   ip:'10.0.4.55', health:'down',     salt:'offline', saltAge:'5h',  ssh:'unreachable', sshAge:'6m',  detail:'TCP port 22 closed or timed out' },
+  { host:'studio-rack-2', ip:'10.0.4.61', health:'down',     salt:'offline', saltAge:'6h',  ssh:'ok',          sshAge:'2m',  detail:'box alive — minion crashed, SSH still up (fixable)' },
+  { host:'new-node-88',   ip:'10.0.4.88', health:'unknown',  salt:'unknown', saltAge:'never', ssh:'unknown',   sshAge:'never', detail:'no probe yet' },
+  { host:'mac-pro-12',    ip:'10.0.4.12', health:'maintenance', salt:'online', saltAge:'1m', ssh:'ok',         sshAge:'3m',  detail:'in maintenance mode — alerts suppressed' },
+];
+
+const sshLabel = { ok:'reachable', auth_failed:'auth failed', unreachable:'unreachable', unknown:'not checked' };
+const sshText  = { ok:'text-gray-600', auth_failed:'text-amber-700', unreachable:'text-red-700', unknown:'text-gray-400' };
+
+function badge(n){
+  const h = HEALTH[n.health];
+  const saltLine = n.health==='maintenance' ? 'Maintenance mode — alerts suppressed'
+    : `Salt:  ${n.salt} · ${n.saltAge==='never'?'never seen':'seen '+n.saltAge+' ago'}`;
+  const sshLine = `SSH:   ${sshLabel[n.ssh]} · ${n.sshAge==='never'?'never probed':'checked '+n.sshAge+' ago'}`;
+  return `
+  <div class="relative tip-wrap inline-block">
+    <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium border cursor-default ${h.bg} ${h.text}">
+      <span class="w-1.5 h-1.5 rounded-full ${h.dot}"></span>${h.label}
+    </span>
+    <div class="tip absolute z-10 left-0 top-full mt-1.5 w-72 rounded-lg bg-white text-gray-700 text-xs p-3 shadow-xl ring-1 ring-gray-200 border border-gray-100">
+      <div class="flex items-center gap-2 font-semibold text-gray-900 mb-2 pb-2 border-b border-gray-100">
+        <span class="w-2 h-2 rounded-full ${h.dot}"></span>${h.label}
+      </div>
+      <div class="font-mono leading-relaxed text-gray-600">
+        <div class="flex items-center gap-2"><span class="w-1.5 h-1.5 rounded-full ${DOT[n.salt]||'bg-gray-400'}"></span>${saltLine}</div>
+        <div class="flex items-center gap-2"><span class="w-1.5 h-1.5 rounded-full ${DOT[n.ssh]||'bg-gray-400'}"></span>${sshLine}</div>
+      </div>
+      <div class="mt-2 pt-2 border-t border-gray-100 text-gray-500">${n.detail}</div>
+    </div>
+  </div>`;
+}
+
+document.getElementById('rows').innerHTML = nodes.map(n => `
+  <tr class="hover:bg-gray-50">
+    <td class="px-4 py-3"><div class="font-medium">${n.host}</div><div class="text-gray-400 text-xs">${n.ip}</div></td>
+    <td class="px-4 py-3">${badge(n)}</td>
+    <td class="px-4 py-3 text-xs text-gray-500"><span class="inline-flex items-center gap-1.5"><span class="w-1.5 h-1.5 rounded-full ${DOT[n.salt]||'bg-gray-400'}"></span>${n.salt} · ${n.saltAge}</span></td>
+    <td class="px-4 py-3 text-xs"><span class="inline-flex items-center gap-1.5 ${sshText[n.ssh]}"><span class="w-2 h-2 rounded-full ${DOT[n.ssh]||'bg-gray-300'}"></span>${sshLabel[n.ssh]} · ${n.sshAge}</span></td>
+  </tr>`).join('');
+</script>
+</body>
+</html>
