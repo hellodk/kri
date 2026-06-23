@@ -40,11 +40,25 @@ function loadPos(): { x: number; y: number } | null {
   }
 }
 
+// Clamp a stored position into the current viewport. A position saved on a
+// larger screen (or before a resize) can otherwise place the panel fully
+// off-screen and unreachable; we apply this at load, not only on resize (#666).
+function clampToViewport(p: { x: number; y: number }, w = 384, h = 56): { x: number; y: number } {
+  const maxX = Math.max(0, window.innerWidth - w)
+  const maxY = Math.max(0, window.innerHeight - h)
+  return { x: Math.max(0, Math.min(p.x, maxX)), y: Math.max(0, Math.min(p.y, maxY)) }
+}
+
 export default function LLMAssistant() {
   const [open, setOpen] = useState(false)
   const [prompt, setPrompt] = useState('')
   const [intentHint, setIntentHint] = useState('Fleet Query')
-  const [pos, setPos] = useState<{ x: number; y: number } | null>(loadPos)
+  // Clamp a stale stored position into the viewport at load, so a panel saved
+  // off-screen on a larger display is always reachable (#666).
+  const [pos, setPos] = useState<{ x: number; y: number } | null>(() => {
+    const p = loadPos()
+    return p ? clampToViewport(p) : null
+  })
   const [streaming, setStreaming] = useState(false)
   const [mode, setMode] = useState<AssistantMode>('qa')
   const [agentView, setAgentView] = useState<'run' | 'artifacts' | 'approvals'>('run')
@@ -70,6 +84,7 @@ export default function LLMAssistant() {
 
   const panelRef = useRef<HTMLDivElement>(null)
   const iconRef = useRef<HTMLButtonElement>(null)
+  const textareaRef = useRef<HTMLTextAreaElement>(null)
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
@@ -93,6 +108,74 @@ export default function LLMAssistant() {
     }
     window.addEventListener('resize', handleResize)
     return () => window.removeEventListener('resize', handleResize)
+  }, [])
+
+  // When the dialog opens, move focus into it; when it closes (and only on an
+  // actual open→close transition, never on first mount), return focus to the
+  // launcher icon so keyboard users aren't stranded (#666).
+  const prevOpenRef = useRef(open)
+  useEffect(() => {
+    if (open) {
+      textareaRef.current?.focus()
+    } else if (prevOpenRef.current) {
+      iconRef.current?.focus()
+    }
+    prevOpenRef.current = open
+  }, [open])
+
+  // Nudge the panel with the arrow keys (keyboard alternative to pointer drag),
+  // and reset to the default anchor with Home (#666).
+  const nudgePos = useCallback((dx: number, dy: number) => {
+    setPos(prev => {
+      const el = panelRef.current
+      const w = el ? el.offsetWidth : 384
+      const h = el ? el.offsetHeight : 56
+      const base = prev ?? { x: window.innerWidth - w - 24, y: window.innerHeight - h - 24 }
+      const next = clampToViewport({ x: base.x + dx, y: base.y + dy }, w, h)
+      localStorage.setItem('llm-assistant-pos', JSON.stringify(next))
+      return next
+    })
+  }, [])
+
+  const onHeaderKeyDown = useCallback((e: React.KeyboardEvent<HTMLDivElement>) => {
+    const STEP = 16
+    switch (e.key) {
+      case 'ArrowUp': e.preventDefault(); nudgePos(0, -STEP); break
+      case 'ArrowDown': e.preventDefault(); nudgePos(0, STEP); break
+      case 'ArrowLeft': e.preventDefault(); nudgePos(-STEP, 0); break
+      case 'ArrowRight': e.preventDefault(); nudgePos(STEP, 0); break
+      case 'Home':
+        e.preventDefault()
+        localStorage.removeItem('llm-assistant-pos')
+        setPos(null)
+        break
+    }
+  }, [nudgePos])
+
+  // Dialog-level keyboard: Escape closes; Tab is trapped within the panel (#666).
+  const onPanelKeyDown = useCallback((e: React.KeyboardEvent<HTMLDivElement>) => {
+    if (e.key === 'Escape') {
+      e.preventDefault()
+      setOpen(false)
+      return
+    }
+    if (e.key !== 'Tab') return
+    const panel = panelRef.current
+    if (!panel) return
+    const focusable = panel.querySelectorAll<HTMLElement>(
+      'a[href], button:not([disabled]), textarea:not([disabled]), input:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])',
+    )
+    if (focusable.length === 0) return
+    const first = focusable[0]
+    const last = focusable[focusable.length - 1]
+    const active = document.activeElement as HTMLElement | null
+    if (e.shiftKey && active === first) {
+      e.preventDefault()
+      last.focus()
+    } else if (!e.shiftKey && active === last) {
+      e.preventDefault()
+      first.focus()
+    }
   }, [])
 
   const startDrag = useCallback((e: React.PointerEvent<HTMLElement>, elemRef: React.RefObject<HTMLElement | null>) => {
@@ -215,9 +298,14 @@ export default function LLMAssistant() {
         case 'final':
           patchLastTurn((t) => ({ ...t, final: ev.text }))
           break
-        case 'limit_reached':
-          patchLastTurn((t) => ({ ...t, note: `Stopped: reached ${ev.limit} (${ev.value}).` }))
+        case 'limit_reached': {
+          const note =
+            ev.limit === 'no_progress'
+              ? 'Stopped early: the assistant kept repeating the same step without new information.'
+              : `Stopped: reached ${ev.limit} (${ev.value}).`
+          patchLastTurn((t) => ({ ...t, note }))
           break
+        }
         case 'error':
           patchLastTurn((t) => ({ ...t, error: ev.error, running: false }))
           break
@@ -364,19 +452,27 @@ export default function LLMAssistant() {
       <div
         ref={panelRef}
         style={posStyle}
+        role="dialog"
+        aria-modal="true"
+        aria-label="AI Fleet Assistant"
         aria-hidden={!open}
-        className={`fixed ${defaultAnchorClasses} z-50 w-96 max-h-[600px] flex flex-col bg-white/90 backdrop-blur-md border border-gray-200 rounded-xl shadow-2xl overflow-hidden transition-all duration-200 ${
+        onKeyDown={onPanelKeyDown}
+        className={`fixed ${defaultAnchorClasses} z-50 w-96 max-h-[600px] flex flex-col bg-white border border-gray-200 rounded-xl shadow-2xl overflow-hidden transition-all duration-200 ${
           open
             ? 'opacity-100 scale-100 pointer-events-auto visible'
             : 'opacity-0 scale-95 pointer-events-none invisible'
         }`}
       >
-        {/* Header — drag handle */}
+        {/* Header — drag handle (pointer) + arrow-key move (keyboard) */}
         <div
           onPointerDown={onPointerDownHeader}
           onPointerMove={e => onPointerMove(e as React.PointerEvent<HTMLElement>)}
           onPointerUp={e => onPointerUp(e as React.PointerEvent<HTMLElement>, false)}
-          className="flex items-center justify-between px-4 py-3 bg-blue-600 text-white cursor-move select-none"
+          onKeyDown={onHeaderKeyDown}
+          tabIndex={open ? 0 : -1}
+          role="button"
+          aria-label="Move assistant — use arrow keys to reposition, Home to reset"
+          className="flex items-center justify-between px-4 py-3 bg-blue-600 text-white cursor-move select-none focus:outline-none focus:ring-2 focus:ring-inset focus:ring-white/70"
         >
           <span className="font-semibold text-sm">AI Fleet Assistant</span>
           <div className="flex items-center gap-2">
@@ -446,7 +542,7 @@ export default function LLMAssistant() {
               {agentView === 'artifacts' && <ArtifactsPanel />}
               {agentView === 'approvals' && <AgentApprovals />}
               {agentView === 'run' && agentTurns.length === 0 && (
-                <p className="text-sm text-gray-400 text-center mt-8">
+                <p className="text-sm text-gray-600 text-center mt-8">
                   Agent mode runs read-only tools to investigate — e.g. “why is mm7 degraded?”
                 </p>
               )}
@@ -485,7 +581,7 @@ export default function LLMAssistant() {
                     </div>
                   )}
                   {turn.meta && (
-                    <div className="text-xs text-gray-400 px-1">
+                    <div className="text-xs text-gray-600 px-1">
                       {turn.model} · {turn.meta.iterations} steps · {turn.meta.tool_calls} tools ·{' '}
                       {turn.meta.tokens_in}↑ {turn.meta.tokens_out}↓ · {turn.meta.duration_ms}ms
                     </div>
@@ -497,7 +593,7 @@ export default function LLMAssistant() {
           ) : (
           <>
           {messages.length === 0 && (
-            <p className="text-sm text-gray-400 text-center mt-8">
+            <p className="text-sm text-gray-600 text-center mt-8">
               Ask anything about your fleet — node status, drift, playbooks, health metrics…
             </p>
           )}
@@ -530,7 +626,7 @@ export default function LLMAssistant() {
                   </pre>
                 )}
                 {msg.meta && (
-                  <div className="mt-1 text-xs text-gray-400">
+                  <div className="mt-1 text-xs text-gray-600">
                     {msg.meta.model} · {msg.meta.tokens_in}↑ {msg.meta.tokens_out}↓ · {msg.meta.duration_ms}ms
                   </div>
                 )}
@@ -545,6 +641,7 @@ export default function LLMAssistant() {
         <div className="border-t border-gray-200 p-3 space-y-1.5">
           <div className="flex gap-2">
             <textarea
+              ref={textareaRef}
               value={prompt}
               onChange={handlePromptChange}
               onKeyDown={handleKeyDown}
@@ -572,10 +669,10 @@ export default function LLMAssistant() {
             )}
           </div>
           {prompt.trim() && mode === 'qa' && (
-            <p className="text-xs text-gray-400">Detected: {intentHint}</p>
+            <p className="text-xs text-gray-600">Detected: {intentHint}</p>
           )}
           {mode === 'agent' && (
-            <p className="text-xs text-gray-400">Agent mode · read-only tools · bounded run</p>
+            <p className="text-xs text-gray-600">Agent mode · read-only tools · bounded run</p>
           )}
         </div>
       </div>

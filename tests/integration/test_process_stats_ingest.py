@@ -6,12 +6,43 @@ in the unit-test gate — they run at merge time or when the developer explicitl
 invokes `pytest tests/integration/test_process_stats_ingest.py`.
 """
 
+import secrets
 import uuid
+from datetime import UTC, datetime
 
 import pytest
-from httpx import AsyncClient
+import pytest_asyncio
+from httpx import ASGITransport, AsyncClient
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from fleet_platform.core.auth import hash_password
+from fleet_platform.models.node import Node
 
 pytestmark = pytest.mark.asyncio
+
+
+@pytest_asyncio.fixture(scope="module", loop_scope="module")
+async def registered_node_client(app_with_test_db, db_session: AsyncSession):
+    """A Node with a known X-Node-Token, plus a client preconfigured with it."""
+    token = secrets.token_urlsafe(32)
+    node = Node(
+        minion_id="integration-test-node",
+        hostname="integration-test-node",
+        node_token_hash=hash_password(token),
+        first_seen_at=datetime.now(UTC),
+        status="online",
+    )
+    db_session.add(node)
+    await db_session.commit()
+    await db_session.refresh(node)
+    async with AsyncClient(
+        transport=ASGITransport(app=app_with_test_db),
+        base_url="http://testserver",
+        headers={"X-Node-Token": token},
+    ) as ac:
+        yield ac
+    await db_session.delete(node)
+    await db_session.commit()
 
 
 async def test_ingest_process_stats_missing_token(client: AsyncClient):

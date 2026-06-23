@@ -22,7 +22,14 @@ def _sync_db(*scalar_returns):
     return db
 
 
-def _node(ssh_username=None, ssh_password_enc=None, ssh_key_enc=None, ssh_auth_mode=None, ssh_host_key=None):
+def _node(
+    ssh_username=None,
+    ssh_password_enc=None,
+    ssh_key_enc=None,
+    ssh_auth_mode=None,
+    ssh_host_key=None,
+    credential_id=None,
+):
     node = MagicMock()
     node.id = uuid.uuid4()
     node.ssh_username = ssh_username
@@ -30,17 +37,38 @@ def _node(ssh_username=None, ssh_password_enc=None, ssh_key_enc=None, ssh_auth_m
     node.ssh_key_enc = ssh_key_enc
     node.ssh_auth_mode = ssh_auth_mode
     node.ssh_host_key = ssh_host_key  # None = not bootstrapped; explicit to avoid MagicMock truthy default
+    node.credential_id = credential_id  # None = no FK; explicit to avoid MagicMock truthy default
     return node
 
 
-def _group(name="prod", ssh_username="guser", ssh_password_enc=None, ssh_key_enc=None, ssh_auth_mode=None):
+def _group(
+    name="prod",
+    ssh_username="guser",
+    ssh_password_enc=None,
+    ssh_key_enc=None,
+    ssh_auth_mode=None,
+    credential_id=None,
+    credential_priority=0,
+):
     g = MagicMock()
     g.name = name
     g.ssh_username = ssh_username
     g.ssh_password_enc = ssh_password_enc
     g.ssh_key_enc = ssh_key_enc
     g.ssh_auth_mode = ssh_auth_mode
+    g.credential_id = credential_id  # None = no FK; explicit to avoid MagicMock truthy default
+    g.credential_priority = credential_priority
     return g
+
+
+def _credential(kind="username_password", username="cuser", secret_plain="cpw"):
+    cred = MagicMock()
+    cred.id = uuid.uuid4()
+    cred.kind = kind
+    cred.username = username
+    cred.secret_enc = encrypt_secret(secret_plain) if secret_plain is not None else ""
+    cred.last_used_at = None
+    return cred
 
 
 def _platform_row(value, is_encrypted=False):
@@ -93,3 +121,38 @@ def test_sync_node_key_auth_mode():
     result = resolve_node_credentials_sync(node, MagicMock())
     assert result["auth_mode"] == "key"
     assert result["ssh_key"] == "KEYDATA"
+
+
+def test_sync_node_credential_fk():
+    """Sync resolver dereferences node.credential_id, source 'node' (#698)."""
+    from fleet_platform.services.credential_resolver import resolve_node_credentials_sync
+
+    cred = _credential(kind="username_password", username="cuser", secret_plain="cpw")
+    node = _node(credential_id=cred.id)
+    db = MagicMock()
+    db.get.return_value = cred
+
+    result = resolve_node_credentials_sync(node, db)
+
+    assert result["credential_source"] == "node"
+    assert result["ssh_user"] == "cuser"
+    assert result["ssh_password"] == "cpw"
+    db.execute.assert_not_called()
+
+
+def test_sync_group_credential_fk():
+    """Sync resolver dereferences group.credential_id, source 'group:<name>' (#698)."""
+    from fleet_platform.services.credential_resolver import resolve_node_credentials_sync
+
+    cred = _credential(kind="ssh_key", username="guser", secret_plain="KEYBLOB")
+    group = _group(name="prod", ssh_username=None, credential_id=cred.id)
+    node = _node()
+    db = _sync_db(group)
+    db.get.return_value = cred
+
+    result = resolve_node_credentials_sync(node, db)
+
+    assert result["credential_source"] == "group:prod"
+    assert result["ssh_user"] == "guser"
+    assert result["ssh_key"] == "KEYBLOB"
+    assert result["auth_mode"] == "key"

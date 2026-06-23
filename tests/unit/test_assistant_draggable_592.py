@@ -95,18 +95,20 @@ def test_click_drag_threshold_present():
 
 
 # ---------------------------------------------------------------------------
-# 5. Translucent panel: bg-white/90 + backdrop-blur
+# 5. Opaque panel (#666): the #592 translucent bg-white/90 + backdrop-blur
+#    failed WCAG contrast over dark page content, so the panel is now opaque.
 # ---------------------------------------------------------------------------
 
 
-def test_panel_translucent_bg():
-    """Panel must use bg-white/90 (translucent white background)."""
-    assert "bg-white/90" in _SOURCE, "bg-white/90 not found — translucent panel background missing"
+def test_panel_opaque_bg():
+    """Panel must use an opaque white background, not the translucent bg-white/90 (#666)."""
+    assert "bg-white/90" not in _SOURCE, "bg-white/90 still present — panel must be opaque for WCAG contrast (#666)"
+    assert "bg-white border" in _SOURCE, "opaque 'bg-white' panel background not found (#666)"
 
 
-def test_panel_backdrop_blur():
-    """Panel must use backdrop-blur for frosted glass effect."""
-    assert "backdrop-blur" in _SOURCE, "backdrop-blur not found — panel frosted-glass effect missing"
+def test_panel_no_backdrop_blur():
+    """Panel must NOT use backdrop-blur — frosted glass over dark content fails contrast (#666)."""
+    assert "backdrop-blur" not in _SOURCE, "backdrop-blur still present — removed for WCAG contrast (#666)"
 
 
 # ---------------------------------------------------------------------------

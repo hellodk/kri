@@ -32,7 +32,14 @@ def _make_db(*scalar_returns):
     return db
 
 
-def _node(ssh_username=None, ssh_password_enc=None, ssh_key_enc=None, ssh_auth_mode=None, ssh_host_key=None):
+def _node(
+    ssh_username=None,
+    ssh_password_enc=None,
+    ssh_key_enc=None,
+    ssh_auth_mode=None,
+    ssh_host_key=None,
+    credential_id=None,
+):
     node = MagicMock()
     node.id = uuid.uuid4()
     node.ssh_username = ssh_username
@@ -40,17 +47,40 @@ def _node(ssh_username=None, ssh_password_enc=None, ssh_key_enc=None, ssh_auth_m
     node.ssh_key_enc = ssh_key_enc
     node.ssh_auth_mode = ssh_auth_mode
     node.ssh_host_key = ssh_host_key  # None = not bootstrapped; explicit to avoid MagicMock truthy default
+    node.credential_id = credential_id  # None = no FK; explicit to avoid MagicMock truthy default
     return node
 
 
-def _group(name="mygroup", ssh_username="guser", ssh_password_enc=None, ssh_key_enc=None, ssh_auth_mode=None):
+def _group(
+    name="mygroup",
+    ssh_username="guser",
+    ssh_password_enc=None,
+    ssh_key_enc=None,
+    ssh_auth_mode=None,
+    credential_id=None,
+    credential_priority=0,
+):
     group = MagicMock()
     group.name = name
     group.ssh_username = ssh_username
     group.ssh_password_enc = ssh_password_enc
     group.ssh_key_enc = ssh_key_enc
     group.ssh_auth_mode = ssh_auth_mode
+    group.credential_id = credential_id  # None = no FK; explicit to avoid MagicMock truthy default
+    group.credential_priority = credential_priority
     return group
+
+
+def _credential(kind="username_password", username="cuser", secret_plain="cpw"):
+    from fleet_platform.services.platform_settings_svc import encrypt_secret
+
+    cred = MagicMock()
+    cred.id = uuid.uuid4()
+    cred.kind = kind
+    cred.username = username
+    cred.secret_enc = encrypt_secret(secret_plain) if secret_plain is not None else ""
+    cred.last_used_at = None
+    return cred
 
 
 def _platform_row(value, is_encrypted=False):
@@ -332,3 +362,82 @@ async def test_global_fallback_decrypt_failure_returns_empty():
 
     assert result["credential_source"] == "global"
     assert result["ssh_password"] == ""
+
+
+# ---------------------------------------------------------------------------
+# Credential-store FK resolution (#698)
+# ---------------------------------------------------------------------------
+
+
+async def test_node_credential_fk_password():
+    """Node FK -> username_password Credential resolves to password auth, source 'node'."""
+    cred = _credential(kind="username_password", username="cuser", secret_plain="cpw")
+    node = _node(credential_id=cred.id)
+    db = AsyncMock(spec=AsyncSession)
+    db.get.return_value = cred
+
+    result = await resolve_node_credentials(node, db)
+
+    assert result["credential_source"] == "node"
+    assert result["ssh_user"] == "cuser"
+    assert result["ssh_password"] == "cpw"
+    assert result["ssh_key"] == ""
+    assert result["auth_mode"] == "password"
+    assert cred.last_used_at is not None  # touched for audit/rotation
+    db.execute.assert_not_called()  # FK hit short-circuits the group query
+
+
+async def test_node_credential_fk_ssh_key():
+    """Node FK -> ssh_key Credential resolves to key auth."""
+    cred = _credential(kind="ssh_key", username="keyuser", secret_plain="PRIVATE_KEY_BLOB")
+    node = _node(credential_id=cred.id)
+    db = AsyncMock(spec=AsyncSession)
+    db.get.return_value = cred
+
+    result = await resolve_node_credentials(node, db)
+
+    assert result["credential_source"] == "node"
+    assert result["ssh_user"] == "keyuser"
+    assert result["ssh_key"] == "PRIVATE_KEY_BLOB"
+    assert result["ssh_password"] == ""
+    assert result["auth_mode"] == "key"
+
+
+async def test_node_fk_wins_over_inline():
+    """When both the node FK and inline creds are set, the FK credential wins."""
+    cred = _credential(kind="username_password", username="fkuser", secret_plain="fkpw")
+    node = _node(ssh_username="inlineuser", credential_id=cred.id)
+    db = AsyncMock(spec=AsyncSession)
+    db.get.return_value = cred
+
+    result = await resolve_node_credentials(node, db)
+
+    assert result["ssh_user"] == "fkuser"
+
+
+async def test_node_fk_dangling_falls_back_to_inline():
+    """A dangling node FK (credential row gone) falls back to inline node creds."""
+    node = _node(ssh_username="inlineuser", ssh_password_enc=encrypt_secret("inlinepw"), credential_id=uuid.uuid4())
+    db = AsyncMock(spec=AsyncSession)
+    db.get.return_value = None  # credential deleted out from under the FK
+
+    result = await resolve_node_credentials(node, db)
+
+    assert result["credential_source"] == "node"
+    assert result["ssh_user"] == "inlineuser"
+    assert result["ssh_password"] == "inlinepw"
+
+
+async def test_group_credential_fk():
+    """Group FK -> Credential resolves with source 'group:<name>'."""
+    cred = _credential(kind="username_password", username="guser", secret_plain="gpw")
+    group = _group(name="prod", ssh_username=None, credential_id=cred.id)
+    node = _node()
+    db = _make_db(group)
+    db.get = AsyncMock(return_value=cred)
+
+    result = await resolve_node_credentials(node, db)
+
+    assert result["credential_source"] == "group:prod"
+    assert result["ssh_user"] == "guser"
+    assert result["ssh_password"] == "gpw"
