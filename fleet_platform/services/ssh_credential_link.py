@@ -76,8 +76,12 @@ async def upsert_owner_ssh_credential(
 
     username = ssh_username if ssh_username is not None else (existing.username if existing else None)
 
-    # Nothing meaningful to persist and no existing row to update.
-    if existing is None and not username and not secret_plain:
+    # Never manufacture a secret-less credential (#704/#701). A username with no
+    # password/key is not a usable SSH credential — creating one would link the
+    # owner to a dead FK that resolves to the "no usable credential" guard and
+    # short-circuits group/controller/global fallback. With no existing dedicated
+    # row to update, leave the owner unlinked so resolution can fall through.
+    if existing is None and not secret_plain:
         return current_credential_id
 
     kind = "ssh_key" if is_key else "username_password"

@@ -116,6 +116,35 @@ async def test_upsert_updates_existing_dedicated_credential():
     db.add.assert_not_called()  # updated in place, not a new row
 
 
+async def test_upsert_username_only_does_not_create_credential():
+    """A username with no password/key must NOT manufacture a secret-less
+    Credential (#704 Class-A defect): the owner stays unlinked so resolution
+    falls through to group/controller/global."""
+    db = _name_free_db()
+    out = await upsert_owner_ssh_credential(
+        db,
+        owner_name="node:n1",
+        current_credential_id=None,
+        ssh_username="admin",
+    )
+    assert out is None
+    db.add.assert_not_called()
+
+
+async def test_upsert_username_and_authmode_only_does_not_create_credential():
+    """Username + auth_mode but no actual secret is still not a usable credential."""
+    db = _name_free_db()
+    out = await upsert_owner_ssh_credential(
+        db,
+        owner_name="node:n1",
+        current_credential_id=None,
+        ssh_username="admin",
+        ssh_auth_mode="password",
+    )
+    assert out is None
+    db.add.assert_not_called()
+
+
 async def test_upsert_ignores_shared_credential_and_creates_new():
     """If the current FK points at a shared (differently-named) credential, don't mutate it."""
     shared = MagicMock()
