@@ -39,21 +39,46 @@ _SYSTEM_PREAMBLE = (
 )
 
 
+def _sanitize_value(v: Any) -> Any:
+    """Recursively sanitize string leaves in a tool result value (#770)."""
+    from fleet_platform.services.prompt_safety import sanitize_result_value
+
+    return sanitize_result_value(v)
+
+
 def _summarize_result(result: Any) -> str:
-    """Compact a ToolResult into a single observation line for the next prompt."""
+    """Compact a ToolResult into a single sanitized observation line (#770).
+
+    String values in the result payload are sanitized before serialization so
+    hostile node data (code-fences, model-control tokens, tool-call shapes)
+    cannot influence the model's next decision.
+    """
+    import json as _json
+
     name = getattr(result, "name", "?")
     ok = getattr(result, "ok", False)
     if not ok:
-        return f"[{name}] ERROR: {getattr(result, 'error', None) or getattr(result, 'status', 'error')}"
-    import json as _json
+        from fleet_platform.services.prompt_safety import sanitize_untrusted
 
+        raw_err = getattr(result, "error", None) or getattr(result, "status", "error")
+        safe_err = sanitize_untrusted(str(raw_err)) if raw_err is not None else "error"
+        return f"[{name}] ERROR: {safe_err}"
+
+    sanitized = _sanitize_value(getattr(result, "result", None))
     try:
-        payload = _json.dumps(getattr(result, "result", None), default=str)
+        payload = _json.dumps(sanitized, default=str)
     except (TypeError, ValueError):
-        payload = str(getattr(result, "result", None))
+        payload = str(sanitized)
     if len(payload) > TOOL_RESULT_CAP:
         payload = payload[:TOOL_RESULT_CAP] + " ...[truncated]"
     return f"[{name}] OK: {payload}"
+
+
+def sanitize_llm_output(text: str) -> str:
+    """Escape/strip HTML that could execute in the browser if rendered naively (#782)."""
+    from fleet_platform.services.prompt_safety import sanitize_llm_output as _impl
+
+    return _impl(text)
 
 
 @dataclass

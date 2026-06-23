@@ -49,11 +49,21 @@ async def audit_tool_dispatch(ctx: ToolCtx, spec: ToolSpec, args: dict, result: 
 
 
 def _redact(args: dict) -> dict:
-    """Drop obviously large/sensitive fields from the audit payload."""
-    out: dict = {}
-    for k, v in (args or {}).items():
-        if isinstance(v, str) and len(v) > 500:
-            out[k] = v[:500] + "...[truncated]"
-        else:
-            out[k] = v
-    return out
+    """Redact sensitive fields from tool-call args before audit logging (#781).
+
+    Delegates to :func:`fleet_platform.services.prompt_safety.redact_args` which
+    applies a key-name blocklist (password, secret, token, etc.) and a length cap.
+    """
+    from fleet_platform.services.prompt_safety import redact_args
+
+    return redact_args(args)
+
+
+def _is_sensitive_key(key: str) -> bool:
+    from fleet_platform.services.prompt_safety import is_sensitive_key
+
+    return is_sensitive_key(key)
+
+
+# Keep sensitive key constants visible at module level for external consumers.
+_SENSITIVE_KEY_PATTERNS = None  # authoritative set lives in prompt_safety._SENSITIVE_KEYS
