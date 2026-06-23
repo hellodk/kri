@@ -147,7 +147,7 @@ services:
       # salt-master now runs natively on mm1 — no local PKI or pillar mounts needed.
       # Salt API URL is configured via SALT_API_URL in .env.docker.
       # Salt key listing reads from mm1 via SALT_PKI_SSH (set SALT_MASTER_SSH_HOST).
-      - ${PULSE_REPOS_DIR:-/home/dk/Documents/git/pulse}:/mnt/pulse:ro   # host playbook repos — override via PULSE_REPOS_DIR in .env.docker
+      - ${PULSE_REPOS_DIR:-./pulse}:/mnt/pulse:ro   # host playbook repos — set PULSE_REPOS_DIR in .env.docker
       - ../salt/states:/srv/salt/states:ro
       - git-repos-cache:/home/appuser/.kri/git-repos  # persist cloned git sources across redeploys
     healthcheck:
@@ -189,12 +189,12 @@ services:
       # Set WORKER_SSH_DIR in .env.docker to override (default: ./ssh).
       # Issue #91: operator personal ~/.ssh removed.
       - ${WORKER_SSH_DIR:-./ssh}:/home/appuser/.ssh:ro
-      - ~/.kri:/home/appuser/.kri  # rw: worker needs to write id_rsa keypair (not :ro)
+      - ${KRI_DATA_DIR:-~/.kri}:/home/appuser/.kri  # rw: worker needs to write id_rsa keypair (not :ro)
       - git-repos-cache:/home/appuser/.kri/git-repos  # persist cloned git sources across redeploys
-      - ${PULSE_REPOS_DIR:-/home/dk/Documents/git/pulse}:/mnt/pulse:ro   # host playbook repos — override via PULSE_REPOS_DIR in .env.docker
+      - ${PULSE_REPOS_DIR:-./pulse}:/mnt/pulse:ro   # host playbook repos — set PULSE_REPOS_DIR in .env.docker
       # Mount playbooks/files so large binaries (salt .pkg, etc.) survive container rebuilds.
       # These files are gitignored but required for air-gapped installs.
-      - ${PLAYBOOKS_FILES_DIR:-/home/dk/Documents/git/kri/playbooks/files}:/app/playbooks/files:ro
+      - ${PLAYBOOKS_FILES_DIR:-../playbooks/files}:/app/playbooks/files:ro
       # Docker socket intentionally NOT mounted — container escape risk. Issue #82.
       # Salt commands now use Salt HTTP API instead of docker exec.
     healthcheck:
@@ -239,12 +239,12 @@ services:
       # Set WORKER_SSH_DIR in .env.docker to override (default: ./ssh).
       # Issue #91: operator personal ~/.ssh removed.
       - ${WORKER_SSH_DIR:-./ssh}:/home/appuser/.ssh:ro
-      - ~/.kri:/home/appuser/.kri  # rw: worker needs to write id_rsa keypair (not :ro)
+      - ${KRI_DATA_DIR:-~/.kri}:/home/appuser/.kri  # rw: worker needs to write id_rsa keypair (not :ro)
       - git-repos-cache:/home/appuser/.kri/git-repos  # persist cloned git sources across redeploys
-      - ${PULSE_REPOS_DIR:-/home/dk/Documents/git/pulse}:/mnt/pulse:ro   # host playbook repos — override via PULSE_REPOS_DIR in .env.docker
+      - ${PULSE_REPOS_DIR:-./pulse}:/mnt/pulse:ro   # host playbook repos — set PULSE_REPOS_DIR in .env.docker
       # Mount playbooks/files so large binaries (salt .pkg, etc.) survive container rebuilds.
       # These files are gitignored but required for air-gapped installs.
-      - ${PLAYBOOKS_FILES_DIR:-/home/dk/Documents/git/kri/playbooks/files}:/app/playbooks/files:ro
+      - ${PLAYBOOKS_FILES_DIR:-../playbooks/files}:/app/playbooks/files:ro
       # Docker socket intentionally NOT mounted — container escape risk. Issue #82.
       # Salt commands now use Salt HTTP API instead of docker exec.
     healthcheck:
