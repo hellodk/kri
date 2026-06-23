@@ -24,6 +24,7 @@ from fleet_platform.models.master_provision_run import MasterProvisionRun
 from fleet_platform.models.node import Node
 from fleet_platform.models.platform_setting import PlatformSetting
 from fleet_platform.models.salt_master import SaltMaster
+from fleet_platform.services.ssh_host_key_svc import to_known_hosts_token
 from fleet_platform.services.ssh_keypair import get_controller_pubkey
 from fleet_platform.services.task_lock import unique_task
 from fleet_platform.workers.celery_app import celery_app
@@ -192,6 +193,10 @@ def bootstrap_node(
     target_ip: str,
     ssh_username: str | None = None,
     salt_master_ids: list[str] | None = None,
+    node_exporter_version: str | None = None,
+    node_exporter_listen_address: str | None = None,
+    node_exporter_url_override: str | None = None,
+    bootstrap_full: bool | None = None,
 ) -> dict:
     """Run bootstrap_node.yml against a fleet node (macOS or Linux).
 
@@ -399,11 +404,17 @@ def bootstrap_node(
 
             known_hosts_file: str | None = None
             if node_ssh_host_key:
-                tmp_kh = tempfile.NamedTemporaryFile(mode="w", suffix=".known_hosts", delete=False)
-                tmp_kh.write(f"{target_ip} {node_ssh_host_key}\n")
-                tmp_kh.close()
-                known_hosts_file = tmp_kh.name
-                strict_check = f"-o StrictHostKeyChecking=yes -o UserKnownHostsFile={known_hosts_file}"
+                _kh_token = to_known_hosts_token(node_ssh_host_key)
+                if _kh_token:
+                    tmp_kh = tempfile.NamedTemporaryFile(mode="w", suffix=".known_hosts", delete=False)
+                    tmp_kh.write(f"{target_ip} {_kh_token}\n")
+                    tmp_kh.close()
+                    known_hosts_file = tmp_kh.name
+                    strict_check = f"-o StrictHostKeyChecking=yes -o UserKnownHostsFile={known_hosts_file}"
+                else:
+                    # Stored key cannot be normalised to a valid token; fall
+                    # back so bootstrap is not hard-blocked (#840).
+                    strict_check = "-o StrictHostKeyChecking=accept-new"
             else:
                 strict_check = "-o StrictHostKeyChecking=accept-new"
 
@@ -439,6 +450,19 @@ def bootstrap_node(
                         _append_capped(stdout_lines, msg, _trunc_ref)
                 return True
 
+            # Build runtime-override extravars for #830.
+            # Only inject when the caller provided a value — omitted vars fall back
+            # to playbook/group_vars defaults (extravars always win in Ansible precedence).
+            runtime_extravars: dict = {}
+            if node_exporter_version is not None:
+                runtime_extravars["node_exporter_version"] = node_exporter_version
+            if node_exporter_listen_address is not None:
+                runtime_extravars["node_exporter_listen_address"] = node_exporter_listen_address
+            if node_exporter_url_override is not None:
+                runtime_extravars["node_exporter_url_override"] = node_exporter_url_override
+            if bootstrap_full is not None:
+                runtime_extravars["bootstrap_full"] = bootstrap_full
+
             thread, runner = ansible_runner.run_async(
                 private_data_dir=tmpdir,
                 playbook=str(_PLAYBOOKS_DIR / "bootstrap_node.yml"),
@@ -454,6 +478,7 @@ def bootstrap_node(
                     "ingest_url": ingest_url,
                     "node_token": raw_token,
                     **password_extravars,
+                    **runtime_extravars,
                 },
                 envvars={
                     "ANSIBLE_COLLECTIONS_PATH": str(_PLAYBOOKS_DIR / "collections" / "installed"),
@@ -755,16 +780,21 @@ def _grains_via_ssh(target_ip, ssh_user, minion_id, ssh_host_key) -> tuple[dict 
         # TOFU: use node's stored host key for strict verification if available.
         grains_known_hosts_file: str | None = None
         if ssh_host_key:
-            tmp_kh2 = tempfile.NamedTemporaryFile(mode="w", suffix=".known_hosts", delete=False)
-            tmp_kh2.write(f"{target_ip} {ssh_host_key}\n")
-            tmp_kh2.close()
-            grains_known_hosts_file = tmp_kh2.name
-            grains_strict_opts = [
-                "-o",
-                "StrictHostKeyChecking=yes",
-                "-o",
-                f"UserKnownHostsFile={grains_known_hosts_file}",
-            ]
+            _grains_kh_token = to_known_hosts_token(ssh_host_key)
+            if _grains_kh_token:
+                tmp_kh2 = tempfile.NamedTemporaryFile(mode="w", suffix=".known_hosts", delete=False)
+                tmp_kh2.write(f"{target_ip} {_grains_kh_token}\n")
+                tmp_kh2.close()
+                grains_known_hosts_file = tmp_kh2.name
+                grains_strict_opts = [
+                    "-o",
+                    "StrictHostKeyChecking=yes",
+                    "-o",
+                    f"UserKnownHostsFile={grains_known_hosts_file}",
+                ]
+            else:
+                # Stored key unparseable; fall back to accept-new (#840).
+                grains_strict_opts = ["-o", "StrictHostKeyChecking=accept-new"]
         else:
             grains_strict_opts = ["-o", "StrictHostKeyChecking=accept-new"]
 

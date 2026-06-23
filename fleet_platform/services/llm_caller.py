@@ -242,14 +242,18 @@ async def call_openai_compat(
 
     content: str = "".join(content_parts)
 
-    if not content:
-        content = "[Model returned an empty stream response. Try a larger model or simplify your question.]"
+    # A genuinely empty response with zero completion tokens indicates a
+    # server-side crash (e.g. vllm-mlx position_embeddings error) that returns
+    # HTTP 200 but delivers nothing. Treat as a hard failure so the endpoint
+    # gets marked unhealthy (#840).
+    if not content and completion_tokens == 0:
+        raise LLMCallError("Model returned no content (0 tokens) — the endpoint or model may be broken")
 
     # Strip <think>...</think> reasoning blocks from thinking models
     if is_thinking:
         content = _re.sub(r"<think>.*?</think>", "", content, flags=_re.DOTALL).strip()
         if not content:
-            content = "[Model returned only a thinking block with no final answer.]"
+            raise LLMCallError("Model returned only a thinking block with no final answer")
     else:
         # Echo-detection only makes sense for small non-thinking models
         content = _validate_response(content, system_prompt)
@@ -323,6 +327,8 @@ async def call_anthropic(
         raise LLMCallError(f"Anthropic call timed out after {_READ_TIMEOUT}s") from exc
     block = message.content[0]
     content: str = block.text if hasattr(block, "text") else ""
+    if not content and message.usage.output_tokens == 0:
+        raise LLMCallError("Model returned no content (0 tokens) — the endpoint or model may be broken")
     return content, message.usage.input_tokens, message.usage.output_tokens
 
 
@@ -443,13 +449,21 @@ async def stream_openai_compat(
         return
 
     content = "".join(content_parts)
-    if not content:
-        content = "[Model returned an empty stream response. Try a larger model or simplify your question.]"
+
+    # A genuinely empty response with zero completion tokens indicates a
+    # server-side crash that returns HTTP 200 but delivers nothing (#840).
+    if not content and completion_tokens == 0:
+        yield {
+            "type": "error",
+            "error": "Model returned no content (0 tokens) — the endpoint or model may be broken",
+        }
+        return
 
     if is_thinking:
         content = _re.sub(r"<think>.*?</think>", "", content, flags=_re.DOTALL).strip()
         if not content:
-            content = "[Model returned only a thinking block with no final answer.]"
+            yield {"type": "error", "error": "Model returned only a thinking block with no final answer"}
+            return
     else:
         content = _validate_response(content, system_prompt)
 
@@ -517,7 +531,13 @@ async def stream_anthropic(
         yield {"type": "error", "error": f"Anthropic stream failed: {exc}"}
         return
 
-    content = "".join(content_parts) or "[Model returned an empty stream response.]"
+    content = "".join(content_parts)
+    if not content and output_tokens == 0:
+        yield {
+            "type": "error",
+            "error": "Model returned no content (0 tokens) — the endpoint or model may be broken",
+        }
+        return
     yield {
         "type": "done",
         "content": content,

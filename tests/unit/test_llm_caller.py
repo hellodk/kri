@@ -218,29 +218,31 @@ async def test_call_openai_compat_raises_llm_call_error_on_http_error():
 
 
 @pytest.mark.asyncio
-async def test_call_openai_compat_returns_empty_message_on_no_content_deltas():
-    """A stream with no content deltas returns a user-friendly error message."""
-    from fleet_platform.services.llm_caller import call_openai_compat
+async def test_call_openai_compat_raises_on_no_content_deltas():
+    """A stream with no content deltas and 0 completion tokens raises LLMCallError (#840).
 
-    # Reuses the test_stream_empty_response_returns_error_message pattern inline
-    mock_client = _sse_from_text("")  # empty text → no content in delta
+    Previously returned a placeholder string; now raises so the endpoint is
+    marked unhealthy rather than silently accepted as a successful response.
+    """
+    from fleet_platform.services.llm_caller import LLMCallError, call_openai_compat
 
-    # Override the aiter_lines to yield only [DONE]
+    # Override the aiter_lines to yield only [DONE] — no content, no usage
     async def _done_only():
         yield "data: [DONE]"
 
+    mock_client = _sse_from_text("")
     mock_client.stream.return_value.__aenter__.return_value.aiter_lines = _done_only
 
     with patch("fleet_platform.services.llm_caller.httpx.AsyncClient", return_value=mock_client):
-        content, _, _ = await call_openai_compat(
-            base_url="http://localhost:11434/v1",
-            api_key=None,
-            model="llama3.2",
-            max_tokens=512,
-            system_prompt="sys",
-            user_prompt="prompt",
-        )
-    assert content.startswith("[") and "empty" in content.lower()
+        with pytest.raises(LLMCallError, match="0 tokens"):
+            await call_openai_compat(
+                base_url="http://localhost:11434/v1",
+                api_key=None,
+                model="llama3.2",
+                max_tokens=512,
+                system_prompt="sys",
+                user_prompt="prompt",
+            )
 
 
 def test_validate_response_returns_error_for_empty_content():
@@ -378,11 +380,15 @@ async def test_stream_read_timeout_raises_llm_call_error():
 
 
 @pytest.mark.asyncio
-async def test_stream_empty_response_returns_error_message():
-    """An empty stream (no content deltas) returns a user-friendly error (#274)."""
+async def test_stream_empty_response_raises_llm_call_error():
+    """An empty stream (no content, 0 completion tokens) raises LLMCallError (#840).
+
+    Previously returned a placeholder; now raises so callers can mark the
+    endpoint unhealthy instead of silently accepting a broken response.
+    """
     from unittest.mock import AsyncMock, MagicMock, patch
 
-    from fleet_platform.services.llm_caller import call_openai_compat
+    from fleet_platform.services.llm_caller import LLMCallError, call_openai_compat
 
     mock_response = MagicMock()
     mock_response.raise_for_status = MagicMock()
@@ -401,16 +407,15 @@ async def test_stream_empty_response_returns_error_message():
     mock_client.stream = MagicMock(return_value=mock_stream_ctx)
 
     with patch("fleet_platform.services.llm_caller.httpx.AsyncClient", return_value=mock_client):
-        content, _, _ = await call_openai_compat(
-            base_url="http://x",
-            api_key=None,
-            model="m",
-            max_tokens=128,
-            system_prompt="sys",
-            user_prompt="hi",
-        )
-
-    assert content.startswith("[") and "empty" in content.lower()
+        with pytest.raises(LLMCallError, match="0 tokens"):
+            await call_openai_compat(
+                base_url="http://x",
+                api_key=None,
+                model="m",
+                max_tokens=128,
+                system_prompt="sys",
+                user_prompt="hi",
+            )
 
 
 # ─── streaming edge cases (#309) ──────────────────────────────────────────────

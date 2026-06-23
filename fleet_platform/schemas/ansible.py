@@ -1,7 +1,11 @@
 # fleet_platform/schemas/ansible.py
+import re
 import uuid
 
-from pydantic import BaseModel
+from pydantic import BaseModel, field_validator
+
+_VERSION_RE = re.compile(r"^\d+\.\d+\.\d+$")
+_LISTEN_ADDR_RE = re.compile(r"^[\w.\-]*:\d{1,5}$")
 
 
 class BootstrapRequest(BaseModel):
@@ -11,6 +15,27 @@ class BootstrapRequest(BaseModel):
     ssh_password: str | None = None  # overrides platform setting ssh_bootstrap_password
     ssh_key: str | None = None  # plaintext private key for key-based auth
     salt_master_ids: list[str] | None = None  # HA: specific master IDs to use; None → all enabled
+    # Runtime overrides for #830 (all optional; omitted → playbook/group_vars defaults apply)
+    node_exporter_version: str | None = None
+    node_exporter_listen_address: str | None = None
+    node_exporter_url_override: str | None = None
+    bootstrap_full: bool | None = None
+
+    @field_validator("node_exporter_version")
+    @classmethod
+    def validate_node_exporter_version(cls, v: str | None) -> str | None:
+        if v is not None and not _VERSION_RE.match(v):
+            raise ValueError(f"node_exporter_version must match X.Y.Z (got {v!r})")
+        return v
+
+    @field_validator("node_exporter_listen_address")
+    @classmethod
+    def validate_node_exporter_listen_address(cls, v: str | None) -> str | None:
+        if v is not None and not _LISTEN_ADDR_RE.match(v):
+            raise ValueError(
+                f"node_exporter_listen_address must match [host]:port, e.g. ':9100' or '0.0.0.0:9100' (got {v!r})"
+            )
+        return v
 
 
 class BootstrapResponse(BaseModel):

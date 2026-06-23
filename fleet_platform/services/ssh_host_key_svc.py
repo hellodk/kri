@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import base64
 import logging
 import uuid
 from datetime import UTC, datetime
@@ -11,6 +12,55 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from fleet_platform.models.node import Node
 
 logger = logging.getLogger(__name__)
+
+# Known OpenSSH public-key algorithm identifiers accepted in a known_hosts file.
+_KNOWN_SSH_ALGS = frozenset(
+    {
+        "ssh-ed25519",
+        "ssh-rsa",
+        "ecdsa-sha2-nistp256",
+        "ecdsa-sha2-nistp384",
+        "ecdsa-sha2-nistp521",
+        "ssh-dss",
+    }
+)
+
+
+def to_known_hosts_token(stored: str) -> str | None:
+    """Return a valid known_hosts token ``<alg> <base64>`` from a stored key value.
+
+    Handles two legacy/current storage shapes:
+
+    * **Native form** – the value is already ``<alg> <base64>`` (or with an
+      optional comment).  The first two whitespace-separated tokens are returned
+      directly.
+    * **Legacy base64-wrapped form** – WebSSH used to store
+      ``base64(export_public_key("openssh"))`` which produced an opaque blob
+      rather than a parseable token.  The value is decoded and the algorithm +
+      key token is extracted.
+
+    Returns ``None`` when the value cannot be parsed into a valid token.
+    """
+    if not stored:
+        return None
+
+    candidate = stored.strip()
+
+    # Fast path: already in native '<alg> <base64>' form.
+    parts = candidate.split()
+    if len(parts) >= 2 and parts[0] in _KNOWN_SSH_ALGS:
+        return f"{parts[0]} {parts[1]}"
+
+    # Slow path: try decoding as a base64-wrapped OpenSSH public key line.
+    try:
+        decoded = base64.b64decode(candidate).decode("ascii")
+        parts = decoded.strip().split()
+        if len(parts) >= 2 and parts[0] in _KNOWN_SSH_ALGS:
+            return f"{parts[0]} {parts[1]}"
+    except Exception:
+        pass
+
+    return None
 
 
 async def verify_or_store_host_key(
@@ -32,6 +82,14 @@ async def verify_or_store_host_key(
         return True
 
     if node.ssh_host_key == host_key_b64:
+        return True
+
+    # Cross-format comparison: a legacy base64-wrapped key and its decoded
+    # native form must compare as equal to avoid spurious MITM warnings during
+    # the migration from the old storage format to the new one (#840).
+    norm_stored = to_known_hosts_token(node.ssh_host_key)
+    norm_incoming = to_known_hosts_token(host_key_b64)
+    if norm_stored is not None and norm_incoming is not None and norm_stored == norm_incoming:
         return True
 
     logger.warning(
