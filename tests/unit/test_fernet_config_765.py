@@ -10,7 +10,6 @@ Verifies that:
 
 from __future__ import annotations
 
-import importlib
 import os
 from pathlib import Path
 from unittest.mock import patch
@@ -21,23 +20,27 @@ from unittest.mock import patch
 
 
 def test_settings_reads_fernet_key_from_env():
-    """Settings.fernet_secret_key must be populated from the FERNET_KEY env var."""
-    import fleet_platform.core.config as config_mod
+    """Settings.fernet_secret_key must be populated from the FERNET_KEY env var.
+
+    Construct a fresh Settings() under a patched env rather than reloading the
+    config module — importlib.reload rebinds the global `settings` singleton and
+    pollutes other tests (platform_settings_svc holds the original reference).
+    """
+    from fleet_platform.core.config import Settings
 
     valid_key = "dGVzdC1rZXktbm90LWZvci1wcm9kdWN0aW9uLXVzZS1vbmx5"
     with patch.dict(os.environ, {"FERNET_KEY": valid_key}, clear=False):
-        fresh = importlib.reload(config_mod)
-        assert fresh.settings.fernet_secret_key == valid_key
+        assert Settings().fernet_secret_key == valid_key
 
 
 def test_settings_fernet_key_absent_gives_none():
     """When FERNET_KEY is absent, fernet_secret_key should default to None."""
-    import fleet_platform.core.config as config_mod
+    from fleet_platform.core.config import Settings
 
     env_without_fernet = {k: v for k, v in os.environ.items() if k not in ("FERNET_KEY", "FERNET_SECRET_KEY")}
     with patch.dict(os.environ, env_without_fernet, clear=True):
-        fresh = importlib.reload(config_mod)
-        assert fresh.settings.fernet_secret_key is None
+        # _env_file=None so a local .env can't inject a value during the test.
+        assert Settings(_env_file=None).fernet_secret_key is None
 
 
 # ---------------------------------------------------------------------------
