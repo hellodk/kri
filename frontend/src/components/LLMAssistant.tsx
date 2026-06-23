@@ -298,9 +298,14 @@ export default function LLMAssistant() {
         case 'final':
           patchLastTurn((t) => ({ ...t, final: ev.text }))
           break
-        case 'limit_reached':
-          patchLastTurn((t) => ({ ...t, note: `Stopped: reached ${ev.limit} (${ev.value}).` }))
+        case 'limit_reached': {
+          const note =
+            ev.limit === 'no_progress'
+              ? 'Stopped early: the assistant kept repeating the same step without new information.'
+              : `Stopped: reached ${ev.limit} (${ev.value}).`
+          patchLastTurn((t) => ({ ...t, note }))
           break
+        }
         case 'error':
           patchLastTurn((t) => ({ ...t, error: ev.error, running: false }))
           break

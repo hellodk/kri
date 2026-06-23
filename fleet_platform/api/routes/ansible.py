@@ -31,14 +31,12 @@ from fleet_platform.schemas.playbook import (
     PlaybookSourceValidateRequest,
     PlaybookSourceValidateResponse,
 )
-from fleet_platform.services.credential_resolver import node_has_group
+from fleet_platform.services.bootstrap_svc import BootstrapGroupRequired, queue_node_bootstrap
 from fleet_platform.services.git_auth import classify_git_error, git_auth_env, redact_secrets
 from fleet_platform.services.log_delta import slice_from, split_running_marker
 from fleet_platform.services.platform_settings_svc import decrypt_secret, encrypt_secret
 from fleet_platform.services.playbook_discovery import discover_all
 from fleet_platform.services.playbook_sources import get_all_playbook_dirs, sync_all_git_sources
-from fleet_platform.services.ssh_credential_link import upsert_owner_ssh_credential
-from fleet_platform.workers.ansible_tasks import bootstrap_node
 from fleet_platform.workers.playbook_tasks import run_playbook
 
 router = APIRouter(prefix="/api/v1/ansible")
@@ -115,55 +113,21 @@ async def bootstrap(
         await db.flush()
         await db.commit()
         await db.refresh(node)
-    else:
-        node.bootstrap_status = "pending"
-        node.bootstrap_ip = payload.target_ip
-        node.bootstrap_logs = ""  # clear previous run's logs
-        node.bootstrap_error = None  # clear previous error
-
-    # Enforce: node must belong to at least one group before bootstrapping
-    if not await node_has_group(node.id, db):
-        raise HTTPException(
-            status_code=400,
-            detail="Node must belong to at least one group before bootstrapping. "
-            "Add the node to a group first, then configure group SSH credentials.",
+    # Shared queuing logic (group guard, credential persistence, audit, dispatch)
+    # is also used by the bulk-import auto-bootstrap path — see bootstrap_svc.
+    try:
+        task = await queue_node_bootstrap(
+            db,
+            node,
+            target_ip=payload.target_ip,
+            actor=claims["email"],
+            ssh_username=payload.ssh_username,
+            ssh_password=payload.ssh_password,
+            ssh_key=payload.ssh_key,
+            salt_master_ids=payload.salt_master_ids,
         )
-
-    # Save SSH credentials to the node for future reuse (#725): persist into the
-    # node's dedicated Credential row + FK rather than the deprecated inline columns.
-    # Secrets are bound to locals (never forwarded to bootstrap_node.delay(), which
-    # would put plaintext in the Redis broker — see #495).
-    _ssh_pw = payload.ssh_password
-    _ssh_key = payload.ssh_key
-    _auth_mode = "key" if (_ssh_key and not _ssh_pw) else "password"
-    _cred_id = await upsert_owner_ssh_credential(
-        db,
-        owner_name=f"node:{node.minion_id}",
-        current_credential_id=node.credential_id,
-        ssh_username=payload.ssh_username,
-        ssh_password=_ssh_pw,
-        ssh_key=_ssh_key,
-        ssh_auth_mode=_auth_mode if (_ssh_pw or _ssh_key) else None,
-    )
-    if _cred_id is not None:
-        node.credential_id = _cred_id
-    await audit(
-        db,
-        actor=claims["email"],
-        action="node.bootstrap.request",
-        resource_type="node",
-        resource_id=node.id,
-        new_value={"minion_id": node.minion_id, "target_ip": payload.target_ip},
-    )
-    await db.commit()
-    await db.refresh(node)
-
-    task = bootstrap_node.delay(
-        str(node.id),
-        payload.target_ip,
-        ssh_username=payload.ssh_username,
-        salt_master_ids=payload.salt_master_ids,
-    )
+    except BootstrapGroupRequired as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
 
     return BootstrapResponse(
         node_id=node.id,
