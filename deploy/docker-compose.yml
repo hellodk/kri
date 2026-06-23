@@ -147,7 +147,7 @@ services:
       # salt-master now runs natively on mm1 — no local PKI or pillar mounts needed.
       # Salt API URL is configured via SALT_API_URL in .env.docker.
       # Salt key listing reads from mm1 via SALT_PKI_SSH (set SALT_MASTER_SSH_HOST).
-      - ${PULSE_REPOS_DIR:-/home/dk/Documents/git/pulse}:/mnt/pulse:ro   # host playbook repos — override via PULSE_REPOS_DIR in .env.docker
+      - ${PULSE_REPOS_DIR:-./pulse}:/mnt/pulse:ro   # host playbook repos — set PULSE_REPOS_DIR in .env.docker
       - ../salt/states:/srv/salt/states:ro
       - git-repos-cache:/home/appuser/.kri/git-repos  # persist cloned git sources across redeploys
     healthcheck:
@@ -189,12 +189,12 @@ services:
       # Set WORKER_SSH_DIR in .env.docker to override (default: ./ssh).
       # Issue #91: operator personal ~/.ssh removed.
       - ${WORKER_SSH_DIR:-./ssh}:/home/appuser/.ssh:ro
-      - ~/.kri:/home/appuser/.kri  # rw: worker needs to write id_rsa keypair (not :ro)
+      - ${KRI_DATA_DIR:-~/.kri}:/home/appuser/.kri  # rw: worker needs to write id_rsa keypair (not :ro)
       - git-repos-cache:/home/appuser/.kri/git-repos  # persist cloned git sources across redeploys
-      - ${PULSE_REPOS_DIR:-/home/dk/Documents/git/pulse}:/mnt/pulse:ro   # host playbook repos — override via PULSE_REPOS_DIR in .env.docker
+      - ${PULSE_REPOS_DIR:-./pulse}:/mnt/pulse:ro   # host playbook repos — set PULSE_REPOS_DIR in .env.docker
       # Mount playbooks/files so large binaries (salt .pkg, etc.) survive container rebuilds.
       # These files are gitignored but required for air-gapped installs.
-      - ${PLAYBOOKS_FILES_DIR:-/home/dk/Documents/git/kri/playbooks/files}:/app/playbooks/files:ro
+      - ${PLAYBOOKS_FILES_DIR:-../playbooks/files}:/app/playbooks/files:ro
       # Docker socket intentionally NOT mounted — container escape risk. Issue #82.
       # Salt commands now use Salt HTTP API instead of docker exec.
     healthcheck:
@@ -239,12 +239,12 @@ services:
       # Set WORKER_SSH_DIR in .env.docker to override (default: ./ssh).
       # Issue #91: operator personal ~/.ssh removed.
       - ${WORKER_SSH_DIR:-./ssh}:/home/appuser/.ssh:ro
-      - ~/.kri:/home/appuser/.kri  # rw: worker needs to write id_rsa keypair (not :ro)
+      - ${KRI_DATA_DIR:-~/.kri}:/home/appuser/.kri  # rw: worker needs to write id_rsa keypair (not :ro)
       - git-repos-cache:/home/appuser/.kri/git-repos  # persist cloned git sources across redeploys
-      - ${PULSE_REPOS_DIR:-/home/dk/Documents/git/pulse}:/mnt/pulse:ro   # host playbook repos — override via PULSE_REPOS_DIR in .env.docker
+      - ${PULSE_REPOS_DIR:-./pulse}:/mnt/pulse:ro   # host playbook repos — set PULSE_REPOS_DIR in .env.docker
       # Mount playbooks/files so large binaries (salt .pkg, etc.) survive container rebuilds.
       # These files are gitignored but required for air-gapped installs.
-      - ${PLAYBOOKS_FILES_DIR:-/home/dk/Documents/git/kri/playbooks/files}:/app/playbooks/files:ro
+      - ${PLAYBOOKS_FILES_DIR:-../playbooks/files}:/app/playbooks/files:ro
       # Docker socket intentionally NOT mounted — container escape risk. Issue #82.
       # Salt commands now use Salt HTTP API instead of docker exec.
     healthcheck:
@@ -260,10 +260,36 @@ services:
           memory: 2G
     logging: *default-logging
 
-  # salt-master removed from Docker — runs natively on mm1 (100.102.68.75).
-  # See playbooks/roles/salt_master and playbooks/setup_salt_master.yml.
-  # This eliminates the PKI key rotation issue caused by container restarts.
-  # Configure SALT_API_URL=http://100.102.68.75:8080 in .env.docker.
+  # Salt master + salt-api.  PKI keys are persisted in the salt-pki volume so
+  # the entrypoint's stable-key mechanism survives container restarts without
+  # forcing minion re-acceptance (#812).  Pillar files written by the worker are
+  # shared via the salt-pillar volume.
+  salt-master:
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile.salt-master
+    restart: unless-stopped
+    volumes:
+      - salt-pki:/etc/salt/pki/master      # PKI persistence — stable key across restarts
+      - salt-pillar:/srv/salt/pillar        # shared with worker for pillar writes
+      - ../salt/states:/srv/salt/states:ro  # kri Salt states (grain_report, sbom_scan …)
+      - ./salt-master.conf:/etc/salt/master.d/kri.conf:ro
+    ports:
+      - "${SALT_MASTER_PUBLISH_PORT:-4505}:4505"
+      - "${SALT_MASTER_RETURN_PORT:-4506}:4506"
+      - "${SALT_API_PORT:-8080}:8080"
+    healthcheck:
+      test: ["CMD", "curl", "-sf", "http://localhost:8080/"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 90s
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 512M
+    logging: *default-logging
 
   beat:
     build:
@@ -325,3 +351,5 @@ volumes:
   redisdata:
   pgbackups:
   git-repos-cache:   # cloned git playbook sources — survives api/worker redeploys
+  salt-pki:          # salt-master PKI keys — shared across restarts for stable minion auth
+  salt-pillar:       # Salt pillar data written by worker, read by salt-master
