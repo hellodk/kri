@@ -76,22 +76,62 @@ async def test_tool_result_carries_executor_output():
 
 
 async def test_max_iterations_limit():
-    # planner always asks for a tool, never finalizes → must stop at max_iterations
+    # planner always asks for a *distinct* tool, never finalizes → stop at max_iterations
     planner = ScriptedPlanner([PlanDecision(tool_calls=[ToolCall("get_node", {"x": str(i)})]) for i in range(20)])
     loop = AgentLoop(Executor(_registry()), planner, _ctx(), max_iterations=3)
     events = await _drain(loop)
-    assert events[-1].type == "limit_reached"
-    assert events[-1].data["limit"] == "max_iterations"
+    limit = next(e for e in events if e.type == "limit_reached")
+    assert limit.data["limit"] == "max_iterations"
     assert sum(1 for e in events if e.type == "step_start") == 3
+    # A bounded stop must still hand back a final answer, not a silent dead end.
+    assert events[-1].type == "final"
+    assert events[-1].data["text"]
 
 
 async def test_max_tool_calls_limit():
     planner = ScriptedPlanner([PlanDecision(tool_calls=[ToolCall("get_node", {"x": str(i)}) for i in range(10)])])
     loop = AgentLoop(Executor(_registry()), planner, _ctx(), max_tool_calls=4)
     events = await _drain(loop)
-    assert events[-1].type == "limit_reached"
-    assert events[-1].data["limit"] == "max_tool_calls"
+    limit = next(e for e in events if e.type == "limit_reached")
+    assert limit.data["limit"] == "max_tool_calls"
     assert sum(1 for e in events if e.type == "tool_call") == 4
+    assert events[-1].type == "final"
+    assert events[-1].data["text"]
+
+
+async def test_repeated_identical_tool_call_stops_early():
+    """A planner that re-emits the SAME call every step must stall out fast, not
+    burn every iteration (the rag_search loop that hit max_iterations + timed out)."""
+    planner = ScriptedPlanner([PlanDecision(tool_calls=[ToolCall("get_node", {"x": "same"})]) for _ in range(6)])
+    loop = AgentLoop(Executor(_registry()), planner, _ctx(), max_iterations=6)
+    events = await _drain(loop)
+
+    # The duplicate call executes once; the 2nd identical decision trips no_progress.
+    assert sum(1 for e in events if e.type == "tool_call") == 1
+    assert sum(1 for e in events if e.type == "step_start") == 2
+    limit = next(e for e in events if e.type == "limit_reached")
+    assert limit.data["limit"] == "no_progress"
+    # User still gets a terminal answer explaining the stall.
+    assert events[-1].type == "final"
+    assert events[-1].data["text"]
+
+
+async def test_new_call_after_repeat_still_progresses():
+    """A repeat mixed with a genuinely new call should not be treated as a stall."""
+    planner = ScriptedPlanner(
+        [
+            PlanDecision(tool_calls=[ToolCall("get_node", {"x": "a"})]),
+            # repeats "a" (skipped) but also asks for a new "b" → progress continues
+            PlanDecision(tool_calls=[ToolCall("get_node", {"x": "a"}), ToolCall("get_node", {"x": "b"})]),
+            PlanDecision(final="done"),
+        ]
+    )
+    loop = AgentLoop(Executor(_registry()), planner, _ctx())
+    events = await _drain(loop)
+    # Two distinct calls executed (a, b); the duplicate "a" was skipped, not re-run.
+    assert sum(1 for e in events if e.type == "tool_call") == 2
+    assert events[-1].type == "final"
+    assert events[-1].data["text"] == "done"
 
 
 async def test_awaiting_approval_halts_loop():
