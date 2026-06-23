@@ -143,7 +143,9 @@ export function ImportNodesModal({ onClose }: { onClose: () => void }) {
   // Options
   const [groupId, setGroupId] = useState('')
   const [sshUsername, setSshUsername] = useState('')
+  const [sshAuthMode, setSshAuthMode] = useState<'password' | 'key'>('password')
   const [sshPassword, setSshPassword] = useState('')
+  const [sshKey, setSshKey] = useState('')
   const [autoBootstrap, setAutoBootstrap] = useState(false)
 
   // Inline group creation
@@ -250,7 +252,9 @@ export function ImportNodesModal({ onClose }: { onClose: () => void }) {
         rows: validateResult?.rows ?? [],
         group_id: groupId || undefined,
         ssh_username: sshUsername.trim() || undefined,
-        ssh_password: sshPassword || undefined,
+        ssh_auth_mode: sshAuthMode,
+        ssh_password: sshAuthMode === 'password' ? (sshPassword || undefined) : undefined,
+        ssh_key: sshAuthMode === 'key' ? (sshKey.trim() || undefined) : undefined,
         auto_bootstrap: autoBootstrap,
       }),
     onSuccess: (data) => {
@@ -266,7 +270,9 @@ export function ImportNodesModal({ onClose }: { onClose: () => void }) {
   })
 
   const summary = validateResult?.summary
-  const canCommit = !!summary && summary.new > 0 && !commitMutation.isPending
+  // Bootstrapping requires a group (the backend enforces this); block commit until one is chosen.
+  const needsGroupForBootstrap = autoBootstrap && !groupId
+  const canCommit = !!summary && summary.new > 0 && !commitMutation.isPending && !needsGroupForBootstrap
 
   // ── Detected CSV columns (first line of CSV) ───────────────────────────────
   const csvColumns = csvContent
@@ -459,7 +465,7 @@ export function ImportNodesModal({ onClose }: { onClose: () => void }) {
             </div>
 
             {/* SSH credentials */}
-            <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-3">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
                   SSH username <span className="text-gray-400 font-normal">(optional)</span>
@@ -471,24 +477,79 @@ export function ImportNodesModal({ onClose }: { onClose: () => void }) {
                   className="w-full px-2.5 py-1.5 text-sm border border-gray-300 rounded-lg focus:outline-none focus:border-brand-600"
                 />
               </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  SSH password <span className="text-gray-400 font-normal">(optional)</span>
+
+              {/* Auth mode toggle */}
+              <div className="flex gap-4">
+                <label className="flex items-center gap-1.5 cursor-pointer text-sm text-gray-700">
+                  <input
+                    type="radio"
+                    name="import-ssh-auth-mode"
+                    checked={sshAuthMode === 'password'}
+                    onChange={() => setSshAuthMode('password')}
+                    className="text-brand-600 focus:ring-brand-500"
+                  />
+                  Password
                 </label>
-                <PasswordInput value={sshPassword} onChange={setSshPassword} placeholder="••••••••" />
+                <label className="flex items-center gap-1.5 cursor-pointer text-sm text-gray-700">
+                  <input
+                    type="radio"
+                    name="import-ssh-auth-mode"
+                    checked={sshAuthMode === 'key'}
+                    onChange={() => setSshAuthMode('key')}
+                    className="text-brand-600 focus:ring-brand-500"
+                  />
+                  SSH key
+                </label>
               </div>
+
+              {sshAuthMode === 'password' ? (
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    SSH password <span className="text-gray-400 font-normal">(optional)</span>
+                  </label>
+                  <PasswordInput value={sshPassword} onChange={setSshPassword} placeholder="••••••••" />
+                </div>
+              ) : (
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    SSH private key <span className="text-gray-400 font-normal">(optional)</span>
+                  </label>
+                  <textarea
+                    value={sshKey}
+                    onChange={e => setSshKey(e.target.value)}
+                    rows={4}
+                    placeholder="-----BEGIN OPENSSH PRIVATE KEY-----"
+                    className="w-full px-2.5 py-1.5 text-sm border border-gray-300 rounded-lg font-mono focus:outline-none focus:border-brand-600 resize-y"
+                  />
+                </div>
+              )}
+              <p className="text-xs text-gray-400">
+                Applied to all imported nodes. Leave blank to reuse the group's saved SSH credentials.
+              </p>
             </div>
 
             {/* Auto-bootstrap */}
-            <label className="flex items-center gap-2 cursor-pointer">
-              <input
-                type="checkbox"
-                checked={autoBootstrap}
-                onChange={e => setAutoBootstrap(e.target.checked)}
-                className="rounded border-gray-300 text-brand-600 focus:ring-brand-500"
-              />
-              <span className="text-sm font-medium text-gray-700">Auto-bootstrap after import</span>
-            </label>
+            <div className="space-y-1">
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={autoBootstrap}
+                  onChange={e => setAutoBootstrap(e.target.checked)}
+                  className="rounded border-gray-300 text-brand-600 focus:ring-brand-500"
+                />
+                <span className="text-sm font-medium text-gray-700">Auto-bootstrap after import</span>
+              </label>
+              {needsGroupForBootstrap && (
+                <p className="text-xs text-amber-600 ml-6">
+                  Select a group above — bootstrapping requires the node to belong to a group.
+                </p>
+              )}
+              {autoBootstrap && (
+                <p className="text-xs text-gray-400 ml-6">
+                  Only nodes with an IP address will be bootstrapped.
+                </p>
+              )}
+            </div>
           </div>
         </div>
 

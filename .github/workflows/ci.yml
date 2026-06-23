@@ -341,7 +341,7 @@ jobs:
         working-directory: .
       - name: Upload Playwright report
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: playwright-report
           path: playwright-report/
@@ -353,7 +353,7 @@ jobs:
           docker compose -f deploy/docker-compose.yml logs > stack-logs/all.log 2>&1 || true
       - name: Upload stack logs artifact
         if: failure()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: stack-logs
           path: stack-logs/
