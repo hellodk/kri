@@ -24,6 +24,7 @@ from fleet_platform.models.master_provision_run import MasterProvisionRun
 from fleet_platform.models.node import Node
 from fleet_platform.models.platform_setting import PlatformSetting
 from fleet_platform.models.salt_master import SaltMaster
+from fleet_platform.services.ssh_host_key_svc import to_known_hosts_token
 from fleet_platform.services.ssh_keypair import get_controller_pubkey
 from fleet_platform.services.task_lock import unique_task
 from fleet_platform.workers.celery_app import celery_app
@@ -399,11 +400,17 @@ def bootstrap_node(
 
             known_hosts_file: str | None = None
             if node_ssh_host_key:
-                tmp_kh = tempfile.NamedTemporaryFile(mode="w", suffix=".known_hosts", delete=False)
-                tmp_kh.write(f"{target_ip} {node_ssh_host_key}\n")
-                tmp_kh.close()
-                known_hosts_file = tmp_kh.name
-                strict_check = f"-o StrictHostKeyChecking=yes -o UserKnownHostsFile={known_hosts_file}"
+                _kh_token = to_known_hosts_token(node_ssh_host_key)
+                if _kh_token:
+                    tmp_kh = tempfile.NamedTemporaryFile(mode="w", suffix=".known_hosts", delete=False)
+                    tmp_kh.write(f"{target_ip} {_kh_token}\n")
+                    tmp_kh.close()
+                    known_hosts_file = tmp_kh.name
+                    strict_check = f"-o StrictHostKeyChecking=yes -o UserKnownHostsFile={known_hosts_file}"
+                else:
+                    # Stored key cannot be normalised to a valid token; fall
+                    # back so bootstrap is not hard-blocked (#840).
+                    strict_check = "-o StrictHostKeyChecking=accept-new"
             else:
                 strict_check = "-o StrictHostKeyChecking=accept-new"
 
@@ -755,16 +762,21 @@ def _grains_via_ssh(target_ip, ssh_user, minion_id, ssh_host_key) -> tuple[dict 
         # TOFU: use node's stored host key for strict verification if available.
         grains_known_hosts_file: str | None = None
         if ssh_host_key:
-            tmp_kh2 = tempfile.NamedTemporaryFile(mode="w", suffix=".known_hosts", delete=False)
-            tmp_kh2.write(f"{target_ip} {ssh_host_key}\n")
-            tmp_kh2.close()
-            grains_known_hosts_file = tmp_kh2.name
-            grains_strict_opts = [
-                "-o",
-                "StrictHostKeyChecking=yes",
-                "-o",
-                f"UserKnownHostsFile={grains_known_hosts_file}",
-            ]
+            _grains_kh_token = to_known_hosts_token(ssh_host_key)
+            if _grains_kh_token:
+                tmp_kh2 = tempfile.NamedTemporaryFile(mode="w", suffix=".known_hosts", delete=False)
+                tmp_kh2.write(f"{target_ip} {_grains_kh_token}\n")
+                tmp_kh2.close()
+                grains_known_hosts_file = tmp_kh2.name
+                grains_strict_opts = [
+                    "-o",
+                    "StrictHostKeyChecking=yes",
+                    "-o",
+                    f"UserKnownHostsFile={grains_known_hosts_file}",
+                ]
+            else:
+                # Stored key unparseable; fall back to accept-new (#840).
+                grains_strict_opts = ["-o", "StrictHostKeyChecking=accept-new"]
         else:
             grains_strict_opts = ["-o", "StrictHostKeyChecking=accept-new"]
 

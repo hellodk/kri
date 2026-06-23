@@ -361,13 +361,17 @@ async def webssh_session(
         # TOFU: verify/store SSH host key
         server_host_key = proxy._ssh_conn.get_server_host_key()
         if server_host_key is not None:
-            key_bytes = server_host_key.export_public_key("openssh")
-            if isinstance(key_bytes, str):
-                key_bytes = key_bytes.encode()
-            key_b64 = base64.b64encode(key_bytes).decode()
+            _key_export = server_host_key.export_public_key("openssh")
+            key_text: str = (
+                _key_export.decode("ascii", errors="replace") if isinstance(_key_export, bytes) else _key_export
+            )
+            # Store as native '<alg> <base64>' token so it is directly usable in
+            # a known_hosts file without further decoding (#840).
+            key_parts = key_text.strip().split()
+            host_key_token = f"{key_parts[0]} {key_parts[1]}" if len(key_parts) >= 2 else key_text.strip()
             from fleet_platform.services.ssh_host_key_svc import verify_or_store_host_key
 
-            key_ok = await verify_or_store_host_key(node, key_b64, db, user_id=str(user_id))
+            key_ok = await verify_or_store_host_key(node, host_key_token, db, user_id=str(user_id))
             if not key_ok:
                 proxy._ssh_conn.close()
                 raise RuntimeError(
