@@ -231,7 +231,7 @@ function ConnectivityPanel({ node, canManage }: { node: NodeDetailData; canManag
         </div>
       )}
       {node.ssh_detail && (
-        <p className="mt-2 text-[11px] text-gray-400 font-mono break-all">{node.ssh_detail}</p>
+        <p className="mt-2 text-[11px] text-gray-600 font-mono break-all">{node.ssh_detail}</p>
       )}
     </div>
   )
