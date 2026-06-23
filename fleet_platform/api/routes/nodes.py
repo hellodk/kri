@@ -357,6 +357,65 @@ async def get_node(
     )
 
 
+class SshTestResponse(BaseModel):
+    node_id: str
+    ssh_state: str  # ok | auth_failed | unreachable | unknown
+    ssh_checked_at: datetime | None = None
+    ssh_detail: str | None = None
+
+
+@router.post("/ssh-refresh")
+async def refresh_all_ssh(
+    _: dict = Depends(require_role("operator", "admin")),
+):
+    """Queue an immediate SSH reachability sweep for the whole fleet (#356-ui).
+
+    Reuses the same Celery task as the 15-minute beat schedule; results land on
+    each node's ``ssh_state`` and the dashboard picks them up on its next poll.
+    """
+    # Lazy import: keep Celery/worker imports out of the API module load path.
+    from fleet_platform.workers.connectivity_tasks import check_ssh_connectivity
+
+    task = check_ssh_connectivity.delay()
+    return {"status": "queued", "task_id": getattr(task, "id", None)}
+
+
+@router.post("/{node_id}/ssh-test", response_model=SshTestResponse)
+async def test_node_ssh(
+    node_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+    _: dict = Depends(require_role("operator", "admin")),
+):
+    """Run an on-demand SSH probe for one node and persist the fresh result.
+
+    Resolves the node's effective credential, probes TCP :22 + auth off the event
+    loop, and stores the four-state outcome. Mirrors the periodic sweep so the
+    cached badge and this button agree.
+    """
+    from fleet_platform.services.credential_resolver import resolve_node_credentials
+    from fleet_platform.services.ssh_probe import probe_node_ssh
+
+    result = await db.execute(select(Node).where(Node.id == node_id))
+    node = result.scalar_one_or_none()
+    if not node:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Node not found")
+
+    creds = await resolve_node_credentials(node, db)
+    probe = await asyncio.to_thread(probe_node_ssh, node, creds)
+
+    node.ssh_state = probe["state"]
+    node.ssh_detail = probe.get("detail")
+    node.ssh_checked_at = datetime.now(UTC)
+    await db.commit()
+
+    return SshTestResponse(
+        node_id=str(node_id),
+        ssh_state=node.ssh_state,
+        ssh_checked_at=node.ssh_checked_at,
+        ssh_detail=node.ssh_detail,
+    )
+
+
 @router.get("/{node_id}/credential")
 async def get_node_resolved_credential(
     node_id: uuid.UUID,

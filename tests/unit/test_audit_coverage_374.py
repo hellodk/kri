@@ -48,7 +48,6 @@ _CASES: list[tuple[str, list[str], int]] = [
     (
         "api/routes/ansible.py",
         [
-            "node.bootstrap.request",
             "node.bootstrap.cancel",
             "playbook.run",
             "playbook_source.create",
@@ -57,7 +56,15 @@ _CASES: list[tuple[str, list[str], int]] = [
             "playbook_source.sync",
             "playbook_file.update",
         ],
-        8,
+        7,
+    ),
+    # node.bootstrap.request moved into the shared bootstrap_svc.queue_node_bootstrap
+    # helper (consolidate Add Node into Import refactor) — both the API route and the
+    # bulk-import auto-bootstrap path funnel through it, so the audit lives there now.
+    (
+        "services/bootstrap_svc.py",
+        ["node.bootstrap.request"],
+        1,
     ),
     (
         "api/routes/salt_ops.py",

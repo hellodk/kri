@@ -47,6 +47,13 @@ class Node(Base, TimestampMixin):
     bootstrap_error: Mapped[str | None] = mapped_column(Text, nullable=True)
     bootstrap_logs: Mapped[str | None] = mapped_column(Text, nullable=True)
 
+    # SSH reachability — a signal independent of Salt ``status`` (which is minion
+    # presence). Populated by the SSH probe sweep and the on-demand /ssh-test
+    # endpoint. ``ssh_state`` ∈ {ok, auth_failed, unreachable, unknown} (#356-ui).
+    ssh_state: Mapped[str | None] = mapped_column(String(20), nullable=True)
+    ssh_checked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    ssh_detail: Mapped[str | None] = mapped_column(String(255), nullable=True)
+
     # Per-node SSH credentials (encrypted at rest).
     # DEPRECATED (#704/#697): superseded by ``credential_id`` -> ``credentials``.
     # Retained one release as a read-fallback; dropped in a follow-up migration.
