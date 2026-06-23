@@ -95,7 +95,9 @@ _DEFAULT_SALT_FUNCTIONS: frozenset[str] = frozenset(
         "saltutil.refresh_grains",
         "saltutil.refresh_pillar",
         "system.reboot",
-        "cmd.run",
+        # cmd.run intentionally excluded: it grants arbitrary shell execution
+        # on any minion (operator-level RCE). Remove it from the ACL and from
+        # here so that no kri-dispatched command can invoke it. (#758)
         "ps.list_processes",
         "ps.kill_pid",
     }

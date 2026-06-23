@@ -47,6 +47,12 @@ async def login(request: Request, payload: LoginRequest, db: AsyncSession = Depe
     if not user.is_active:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Account is disabled")
 
+    if user.must_change_password:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="MUST_CHANGE_PASSWORD",
+        )
+
     from fleet_platform.core.audit import audit
 
     user.last_login_at = datetime.now(UTC)
