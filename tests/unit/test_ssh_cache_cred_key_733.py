@@ -4,34 +4,17 @@ Verifies that two callers connecting to the same host:port:username but with
 DIFFERENT credentials each get their own cache entry (no auth bypass), while
 identical credentials still share a single connection.
 
-asyncssh is mocked via sys.modules since it is a C extension not installed
-in the test environment.
+asyncssh.connect is patched per-test; the real asyncssh module is used so that
+its exception classes remain intact for other tests in the suite.
 """
 
 from __future__ import annotations
 
 import asyncio
-import sys
-import types
 from unittest.mock import AsyncMock, MagicMock, patch
 
+import asyncssh
 import pytest
-
-# ---------------------------------------------------------------------------
-# Stub out asyncssh in sys.modules before the module under test is imported
-# ---------------------------------------------------------------------------
-
-
-def _make_asyncssh_stub():
-    stub = types.ModuleType("asyncssh")
-    # connect will be replaced per-test via patch
-    stub.connect = AsyncMock()
-    return stub
-
-
-if "asyncssh" not in sys.modules:
-    sys.modules["asyncssh"] = _make_asyncssh_stub()
-
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -78,7 +61,7 @@ async def test_different_passwords_create_separate_entries():
     kwargs_b = {"host": "10.0.0.1", "port": 22, "username": "admin", "password": "pw_bbb"}
 
     mock_connect = AsyncMock(side_effect=[conn_a, conn_b])
-    with patch.object(sys.modules["asyncssh"], "connect", mock_connect):
+    with patch.object(asyncssh, "connect", mock_connect):
         result_a = await ssh_connection_cache.get_connection("10.0.0.1", 22, "admin", kwargs_a)
         result_b = await ssh_connection_cache.get_connection("10.0.0.1", 22, "admin", kwargs_b)
 
@@ -112,7 +95,7 @@ async def test_identical_credentials_reuse_connection():
     kwargs = {"host": "10.0.0.1", "port": 22, "username": "admin", "password": "pw_same"}
 
     mock_connect = AsyncMock(return_value=conn)
-    with patch.object(sys.modules["asyncssh"], "connect", mock_connect):
+    with patch.object(asyncssh, "connect", mock_connect):
         result_a = await ssh_connection_cache.get_connection("10.0.0.1", 22, "admin", kwargs)
         result_b = await ssh_connection_cache.get_connection("10.0.0.1", 22, "admin", kwargs)
 
@@ -144,7 +127,7 @@ async def test_different_client_keys_create_separate_entries():
     kwargs_b = {"host": "10.0.0.2", "port": 22, "username": "root", "client_keys": [key_bytes_b]}
 
     mock_connect = AsyncMock(side_effect=[conn_a, conn_b])
-    with patch.object(sys.modules["asyncssh"], "connect", mock_connect):
+    with patch.object(asyncssh, "connect", mock_connect):
         result_a = await ssh_connection_cache.get_connection("10.0.0.2", 22, "root", kwargs_a)
         result_b = await ssh_connection_cache.get_connection("10.0.0.2", 22, "root", kwargs_b)
 
