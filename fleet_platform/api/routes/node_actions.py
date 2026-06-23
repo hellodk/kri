@@ -1,6 +1,7 @@
 """HTTP endpoints for destructive node action approval gate (#291)."""
 
 import json
+import logging
 import re
 import uuid
 from datetime import UTC, datetime
@@ -19,6 +20,8 @@ from fleet_platform.metrics import node_action_total
 from fleet_platform.models.node import Node
 from fleet_platform.models.pending_action import PendingAction
 from fleet_platform.services import pending_action_svc
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/v1/nodes", tags=["node-actions"])
 actions_router = APIRouter(prefix="/api/v1/actions", tags=["node-actions"])
@@ -184,8 +187,13 @@ async def request_node_action(
     # Send approval email (non-blocking — failure must not block the response)
     try:
         await pending_action_svc._send_approval_email(action, node, claims["sub"])
-    except Exception:
-        pass  # email failure must not block
+    except Exception as exc:
+        logger.warning(
+            "approval email send failed for action=%s: %s",
+            action.id,
+            exc,
+            exc_info=True,
+        )  # email failure must not block
 
     await audit(
         db,
