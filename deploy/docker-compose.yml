@@ -260,36 +260,10 @@ services:
           memory: 2G
     logging: *default-logging
 
-  # Salt master + salt-api.  PKI keys are persisted in the salt-pki volume so
-  # the entrypoint's stable-key mechanism survives container restarts without
-  # forcing minion re-acceptance (#812).  Pillar files written by the worker are
-  # shared via the salt-pillar volume.
-  salt-master:
-    build:
-      context: ..
-      dockerfile: deploy/Dockerfile.salt-master
-    restart: unless-stopped
-    volumes:
-      - salt-pki:/etc/salt/pki/master      # PKI persistence — stable key across restarts
-      - salt-pillar:/srv/salt/pillar        # shared with worker for pillar writes
-      - ../salt/states:/srv/salt/states:ro  # kri Salt states (grain_report, sbom_scan …)
-      - ./salt-master.conf:/etc/salt/master.d/kri.conf:ro
-    ports:
-      - "${SALT_MASTER_PUBLISH_PORT:-4505}:4505"
-      - "${SALT_MASTER_RETURN_PORT:-4506}:4506"
-      - "${SALT_API_PORT:-8080}:8080"
-    healthcheck:
-      test: ["CMD", "curl", "-sf", "http://localhost:8080/"]
-      interval: 30s
-      timeout: 10s
-      retries: 5
-      start_period: 90s
-    deploy:
-      resources:
-        limits:
-          cpus: '1.0'
-          memory: 512M
-    logging: *default-logging
+  # salt-master removed from Docker — runs natively on mm1 (100.102.68.75).
+  # See playbooks/roles/salt_master and playbooks/setup_salt_master.yml.
+  # This eliminates the PKI key rotation issue caused by container restarts.
+  # Configure SALT_API_URL=http://100.102.68.75:8080 in .env.docker.
 
   beat:
     build:
@@ -351,5 +325,3 @@ volumes:
   redisdata:
   pgbackups:
   git-repos-cache:   # cloned git playbook sources — survives api/worker redeploys
-  salt-pki:          # salt-master PKI keys — shared across restarts for stable minion auth
-  salt-pillar:       # Salt pillar data written by worker, read by salt-master

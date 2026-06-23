@@ -91,23 +91,4 @@ else
 fi
 
 echo "[salt-master] Starting $(salt-master --version)"
-/usr/bin/salt-master --log-level=info --log-file=/dev/stdout &
-SALT_MASTER_PID=$!
-
-echo "[salt-api] Waiting for salt-master to initialise..."
-sleep 8
-
-echo "[salt-api] Starting salt-api"
-/usr/bin/salt-api --log-level=info --log-file=/dev/stdout &
-SALT_API_PID=$!
-
-# Exit if either child exits so dumb-init can restart the container.
-wait -n $SALT_MASTER_PID $SALT_API_PID 2>/dev/null || {
-    # wait -n not available on older shells — fall back to a poll loop
-    while kill -0 $SALT_MASTER_PID 2>/dev/null && kill -0 $SALT_API_PID 2>/dev/null; do
-        sleep 5
-    done
-}
-echo "[entrypoint] A process exited — shutting down"
-kill $SALT_MASTER_PID $SALT_API_PID 2>/dev/null
-wait
+exec /usr/bin/salt-master --log-level=info --log-file=/dev/stdout

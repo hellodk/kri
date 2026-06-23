@@ -14,7 +14,7 @@ RUN curl -fsSL https://packages.broadcom.com/artifactory/api/security/keypair/Sa
       https://packages.broadcom.com/artifactory/saltproject-deb/ stable main" \
       > /etc/apt/sources.list.d/salt.list && \
     apt-get update && \
-    apt-get install -y --no-install-recommends salt-master salt-api && \
+    apt-get install -y --no-install-recommends salt-master && \
     rm -rf /var/lib/apt/lists/*
 
 RUN mkdir -p /etc/salt/master.d /srv/salt/pillar /srv/salt/states \
