@@ -148,10 +148,14 @@ async def resolve_node_credentials(node: Node, db: AsyncSession) -> dict:
     credential_source ('node' | 'group:<name>' | 'controller' | 'global')
     """
     # 1. Node-level credential — FK first, inline columns as read-fallback.
+    #    An FK pointing at a secret-less Credential (#704 birth defect) is not a
+    #    real credential: skip it and fall through rather than short-circuiting.
     if node.credential_id:
         cred = await db.get(Credential, node.credential_id)
         if cred is not None:
-            return _credential_to_creds(cred, "node")
+            creds = _credential_to_creds(cred, "node")
+            if has_usable_secret(creds):
+                return creds
     if node.ssh_username:
         return _inline_node_creds(node)
 
@@ -161,7 +165,9 @@ async def resolve_node_credentials(node: Node, db: AsyncSession) -> dict:
         if group.credential_id:
             cred = await db.get(Credential, group.credential_id)
             if cred is not None:
-                return _credential_to_creds(cred, f"group:{group.name}")
+                creds = _credential_to_creds(cred, f"group:{group.name}")
+                if has_usable_secret(creds):
+                    return creds
         if group.ssh_username:
             return _inline_group_creds(group)
 
@@ -200,10 +206,14 @@ def resolve_node_credentials_sync(node: Node, db) -> dict:
     identical dict shape, including ``credential_source`` (#279, #349, #698).
     """
     # 1. Node-level credential — FK first, inline columns as read-fallback.
+    #    An FK pointing at a secret-less Credential (#704 birth defect) is not a
+    #    real credential: skip it and fall through rather than short-circuiting.
     if node.credential_id:
         cred = db.get(Credential, node.credential_id)
         if cred is not None:
-            return _credential_to_creds(cred, "node")
+            creds = _credential_to_creds(cred, "node")
+            if has_usable_secret(creds):
+                return creds
     if node.ssh_username:
         return _inline_node_creds(node)
 
@@ -213,7 +223,9 @@ def resolve_node_credentials_sync(node: Node, db) -> dict:
         if group.credential_id:
             cred = db.get(Credential, group.credential_id)
             if cred is not None:
-                return _credential_to_creds(cred, f"group:{group.name}")
+                creds = _credential_to_creds(cred, f"group:{group.name}")
+                if has_usable_secret(creds):
+                    return creds
         if group.ssh_username:
             return _inline_group_creds(group)
 
