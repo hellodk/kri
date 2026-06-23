@@ -724,7 +724,7 @@ async def list_node_vms(
     from fleet_platform.workers.salt_tasks import run_salt_cmd as salt_run_cmd
 
     try:
-        result_dict = await asyncio.get_event_loop().run_in_executor(
+        result_dict = await asyncio.get_running_loop().run_in_executor(
             None,
             lambda: salt_run_cmd.delay(
                 function="cmd.run",
