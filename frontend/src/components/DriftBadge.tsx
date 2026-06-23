@@ -12,7 +12,7 @@ export function DriftBadge({ score }: { score: number }) {
   const { bg, text, dot } = severityStyle(score)
   return (
     <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold border tabular-nums ${bg} ${text}`}>
-      <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${dot}`} />
+      <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${dot}`} />
       {score}
     </span>
   )

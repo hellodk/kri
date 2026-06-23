@@ -44,7 +44,7 @@ function NoMasterBanner() {
           viewBox="0 0 20 20"
           fill="none"
           aria-hidden="true"
-          className="flex-shrink-0"
+          className="shrink-0"
         >
           <path
             d="M10 2a8 8 0 100 16A8 8 0 0010 2zm0 4a.75.75 0 01.75.75v3.5a.75.75 0 01-1.5 0v-3.5A.75.75 0 0110 6zm0 7a1 1 0 110 2 1 1 0 010-2z"
@@ -60,7 +60,7 @@ function NoMasterBanner() {
       </div>
       <Link
         to="/settings?tab=Salt Masters"
-        className="flex-shrink-0 px-3 py-1 text-xs font-semibold rounded-md border transition-colors"
+        className="shrink-0 px-3 py-1 text-xs font-semibold rounded-md border transition-colors"
         style={{
           background: '#FEF3C7',
           color: '#78350F',

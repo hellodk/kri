@@ -21,7 +21,7 @@ export function Pagination({ page, total, perPage, onPage, onPerPage }: Props) {
           <select
             value={perPage}
             onChange={(e) => { onPerPage(Number(e.target.value)); onPage(1) }}
-            className="text-xs border border-gray-300 rounded px-2 py-1 text-gray-600 focus:outline-none focus:border-brand-600"
+            className="text-xs border border-gray-300 rounded px-2 py-1 text-gray-600 focus:outline-hidden focus:border-brand-600"
           >
             {[25, 50, 100].map((n) => (
               <option key={n} value={n}>{n} / page</option>

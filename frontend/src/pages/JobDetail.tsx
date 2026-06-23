@@ -64,7 +64,7 @@ export function JobDetail() {
             {results.items.map((r) => (
               <details key={r.id} className="group">
                 <summary className="flex items-center gap-3 px-4 py-3 cursor-pointer hover:bg-gray-50 text-sm">
-                  <span className={`w-2 h-2 rounded-full flex-shrink-0 ${r.exit_code === 0 ? 'bg-green-500' : 'bg-red-500'}`} />
+                  <span className={`w-2 h-2 rounded-full shrink-0 ${r.exit_code === 0 ? 'bg-green-500' : 'bg-red-500'}`} />
                   <span className="font-mono text-xs text-gray-500">{r.node_id.slice(0, 8)}</span>
                   <span className={`text-xs px-1.5 py-0.5 rounded ${r.exit_code === 0 ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
                     exit {r.exit_code ?? '?'}

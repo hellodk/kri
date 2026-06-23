@@ -81,7 +81,7 @@ function provisionStatusBadge(status: string): { bgClass: string; textClass: str
 }
 
 const inputClass =
-  'w-full px-3 py-2 border border-gray-300 rounded-lg text-sm text-gray-900 focus:outline-none focus:border-brand-600 bg-white disabled:bg-gray-50 disabled:text-gray-500'
+  'w-full px-3 py-2 border border-gray-300 rounded-lg text-sm text-gray-900 focus:outline-hidden focus:border-brand-600 bg-white disabled:bg-gray-50 disabled:text-gray-500'
 
 const labelClass = 'block text-xs font-semibold text-gray-700 mb-1'
 
@@ -444,7 +444,7 @@ function MasterMinionsSection({ masterId }: MasterMinionsSectionProps) {
           fill="none"
           stroke="currentColor"
           strokeWidth="2"
-          className="text-gray-500 flex-shrink-0"
+          className="text-gray-500 shrink-0"
           aria-hidden="true"
         >
           <rect x="2" y="3" width="20" height="14" rx="2" />
@@ -785,7 +785,7 @@ export function SaltMastersTab() {
           return (
             <div
               key={master.id}
-              className="border border-gray-200 rounded-xl bg-white shadow-sm overflow-hidden"
+              className="border border-gray-200 rounded-xl bg-white shadow-xs overflow-hidden"
             >
               {/* Header row */}
               <div className="px-5 py-4 flex items-start justify-between gap-4">

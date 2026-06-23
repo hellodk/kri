@@ -376,7 +376,7 @@ export function SecurityPage() {
           <button
             onClick={() => scanAllMutation.mutate('trivy')}
             disabled={scanAllMutation.isPending}
-            className="px-4 py-2 bg-brand-600 text-white text-sm font-medium rounded-lg hover:bg-brand-700 disabled:opacity-50 shadow-sm"
+            className="px-4 py-2 bg-brand-600 text-white text-sm font-medium rounded-lg hover:bg-brand-700 disabled:opacity-50 shadow-xs"
           >
             {scanAllMutation.isPending ? 'Scanning...' : 'Scan All (Trivy)'}
           </button>
@@ -406,7 +406,7 @@ export function SecurityPage() {
           { label: 'License Risks', value: (d?.license_risks?.high ?? 0) + (d?.license_risks?.medium ?? 0), numColor: 'text-purple-700', accent: 'border-l-purple-500' },
           { label: 'Nodes at Risk', value: d?.nodes_with_critical_or_high ?? 0, numColor: 'text-orange-700', accent: 'border-l-orange-500' },
         ].map(card => (
-          <div key={card.label} className={`bg-white rounded-xl border border-gray-200 border-l-4 ${card.accent} p-5 shadow-sm`}>
+          <div key={card.label} className={`bg-white rounded-xl border border-gray-200 border-l-4 ${card.accent} p-5 shadow-xs`}>
             <p className="text-xs font-semibold uppercase tracking-wide text-gray-500 mb-2">{card.label}</p>
             <p className={`text-4xl font-black tabular-nums ${card.numColor}`}>{card.value}</p>
           </div>
@@ -414,7 +414,7 @@ export function SecurityPage() {
       </div>
 
       {/* Node table */}
-      <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
+      <div className="bg-white rounded-xl border border-gray-200 shadow-xs overflow-hidden">
         <div className="px-5 py-3 border-b border-gray-100 bg-gray-50 flex items-center justify-between">
           <h2 className="text-sm font-semibold text-gray-700">Node Security Status</h2>
           {d?.last_scan_at && (
@@ -507,7 +507,7 @@ export function SecurityPage() {
       </div>
 
       {/* Active PAM Sessions */}
-      <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
+      <div className="bg-white rounded-xl border border-gray-200 shadow-xs overflow-hidden">
         <div className="px-5 py-3 border-b border-gray-100 bg-gray-50 flex items-center justify-between">
           <h2 className="text-sm font-semibold text-gray-700">Active SSH Sessions (PAM)</h2>
           <span className="text-xs text-gray-400">
@@ -563,7 +563,7 @@ export function SecurityPage() {
       </div>
 
       {/* Recent Security Events */}
-      <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
+      <div className="bg-white rounded-xl border border-gray-200 shadow-xs overflow-hidden">
         <div className="px-5 py-3 border-b border-gray-100 bg-gray-50 flex items-center justify-between">
           <h2 className="text-sm font-semibold text-gray-700">Security Event Feed</h2>
           <button

@@ -155,7 +155,7 @@ export function LLMEndpointForm({ endpoint, onClose, onSaved }: Props) {
   }
 
   const inputClass =
-    'w-full px-3 py-2 border border-gray-300 rounded-lg text-sm text-gray-900 focus:outline-none focus:border-brand-600'
+    'w-full px-3 py-2 border border-gray-300 rounded-lg text-sm text-gray-900 focus:outline-hidden focus:border-brand-600'
 
   return (
     /* Backdrop */
@@ -350,7 +350,7 @@ export function LLMEndpointForm({ endpoint, onClose, onSaved }: Props) {
             <button
               type="submit"
               disabled={mutation.isPending}
-              className="px-4 py-2 bg-brand-600 text-white text-sm rounded-lg font-medium hover:bg-brand-700 disabled:opacity-50 shadow-sm"
+              className="px-4 py-2 bg-brand-600 text-white text-sm rounded-lg font-medium hover:bg-brand-700 disabled:opacity-50 shadow-xs"
             >
               {mutation.isPending ? 'Saving…' : isEdit ? 'Save Changes' : 'Add Endpoint'}
             </button>

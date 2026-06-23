@@ -42,7 +42,7 @@ function StatCard({
   return (
     <Link
       to={to}
-      className={`block bg-white rounded-xl border border-gray-200 border-l-4 ${accent} p-5 shadow-sm hover:shadow-md transition-shadow`}
+      className={`block bg-white rounded-xl border border-gray-200 border-l-4 ${accent} p-5 shadow-xs hover:shadow-md transition-shadow`}
     >
       <p className="text-xs font-semibold uppercase tracking-wide text-gray-500 mb-2">{title}</p>
       <p className={`text-4xl font-black tabular-nums leading-none mb-2 ${numColor}`}>{value}</p>
@@ -300,7 +300,7 @@ export function DashboardPage() {
       </div>
 
       {/* Fleet status stacked bar */}
-      <div className="bg-white rounded-xl border border-gray-200 shadow-sm px-5 py-4">
+      <div className="bg-white rounded-xl border border-gray-200 shadow-xs px-5 py-4">
         <FleetStatusBar
           online={onlineCount}
           offline={offlineCount}
@@ -311,11 +311,11 @@ export function DashboardPage() {
 
       {/* Salt Masters health widget — only rendered when at least one master exists */}
       {mastersHealth.total > 0 && (
-        <div className="bg-white rounded-xl border border-gray-200 shadow-sm px-5 py-4">
+        <div className="bg-white rounded-xl border border-gray-200 shadow-xs px-5 py-4">
           <div className="flex items-center justify-between mb-3">
             <div className="flex items-center gap-2">
               {/* Server icon */}
-              <svg className="w-4 h-4 text-indigo-600 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <svg className="w-4 h-4 text-indigo-600 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                 <path strokeLinecap="round" strokeLinejoin="round" d="M5 12h14M5 12a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v4a2 2 0 01-2 2M5 12a2 2 0 00-2 2v4a2 2 0 002 2h14a2 2 0 002-2v-4a2 2 0 00-2-2m-2-4h.01M17 16h.01" />
               </svg>
               <h2 className="text-sm font-semibold text-gray-800">
@@ -336,28 +336,28 @@ export function DashboardPage() {
           <div className="flex flex-wrap gap-4">
             {mastersHealth.healthy > 0 && (
               <span className="flex items-center gap-1.5 text-sm">
-                <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 flex-shrink-0" aria-hidden="true" />
+                <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 shrink-0" aria-hidden="true" />
                 <span className="font-semibold text-emerald-700 tabular-nums">{mastersHealth.healthy}</span>
                 <span className="text-gray-500">Healthy</span>
               </span>
             )}
             {mastersHealth.degraded > 0 && (
               <span className="flex items-center gap-1.5 text-sm">
-                <span className="w-2.5 h-2.5 rounded-full bg-amber-500 flex-shrink-0" aria-hidden="true" />
+                <span className="w-2.5 h-2.5 rounded-full bg-amber-500 shrink-0" aria-hidden="true" />
                 <span className="font-semibold text-amber-700 tabular-nums">{mastersHealth.degraded}</span>
                 <span className="text-gray-500">Degraded</span>
               </span>
             )}
             {mastersHealth.unreachable > 0 && (
               <span className="flex items-center gap-1.5 text-sm">
-                <span className="w-2.5 h-2.5 rounded-full bg-red-500 flex-shrink-0" aria-hidden="true" />
+                <span className="w-2.5 h-2.5 rounded-full bg-red-500 shrink-0" aria-hidden="true" />
                 <span className="font-semibold text-red-700 tabular-nums">{mastersHealth.unreachable}</span>
                 <span className="text-gray-500">Unreachable</span>
               </span>
             )}
             {mastersHealth.unknown > 0 && (
               <span className="flex items-center gap-1.5 text-sm">
-                <span className="w-2.5 h-2.5 rounded-full bg-gray-400 flex-shrink-0" aria-hidden="true" />
+                <span className="w-2.5 h-2.5 rounded-full bg-gray-400 shrink-0" aria-hidden="true" />
                 <span className="font-semibold text-gray-700 tabular-nums">{mastersHealth.unknown}</span>
                 <span className="text-gray-500">Unknown</span>
               </span>
@@ -379,7 +379,7 @@ export function DashboardPage() {
       {/* Two-column lists */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         {/* Most drifted nodes */}
-        <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
+        <div className="bg-white rounded-xl border border-gray-200 shadow-xs overflow-hidden">
           <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
             <h2 className="text-sm font-semibold text-gray-800">Most Drifted Nodes</h2>
             <Link to="/drift" className="text-xs text-brand-600 hover:underline font-medium">
@@ -438,7 +438,7 @@ export function DashboardPage() {
         </div>
 
         {/* Recent activity */}
-        <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
+        <div className="bg-white rounded-xl border border-gray-200 shadow-xs overflow-hidden">
           <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
             <h2 className="text-sm font-semibold text-gray-800">Recent Activity</h2>
             <Link to="/executions" className="text-xs text-brand-600 hover:underline font-medium">
