@@ -1,5 +1,12 @@
 import { api } from './client'
-import type { FleetOverview, Node, NodeDetail, Paginated, Tag } from '../types'
+import type { FleetOverview, Node, NodeDetail, Paginated, SshState, Tag } from '../types'
+
+export interface SshTestResponse {
+  node_id: string
+  ssh_state: SshState
+  ssh_checked_at: string | null
+  ssh_detail: string | null
+}
 
 export interface ImportRow {
   minion_id: string
@@ -87,9 +94,15 @@ export const fleetApi = {
     api.delete(`/api/v1/nodes/${nodeId}/tags/${key}`),
   maintenanceMode: (nodeId: string, enabled: boolean) =>
     api.patch<NodeDetail>(`/api/v1/nodes/${nodeId}/maintenance`, { enabled }),
+  // On-demand SSH reachability probe for a single node (#356-ui).
+  sshTest: (nodeId: string) =>
+    api.post<SshTestResponse>(`/api/v1/nodes/${nodeId}/ssh-test`, {}),
+  // Queue an immediate fleet-wide SSH sweep; dashboard polling picks up results.
+  sshRefreshAll: () =>
+    api.post<{ status: string; task_id: string | null }>('/api/v1/nodes/ssh-refresh', {}),
   importValidate: (body: { source: string; text?: string; csv_content?: string; mapping?: Record<string, string> }) =>
     api.post<ImportValidateResponse>('/api/v1/fleet/nodes/import/validate', body),
-  importCommit: (body: { rows: ImportRow[]; group_id?: string; ssh_username?: string; ssh_password?: string; auto_bootstrap?: boolean }) =>
+  importCommit: (body: { rows: ImportRow[]; group_id?: string; ssh_username?: string; ssh_password?: string; ssh_key?: string; ssh_auth_mode?: 'password' | 'key'; auto_bootstrap?: boolean }) =>
     api.post<ImportCommitResponse>('/api/v1/fleet/nodes/import/commit', body),
   processStats: (nodeId: string, params: { sort?: 'mem_rss_bytes' | 'cpu_pct'; limit?: number } = {}) => {
     const q = new URLSearchParams()
