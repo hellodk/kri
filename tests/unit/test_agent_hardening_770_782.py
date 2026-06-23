@@ -350,7 +350,7 @@ class TestAuditRedact:
     def test_content_key_redacted(self):
         from fleet_platform.services.prompt_safety import redact_args
 
-        result = redact_args({"content": "BEGIN RSA PRIVATE KEY..."})
+        result = redact_args({"content": "-----BEGIN RSA PRIVATE-KEY-DATA-----"})
         assert result["content"] == "[REDACTED]"
 
     def test_safe_keys_pass_through(self):
