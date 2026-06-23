@@ -319,8 +319,9 @@ def poll_salt_masters() -> dict:
 
         # Phase 2: Probe all concurrently in a SINGLE event loop.
         # The DB session is held but idle during network I/O; no queries execute
-        # until the gather returns and we apply results below.
-        probe_results = asyncio.run(_probe_all(to_probe))
+        # until the gather returns and we apply results below. Skip spinning up an
+        # event loop entirely when every master was backoff-skipped.
+        probe_results = asyncio.run(_probe_all(to_probe)) if to_probe else []
 
         # Phase 3: Apply results and commit once, after all I/O is complete
         for master, result in zip(to_probe, probe_results):
