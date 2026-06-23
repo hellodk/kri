@@ -173,14 +173,21 @@ async def update_endpoint(
     endpoint = await llm_svc.get_endpoint(db, endpoint_id)
     if not endpoint:
         raise HTTPException(status_code=404, detail="LLM endpoint not found")
+    old_enabled = endpoint.enabled
+    old_is_default = endpoint.is_default
     endpoint = await llm_svc.update_endpoint(db, endpoint, payload)
+    audit_value: dict = {"name": endpoint.name, "provider": endpoint.provider, "model": endpoint.model}
+    if payload.enabled is not None and payload.enabled != old_enabled:
+        audit_value["enabled"] = {"old": old_enabled, "new": endpoint.enabled}
+    if endpoint.is_default != old_is_default:
+        audit_value["is_default"] = {"old": old_is_default, "new": endpoint.is_default}
     await audit(
         db,
         actor=claims["email"],
         action="llm_endpoint.update",
         resource_type="llm_endpoint",
         resource_id=endpoint_id,
-        new_value={"name": endpoint.name, "provider": endpoint.provider, "model": endpoint.model},
+        new_value=audit_value,
     )
     await db.commit()
     return _to_response(endpoint)
@@ -373,6 +380,19 @@ async def submit_query(
             else:
                 error = str(exc)
         else:
+            # Fixed-model endpoint: mark transiently unhealthy so it falls out
+            # of rotation until a successful probe restores it (#840).
+            # NEVER touch LLMEndpoint.enabled — that is operator-only.
+            if isinstance(exc, LLMCallError):
+                from fleet_platform.services import model_health_cache as hc
+
+                hc.set_health(
+                    endpoint.base_url or "",
+                    endpoint.provider,
+                    endpoint.model,
+                    healthy=False,
+                    latency_ms=None,
+                )
             error = str(exc)
 
     duration_ms = int((time.perf_counter() - t0) * 1000)
@@ -545,6 +565,19 @@ async def submit_query_stream(
                     yield f"data: {json.dumps(event)}\n\n"
                 elif etype == "error":
                     error = event.get("error") or "unknown error"
+                    # Fixed-model endpoint: mark transiently unhealthy so it
+                    # falls out of rotation until a probe restores it (#840).
+                    # NEVER touch LLMEndpoint.enabled — operator-only.
+                    if endpoint.model != "__auto__":
+                        from fleet_platform.services import model_health_cache as _hc
+
+                        _hc.set_health(
+                            endpoint.base_url or "",
+                            endpoint.provider,
+                            endpoint.model,
+                            healthy=False,
+                            latency_ms=None,
+                        )
                     yield f"data: {json.dumps(event)}\n\n"
                 elif etype == "done":
                     joined_content = event.get("content", "")
@@ -554,6 +587,16 @@ async def submit_query_stream(
             # Guard: any unexpected failure inside the generator must still
             # produce an SSE error frame so the client never hangs forever.
             error = f"stream failed: {exc}"
+            if endpoint.model != "__auto__":
+                from fleet_platform.services import model_health_cache as _hc
+
+                _hc.set_health(
+                    endpoint.base_url or "",
+                    endpoint.provider,
+                    endpoint.model,
+                    healthy=False,
+                    latency_ms=None,
+                )
             yield f"data: {json.dumps({'type': 'error', 'error': error})}\n\n"
 
         duration_ms = int((time.perf_counter() - t0) * 1000)

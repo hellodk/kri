@@ -52,6 +52,20 @@ async def _probe_model(base_url: str, model_id: str, api_key: str | None) -> tup
                 headers=headers,
             )
             resp.raise_for_status()
+            try:
+                body = resp.json()
+            except Exception:  # noqa: BLE001
+                body = {}
+
+        # A 200 is only healthy when the response contains actual content or
+        # at least 1 completion token. A vllm-mlx crash returns HTTP 200 but
+        # delivers an empty stream (0 tokens), which would look healthy under
+        # the old raise_for_status()-only check (#840).
+        choices = body.get("choices") or []
+        has_content = any((c.get("message") or {}).get("content") for c in choices)
+        completion_tokens = (body.get("usage") or {}).get("completion_tokens") or 0
+        if not has_content and completion_tokens < 1:
+            return False, None
         return True, int((time.monotonic() - t0) * 1000)
     except httpx.HTTPStatusError:
         # Definitive server-side error — the model is broken.

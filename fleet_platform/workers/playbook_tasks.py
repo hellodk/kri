@@ -20,6 +20,7 @@ from fleet_platform.db.session import get_sync_db
 from fleet_platform.models.ansible_job import AnsibleJob
 from fleet_platform.models.node import Node
 from fleet_platform.services.credential_resolver import resolve_node_credentials_sync
+from fleet_platform.services.ssh_host_key_svc import to_known_hosts_token
 from fleet_platform.workers.celery_app import celery_app
 
 _DEFAULT_PLAYBOOKS_DIR = Path(__file__).parent.parent.parent / "playbooks"
@@ -234,7 +235,12 @@ def _write_known_hosts(tmpdir: str, hosts: list[dict]) -> tuple[str, bool]:
     for h in hosts:
         key = (h.get("ssh_host_key") or "").strip()
         if key:
-            lines.append(f"{h['ip']} {key}")
+            token = to_known_hosts_token(key)
+            if token:
+                lines.append(f"{h['ip']} {token}")
+            else:
+                # Stored value cannot be parsed; treat as missing (#840).
+                all_have_keys = False
         else:
             all_have_keys = False
 

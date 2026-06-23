@@ -98,7 +98,8 @@ def test_get_connection_creates_and_caches():
 
     result = asyncio.run(run())
     assert result is fake_conn
-    assert ("h", 22, "u") in ssh_connection_cache._cache
+    expected_key = ("h", 22, "u", ssh_connection_cache._credential_fingerprint({"host": "h"}))
+    assert expected_key in ssh_connection_cache._cache
     ssh_connection_cache._cache.clear()
 
 
@@ -107,7 +108,8 @@ def test_get_connection_reuses_cached():
 
     ssh_connection_cache._cache.clear()
     fake_conn = _make_conn()
-    ssh_connection_cache._cache[("h", 22, "u")] = ssh_connection_cache._CachedConn(conn=fake_conn)
+    key = ("h", 22, "u", ssh_connection_cache._credential_fingerprint({}))
+    ssh_connection_cache._cache[key] = ssh_connection_cache._CachedConn(conn=fake_conn)
 
     async def run():
         with patch("asyncssh.connect", new=AsyncMock(side_effect=AssertionError("should not call connect"))):
@@ -115,7 +117,7 @@ def test_get_connection_reuses_cached():
 
     result = asyncio.run(run())
     assert result is fake_conn
-    assert ssh_connection_cache._cache[("h", 22, "u")].use_count == 1
+    assert ssh_connection_cache._cache[key].use_count == 1
     ssh_connection_cache._cache.clear()
 
 

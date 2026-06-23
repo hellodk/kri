@@ -10,6 +10,7 @@ import { mastersByNodeId } from '../lib/masterNodes'
 import { useAuthStore } from '../stores/authStore'
 import { useToastStore } from '../stores/toastStore'
 import { StatusBadge } from '../components/StatusBadge'
+import { SshIndicator } from '../components/SshIndicator'
 import { DriftBadge } from '../components/DriftBadge'
 import { Skeleton } from '../components/Skeleton'
 import { ErrorState } from '../components/ErrorState'
@@ -421,6 +422,17 @@ export function FleetDashboard() {
       sort,
     }),
     staleTime: 30_000,
+    refetchInterval: 60_000,  // keep SSH reachability badges fresh (#356-ui)
+  })
+
+  const refreshSshMutation = useMutation({
+    mutationFn: () => fleetApi.sshRefreshAll(),
+    onSuccess: () => {
+      toast('SSH refresh queued — results update shortly', 'info')
+      // Give the worker a moment, then pull fresh states.
+      setTimeout(() => qc.invalidateQueries({ queryKey: ['nodes'] }), 4000)
+    },
+    onError: () => toast('Failed to queue SSH refresh', 'error'),
   })
 
   const { data: saltStatesData } = useQuery({
@@ -561,6 +573,16 @@ export function FleetDashboard() {
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold text-gray-900">Fleet Dashboard</h1>
         <div className="flex items-center gap-2">
+          {canManage && (
+            <button
+              onClick={() => refreshSshMutation.mutate()}
+              disabled={refreshSshMutation.isPending}
+              title="Re-probe SSH reachability for the whole fleet now"
+              className="px-4 py-2 bg-white border border-gray-300 text-gray-700 text-sm font-medium rounded-lg hover:bg-gray-50 shadow-sm disabled:opacity-50"
+            >
+              {refreshSshMutation.isPending ? 'Refreshing…' : '↻ Refresh SSH'}
+            </button>
+          )}
           {canManage && (
             <button
               onClick={() => setShowImport(true)}
@@ -855,7 +877,7 @@ export function FleetDashboard() {
                         </th>
                       )}
                       <SortTh field="hostname" label="Hostname" />
-                      <th className="px-4 py-3">Status</th>
+                      <th className="px-4 py-3">Connectivity</th>
                       <th className="px-4 py-3">OS</th>
                       <SortTh field="drift_score" label="Drift" />
                       <SortTh field="last_seen_at" label="Last Seen" />
@@ -901,6 +923,13 @@ export function FleetDashboard() {
                                 <span className="text-xs px-1.5 py-0.5 rounded bg-amber-100 text-amber-700 border border-amber-200">⚙ Maint.</span>
                               )}
                             </div>
+                            <SshIndicator
+                              nodeId={node.id}
+                              state={node.ssh_state}
+                              checkedAt={node.ssh_checked_at}
+                              detail={node.ssh_detail}
+                              canManage={canManage}
+                            />
                             {((node.cpu_usage_pct ?? 0) > 0 || (node.mem_usage_pct ?? 0) > 0) && (
                               <div className="flex flex-col gap-0.5 min-w-[72px]">
                                 {(node.cpu_usage_pct ?? 0) > 0 && (
