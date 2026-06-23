@@ -7,6 +7,7 @@ actual tool execution is stubbed so these stay DB/network-free.
 from __future__ import annotations
 
 import json
+import uuid
 from datetime import UTC, datetime, timedelta
 
 import pytest
@@ -16,14 +17,20 @@ from fleet_platform.services.agent_apply_svc import ApprovalError
 
 
 class FakeResult:
+    def __init__(self, value=None):
+        self._value = value
+
     def scalar_one_or_none(self):
-        return None  # no Node row — proposal still works with nil node_id
+        return self._value
 
 
 class FakeDB:
     def __init__(self):
         self.added = []
         self.commits = 0
+        # The row returned by the locked re-fetch in approve/reject (#735).
+        # Defaults to None so create_proposal's Node lookup still returns None.
+        self.locked_action = None
 
     def add(self, obj):
         self.added.append(obj)
@@ -35,13 +42,14 @@ class FakeDB:
         pass
 
     async def execute(self, _q):
-        return FakeResult()
+        return FakeResult(self.locked_action)
 
 
 class FakeAction:
     """Mimics the PendingAction fields the service touches."""
 
     def __init__(self, *, co_sign_required=False, status="pending", target_count=1):
+        self.id = uuid.uuid4()
         self.status = status
         self.co_sign_required = co_sign_required
         self.target_count = target_count
@@ -96,6 +104,7 @@ async def test_create_proposal_guard_refusal_writes_nothing():
 async def test_single_approval_executes_when_no_cosign():
     db = FakeDB()
     action = FakeAction(co_sign_required=False)
+    db.locked_action = action
     out = await agent_apply_svc.approve_proposal(db, action, approver_email="boss@x.com", approver_role="operator")
     assert out["status"] == "executed"
     assert action.approved_by == "boss@x.com"
@@ -105,6 +114,7 @@ async def test_single_approval_executes_when_no_cosign():
 async def test_cosign_required_waits_then_executes():
     db = FakeDB()
     action = FakeAction(co_sign_required=True, target_count=12)
+    db.locked_action = action
     first = await agent_apply_svc.approve_proposal(db, action, approver_email="op2@x.com", approver_role="operator")
     assert first["status"] == "awaiting_cosign"
     assert action.status == "awaiting_cosign"
@@ -117,6 +127,7 @@ async def test_cosign_requires_admin():
     db = FakeDB()
     action = FakeAction(co_sign_required=True, status="awaiting_cosign")
     action.approved_by = "op2@x.com"
+    db.locked_action = action
     with pytest.raises(ApprovalError, match="admin"):
         await agent_apply_svc.approve_proposal(db, action, approver_email="op3@x.com", approver_role="operator")
 
@@ -125,6 +136,7 @@ async def test_cosign_must_be_different_person():
     db = FakeDB()
     action = FakeAction(co_sign_required=True, status="awaiting_cosign")
     action.approved_by = "admin@x.com"
+    db.locked_action = action
     with pytest.raises(ApprovalError, match="different person"):
         await agent_apply_svc.approve_proposal(db, action, approver_email="admin@x.com", approver_role="admin")
 
@@ -132,6 +144,7 @@ async def test_cosign_must_be_different_person():
 async def test_cannot_approve_already_executed():
     db = FakeDB()
     action = FakeAction(status="executed")
+    db.locked_action = action
     with pytest.raises(ApprovalError, match="already"):
         await agent_apply_svc.approve_proposal(db, action, approver_email="x@x.com", approver_role="admin")
 
@@ -140,6 +153,7 @@ async def test_expired_window_rejected():
     db = FakeDB()
     action = FakeAction()
     action.expires_at = datetime.now(UTC) - timedelta(minutes=1)
+    db.locked_action = action
     with pytest.raises(ApprovalError, match="expired"):
         await agent_apply_svc.approve_proposal(db, action, approver_email="x@x.com", approver_role="operator")
     assert action.status == "expired"
@@ -148,6 +162,7 @@ async def test_expired_window_rejected():
 async def test_reject_sets_status():
     db = FakeDB()
     action = FakeAction()
+    db.locked_action = action
     out = await agent_apply_svc.reject_proposal(db, action, approver_email="x@x.com")
     assert out["status"] == "rejected"
     assert action.status == "rejected"
