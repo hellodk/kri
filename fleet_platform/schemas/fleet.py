@@ -4,6 +4,7 @@ from typing import Any
 
 from pydantic import BaseModel, computed_field, field_validator, model_validator
 
+from fleet_platform.core.validators import validate_minion_id
 from fleet_platform.services.node_health import compute_health
 
 
@@ -108,6 +109,8 @@ class NodeCreateRequest(BaseModel):
     ip_address: str | None = None
     hardware_model: str | None = None
     os_version: str | None = None
+
+    _validate_minion_id = field_validator("minion_id")(validate_minion_id)
 
 
 class NodeUpdateRequest(BaseModel):
