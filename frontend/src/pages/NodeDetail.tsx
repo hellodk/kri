@@ -16,6 +16,7 @@ import { saltMastersApi, type SaltMaster } from '../api/saltMasters'
 import { saltMasterBadge } from '../lib/saltMasterHelpers'
 import { StatusBadge } from '../components/StatusBadge'
 import { DriftBadge } from '../components/DriftBadge'
+import { HealthBadge } from '../components/HealthBadge'
 import { formatGrainKey } from './DriftExplorer'
 import { Skeleton } from '../components/Skeleton'
 import { ErrorState } from '../components/ErrorState'
@@ -777,13 +778,18 @@ export function NodeDetail() {
             <h1 className="text-2xl font-bold text-gray-900">
               {node.hostname ?? node.minion_id}
             </h1>
-            <StatusBadge status={node.status} />
+            <HealthBadge
+              nodeId={node.id}
+              health={node.health}
+              status={node.status}
+              sshState={node.ssh_state}
+              sshCheckedAt={node.ssh_checked_at}
+              sshDetail={node.ssh_detail}
+              lastSeenAt={node.last_seen_at}
+              maintenanceMode={node.maintenance_mode}
+              canManage={currentUser?.role === 'admin' || currentUser?.role === 'operator'}
+            />
             <DriftBadge score={node.drift_score} />
-            {node.maintenance_mode && (
-              <span className="text-xs px-1.5 py-0.5 rounded bg-amber-100 text-amber-700 border border-amber-200 font-medium">
-                ⚙ Maintenance
-              </span>
-            )}
           </div>
           <p className="text-sm text-gray-500 mt-1">
             {node.ip_address ?? node.bootstrap_ip ?? 'IP unknown'} ·{' '}

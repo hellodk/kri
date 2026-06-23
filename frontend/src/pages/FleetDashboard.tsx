@@ -9,8 +9,7 @@ import { fleetActionsBlocked } from '../lib/saltMasterGuard'
 import { mastersByNodeId } from '../lib/masterNodes'
 import { useAuthStore } from '../stores/authStore'
 import { useToastStore } from '../stores/toastStore'
-import { StatusBadge } from '../components/StatusBadge'
-import { SshIndicator } from '../components/SshIndicator'
+import { HealthBadge } from '../components/HealthBadge'
 import { DriftBadge } from '../components/DriftBadge'
 import { Skeleton } from '../components/Skeleton'
 import { ErrorState } from '../components/ErrorState'
@@ -336,6 +335,7 @@ export function FleetDashboard() {
   const [perPage, setPerPage] = useState(50)
   const [search, setSearch] = useState('')
   const [statusFilter, setStatusFilter] = useState('')
+  const [healthFilter, setHealthFilter] = useState('')
   const [osFilter, setOsFilter] = useState('')
   const [tagFilter, setTagFilter] = useState('')
   const [driftMin, setDriftMin] = useState('')
@@ -361,7 +361,7 @@ export function FleetDashboard() {
   const user = useAuthStore((s) => s.user)
   const canManage = user?.role === 'admin' || user?.role === 'operator'
 
-  const filters = { search, statusFilter, osFilter, tagFilter, driftMin, driftMax, cpuMin, memMin, sort }
+  const filters = { search, statusFilter, healthFilter, osFilter, tagFilter, driftMin, driftMax, cpuMin, memMin, sort }
 
   const secondaryFilterCount = [
     driftMin, driftMax, cpuMin, memMin,
@@ -369,14 +369,14 @@ export function FleetDashboard() {
   ].filter(Boolean).length
 
   function resetFilters() {
-    setSearch(''); setStatusFilter(''); setOsFilter('')
+    setSearch(''); setStatusFilter(''); setHealthFilter(''); setOsFilter('')
     setTagFilter(''); setDriftMin(''); setDriftMax(''); setCpuMin(''); setMemMin(''); setSort('drift_score:desc')
     setMacosOnly(false)
     setShowMoreFilters(false)
     setPage(1)
   }
 
-  const hasActiveFilters = search || statusFilter || osFilter || tagFilter || driftMin || driftMax || cpuMin || memMin || macosOnly
+  const hasActiveFilters = search || statusFilter || healthFilter || osFilter || tagFilter || driftMin || driftMax || cpuMin || memMin || macosOnly
 
   const qc = useQueryClient()
   const toast = useToastStore((s) => s.add)
@@ -412,6 +412,7 @@ export function FleetDashboard() {
     queryFn: () => fleetApi.nodes({
       page, per_page: perPage,
       status: statusFilter || undefined,
+      health: healthFilter || undefined,
       search: search || undefined,
       os_version: osFilter || undefined,
       tag: tagFilter || undefined,
@@ -665,7 +666,19 @@ export function FleetDashboard() {
             />
           </div>
 
-          {/* Status */}
+          {/* Health (unified rollup) */}
+          <select value={healthFilter} onChange={(e) => { setHealthFilter(e.target.value); setPage(1) }}
+            title="Filter by unified health (Salt presence + SSH)"
+            className="text-sm bg-white border border-gray-300 text-gray-900 rounded-lg px-3 py-1.5 focus:outline-none focus:border-brand-600">
+            <option value="">All health</option>
+            <option value="online">Online</option>
+            <option value="degraded">Degraded</option>
+            <option value="down">Down</option>
+            <option value="unknown">Unknown</option>
+            <option value="maintenance">Maintenance</option>
+          </select>
+
+          {/* Status (raw Salt presence) */}
           <select value={statusFilter} onChange={(e) => { setStatusFilter(e.target.value); setPage(1) }}
             className="text-sm bg-white border border-gray-300 text-gray-900 rounded-lg px-3 py-1.5 focus:outline-none focus:border-brand-600">
             <option value="">All statuses</option>
@@ -766,6 +779,8 @@ export function FleetDashboard() {
               <option value="hostname:desc">Hostname Z–A</option>
               <option value="last_seen_at:desc">Last Seen ↓</option>
               <option value="last_seen_at:asc">Last Seen ↑</option>
+              <option value="health:desc">Health (worst first)</option>
+              <option value="health:asc">Health (best first)</option>
               <option value="status:asc">Status A–Z</option>
             </select>
           </div>
@@ -917,17 +932,15 @@ export function FleetDashboard() {
                         </td>
                         <td className="px-4 py-3">
                           <div className="flex flex-col gap-1.5">
-                            <div className="flex items-center gap-1.5 flex-wrap">
-                              <StatusBadge status={node.status} />
-                              {node.maintenance_mode && (
-                                <span className="text-xs px-1.5 py-0.5 rounded bg-amber-100 text-amber-700 border border-amber-200">⚙ Maint.</span>
-                              )}
-                            </div>
-                            <SshIndicator
+                            <HealthBadge
                               nodeId={node.id}
-                              state={node.ssh_state}
-                              checkedAt={node.ssh_checked_at}
-                              detail={node.ssh_detail}
+                              health={node.health}
+                              status={node.status}
+                              sshState={node.ssh_state}
+                              sshCheckedAt={node.ssh_checked_at}
+                              sshDetail={node.ssh_detail}
+                              lastSeenAt={node.last_seen_at}
+                              maintenanceMode={node.maintenance_mode}
                               canManage={canManage}
                             />
                             {((node.cpu_usage_pct ?? 0) > 0 || (node.mem_usage_pct ?? 0) > 0) && (

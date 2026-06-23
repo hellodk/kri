@@ -55,7 +55,7 @@ export interface ProcessStatsResponse {
 export const fleetApi = {
   overview: () => api.get<FleetOverview>('/api/v1/fleet/overview'),
   nodes: (params: {
-    page?: number; per_page?: number; status?: string; sort?: string;
+    page?: number; per_page?: number; status?: string; health?: string; sort?: string;
     search?: string; os_version?: string; drift_min?: number; drift_max?: number; tag?: string;
     cpu_min?: number; mem_min?: number;
   }) => {
@@ -63,6 +63,7 @@ export const fleetApi = {
     if (params.page)       q.set('page',       String(params.page))
     if (params.per_page)   q.set('per_page',   String(params.per_page))
     if (params.status)     q.set('status',     params.status)
+    if (params.health)     q.set('health',     params.health)
     if (params.sort)       q.set('sort',       params.sort)
     if (params.search)     q.set('search',     params.search)
     if (params.os_version) q.set('os_version', params.os_version)

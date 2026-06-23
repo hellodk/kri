@@ -244,6 +244,7 @@ _SORT_FIELDS = {"drift_score", "hostname", "status", "last_seen_at", "created_at
 @router.get("", response_model=PaginatedResponse[NodeListItem])
 async def list_nodes(
     status: str | None = None,
+    health: str | None = None,
     tag: str | None = None,
     group_id: uuid.UUID | None = None,
     search: str | None = None,
@@ -264,6 +265,11 @@ async def list_nodes(
 
     if status:
         query = query.where(Node.status == status)
+
+    if health:
+        from fleet_platform.services.node_health import health_case
+
+        query = query.where(health_case(Node) == health)
 
     if search:
         pattern = f"%{search}%"
@@ -296,9 +302,14 @@ async def list_nodes(
         query = query.where(Node.id.in_(member_subq))
 
     sort_field, _sep2, sort_dir = sort.partition(":")
-    if sort_field not in _SORT_FIELDS:
-        sort_field = "drift_score"
-    sort_col = getattr(Node, sort_field)
+    if sort_field == "health":
+        from fleet_platform.services.node_health import health_sort_rank
+
+        sort_col = health_sort_rank(Node)
+    else:
+        if sort_field not in _SORT_FIELDS:
+            sort_field = "drift_score"
+        sort_col = getattr(Node, sort_field)
     query = query.order_by(sort_col.desc() if sort_dir == "desc" else sort_col.asc())
 
     total_result = await db.execute(select(func.count()).select_from(query.subquery()))

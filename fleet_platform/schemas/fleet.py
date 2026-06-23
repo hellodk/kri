@@ -2,7 +2,9 @@ import uuid
 from datetime import datetime
 from typing import Any
 
-from pydantic import BaseModel, field_validator, model_validator
+from pydantic import BaseModel, computed_field, field_validator, model_validator
+
+from fleet_platform.services.node_health import compute_health
 
 
 class TagResponse(BaseModel):
@@ -41,6 +43,17 @@ class NodeListItem(BaseModel):
     ssh_state: str | None = None
     ssh_checked_at: datetime | None = None
     ssh_detail: str | None = None
+
+    @computed_field  # type: ignore[prop-decorator]
+    @property
+    def health(self) -> str:
+        """Unified worst-of rollup of Salt presence + SSH state (#356 follow-up).
+
+        Derived, never stored. The granular ``status`` / ``ssh_state`` fields are
+        still emitted for the UI's hover breakdown — this just adds the single
+        at-a-glance read.
+        """
+        return compute_health(self.status, self.ssh_state, self.maintenance_mode)
 
     model_config = {"from_attributes": True}
 

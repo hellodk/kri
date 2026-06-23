@@ -44,9 +44,13 @@ export interface Node {
   ssh_state?: SshState | null
   ssh_checked_at?: string | null
   ssh_detail?: string | null
+  // Unified worst-of rollup of Salt presence + SSH state (derived server-side)
+  health?: HealthState
 }
 
 export type SshState = 'ok' | 'auth_failed' | 'unreachable' | 'unknown'
+
+export type HealthState = 'online' | 'degraded' | 'down' | 'unknown' | 'maintenance'
 
 export interface NodeDetail extends Node {
   os_build: string | null
