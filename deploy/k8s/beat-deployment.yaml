@@ -7,6 +7,8 @@ metadata:
     app: kri-beat
     component: beat
 spec:
+  # Beat must remain a singleton — running multiple beat schedulers against
+  # the same RedBeat Redis key produces duplicate task dispatches.
   replicas: 1
   selector:
     matchLabels:
@@ -17,10 +19,22 @@ spec:
         app: kri-beat
         component: beat
     spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1001
+        runAsGroup: 1001
+        fsGroup: 1001
+        seccompProfile:
+          type: RuntimeDefault
       containers:
         - name: beat
           image: gitea.local/kri/kri-api:0.1.415
           imagePullPolicy: IfNotPresent
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
           command:
             - uv
             - run
@@ -70,6 +84,17 @@ spec:
               value: "postgresql+psycopg://fleet:$(POSTGRES_PASSWORD)@postgres.utilities.svc.cluster.local:5432/fleet_platform"
             - name: REDIS_URL
               value: "redis://:$(REDIS_PASSWORD)@redis.utilities.svc.cluster.local:6379/0"
+            # Prevent Python from writing .pyc files to the read-only rootfs.
+            - name: PYTHONDONTWRITEBYTECODE
+              value: "1"
+            # Prevent uv from attempting a venv sync on the read-only rootfs.
+            - name: UV_NO_SYNC
+              value: "1"
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+            - name: uv-cache
+              mountPath: /home/appuser/.cache
           livenessProbe:
             exec:
               command:
@@ -97,3 +122,8 @@ spec:
             limits:
               cpu: "500m"
               memory: "512Mi"
+      volumes:
+        - name: tmp
+          emptyDir: {}
+        - name: uv-cache
+          emptyDir: {}
