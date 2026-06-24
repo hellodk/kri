@@ -124,7 +124,7 @@ export function TopBar() {
   }
 
   return (
-    <header className="h-14 flex items-center px-4 bg-white border-b border-gray-200 gap-4 shadow-sm">
+    <header className="h-14 flex items-center px-4 bg-white border-b border-gray-200 gap-4 shadow-xs">
       <button
         onClick={() => setSidebarOpen(!sidebarOpen)}
         className="text-gray-500 hover:text-gray-700 transition-colors text-lg leading-none"
@@ -148,7 +148,7 @@ export function TopBar() {
           onFocus={() => q.length >= 2 && setOpen(true)}
           onBlur={() => setTimeout(() => setOpen(false), 150)}
           onKeyDown={handleKeyDown}
-          className="w-full px-3 py-1.5 pl-8 bg-gray-50 border border-gray-300 text-gray-900 placeholder-gray-400 rounded-lg text-sm focus:outline-none focus:border-brand-600 focus:bg-white transition-colors"
+          className="w-full px-3 py-1.5 pl-8 bg-gray-50 border border-gray-300 text-gray-900 placeholder-gray-400 rounded-lg text-sm focus:outline-hidden focus:border-brand-600 focus:bg-white transition-colors"
         />
         <svg className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400 pointer-events-none" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
           <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />

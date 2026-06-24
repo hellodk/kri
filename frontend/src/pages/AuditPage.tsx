@@ -6,6 +6,7 @@ import { Skeleton } from '../components/Skeleton'
 import { ErrorState } from '../components/ErrorState'
 import { Pagination } from '../components/Pagination'
 import { formatDistanceToNow } from 'date-fns'
+import { formatLocalDateTime } from '../utils/time'
 
 const RESOURCE_TYPES = ['node', 'group', 'user', 'setting', 'playbook']
 
@@ -149,7 +150,7 @@ export function AuditPage() {
       </div>
 
       {/* Filter bar */}
-      <div className="bg-white border border-gray-200 rounded-lg p-4 space-y-3 shadow-sm">
+      <div className="bg-white border border-gray-200 rounded-lg p-4 space-y-3 shadow-xs">
         <div className="flex flex-wrap gap-3 items-end">
           {/* Actor */}
           <div className="flex flex-col gap-1">
@@ -159,7 +160,7 @@ export function AuditPage() {
               placeholder="email or user ID"
               value={actor}
               onChange={(e) => set('actor', e.target.value)}
-              className="px-3 py-1.5 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-500 w-52"
+              className="px-3 py-1.5 text-sm border border-gray-300 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-brand-500 w-52"
             />
           </div>
 
@@ -171,7 +172,7 @@ export function AuditPage() {
               placeholder="e.g. login, node.delete"
               value={action}
               onChange={(e) => set('action', e.target.value)}
-              className="px-3 py-1.5 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-500 w-44"
+              className="px-3 py-1.5 text-sm border border-gray-300 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-brand-500 w-44"
             />
           </div>
 
@@ -181,7 +182,7 @@ export function AuditPage() {
             <select
               value={resourceType}
               onChange={(e) => set('resource_type', e.target.value)}
-              className="px-3 py-1.5 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-500 bg-white"
+              className="px-3 py-1.5 text-sm border border-gray-300 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-brand-500 bg-white"
             >
               <option value="">All types</option>
               {RESOURCE_TYPES.map(rt => (
@@ -215,21 +216,21 @@ export function AuditPage() {
               type="datetime-local"
               value={toDatetimeLocal(fromTs)}
               onChange={(e) => set('from_ts', e.target.value ? isoLocal(e.target.value) : '')}
-              className="px-2 py-1 text-xs border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-brand-500"
+              className="px-2 py-1 text-xs border border-gray-300 rounded-md focus:outline-hidden focus:ring-2 focus:ring-brand-500"
             />
             <span className="text-xs text-gray-400">to</span>
             <input
               type="datetime-local"
               value={toDatetimeLocal(toTs)}
               onChange={(e) => set('to_ts', e.target.value ? isoLocal(e.target.value) : '')}
-              className="px-2 py-1 text-xs border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-brand-500"
+              className="px-2 py-1 text-xs border border-gray-300 rounded-md focus:outline-hidden focus:ring-2 focus:ring-brand-500"
             />
           </div>
         </div>
       </div>
 
       {/* Table */}
-      <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
+      <div className="bg-white rounded-lg shadow-xs border border-gray-200 overflow-hidden">
         {isLoading ? (
           <Skeleton rows={12} />
         ) : isError ? (
@@ -239,12 +240,12 @@ export function AuditPage() {
             <table className="w-full text-sm">
               <thead>
                 <tr className="bg-gray-50 border-b border-gray-200 text-left text-xs text-gray-500 uppercase tracking-wide">
-                  <th className="px-4 py-3">Timestamp</th>
-                  <th className="px-4 py-3">Actor</th>
-                  <th className="px-4 py-3">Action</th>
-                  <th className="px-4 py-3">Resource Type</th>
-                  <th className="px-4 py-3">Resource ID</th>
-                  <th className="px-4 py-3">Changes</th>
+                  <th scope="col" className="px-4 py-3">Timestamp</th>
+                  <th scope="col" className="px-4 py-3">Actor</th>
+                  <th scope="col" className="px-4 py-3">Action</th>
+                  <th scope="col" className="px-4 py-3">Resource Type</th>
+                  <th scope="col" className="px-4 py-3">Resource ID</th>
+                  <th scope="col" className="px-4 py-3">Changes</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100">
@@ -263,7 +264,7 @@ export function AuditPage() {
                       <tr key={e.id} className={`hover:bg-gray-50 ${hasChanges ? 'cursor-pointer' : ''}`} onClick={() => hasChanges && setExpandedId(isExpanded ? null : e.id)}>
                         <td className="px-4 py-3 text-gray-500 whitespace-nowrap text-xs">
                           <span title={formatDistanceToNow(new Date(e.event_at), { addSuffix: true })}>
-                            {new Date(e.event_at).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata', day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false })} IST
+                            {formatLocalDateTime(e.event_at, { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false })}
                           </span>
                         </td>
                         <td className="px-4 py-3 font-mono text-xs text-gray-700 max-w-[180px] truncate">

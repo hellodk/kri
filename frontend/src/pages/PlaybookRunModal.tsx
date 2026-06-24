@@ -86,7 +86,7 @@ function SensitiveInput({ value, onChange, placeholder, isSystemVar }: {
         value={value}
         onChange={(e) => onChange(e.target.value)}
         placeholder={placeholder}
-        className={`w-full px-2.5 py-1.5 pr-9 text-sm border rounded-lg focus:outline-none font-mono ${
+        className={`w-full px-2.5 py-1.5 pr-9 text-sm border rounded-lg focus:outline-hidden font-mono ${
           isSystemVar
             ? 'border-amber-300 bg-amber-50 focus:border-amber-500'
             : 'border-gray-300 focus:border-brand-600'
@@ -289,7 +289,7 @@ export function PlaybookRunModal({ playbook, onClose, initialTargetType, initial
                 {targetType === 'node' ? 'Node' : 'Group'}
               </label>
               <select required value={targetId} onChange={(e) => setTargetId(e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm text-gray-900 focus:outline-none focus:border-brand-600">
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm text-gray-900 focus:outline-hidden focus:border-brand-600">
                 <option value="">Select…</option>
                 {targetType === 'node'
                   ? nodes?.items.map((n) => (
@@ -345,7 +345,7 @@ export function PlaybookRunModal({ playbook, onClose, initialTargetType, initial
                             type="text"
                             value={value}
                             onChange={(e) => setVars((prev) => ({ ...prev, [key]: e.target.value }))}
-                            className={`w-full px-2.5 py-1.5 text-sm border rounded-lg focus:outline-none font-mono ${
+                            className={`w-full px-2.5 py-1.5 text-sm border rounded-lg focus:outline-hidden font-mono ${
                               SYSTEM_VARS.has(key)
                                 ? 'border-amber-300 bg-amber-50 focus:border-amber-500'
                                 : 'border-gray-300 focus:border-brand-600'
@@ -406,7 +406,7 @@ export function PlaybookRunModal({ playbook, onClose, initialTargetType, initial
                     setTimeoutMin(Math.max(1, Math.min(360, val)))
                   }
                 }}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm text-gray-900 focus:outline-none focus:border-brand-600"
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm text-gray-900 focus:outline-hidden focus:border-brand-600"
               />
               <p className="text-xs text-gray-400 mt-1">Run is terminated if it exceeds this. Default 30 min.</p>
             </div>

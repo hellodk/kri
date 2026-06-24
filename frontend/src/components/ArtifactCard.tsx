@@ -42,7 +42,7 @@ export function ArtifactCard({ artifact }: { artifact: ArtifactSummary }) {
             value={target}
             onChange={(e) => setTarget(e.target.value)}
             placeholder="live target path (e.g. deploy_config.yml) — blank = treat as new"
-            className="flex-1 border border-gray-300 rounded px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-blue-500"
+            className="flex-1 border border-gray-300 rounded px-2 py-1 text-xs focus:outline-hidden focus:ring-1 focus:ring-blue-500"
           />
           <button
             onClick={loadDiff}

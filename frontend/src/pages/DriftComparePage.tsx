@@ -142,7 +142,7 @@ export function DriftComparePage() {
             placeholder="Search by hostname…"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            className="w-full text-sm border border-gray-300 rounded px-2 py-1.5 focus:outline-none focus:ring-2 focus:ring-brand-400"
+            className="w-full text-sm border border-gray-300 rounded px-2 py-1.5 focus:outline-hidden focus:ring-2 focus:ring-brand-400"
           />
           {nodesLoading ? (
             <Skeleton rows={6} />
@@ -214,11 +214,11 @@ export function DriftComparePage() {
                 <table className="w-full text-sm">
                   <thead>
                     <tr className="bg-gray-50 border-b border-gray-200">
-                      <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase sticky left-0 bg-gray-50 z-10 border-r border-gray-200">
+                      <th scope="col" className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase sticky left-0 bg-gray-50 z-10 border-r border-gray-200">
                         Package
                       </th>
                       {compareData.nodes.map((n) => (
-                        <th
+                        <th scope="col"
                           key={n.id}
                           className="px-3 py-2 text-xs font-medium text-gray-500 uppercase whitespace-nowrap min-w-[130px]"
                         >

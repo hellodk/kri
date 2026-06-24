@@ -138,7 +138,7 @@ function UploadModal({ onClose }: { onClose: () => void }) {
               value={name}
               onChange={(e) => setName(e.target.value)}
               placeholder="MyApp Distribution"
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm text-gray-900 focus:outline-none focus:border-brand-600"
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm text-gray-900 focus:outline-hidden focus:border-brand-600"
             />
           </div>
 
@@ -151,7 +151,7 @@ function UploadModal({ onClose }: { onClose: () => void }) {
               value={description}
               onChange={(e) => setDescription(e.target.value)}
               placeholder="Production distribution profile for MyApp"
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm text-gray-900 focus:outline-none focus:border-brand-600"
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm text-gray-900 focus:outline-hidden focus:border-brand-600"
             />
           </div>
 
@@ -295,7 +295,7 @@ export function ProvisioningPage() {
         </div>
         <button
           onClick={() => setShowUpload(true)}
-          className="px-4 py-2 bg-brand-600 text-white text-sm font-medium rounded-lg hover:bg-brand-700 shadow-sm"
+          className="px-4 py-2 bg-brand-600 text-white text-sm font-medium rounded-lg hover:bg-brand-700 shadow-xs"
         >
           + Upload Profile
         </button>
@@ -333,18 +333,18 @@ export function ProvisioningPage() {
           </button>
         </div>
       ) : (
-        <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
+        <div className="bg-white rounded-xl border border-gray-200 shadow-xs overflow-hidden">
           <table className="w-full text-sm">
             <thead>
               <tr className="bg-gray-50 border-b border-gray-200 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide">
-                <th className="px-4 py-3">Name</th>
-                <th className="px-4 py-3">Bundle ID</th>
-                <th className="px-4 py-3">Team</th>
-                <th className="px-4 py-3">Type</th>
-                <th className="px-4 py-3">Expiry</th>
-                <th className="px-4 py-3">Uploaded by</th>
-                <th className="px-4 py-3">Uploaded</th>
-                <th className="px-4 py-3 w-28"></th>
+                <th scope="col" className="px-4 py-3">Name</th>
+                <th scope="col" className="px-4 py-3">Bundle ID</th>
+                <th scope="col" className="px-4 py-3">Team</th>
+                <th scope="col" className="px-4 py-3">Type</th>
+                <th scope="col" className="px-4 py-3">Expiry</th>
+                <th scope="col" className="px-4 py-3">Uploaded by</th>
+                <th scope="col" className="px-4 py-3">Uploaded</th>
+                <th scope="col" className="px-4 py-3 w-28"></th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">

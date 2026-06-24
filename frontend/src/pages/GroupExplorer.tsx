@@ -7,6 +7,7 @@ import { Skeleton } from '../components/Skeleton'
 import { ErrorState } from '../components/ErrorState'
 import { ConfirmDialog } from '../components/ConfirmDialog'
 import { Pagination } from '../components/Pagination'
+import { formatLocalDate } from '../utils/time'
 
 export function GroupExplorer() {
   const [page, setPage] = useState(1)
@@ -142,7 +143,7 @@ export function GroupExplorer() {
         </form>
       )}
 
-      <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
+      <div className="bg-white rounded-lg shadow-xs border border-gray-200 overflow-hidden">
         {isLoading ? <Skeleton rows={6} /> : isError ? (
           <ErrorState message="Failed to load groups" retry={refetch} />
         ) : (
@@ -170,7 +171,7 @@ export function GroupExplorer() {
             <table className="w-full text-sm">
               <thead>
                 <tr className="bg-gray-50 border-b border-gray-200 text-left text-xs text-gray-500 uppercase">
-                  <th className="pl-4 py-3 w-8">
+                  <th scope="col" className="pl-4 py-3 w-8">
                     <input
                       type="checkbox"
                       checked={allSelected}
@@ -179,11 +180,11 @@ export function GroupExplorer() {
                       className="accent-brand-600 cursor-pointer"
                     />
                   </th>
-                  <th className="px-4 py-3">Name</th>
-                  <th className="px-4 py-3">Type</th>
-                  <th className="px-4 py-3">Members</th>
-                  <th className="px-4 py-3">Created</th>
-                  <th className="px-4 py-3 w-16"></th>
+                  <th scope="col" className="px-4 py-3">Name</th>
+                  <th scope="col" className="px-4 py-3">Type</th>
+                  <th scope="col" className="px-4 py-3">Members</th>
+                  <th scope="col" className="px-4 py-3">Created</th>
+                  <th scope="col" className="px-4 py-3 w-16"></th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100">
@@ -207,7 +208,7 @@ export function GroupExplorer() {
                       </span>
                     </td>
                     <td className="px-4 py-3 text-gray-600">{g.member_count}</td>
-                    <td className="px-4 py-3 text-gray-500">{new Date(g.created_at).toLocaleDateString('en-IN', { timeZone: 'Asia/Kolkata', day: '2-digit', month: 'short', year: 'numeric' })}</td>
+                    <td className="px-4 py-3 text-gray-500">{formatLocalDate(g.created_at)}</td>
                     <td className="px-4 py-3 text-right">
                       <button
                         onClick={() => setDeletingGroup({ id: g.id, name: g.name })}

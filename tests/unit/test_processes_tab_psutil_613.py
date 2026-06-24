@@ -60,11 +60,16 @@ def test_nodedetal_uses_is_llm():
 
 
 def test_nodedetal_uses_ist_timezone():
-    assert "Asia/Kolkata" in NODE_DETAIL_TSX, "NodeDetail.tsx must use Asia/Kolkata timezone for IST display"
+    # #796/#877: NodeDetail no longer hardcodes a timezone. Date rendering (and
+    # the timezone suffix) is delegated to the shared formatIST/formatISTDate
+    # helper, which formats in the viewer's local timezone.
+    assert "formatIST" in NODE_DETAIL_TSX, "NodeDetail.tsx must render dates via the formatIST helper"
 
 
 def test_nodedetal_has_ist_suffix():
-    assert " IST" in NODE_DETAIL_TSX, "NodeDetail.tsx must display ' IST' suffix on timestamps"
+    # The timezone suffix is now produced by the formatIST helper rather than a
+    # literal ' IST' string embedded in the page (#796/#877).
+    assert "formatIST" in NODE_DETAIL_TSX, "NodeDetail.tsx must use formatIST so timestamps carry a timezone suffix"
 
 
 # ── NodeDetail.tsx — old data source REMOVED ──────────────────────────────

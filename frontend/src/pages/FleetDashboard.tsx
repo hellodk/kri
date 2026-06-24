@@ -86,7 +86,7 @@ function EditNodeModal({ node, onClose }: { node: Node; onClose: () => void }) {
               value={hostname}
               onChange={(e) => setHostname(e.target.value)}
               placeholder="mac-mini-01.local"
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm text-gray-900 focus:outline-none focus:border-brand-600"
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm text-gray-900 focus:outline-hidden focus:border-brand-600"
             />
           </div>
           <div>
@@ -95,7 +95,7 @@ function EditNodeModal({ node, onClose }: { node: Node; onClose: () => void }) {
               value={ipAddress}
               onChange={(e) => setIpAddress(e.target.value)}
               placeholder="192.168.1.50"
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm text-gray-900 focus:outline-none focus:border-brand-600"
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm text-gray-900 focus:outline-hidden focus:border-brand-600"
             />
           </div>
           <div>
@@ -104,7 +104,7 @@ function EditNodeModal({ node, onClose }: { node: Node; onClose: () => void }) {
               value={hardwareModel}
               onChange={(e) => setHardwareModel(e.target.value)}
               placeholder="Mac mini (2023)"
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm text-gray-900 focus:outline-none focus:border-brand-600"
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm text-gray-900 focus:outline-hidden focus:border-brand-600"
             />
           </div>
           <div>
@@ -113,7 +113,7 @@ function EditNodeModal({ node, onClose }: { node: Node; onClose: () => void }) {
               value={osVersion}
               onChange={(e) => setOsVersion(e.target.value)}
               placeholder="macOS 14.4.1"
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm text-gray-900 focus:outline-none focus:border-brand-600"
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm text-gray-900 focus:outline-hidden focus:border-brand-600"
             />
           </div>
 
@@ -152,7 +152,7 @@ function EditNodeModal({ node, onClose }: { node: Node; onClose: () => void }) {
               <label className="block text-sm font-medium text-gray-700 mb-1">SSH Username</label>
               <input value={sshUsername} onChange={(e) => setSshUsername(e.target.value)}
                 placeholder="admin"
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm text-gray-900 focus:outline-none focus:border-brand-600" />
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm text-gray-900 focus:outline-hidden focus:border-brand-600" />
             </div>
 
             {authMode === 'password' ? (
@@ -164,7 +164,7 @@ function EditNodeModal({ node, onClose }: { node: Node; onClose: () => void }) {
                   value={sshPassword}
                   onChange={setSshPassword}
                   placeholder={node.has_ssh_password ? '••••••••' : 'Enter password'}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm text-gray-900 focus:outline-none focus:border-brand-600"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm text-gray-900 focus:outline-hidden focus:border-brand-600"
                 />
               </div>
             ) : (
@@ -174,7 +174,7 @@ function EditNodeModal({ node, onClose }: { node: Node; onClose: () => void }) {
                 </label>
                 <textarea rows={6} value={sshKey} onChange={(e) => setSshKey(e.target.value)}
                   placeholder={'-----BEGIN OPENSSH PRIVATE KEY-----\n...'}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm font-mono text-gray-900 focus:outline-none focus:border-brand-600 resize-none" />
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm font-mono text-gray-900 focus:outline-hidden focus:border-brand-600 resize-none" />
                 <p className="text-xs text-gray-400 mt-1">Paste the private key. The public key will be authorized on the node automatically during bootstrap.</p>
               </div>
             )}
@@ -293,7 +293,7 @@ function BulkDeleteConfirmModal({ count, selectedNodes, onConfirm, onCancel }: B
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" role="dialog" aria-modal="true" aria-labelledby="bulk-delete-title">
       <div className="bg-white rounded-xl shadow-2xl p-6 w-full max-w-md mx-4 border border-gray-200">
         <div className="flex items-center gap-3 mb-4">
-          <div className="w-10 h-10 rounded-full bg-red-100 flex items-center justify-center flex-shrink-0">
+          <div className="w-10 h-10 rounded-full bg-red-100 flex items-center justify-center shrink-0">
             <svg className="w-5 h-5 text-red-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z" />
             </svg>
@@ -553,7 +553,7 @@ export function FleetDashboard() {
     const isActive = sortField === field
     const nextDir = isActive && sortDir === 'asc' ? 'desc' : 'asc'
     return (
-      <th
+      <th scope="col"
         className={`px-4 py-3 cursor-pointer select-none hover:bg-gray-100 group ${className ?? ''}`}
         onClick={() => { setSort(`${field}:${isActive ? nextDir : 'desc'}`); setPage(1) }}
       >
@@ -579,7 +579,7 @@ export function FleetDashboard() {
               onClick={() => refreshSshMutation.mutate()}
               disabled={refreshSshMutation.isPending}
               title="Re-probe SSH reachability for the whole fleet now"
-              className="px-4 py-2 bg-white border border-gray-300 text-gray-700 text-sm font-medium rounded-lg hover:bg-gray-50 shadow-sm disabled:opacity-50"
+              className="px-4 py-2 bg-white border border-gray-300 text-gray-700 text-sm font-medium rounded-lg hover:bg-gray-50 shadow-xs disabled:opacity-50"
             >
               {refreshSshMutation.isPending ? 'Refreshing…' : '↻ Refresh SSH'}
             </button>
@@ -587,7 +587,7 @@ export function FleetDashboard() {
           {canManage && (
             <button
               onClick={() => setShowImport(true)}
-              className="px-4 py-2 bg-white border border-gray-300 text-gray-700 text-sm font-medium rounded-lg hover:bg-gray-50 shadow-sm"
+              className="px-4 py-2 bg-white border border-gray-300 text-gray-700 text-sm font-medium rounded-lg hover:bg-gray-50 shadow-xs"
             >
               + Import
             </button>
@@ -596,7 +596,7 @@ export function FleetDashboard() {
             onClick={() => setShowBootstrap(true)}
             disabled={mastersBlocked}
             title={mastersBlocked ? 'No enabled salt-master — configure one in Overview → Salt Masters' : undefined}
-            className="px-4 py-2 bg-brand-600 text-white text-sm font-medium rounded-lg hover:bg-brand-700 shadow-sm disabled:opacity-40 disabled:cursor-not-allowed"
+            className="px-4 py-2 bg-brand-600 text-white text-sm font-medium rounded-lg hover:bg-brand-700 shadow-xs disabled:opacity-40 disabled:cursor-not-allowed"
           >
             + Bootstrap Node
           </button>
@@ -642,7 +642,7 @@ export function FleetDashboard() {
               key={label}
               onClick={onClick}
               title={title}
-              className={`bg-white rounded-xl border border-gray-200 border-l-4 ${accent} p-5 shadow-sm text-left w-full cursor-pointer hover:shadow-md hover:ring-2 hover:ring-brand-200 transition-all`}
+              className={`bg-white rounded-xl border border-gray-200 border-l-4 ${accent} p-5 shadow-xs text-left w-full cursor-pointer hover:shadow-md hover:ring-2 hover:ring-brand-200 transition-all`}
             >
               <p className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-2">{label}</p>
               <p className={`text-4xl font-bold tabular-nums ${num}`}>{value}</p>
@@ -652,7 +652,7 @@ export function FleetDashboard() {
       ) : null}
 
       {/* Filter bar */}
-      <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-4 space-y-3">
+      <div className="bg-white rounded-xl border border-gray-200 shadow-xs p-4 space-y-3">
         {/* Row 1: search + status + More filters toggle */}
         <div className="flex flex-wrap items-center gap-3">
           {/* Search */}
@@ -662,14 +662,14 @@ export function FleetDashboard() {
               value={search}
               onChange={(e) => { setSearch(e.target.value); setPage(1) }}
               placeholder="Search hostname or minion ID…"
-              className="w-full pl-9 pr-3 py-1.5 border border-gray-300 text-sm text-gray-900 rounded-lg focus:outline-none focus:border-brand-600"
+              className="w-full pl-9 pr-3 py-1.5 border border-gray-300 text-sm text-gray-900 rounded-lg focus:outline-hidden focus:border-brand-600"
             />
           </div>
 
           {/* Health (unified rollup) */}
           <select value={healthFilter} onChange={(e) => { setHealthFilter(e.target.value); setPage(1) }}
             title="Filter by unified health (Salt presence + SSH)"
-            className="text-sm bg-white border border-gray-300 text-gray-900 rounded-lg px-3 py-1.5 focus:outline-none focus:border-brand-600">
+            className="text-sm bg-white border border-gray-300 text-gray-900 rounded-lg px-3 py-1.5 focus:outline-hidden focus:border-brand-600">
             <option value="">All health</option>
             <option value="online">Online</option>
             <option value="degraded">Degraded</option>
@@ -680,7 +680,7 @@ export function FleetDashboard() {
 
           {/* Status (raw Salt presence) */}
           <select value={statusFilter} onChange={(e) => { setStatusFilter(e.target.value); setPage(1) }}
-            className="text-sm bg-white border border-gray-300 text-gray-900 rounded-lg px-3 py-1.5 focus:outline-none focus:border-brand-600">
+            className="text-sm bg-white border border-gray-300 text-gray-900 rounded-lg px-3 py-1.5 focus:outline-hidden focus:border-brand-600">
             <option value="">All statuses</option>
             <option value="online">Online</option>
             <option value="offline">Offline</option>
@@ -735,29 +735,29 @@ export function FleetDashboard() {
             {/* OS Version */}
             <input value={osFilter} onChange={(e) => { setOsFilter(e.target.value); setPage(1) }}
               placeholder="OS (e.g. 14.4)"
-              className="w-36 px-3 py-1.5 border border-gray-300 text-sm text-gray-900 rounded-lg focus:outline-none focus:border-brand-600" />
+              className="w-36 px-3 py-1.5 border border-gray-300 text-sm text-gray-900 rounded-lg focus:outline-hidden focus:border-brand-600" />
 
             {/* Tag filter */}
             <input value={tagFilter} onChange={(e) => { setTagFilter(e.target.value); setPage(1) }}
               placeholder="Tag key:value"
-              className="w-40 px-3 py-1.5 border border-gray-300 text-sm text-gray-900 rounded-lg focus:outline-none focus:border-brand-600" />
+              className="w-40 px-3 py-1.5 border border-gray-300 text-sm text-gray-900 rounded-lg focus:outline-hidden focus:border-brand-600" />
 
             {/* Drift range */}
             <span className="text-sm text-gray-500 font-medium">Drift:</span>
             <input value={driftMin} onChange={(e) => { setDriftMin(e.target.value); setPage(1) }}
               placeholder="Min" type="number" min="0"
-              className="w-20 px-3 py-1.5 border border-gray-300 text-sm text-gray-900 rounded-lg focus:outline-none focus:border-brand-600" />
+              className="w-20 px-3 py-1.5 border border-gray-300 text-sm text-gray-900 rounded-lg focus:outline-hidden focus:border-brand-600" />
             <span className="text-gray-400 text-sm">–</span>
             <input value={driftMax} onChange={(e) => { setDriftMax(e.target.value); setPage(1) }}
               placeholder="Max" type="number" min="0"
-              className="w-20 px-3 py-1.5 border border-gray-300 text-sm text-gray-900 rounded-lg focus:outline-none focus:border-brand-600" />
+              className="w-20 px-3 py-1.5 border border-gray-300 text-sm text-gray-900 rounded-lg focus:outline-hidden focus:border-brand-600" />
 
             {/* CPU min */}
             <span className="text-sm text-gray-500 font-medium">CPU%:</span>
             <input
               type="number" min="0" max="100" placeholder="≥"
               value={cpuMin} onChange={e => { setCpuMin(e.target.value); setPage(1) }}
-              className="w-20 px-3 py-1.5 border border-gray-300 text-sm text-gray-900 rounded-lg focus:outline-none focus:border-brand-600"
+              className="w-20 px-3 py-1.5 border border-gray-300 text-sm text-gray-900 rounded-lg focus:outline-hidden focus:border-brand-600"
             />
 
             {/* Mem min */}
@@ -765,14 +765,14 @@ export function FleetDashboard() {
             <input
               type="number" min="0" max="100" placeholder="≥"
               value={memMin} onChange={e => { setMemMin(e.target.value); setPage(1) }}
-              className="w-20 px-3 py-1.5 border border-gray-300 text-sm text-gray-900 rounded-lg focus:outline-none focus:border-brand-600"
+              className="w-20 px-3 py-1.5 border border-gray-300 text-sm text-gray-900 rounded-lg focus:outline-hidden focus:border-brand-600"
             />
 
             <div className="flex-1" />
 
             {/* Sort */}
             <select value={sort} onChange={(e) => { setSort(e.target.value); setPage(1) }}
-              className="text-sm bg-white border border-gray-300 text-gray-900 rounded-lg px-3 py-1.5 focus:outline-none focus:border-brand-600">
+              className="text-sm bg-white border border-gray-300 text-gray-900 rounded-lg px-3 py-1.5 focus:outline-hidden focus:border-brand-600">
               <option value="drift_score:desc">Drift ↓</option>
               <option value="drift_score:asc">Drift ↑</option>
               <option value="hostname:asc">Hostname A–Z</option>
@@ -788,7 +788,7 @@ export function FleetDashboard() {
       </div>
 
       {/* Node table */}
-      <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
+      <div className="bg-white rounded-xl border border-gray-200 shadow-xs overflow-hidden">
         {nodesLoading ? (
           <Skeleton rows={10} />
         ) : isError ? (
@@ -805,14 +805,14 @@ export function FleetDashboard() {
                 {mastersBlocked ? (
                   <Link
                     to="/overview?tab=salt-masters"
-                    className="inline-block px-6 py-2.5 bg-amber-700 text-white text-sm font-medium rounded-lg hover:bg-amber-800 shadow-sm"
+                    className="inline-block px-6 py-2.5 bg-amber-700 text-white text-sm font-medium rounded-lg hover:bg-amber-800 shadow-xs"
                   >
                     Configure a salt-master first →
                   </Link>
                 ) : (
                   <button
                     onClick={() => setShowBootstrap(true)}
-                    className="px-6 py-2.5 bg-brand-600 text-white text-sm font-medium rounded-lg hover:bg-brand-700 shadow-sm"
+                    className="px-6 py-2.5 bg-brand-600 text-white text-sm font-medium rounded-lg hover:bg-brand-700 shadow-xs"
                   >
                     Bootstrap your first node →
                   </button>
@@ -886,20 +886,20 @@ export function FleetDashboard() {
                   <thead className="sticky top-0 z-10 bg-white">
                     <tr className="bg-white border-b border-gray-200 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide">
                       {canManage && (
-                        <th className="pl-4 py-3 w-8">
+                        <th scope="col" className="pl-4 py-3 w-8">
                           <input type="checkbox" checked={allSelected} onChange={toggleAll}
                             className="accent-brand-600 cursor-pointer" />
                         </th>
                       )}
                       <SortTh field="hostname" label="Hostname" />
-                      <th className="px-4 py-3">Connectivity</th>
-                      <th className="px-4 py-3">OS</th>
+                      <th scope="col" className="px-4 py-3">Connectivity</th>
+                      <th scope="col" className="px-4 py-3">OS</th>
                       <SortTh field="drift_score" label="Drift" />
                       <SortTh field="last_seen_at" label="Last Seen" />
-                      <th className="px-4 py-3">Tags</th>
-                      {macosOnly && <th className="px-4 py-3">Xcode</th>}
-                      {macosOnly && <th className="px-4 py-3">Certs</th>}
-                      {canManage && <th className="px-4 py-3 w-24"></th>}
+                      <th scope="col" className="px-4 py-3">Tags</th>
+                      {macosOnly && <th scope="col" className="px-4 py-3">Xcode</th>}
+                      {macosOnly && <th scope="col" className="px-4 py-3">Certs</th>}
+                      {canManage && <th scope="col" className="px-4 py-3 w-24"></th>}
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-100">
