@@ -50,7 +50,7 @@ export function SBOMExplorer() {
             placeholder="Search packages fleet-wide (min 3 chars)…"
             value={q}
             onChange={(e) => handleInput(e.target.value)}
-            className="flex-1 px-4 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
+            className="flex-1 px-4 py-2 border border-gray-300 rounded-lg text-sm focus:outline-hidden focus:ring-2 focus:ring-brand-500"
           />
           <button
             onClick={() => { setQ(''); setDebouncedQ(''); setBrowsing(true) }}
@@ -68,7 +68,7 @@ export function SBOMExplorer() {
         )}
       </div>
       {showResults && (
-        <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
+        <div className="bg-white rounded-lg shadow-xs border border-gray-200 overflow-hidden">
           {displayLoading ? <Skeleton rows={8} /> : displayError ? (
             <ErrorState message="Failed to load packages" retry={displayRefetch} />
           ) : displayData && displayData.length === 0 ? (
@@ -79,11 +79,11 @@ export function SBOMExplorer() {
             <table className="w-full text-sm">
               <thead>
                 <tr className="bg-gray-50 border-b border-gray-200 text-left text-xs text-gray-500 uppercase tracking-wide">
-                  <th className="px-4 py-3">Package</th>
-                  <th className="px-4 py-3">Version</th>
-                  <th className="px-4 py-3">Type</th>
-                  <th className="px-4 py-3">Node</th>
-                  <th className="px-4 py-3">Scanned</th>
+                  <th scope="col" className="px-4 py-3">Package</th>
+                  <th scope="col" className="px-4 py-3">Version</th>
+                  <th scope="col" className="px-4 py-3">Type</th>
+                  <th scope="col" className="px-4 py-3">Node</th>
+                  <th scope="col" className="px-4 py-3">Scanned</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100">

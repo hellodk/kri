@@ -27,7 +27,7 @@ export function HubPage({ tabs, defaultTab }: HubPageProps) {
     <>
       {/* Tab bar — breaks out of main's p-6 */}
       <div className="-mx-6 -mt-6 mb-4">
-        <div className="bg-white border-b border-gray-200 px-6 flex items-end sticky top-0 z-10 shadow-sm">
+        <div className="bg-white border-b border-gray-200 px-6 flex items-end sticky top-0 z-10 shadow-xs">
           {tabs.map((tab) => {
             const isActive = tab.key === activeTab?.key
             const hasBadge = tab.showBadge && pendingCount > 0

@@ -9,7 +9,7 @@ from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 from starlette.responses import Response
 
-from fleet_platform.api.limiter import limiter
+from fleet_platform.api.limiter import RateLimitHeadersMiddleware, limiter
 from fleet_platform.api.metrics_auth import verify_metrics_request
 from fleet_platform.api.metrics_collectors import refresh_all_gauges
 from fleet_platform.api.routes import (
@@ -163,6 +163,11 @@ def create_app() -> FastAPI:
     )
 
     app.add_middleware(SecurityHeaderMiddleware)
+
+    # Adds X-RateLimit-* headers to every response on rate-limited routes (see
+    # RateLimitHeadersMiddleware docstring for why SlowAPI's own injection can't
+    # be used with our dict-returning decorated endpoints).
+    app.add_middleware(RateLimitHeadersMiddleware)
 
     app.include_router(health.router, tags=["health"])
     app.include_router(auth.router, tags=["auth"])

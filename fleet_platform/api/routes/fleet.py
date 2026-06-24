@@ -14,6 +14,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from fleet_platform.api.deps import get_db, get_redis
 from fleet_platform.core.audit import audit
 from fleet_platform.core.auth import get_current_user, hash_password, require_role
+from fleet_platform.core.validators import MINION_ID_RE
 from fleet_platform.models.node import Node
 from fleet_platform.schemas.fleet import FleetOverviewResponse
 from fleet_platform.schemas.node_import import (
@@ -194,7 +195,11 @@ async def import_commit(
     _ssh_key = payload.ssh_key or None
     _auth_mode = payload.ssh_auth_mode or ("key" if (_ssh_key and not _ssh_pw) else "password")
 
-    new_rows = [r for r in payload.rows if r.status == "new"]
+    # Commit only acts on rows the validate step marked "new". Re-check the
+    # minion_id format defensively here too: a client could POST status="new"
+    # with a malformed minion_id directly, bypassing the validate endpoint.
+    # Such rows are skipped (never persisted) rather than 422-ing the whole batch.
+    new_rows = [r for r in payload.rows if r.status == "new" and MINION_ID_RE.match(r.minion_id or "")]
     skipped = len(payload.rows) - len(new_rows)
     created_ids: list[str] = []
     created_nodes: list[Node] = []

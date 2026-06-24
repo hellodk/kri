@@ -2,7 +2,7 @@ import { format, formatDistanceToNow } from 'date-fns'
 import { toZonedTime } from 'date-fns-tz'
 
 export function getTimezone(): string {
-  return 'Asia/Kolkata'
+  return Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC'
 }
 
 export function formatDate(date: string | Date, fmt = 'PPpp'): string {

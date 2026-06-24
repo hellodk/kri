@@ -3,6 +3,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { api } from '../api/client'
 import { useToastStore } from '../stores/toastStore'
 import { Skeleton } from '../components/Skeleton'
+import { formatLocalDate, formatLocalDateTime, formatLocalTime } from '../utils/time'
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -316,7 +317,7 @@ export function SecurityPage() {
   const { data: activeSessions } = useQuery({
     queryKey: ['ssh-sessions-active'],
     queryFn: () => api.get<{ items: SSHSessionRow[] }>('/api/v1/ssh/sessions?status=active&limit=20'),
-    refetchInterval: 10_000,
+    refetchInterval: 30_000,
   })
 
   const { data: recentEvents } = useQuery({
@@ -376,7 +377,7 @@ export function SecurityPage() {
           <button
             onClick={() => scanAllMutation.mutate('trivy')}
             disabled={scanAllMutation.isPending}
-            className="px-4 py-2 bg-brand-600 text-white text-sm font-medium rounded-lg hover:bg-brand-700 disabled:opacity-50 shadow-sm"
+            className="px-4 py-2 bg-brand-600 text-white text-sm font-medium rounded-lg hover:bg-brand-700 disabled:opacity-50 shadow-xs"
           >
             {scanAllMutation.isPending ? 'Scanning...' : 'Scan All (Trivy)'}
           </button>
@@ -406,7 +407,7 @@ export function SecurityPage() {
           { label: 'License Risks', value: (d?.license_risks?.high ?? 0) + (d?.license_risks?.medium ?? 0), numColor: 'text-purple-700', accent: 'border-l-purple-500' },
           { label: 'Nodes at Risk', value: d?.nodes_with_critical_or_high ?? 0, numColor: 'text-orange-700', accent: 'border-l-orange-500' },
         ].map(card => (
-          <div key={card.label} className={`bg-white rounded-xl border border-gray-200 border-l-4 ${card.accent} p-5 shadow-sm`}>
+          <div key={card.label} className={`bg-white rounded-xl border border-gray-200 border-l-4 ${card.accent} p-5 shadow-xs`}>
             <p className="text-xs font-semibold uppercase tracking-wide text-gray-500 mb-2">{card.label}</p>
             <p className={`text-4xl font-black tabular-nums ${card.numColor}`}>{card.value}</p>
           </div>
@@ -414,12 +415,12 @@ export function SecurityPage() {
       </div>
 
       {/* Node table */}
-      <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
+      <div className="bg-white rounded-xl border border-gray-200 shadow-xs overflow-hidden">
         <div className="px-5 py-3 border-b border-gray-100 bg-gray-50 flex items-center justify-between">
           <h2 className="text-sm font-semibold text-gray-700">Node Security Status</h2>
           {d?.last_scan_at && (
             <span className="text-xs text-gray-400">
-              Last scan: {new Date(d.last_scan_at).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata', day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit', hour12: false })} IST
+              Last scan: {formatLocalDateTime(d.last_scan_at, { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit', hour12: false })}
             </span>
           )}
         </div>
@@ -433,15 +434,15 @@ export function SecurityPage() {
           <table className="w-full text-sm">
             <thead>
               <tr className="text-left text-xs font-semibold text-gray-500 uppercase tracking-wide bg-gray-50 border-b border-gray-100">
-                <th className="px-4 py-3">Node</th>
-                <th className="px-4 py-3">Risk</th>
-                <th className="px-4 py-3 text-red-600">Critical</th>
-                <th className="px-4 py-3 text-orange-600">High</th>
-                <th className="px-4 py-3 text-amber-600">Medium</th>
-                <th className="px-4 py-3 text-blue-600">Low</th>
-                <th className="px-4 py-3 text-purple-600">Lic. Risks</th>
-                <th className="px-4 py-3">Last Scanned</th>
-                <th className="px-4 py-3 w-24"></th>
+                <th scope="col" className="px-4 py-3">Node</th>
+                <th scope="col" className="px-4 py-3">Risk</th>
+                <th scope="col" className="px-4 py-3 text-red-600">Critical</th>
+                <th scope="col" className="px-4 py-3 text-orange-600">High</th>
+                <th scope="col" className="px-4 py-3 text-amber-600">Medium</th>
+                <th scope="col" className="px-4 py-3 text-blue-600">Low</th>
+                <th scope="col" className="px-4 py-3 text-purple-600">Lic. Risks</th>
+                <th scope="col" className="px-4 py-3">Last Scanned</th>
+                <th scope="col" className="px-4 py-3 w-24"></th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">
@@ -478,7 +479,7 @@ export function SecurityPage() {
                   </td>
                   <td className="px-4 py-3 text-xs text-gray-400">
                     {node.last_scanned_at
-                      ? new Date(node.last_scanned_at).toLocaleDateString('en-IN', { timeZone: 'Asia/Kolkata', day: '2-digit', month: 'short', year: 'numeric' })
+                      ? formatLocalDate(node.last_scanned_at)
                       : <span className="text-gray-300">never</span>}
                   </td>
                   <td className="px-4 py-3 text-right">
@@ -507,7 +508,7 @@ export function SecurityPage() {
       </div>
 
       {/* Active PAM Sessions */}
-      <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
+      <div className="bg-white rounded-xl border border-gray-200 shadow-xs overflow-hidden">
         <div className="px-5 py-3 border-b border-gray-100 bg-gray-50 flex items-center justify-between">
           <h2 className="text-sm font-semibold text-gray-700">Active SSH Sessions (PAM)</h2>
           <span className="text-xs text-gray-400">
@@ -522,13 +523,13 @@ export function SecurityPage() {
           <table className="w-full text-sm">
             <thead>
               <tr className="text-left text-xs font-semibold text-gray-500 uppercase tracking-wide bg-gray-50 border-b border-gray-100">
-                <th className="px-4 py-3">Node ID</th>
-                <th className="px-4 py-3">SSH User</th>
-                <th className="px-4 py-3">Source IP</th>
-                <th className="px-4 py-3">Credentials</th>
-                <th className="px-4 py-3">Started</th>
-                <th className="px-4 py-3">Status</th>
-                <th className="px-4 py-3 text-red-600">Alerts</th>
+                <th scope="col" className="px-4 py-3">Node ID</th>
+                <th scope="col" className="px-4 py-3">SSH User</th>
+                <th scope="col" className="px-4 py-3">Source IP</th>
+                <th scope="col" className="px-4 py-3">Credentials</th>
+                <th scope="col" className="px-4 py-3">Started</th>
+                <th scope="col" className="px-4 py-3">Status</th>
+                <th scope="col" className="px-4 py-3 text-red-600">Alerts</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">
@@ -541,7 +542,7 @@ export function SecurityPage() {
                   <td className="px-4 py-2 text-xs text-gray-500">{s.source_ip ?? '—'}</td>
                   <td className="px-4 py-2 text-xs text-gray-500">{s.credential_source}</td>
                   <td className="px-4 py-2 text-xs text-gray-400">
-                    {new Date(s.started_at).toLocaleTimeString('en-IN', { timeZone: 'Asia/Kolkata', hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false })} IST
+                    {formatLocalTime(s.started_at)}
                   </td>
                   <td className="px-4 py-2">
                     <span className={`text-xs px-2 py-0.5 rounded font-medium ${SESSION_STATUS_COLORS[s.status] ?? 'bg-gray-100 text-gray-600'}`}>
@@ -563,7 +564,7 @@ export function SecurityPage() {
       </div>
 
       {/* Recent Security Events */}
-      <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
+      <div className="bg-white rounded-xl border border-gray-200 shadow-xs overflow-hidden">
         <div className="px-5 py-3 border-b border-gray-100 bg-gray-50 flex items-center justify-between">
           <h2 className="text-sm font-semibold text-gray-700">Security Event Feed</h2>
           <button
@@ -600,7 +601,7 @@ export function SecurityPage() {
                   )}
                 </div>
                 <span className="shrink-0 text-xs text-gray-400">
-                  {new Date(ev.created_at).toLocaleTimeString('en-IN', { timeZone: 'Asia/Kolkata', hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false })} IST
+                  {formatLocalTime(ev.created_at)}
                 </span>
               </div>
             ))}

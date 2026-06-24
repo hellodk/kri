@@ -34,4 +34,10 @@ def test_bulk_salt_state_uses_confirm_dialog():
 def test_confirm_dialog_component_exists():
     assert 'role="dialog"' in CONFIRM_COMPONENT, "ConfirmDialog must have role=dialog"
     assert "aria-modal" in CONFIRM_COMPONENT, "ConfirmDialog must have aria-modal"
-    assert "Escape" in CONFIRM_COMPONENT, "ConfirmDialog must handle Escape key"
+    # #878 extracted Escape-to-close (and focus trapping) into the shared
+    # useFocusTrap hook, so the literal "Escape" handler no longer lives in
+    # ConfirmDialog.tsx. Assert it delegates to that hook, which invokes the
+    # close/cancel handler on Escape (see frontend/src/hooks/useFocusTrap.ts).
+    HOOK = Path("frontend/src/hooks/useFocusTrap.ts").read_text()
+    assert "useFocusTrap" in CONFIRM_COMPONENT, "ConfirmDialog must use the useFocusTrap hook"
+    assert "Escape" in HOOK, "useFocusTrap must handle the Escape key"

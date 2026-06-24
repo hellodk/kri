@@ -48,20 +48,26 @@ async def db_session(test_engine):
 async def app_with_test_db(test_engine):
     from unittest.mock import AsyncMock, MagicMock
 
-    from slowapi import Limiter
-    from slowapi.util import get_remote_address
-
     import fleet_platform.api.limiter as limiter_module
-
-    # Use in-memory rate limiter for tests to avoid 429 false positives
-    test_limiter = Limiter(key_func=get_remote_address, storage_uri="memory://")
-    limiter_module.limiter = test_limiter
-
     from fleet_platform.api import deps
     from fleet_platform.api.main import create_app
 
+    # Do NOT swap limiter_module.limiter for a throwaway instance here. The route
+    # @limiter.limit decorators bind to whichever limiter object the routes
+    # imported at first load; reassigning the module attribute afterwards cannot
+    # rebind them and only desynchronises app.state.limiter from the limiter the
+    # decorators actually use — which is exactly what broke the behavioural
+    # rate-limit tests (they reset limiter_module.limiter, but the decorators
+    # were firing on a stale per-module test_limiter). Instead, share the real
+    # production limiter and just zero its in-memory storage so hit counters from
+    # other modules don't bleed in and cause spurious 429s.
+    try:
+        limiter_module.limiter._storage.reset()
+    except Exception:
+        pass
+
     app = create_app()
-    app.state.limiter = test_limiter
+    app.state.limiter = limiter_module.limiter
     TestSession = async_sessionmaker(test_engine, expire_on_commit=False)
 
     async def override_get_db():
@@ -86,7 +92,15 @@ async def app_with_test_db(test_engine):
     app.dependency_overrides[deps.get_db] = override_get_db
     app.dependency_overrides[deps.get_redis] = override_get_redis
     app._test_mock_redis = mock_redis  # expose for tests that need to configure it
-    return app
+    try:
+        yield app
+    finally:
+        # Clear any hits the route decorators accumulated on the shared limiter
+        # during this module so later modules start from a clean counter.
+        try:
+            limiter_module.limiter._storage.reset()
+        except Exception:
+            pass
 
 
 @pytest_asyncio.fixture(scope="module", loop_scope="module")

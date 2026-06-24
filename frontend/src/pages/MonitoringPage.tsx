@@ -1,6 +1,7 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { format, parseISO } from 'date-fns'
 import { monitoringApi, type MonitoringSummary, type FleetHealth } from '../api/monitoring'
+import { formatLocalTime } from '../utils/time'
 
 // ── Shared card wrapper ────────────────────────────────────────────────────────
 
@@ -16,7 +17,7 @@ function SectionCard({
   children: React.ReactNode
 }) {
   return (
-    <div className="rounded-xl border border-gray-200 bg-white shadow-sm overflow-hidden">
+    <div className="rounded-xl border border-gray-200 bg-white shadow-xs overflow-hidden">
       <div className={`h-1 w-full ${barColor}`} />
       <div className="p-5">
         <div className="flex items-center gap-2 mb-4">
@@ -66,7 +67,7 @@ function MetricCard({
   sub: string
 }) {
   return (
-    <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-4">
+    <div className="bg-white rounded-xl border border-gray-200 shadow-xs p-4">
       <div className="flex items-center justify-between mb-2">
         <span className="text-xs font-semibold uppercase tracking-wide text-gray-400">{label}</span>
         {badge && <span className="text-xs text-gray-300">{badge}</span>}
@@ -181,7 +182,7 @@ function NodeStatusCard({ data }: { data: MonitoringSummary }) {
         {segments.map(({ label, count, dot, text }) => (
           <div key={label} className="flex items-center justify-between text-sm">
             <span className="flex items-center gap-1.5 text-gray-600">
-              <span className={`w-2 h-2 rounded-full ${dot} flex-shrink-0`} />
+              <span className={`w-2 h-2 rounded-full ${dot} shrink-0`} />
               {label}
             </span>
             <span className={`font-semibold tabular-nums ${text}`}>{count}</span>
@@ -276,7 +277,7 @@ function AlertEventsCard({ data }: { data: MonitoringSummary }) {
               key={ev.id}
               className="flex items-start gap-2 text-xs py-1.5 border-b border-gray-100 last:border-0"
             >
-              <span className="flex-shrink-0 text-red-500 mt-0.5">◭</span>
+              <span className="shrink-0 text-red-500 mt-0.5">◭</span>
               <div className="min-w-0 flex-1">
                 <p className="text-gray-800 leading-snug">{ev.message}</p>
                 {ev.fired_at && (
@@ -312,8 +313,8 @@ function HttpRequestsCard({ data }: { data: MonitoringSummary }) {
           <table className="w-full text-xs">
             <thead>
               <tr className="border-b border-gray-100">
-                <th className="text-left py-1.5 px-1 font-semibold text-gray-500 uppercase tracking-wide">Endpoint</th>
-                <th className="text-right py-1.5 px-1 font-semibold text-gray-500 uppercase tracking-wide">Count</th>
+                <th scope="col" className="text-left py-1.5 px-1 font-semibold text-gray-500 uppercase tracking-wide">Endpoint</th>
+                <th scope="col" className="text-right py-1.5 px-1 font-semibold text-gray-500 uppercase tracking-wide">Count</th>
               </tr>
             </thead>
             <tbody>
@@ -357,7 +358,7 @@ function HttpRequestsCard({ data }: { data: MonitoringSummary }) {
 
 function SkeletonCard() {
   return (
-    <div className="rounded-xl border border-gray-200 bg-white shadow-sm overflow-hidden animate-pulse">
+    <div className="rounded-xl border border-gray-200 bg-white shadow-xs overflow-hidden animate-pulse">
       <div className="h-1 w-full bg-gray-200" />
       <div className="p-5 space-y-3">
         <div className="h-3 bg-gray-100 rounded w-1/3" />
@@ -385,7 +386,7 @@ export function MonitoringPage() {
   }
 
   const lastUpdated = dataUpdatedAt
-    ? new Date(dataUpdatedAt).toLocaleTimeString('en-IN', { timeZone: 'Asia/Kolkata', hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false }) + ' IST'
+    ? formatLocalTime(dataUpdatedAt)
     : null
 
   return (
@@ -430,7 +431,7 @@ export function MonitoringPage() {
       {/* Beat dead-man's-switch warning */}
       {data && data.maintenance_heartbeat.beat_ok === false && (
         <div className="mb-4 flex items-start gap-3 px-4 py-3 bg-red-50 border border-red-200 rounded-xl text-sm text-red-800">
-          <span className="text-lg leading-none flex-shrink-0">⚠</span>
+          <span className="text-lg leading-none shrink-0">⚠</span>
           <div>
             <p className="font-semibold">Celery Beat worker appears stuck or down</p>
             <p className="text-red-700 mt-0.5">

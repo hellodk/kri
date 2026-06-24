@@ -13,6 +13,7 @@ import { ConfirmDialog } from '../components/ConfirmDialog'
 import { useToastStore } from '../stores/toastStore'
 import { SecretInput } from '../components/SecretInput'
 import { formatDistanceToNow } from 'date-fns'
+import { formatLocalDateTime } from '../utils/time'
 
 type GroupTab = 'Members' | 'Drift' | 'SSH' | 'Secrets'
 
@@ -226,7 +227,7 @@ export function GroupDetail() {
 
       {/* Drift tab */}
       {activeTab === 'Drift' && (
-        <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
+        <div className="bg-white rounded-xl border border-gray-200 shadow-xs overflow-hidden">
           {allMembersLoading ? (
             <Skeleton rows={5} />
           ) : (() => {
@@ -246,11 +247,11 @@ export function GroupDetail() {
                   <table className="w-full text-sm">
                     <thead>
                       <tr className="bg-gray-50 border-b border-gray-200 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide">
-                        <th className="px-4 py-3">Node</th>
-                        <th className="px-4 py-3">Drift Score</th>
-                        <th className="px-4 py-3">Severity</th>
-                        <th className="px-4 py-3">Last Seen</th>
-                        <th className="px-4 py-3 w-24"></th>
+                        <th scope="col" className="px-4 py-3">Node</th>
+                        <th scope="col" className="px-4 py-3">Drift Score</th>
+                        <th scope="col" className="px-4 py-3">Severity</th>
+                        <th scope="col" className="px-4 py-3">Last Seen</th>
+                        <th scope="col" className="px-4 py-3 w-24"></th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-gray-100">
@@ -283,7 +284,7 @@ export function GroupDetail() {
       )}
 
       {/* SSH Credentials card */}
-      {activeTab === 'SSH' && <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
+      {activeTab === 'SSH' && <div className="bg-white rounded-xl border border-gray-200 shadow-xs overflow-hidden">
         <div className="px-4 py-3 border-b border-gray-200">
           <p className="text-sm font-semibold text-gray-700">SSH Credentials</p>
           <p className="text-xs text-gray-400 mt-0.5">
@@ -349,7 +350,7 @@ export function GroupDetail() {
                 value={sshUsername}
                 onChange={(e) => setSshUsername(e.target.value)}
                 placeholder="admin"
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm text-gray-900 focus:outline-none focus:border-brand-600"
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm text-gray-900 focus:outline-hidden focus:border-brand-600"
               />
             </div>
 
@@ -366,7 +367,7 @@ export function GroupDetail() {
                   value={sshPassword}
                   onChange={setSshPassword}
                   placeholder={creds?.has_ssh_password ? '••••••••' : 'Enter password'}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm text-gray-900 focus:outline-none focus:border-brand-600"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm text-gray-900 focus:outline-hidden focus:border-brand-600"
                 />
               </div>
             ) : (
@@ -382,7 +383,7 @@ export function GroupDetail() {
                   value={sshKey}
                   onChange={(e) => setSshKey(e.target.value)}
                   placeholder={'-----BEGIN OPENSSH PRIVATE KEY-----\n...'}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm font-mono text-gray-900 focus:outline-none focus:border-brand-600 resize-none"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm font-mono text-gray-900 focus:outline-hidden focus:border-brand-600 resize-none"
                 />
                 <p className="text-xs text-gray-400 mt-1">
                   Paste the private key. The public key will be authorized on the node automatically during bootstrap.
@@ -404,7 +405,7 @@ export function GroupDetail() {
                     value={sessionMaxMins}
                     onChange={(e) => setSessionMaxMins(e.target.value)}
                     placeholder="60"
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm text-gray-900 focus:outline-none focus:border-brand-600"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm text-gray-900 focus:outline-hidden focus:border-brand-600"
                   />
                 </div>
                 <div>
@@ -417,7 +418,7 @@ export function GroupDetail() {
                     value={sessionRetentionDays}
                     onChange={(e) => setSessionRetentionDays(e.target.value)}
                     placeholder="30"
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm text-gray-900 focus:outline-none focus:border-brand-600"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm text-gray-900 focus:outline-hidden focus:border-brand-600"
                   />
                 </div>
               </div>
@@ -449,7 +450,7 @@ export function GroupDetail() {
             </p>
           </div>
 
-          <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
+          <div className="bg-white rounded-xl border border-gray-200 shadow-xs overflow-hidden">
             <div className="px-4 py-3 border-b border-gray-200">
               <p className="text-sm font-semibold text-gray-700">Group Secrets</p>
               <p className="text-xs text-gray-400 mt-0.5">Values are write-only and never displayed.</p>
@@ -460,10 +461,10 @@ export function GroupDetail() {
               <table className="w-full text-sm">
                 <thead>
                   <tr className="bg-gray-50 border-b border-gray-200 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide">
-                    <th className="px-4 py-3">Key</th>
-                    <th className="px-4 py-3">Description</th>
-                    <th className="px-4 py-3">Last Updated</th>
-                    <th className="px-4 py-3 w-20"></th>
+                    <th scope="col" className="px-4 py-3">Key</th>
+                    <th scope="col" className="px-4 py-3">Description</th>
+                    <th scope="col" className="px-4 py-3">Last Updated</th>
+                    <th scope="col" className="px-4 py-3 w-20"></th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-100">
@@ -472,7 +473,7 @@ export function GroupDetail() {
                       <td className="px-4 py-3 font-mono font-medium text-gray-900">{s.key}</td>
                       <td className="px-4 py-3 text-gray-500 text-xs">{s.description ?? '—'}</td>
                       <td className="px-4 py-3 text-gray-400 text-xs">
-                        {new Date(s.updated_at).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata', day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false })} IST
+                        {formatLocalDateTime(s.updated_at, { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false })}
                       </td>
                       <td className="px-4 py-3 text-right">
                         <button
@@ -490,7 +491,7 @@ export function GroupDetail() {
             )}
           </div>
 
-          <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-4 space-y-3">
+          <div className="bg-white rounded-xl border border-gray-200 shadow-xs p-4 space-y-3">
             <p className="text-sm font-semibold text-gray-700">Add / Update Secret</p>
             <form
               onSubmit={(e) => { e.preventDefault(); addGroupSecretMutation.mutate() }}
@@ -504,7 +505,7 @@ export function GroupDetail() {
                     onChange={(e) => setSecretKey(e.target.value)}
                     placeholder="e.g. jenkins_url"
                     required
-                    className="w-full text-sm border border-gray-300 rounded px-2 py-1.5 font-mono focus:outline-none focus:ring-2 focus:ring-brand-400"
+                    className="w-full text-sm border border-gray-300 rounded px-2 py-1.5 font-mono focus:outline-hidden focus:ring-2 focus:ring-brand-400"
                   />
                 </div>
                 <div className="flex-1 min-w-40">
@@ -516,7 +517,7 @@ export function GroupDetail() {
                       onChange={(e) => setSecretValue(e.target.value)}
                       placeholder="Secret value"
                       required
-                      className="w-full text-sm border border-gray-300 rounded px-2 py-1.5 pr-16 focus:outline-none focus:ring-2 focus:ring-brand-400"
+                      className="w-full text-sm border border-gray-300 rounded px-2 py-1.5 pr-16 focus:outline-hidden focus:ring-2 focus:ring-brand-400"
                     />
                     <button
                       type="button"
@@ -533,7 +534,7 @@ export function GroupDetail() {
                     value={secretDesc}
                     onChange={(e) => setSecretDesc(e.target.value)}
                     placeholder="Brief description"
-                    className="w-full text-sm border border-gray-300 rounded px-2 py-1.5 focus:outline-none focus:ring-2 focus:ring-brand-400"
+                    className="w-full text-sm border border-gray-300 rounded px-2 py-1.5 focus:outline-hidden focus:ring-2 focus:ring-brand-400"
                   />
                 </div>
               </div>
@@ -552,7 +553,7 @@ export function GroupDetail() {
       )}
 
       {/* Members table */}
-      {activeTab === 'Members' && <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
+      {activeTab === 'Members' && <div className="bg-white rounded-xl border border-gray-200 shadow-xs overflow-hidden">
         <div className="px-4 py-3 border-b border-gray-200 flex items-center justify-between">
           <span className="text-sm font-semibold text-gray-700">
             Members <span className="text-gray-400 font-normal">({group.member_count})</span>
@@ -573,7 +574,7 @@ export function GroupDetail() {
             <select
               value={addNodeId}
               onChange={(e) => setAddNodeId(e.target.value)}
-              className="flex-1 text-sm bg-white border border-gray-300 text-gray-900 rounded-lg px-3 py-1.5 focus:outline-none focus:border-brand-600"
+              className="flex-1 text-sm bg-white border border-gray-300 text-gray-900 rounded-lg px-3 py-1.5 focus:outline-hidden focus:border-brand-600"
             >
               <option value="">Select a node…</option>
               {nonMembers.map((n) => (
@@ -603,11 +604,11 @@ export function GroupDetail() {
             <table className="w-full text-sm">
               <thead>
                 <tr className="bg-gray-50 border-b border-gray-200 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide">
-                  <th className="px-4 py-3">Hostname</th>
-                  <th className="px-4 py-3">Status</th>
-                  <th className="px-4 py-3">Drift</th>
-                  <th className="px-4 py-3">OS</th>
-                  {isStatic && <th className="px-4 py-3 w-16"></th>}
+                  <th scope="col" className="px-4 py-3">Hostname</th>
+                  <th scope="col" className="px-4 py-3">Status</th>
+                  <th scope="col" className="px-4 py-3">Drift</th>
+                  <th scope="col" className="px-4 py-3">OS</th>
+                  {isStatic && <th scope="col" className="px-4 py-3 w-16"></th>}
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100">

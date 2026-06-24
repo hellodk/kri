@@ -47,7 +47,7 @@ function RecentEvents() {
   return (
     <section>
       <h2 className="text-lg font-semibold text-gray-800 mb-3">Recent Events</h2>
-      <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
+      <div className="bg-white rounded-lg shadow-xs border border-gray-200 overflow-hidden">
         {isLoading ? (
           <Skeleton rows={6} />
         ) : isError ? (
@@ -56,11 +56,11 @@ function RecentEvents() {
           <table className="w-full text-sm">
             <thead>
               <tr className="bg-gray-50 border-b border-gray-200 text-left text-xs text-gray-500 uppercase tracking-wide">
-                <th className="px-4 py-3">Type</th>
-                <th className="px-4 py-3">Message</th>
-                <th className="px-4 py-3">Node</th>
-                <th className="px-4 py-3">Fired</th>
-                <th className="px-4 py-3">Status</th>
+                <th scope="col" className="px-4 py-3">Type</th>
+                <th scope="col" className="px-4 py-3">Message</th>
+                <th scope="col" className="px-4 py-3">Node</th>
+                <th scope="col" className="px-4 py-3">Fired</th>
+                <th scope="col" className="px-4 py-3">Status</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">
@@ -179,7 +179,7 @@ function AlertRules() {
                 value={form.name}
                 onChange={(e) => setForm({ ...form, name: e.target.value })}
                 placeholder="e.g. Offline Node Alert"
-                className="w-full px-3 py-1.5 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-500"
+                className="w-full px-3 py-1.5 text-sm border border-gray-300 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-brand-500"
               />
             </div>
             <div>
@@ -187,7 +187,7 @@ function AlertRules() {
               <select
                 value={form.event_type}
                 onChange={(e) => setForm({ ...form, event_type: e.target.value, threshold: null })}
-                className="w-full px-3 py-1.5 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-500"
+                className="w-full px-3 py-1.5 text-sm border border-gray-300 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-brand-500"
               >
                 {EVENT_TYPES.map((t) => (
                   <option key={t.value} value={t.value}>{t.label}</option>
@@ -204,7 +204,7 @@ function AlertRules() {
                 type="number"
                 value={form.threshold ?? ''}
                 onChange={(e) => setForm({ ...form, threshold: e.target.value ? Number(e.target.value) : null })}
-                className="w-32 px-3 py-1.5 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-500"
+                className="w-32 px-3 py-1.5 text-sm border border-gray-300 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-brand-500"
               />
             </div>
           )}
@@ -228,7 +228,7 @@ function AlertRules() {
         </div>
       )}
 
-      <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
+      <div className="bg-white rounded-lg shadow-xs border border-gray-200 overflow-hidden">
         {isLoading ? (
           <Skeleton rows={4} />
         ) : isError ? (
@@ -237,11 +237,11 @@ function AlertRules() {
           <table className="w-full text-sm">
             <thead>
               <tr className="bg-gray-50 border-b border-gray-200 text-left text-xs text-gray-500 uppercase tracking-wide">
-                <th className="px-4 py-3">Name</th>
-                <th className="px-4 py-3">Type</th>
-                <th className="px-4 py-3">Threshold</th>
-                <th className="px-4 py-3">Status</th>
-                <th className="px-4 py-3"></th>
+                <th scope="col" className="px-4 py-3">Name</th>
+                <th scope="col" className="px-4 py-3">Type</th>
+                <th scope="col" className="px-4 py-3">Threshold</th>
+                <th scope="col" className="px-4 py-3">Status</th>
+                <th scope="col" className="px-4 py-3"></th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">
@@ -366,7 +366,7 @@ function WebhookTargets() {
                 value={form.name}
                 onChange={(e) => setForm({ ...form, name: e.target.value })}
                 placeholder="e.g. Slack #alerts"
-                className="w-full px-3 py-1.5 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-500"
+                className="w-full px-3 py-1.5 text-sm border border-gray-300 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-brand-500"
               />
             </div>
             <div>
@@ -374,7 +374,7 @@ function WebhookTargets() {
               <select
                 value={form.type}
                 onChange={(e) => setForm({ ...form, type: e.target.value as 'slack' | 'generic' })}
-                className="w-full px-3 py-1.5 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-500"
+                className="w-full px-3 py-1.5 text-sm border border-gray-300 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-brand-500"
               >
                 <option value="slack">Slack</option>
                 <option value="generic">Generic (JSON)</option>
@@ -388,7 +388,7 @@ function WebhookTargets() {
               value={form.url}
               onChange={(e) => setForm({ ...form, url: e.target.value })}
               placeholder="https://hooks.slack.com/services/…"
-              className="w-full px-3 py-1.5 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-500"
+              className="w-full px-3 py-1.5 text-sm border border-gray-300 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-brand-500"
             />
           </div>
           <div className="flex items-center gap-2">
@@ -411,7 +411,7 @@ function WebhookTargets() {
         </div>
       )}
 
-      <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
+      <div className="bg-white rounded-lg shadow-xs border border-gray-200 overflow-hidden">
         {isLoading ? (
           <Skeleton rows={4} />
         ) : isError ? (
@@ -420,11 +420,11 @@ function WebhookTargets() {
           <table className="w-full text-sm">
             <thead>
               <tr className="bg-gray-50 border-b border-gray-200 text-left text-xs text-gray-500 uppercase tracking-wide">
-                <th className="px-4 py-3">Name</th>
-                <th className="px-4 py-3">URL</th>
-                <th className="px-4 py-3">Type</th>
-                <th className="px-4 py-3">Status</th>
-                <th className="px-4 py-3"></th>
+                <th scope="col" className="px-4 py-3">Name</th>
+                <th scope="col" className="px-4 py-3">URL</th>
+                <th scope="col" className="px-4 py-3">Type</th>
+                <th scope="col" className="px-4 py-3">Status</th>
+                <th scope="col" className="px-4 py-3"></th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">

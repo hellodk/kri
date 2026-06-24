@@ -63,14 +63,21 @@ def get_week_stats(db: Session) -> dict:
 
     total_nodes: int = db.execute(select(func.count(Node.id))).scalar_one()
     online_nodes: int = db.execute(select(func.count(Node.id)).where(Node.status == "online")).scalar_one()
+    offline_nodes = max(total_nodes - online_nodes, 0)
+
+    pass_rate = round(passed / total * 100) if total > 0 else 100
+    online_rate = round(online_nodes / total_nodes * 100) if total_nodes > 0 else 0
 
     return {
         "builds_total": total,
         "builds_passed": passed,
         "builds_failed": failed,
+        "pass_rate": pass_rate,
         "top_failing_jobs": top_failing,
         "total_nodes": total_nodes,
         "online_nodes": online_nodes,
+        "offline_nodes": offline_nodes,
+        "online_rate": online_rate,
         "period_start": since.strftime("%Y-%m-%d"),
         "period_end": datetime.now(UTC).strftime("%Y-%m-%d"),
     }
@@ -88,7 +95,15 @@ def render_html(stats: dict) -> str:
         or '<tr><td colspan="2" style="padding:8px 12px;font-size:13px;color:#6B7280">No failures this week</td></tr>'
     )
 
-    pass_rate = round(stats["builds_passed"] / stats["builds_total"] * 100) if stats["builds_total"] > 0 else 100
+    pass_rate = stats.get(
+        "pass_rate",
+        round(stats["builds_passed"] / stats["builds_total"] * 100) if stats["builds_total"] > 0 else 100,
+    )
+    offline_nodes = stats.get("offline_nodes", max(stats["total_nodes"] - stats["online_nodes"], 0))
+    online_rate = stats.get(
+        "online_rate",
+        round(stats["online_nodes"] / stats["total_nodes"] * 100) if stats["total_nodes"] > 0 else 0,
+    )
 
     fail_bg = "#FEF2F2" if stats["builds_failed"] > 0 else "#F9FAFB"
     fail_border = "#FECACA" if stats["builds_failed"] > 0 else "#E5E7EB"
@@ -113,13 +128,19 @@ def render_html(stats: dict) -> str:
       <h2 style="margin:0 0 16px;font-size:15px;font-weight:600;color:#111827">Fleet Health</h2>
       <table width="100%" cellpadding="0" cellspacing="0">
         <tr>
-          <td width="50%" style="padding-right:8px">
+          <td width="33%" style="padding-right:6px">
             <div style="background:#F0FDF4;border:1px solid #BBF7D0;border-radius:8px;padding:16px;text-align:center">
               <div style="font-size:32px;font-weight:700;color:#16A34A">{stats["online_nodes"]}</div>
               <div style="font-size:12px;color:#4B5563;margin-top:4px">Nodes Online</div>
             </div>
           </td>
-          <td width="50%" style="padding-left:8px">
+          <td width="33%" style="padding:0 3px">
+            <div style="background:{"#FEF2F2" if offline_nodes > 0 else "#F9FAFB"};border:1px solid {"#FECACA" if offline_nodes > 0 else "#E5E7EB"};border-radius:8px;padding:16px;text-align:center">
+              <div style="font-size:32px;font-weight:700;color:{"#DC2626" if offline_nodes > 0 else "#111827"}">{offline_nodes}</div>
+              <div style="font-size:12px;color:#4B5563;margin-top:4px">Nodes Offline</div>
+            </div>
+          </td>
+          <td width="33%" style="padding-left:6px">
             <div style="background:#F9FAFB;border:1px solid #E5E7EB;border-radius:8px;padding:16px;text-align:center">
               <div style="font-size:32px;font-weight:700;color:#111827">{stats["total_nodes"]}</div>
               <div style="font-size:12px;color:#4B5563;margin-top:4px">Total Nodes</div>
@@ -127,6 +148,9 @@ def render_html(stats: dict) -> str:
           </td>
         </tr>
       </table>
+      <div style="margin-top:12px;background:#F0FDF4;border-radius:6px;padding:10px 16px;font-size:13px;color:#16A34A;text-align:center">
+        Fleet availability: <strong>{online_rate}%</strong> online
+      </div>
     </td></tr>
 
     <tr><td style="padding:0 32px"><div style="border-top:1px solid #E5E7EB"></div></td></tr>
@@ -185,6 +209,44 @@ def render_html(stats: dict) -> str:
 </html>"""
 
 
+def render_text(stats: dict) -> str:
+    """Plain-text alternative for clients that don't render HTML."""
+    pass_rate = stats.get(
+        "pass_rate",
+        round(stats["builds_passed"] / stats["builds_total"] * 100) if stats["builds_total"] > 0 else 100,
+    )
+    offline_nodes = stats.get("offline_nodes", max(stats["total_nodes"] - stats["online_nodes"], 0))
+    online_rate = stats.get(
+        "online_rate",
+        round(stats["online_nodes"] / stats["total_nodes"] * 100) if stats["total_nodes"] > 0 else 0,
+    )
+    if stats["top_failing_jobs"]:
+        failing = "\n".join(f"  - {name}: {count} failure(s)" for name, count in stats["top_failing_jobs"])
+    else:
+        failing = "  None this week"
+
+    return f"""kri Fleet Platform — Weekly Fleet Digest
+{stats["period_start"]} to {stats["period_end"]}
+
+FLEET HEALTH
+  Online:  {stats["online_nodes"]}
+  Offline: {offline_nodes}
+  Total:   {stats["total_nodes"]}
+  Availability: {online_rate}% online
+
+JENKINS BUILDS (last 7 days)
+  Total:  {stats["builds_total"]}
+  Passed: {stats["builds_passed"]}
+  Failed: {stats["builds_failed"]}
+  Pass rate: {pass_rate}%
+
+TOP FAILING JOBS
+{failing}
+
+Generated by kri Fleet Platform · Weekly digest every Monday 08:00 UTC
+"""
+
+
 def send_digest(db: Session) -> dict:
     smtp_host = get_setting_sync(db, SMTP_HOST)
     if not smtp_host:
@@ -203,11 +265,14 @@ def send_digest(db: Session) -> dict:
 
     stats = get_week_stats(db)
     html = render_html(stats)
+    text = render_text(stats)
 
     msg = MIMEMultipart("alternative")
     msg["Subject"] = f"Fleet Digest — Week ending {stats['period_end']}"
     msg["From"] = from_addr
     msg["To"] = ", ".join(recipients)
+    # Per RFC 2046, attach plain-text first and HTML last (most-preferred wins).
+    msg.attach(MIMEText(text, "plain"))
     msg.attach(MIMEText(html, "html"))
 
     _smtp_send(smtp_host, smtp_port, smtp_user, smtp_password, from_addr, recipients, msg)

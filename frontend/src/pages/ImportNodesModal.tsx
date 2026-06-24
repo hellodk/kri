@@ -3,6 +3,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { fleetApi } from '../api/fleet'
 import type { ImportRow, ImportValidateResponse } from '../api/fleet'
 import { groupsApi } from '../api/groups'
+import { useFocusTrap } from '../hooks/useFocusTrap'
 import { useToastStore } from '../stores/toastStore'
 
 // ─── Password input with show/hide toggle ──────────────────────────────────────
@@ -17,7 +18,7 @@ function PasswordInput({ value, onChange, placeholder }: {
         value={value}
         onChange={e => onChange(e.target.value)}
         placeholder={placeholder}
-        className="w-full px-2.5 py-1.5 pr-9 text-sm border border-gray-300 rounded-lg focus:outline-none focus:border-brand-600"
+        className="w-full px-2.5 py-1.5 pr-9 text-sm border border-gray-300 rounded-lg focus:outline-hidden focus:border-brand-600"
       />
       <button
         type="button"
@@ -90,11 +91,11 @@ function PreviewTable({ result, loading }: { result: ImportValidateResponse | nu
             <table className="w-full text-xs">
               <thead className="sticky top-0 bg-gray-50 border-b border-gray-200">
                 <tr>
-                  <th className="text-left px-3 py-2 font-semibold text-gray-700 whitespace-nowrap">Status</th>
-                  <th className="text-left px-3 py-2 font-semibold text-gray-700 whitespace-nowrap">Minion ID</th>
-                  <th className="text-left px-3 py-2 font-semibold text-gray-700 whitespace-nowrap">Hostname</th>
-                  <th className="text-left px-3 py-2 font-semibold text-gray-700 whitespace-nowrap">IP</th>
-                  <th className="text-left px-3 py-2 font-semibold text-gray-700">Reason</th>
+                  <th scope="col" className="text-left px-3 py-2 font-semibold text-gray-700 whitespace-nowrap">Status</th>
+                  <th scope="col" className="text-left px-3 py-2 font-semibold text-gray-700 whitespace-nowrap">Minion ID</th>
+                  <th scope="col" className="text-left px-3 py-2 font-semibold text-gray-700 whitespace-nowrap">Hostname</th>
+                  <th scope="col" className="text-left px-3 py-2 font-semibold text-gray-700 whitespace-nowrap">IP</th>
+                  <th scope="col" className="text-left px-3 py-2 font-semibold text-gray-700">Reason</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100">
@@ -122,6 +123,7 @@ function PreviewTable({ result, loading }: { result: ImportValidateResponse | nu
 export function ImportNodesModal({ onClose }: { onClose: () => void }) {
   const qc = useQueryClient()
   const toast = useToastStore((s) => s.add)
+  const containerRef = useFocusTrap<HTMLDivElement>(true, onClose)
 
   // Tab state
   const [tab, setTab] = useState<'paste' | 'csv' | 'salt'>('paste')
@@ -286,7 +288,7 @@ export function ImportNodesModal({ onClose }: { onClose: () => void }) {
   ]
 
   return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+    <div ref={containerRef} className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4" role="dialog" aria-modal="true">
       <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl flex flex-col" style={{ maxHeight: '90vh' }}>
 
         {/* Header */}
@@ -331,7 +333,7 @@ export function ImportNodesModal({ onClose }: { onClose: () => void }) {
                 onChange={e => onPasteChange(e.target.value)}
                 rows={6}
                 placeholder={"One per line:\n192.168.1.10\nmm-04,192.168.1.11\nminion-id,hostname,192.168.1.12"}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm text-gray-900 font-mono focus:outline-none focus:border-brand-600 resize-y"
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm text-gray-900 font-mono focus:outline-hidden focus:border-brand-600 resize-y"
               />
               <p className="text-xs text-gray-400 mt-1">
                 Each line: IP, or <code>minion-id,ip</code>, or <code>minion-id,hostname,ip</code>
@@ -423,7 +425,7 @@ export function ImportNodesModal({ onClose }: { onClose: () => void }) {
                   setShowNewGroup(false)
                   setGroupId(e.target.value)
                 }}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm text-gray-900 focus:outline-none focus:border-brand-600 bg-white"
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm text-gray-900 focus:outline-hidden focus:border-brand-600 bg-white"
               >
                 <option value="">No group</option>
                 {(groups?.items ?? []).filter(g => g.type === 'static').map(g => (
@@ -443,7 +445,7 @@ export function ImportNodesModal({ onClose }: { onClose: () => void }) {
                       if (e.key === 'Escape') { setShowNewGroup(false); setNewGroupName('') }
                     }}
                     placeholder="Group name…"
-                    className="flex-1 px-3 py-1.5 border border-brand-400 rounded-lg text-sm text-gray-900 focus:outline-none focus:border-brand-600 bg-white"
+                    className="flex-1 px-3 py-1.5 border border-brand-400 rounded-lg text-sm text-gray-900 focus:outline-hidden focus:border-brand-600 bg-white"
                   />
                   <button
                     type="button"
@@ -474,7 +476,7 @@ export function ImportNodesModal({ onClose }: { onClose: () => void }) {
                   value={sshUsername}
                   onChange={e => setSshUsername(e.target.value)}
                   placeholder="admin"
-                  className="w-full px-2.5 py-1.5 text-sm border border-gray-300 rounded-lg focus:outline-none focus:border-brand-600"
+                  className="w-full px-2.5 py-1.5 text-sm border border-gray-300 rounded-lg focus:outline-hidden focus:border-brand-600"
                 />
               </div>
 
@@ -519,7 +521,7 @@ export function ImportNodesModal({ onClose }: { onClose: () => void }) {
                     onChange={e => setSshKey(e.target.value)}
                     rows={4}
                     placeholder="-----BEGIN OPENSSH PRIVATE KEY-----"
-                    className="w-full px-2.5 py-1.5 text-sm border border-gray-300 rounded-lg font-mono focus:outline-none focus:border-brand-600 resize-y"
+                    className="w-full px-2.5 py-1.5 text-sm border border-gray-300 rounded-lg font-mono focus:outline-hidden focus:border-brand-600 resize-y"
                   />
                 </div>
               )}

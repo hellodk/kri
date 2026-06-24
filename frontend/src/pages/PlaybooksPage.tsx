@@ -140,8 +140,8 @@ function EntriesTable({
       : 'bg-gray-100 text-gray-600'
 
   const containerClass = amberBg
-    ? 'bg-amber-50 rounded-xl border border-amber-200 shadow-sm overflow-hidden mb-6'
-    : 'bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden mb-6'
+    ? 'bg-amber-50 rounded-xl border border-amber-200 shadow-xs overflow-hidden mb-6'
+    : 'bg-white rounded-xl border border-gray-200 shadow-xs overflow-hidden mb-6'
 
   const headerBorderClass = amberBg ? 'border-amber-100' : 'border-gray-100'
   const theadClass = amberBg ? 'border-b border-amber-100 bg-amber-100/60' : 'border-b border-gray-100 bg-gray-50'
@@ -157,11 +157,11 @@ function EntriesTable({
       <table className="w-full">
         <thead>
           <tr className={theadClass}>
-            <th className="px-3 py-2.5 w-8" />
-            <th className="px-5 py-2.5 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide">Name</th>
-            <th className="px-5 py-2.5 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide hidden md:table-cell">File</th>
-            <th className="px-5 py-2.5 text-center text-xs font-semibold text-gray-500 uppercase tracking-wide">Vars</th>
-            <th className="px-5 py-2.5 text-right text-xs font-semibold text-gray-500 uppercase tracking-wide">Actions</th>
+            <th scope="col" className="px-3 py-2.5 w-8" />
+            <th scope="col" className="px-5 py-2.5 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide">Name</th>
+            <th scope="col" className="px-5 py-2.5 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide hidden md:table-cell">File</th>
+            <th scope="col" className="px-5 py-2.5 text-center text-xs font-semibold text-gray-500 uppercase tracking-wide">Vars</th>
+            <th scope="col" className="px-5 py-2.5 text-right text-xs font-semibold text-gray-500 uppercase tracking-wide">Actions</th>
           </tr>
         </thead>
         <tbody>
@@ -318,11 +318,11 @@ export function PlaybooksPage() {
         <>
           {/* Stat cards */}
           <div className="grid grid-cols-3 gap-4 mb-6">
-            <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-5">
+            <div className="bg-white rounded-xl border border-gray-200 shadow-xs p-5">
               <div className="text-xs font-semibold uppercase tracking-wide text-gray-600 mb-2">▤ Enabled</div>
               <div className="text-4xl font-black text-gray-900">{allEntries.length}</div>
             </div>
-            <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-5">
+            <div className="bg-white rounded-xl border border-gray-200 shadow-xs p-5">
               <div className="text-xs font-semibold uppercase tracking-wide text-gray-600 mb-2">★ Favorites</div>
               <div className="text-4xl font-black text-amber-500">{favorites.length}</div>
             </div>
@@ -333,7 +333,7 @@ export function PlaybooksPage() {
                   type="button"
                   onClick={() => navigate(cta.route)}
                   title="Configure in Settings → Integrations"
-                  className="bg-white rounded-xl border border-gray-200 shadow-sm p-5 text-left w-full cursor-pointer hover:border-brand-400 hover:shadow-md transition-colors focus:outline-none focus:ring-2 focus:ring-brand-500"
+                  className="bg-white rounded-xl border border-gray-200 shadow-xs p-5 text-left w-full cursor-pointer hover:border-brand-400 hover:shadow-md transition-colors focus:outline-hidden focus:ring-2 focus:ring-brand-500"
                 >
                   <div className="text-xs font-semibold uppercase tracking-wide text-gray-600 mb-2">⊞ Ansible</div>
                   <div className={`text-lg font-bold ${settings?.ansible_endpoint_url ? 'text-emerald-600' : 'text-amber-600'}`}>
@@ -353,7 +353,7 @@ export function PlaybooksPage() {
               placeholder="Search playbooks and roles… (fuzzy: type 'bsn' to match 'bootstrap_node')"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              className="w-full pl-8 pr-4 py-2.5 bg-white border border-gray-200 rounded-xl text-sm text-gray-900 placeholder-gray-400 shadow-sm focus:outline-none focus:border-brand-500 focus:ring-1 focus:ring-brand-500 transition-colors"
+              className="w-full pl-8 pr-4 py-2.5 bg-white border border-gray-200 rounded-xl text-sm text-gray-900 placeholder-gray-400 shadow-xs focus:outline-hidden focus:border-brand-500 focus:ring-1 focus:ring-brand-500 transition-colors"
             />
             {search && (
               <button
@@ -374,7 +374,7 @@ export function PlaybooksPage() {
 
           {/* Favorites section — floats to top */}
           {favorites.length > 0 && (filteredFavPlaybooks.length > 0 || filteredFavRoles.length > 0) && (
-            <div className="bg-amber-50 rounded-xl border border-amber-200 shadow-sm overflow-hidden mb-6">
+            <div className="bg-amber-50 rounded-xl border border-amber-200 shadow-xs overflow-hidden mb-6">
               <div className="px-5 py-3 border-b border-amber-100 flex items-center justify-between">
                 <span className="text-sm font-semibold text-amber-800">★ Favorites</span>
                 <span className="text-xs text-amber-600">{favorites.length} total</span>
@@ -382,11 +382,11 @@ export function PlaybooksPage() {
               <table className="w-full">
                 <thead>
                   <tr className="border-b border-amber-100 bg-amber-100/60">
-                    <th className="px-3 py-2.5 w-8" />
-                    <th className="px-5 py-2.5 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide">Name</th>
-                    <th className="px-5 py-2.5 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide hidden md:table-cell">File</th>
-                    <th className="px-5 py-2.5 text-center text-xs font-semibold text-gray-500 uppercase tracking-wide">Vars</th>
-                    <th className="px-5 py-2.5 text-right text-xs font-semibold text-gray-500 uppercase tracking-wide">Actions</th>
+                    <th scope="col" className="px-3 py-2.5 w-8" />
+                    <th scope="col" className="px-5 py-2.5 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide">Name</th>
+                    <th scope="col" className="px-5 py-2.5 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide hidden md:table-cell">File</th>
+                    <th scope="col" className="px-5 py-2.5 text-center text-xs font-semibold text-gray-500 uppercase tracking-wide">Vars</th>
+                    <th scope="col" className="px-5 py-2.5 text-right text-xs font-semibold text-gray-500 uppercase tracking-wide">Actions</th>
                   </tr>
                 </thead>
                 <tbody>
