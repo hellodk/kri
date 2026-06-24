@@ -2,7 +2,20 @@
 import uuid
 from datetime import datetime
 
-from sqlalchemy import BigInteger, Boolean, DateTime, ForeignKey, Index, Integer, Numeric, String, Text, func, text
+from sqlalchemy import (
+    BigInteger,
+    Boolean,
+    DateTime,
+    ForeignKey,
+    Index,
+    Integer,
+    Numeric,
+    String,
+    Text,
+    UniqueConstraint,
+    func,
+    text,
+)
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -50,4 +63,12 @@ class NodeProcessStat(Base):
         default=False,
     )
 
-    __table_args__ = (Index("idx_node_process_node_collected", "node_id", "collected_at"),)
+    __table_args__ = (
+        Index("idx_node_process_node_collected", "node_id", "collected_at"),
+        UniqueConstraint(
+            "node_id",
+            "collected_at",
+            "pid",
+            name="uq_node_process_stat_node_ts_pid",
+        ),
+    )
