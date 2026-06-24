@@ -134,13 +134,13 @@ export function ExecutionHistory() {
             <table className="w-full text-sm">
               <thead>
                 <tr className="bg-gray-50 border-b border-gray-200 text-left text-xs text-gray-500 uppercase tracking-wide">
-                  <th className="px-4 py-3">Playbook</th>
-                  <th className="px-4 py-3">Status</th>
-                  <th className="px-4 py-3">Target</th>
-                  <th className="px-4 py-3">Started</th>
-                  <th className="px-4 py-3">Duration</th>
-                  <th className="px-4 py-3">RC</th>
-                  <th className="px-4 py-3"></th>
+                  <th scope="col" className="px-4 py-3">Playbook</th>
+                  <th scope="col" className="px-4 py-3">Status</th>
+                  <th scope="col" className="px-4 py-3">Target</th>
+                  <th scope="col" className="px-4 py-3">Started</th>
+                  <th scope="col" className="px-4 py-3">Duration</th>
+                  <th scope="col" className="px-4 py-3">RC</th>
+                  <th scope="col" className="px-4 py-3"></th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100">
@@ -230,12 +230,12 @@ export function ExecutionHistory() {
               <table className="w-full text-sm">
                 <thead>
                   <tr className="bg-gray-50 border-b border-gray-200 text-left text-xs text-gray-500 uppercase tracking-wide">
-                    <th className="px-4 py-3">Type</th>
-                    <th className="px-4 py-3">Status</th>
-                    <th className="px-4 py-3">Target</th>
-                    <th className="px-4 py-3">Triggered By</th>
-                    <th className="px-4 py-3">Started</th>
-                    <th className="px-4 py-3">Duration</th>
+                    <th scope="col" className="px-4 py-3">Type</th>
+                    <th scope="col" className="px-4 py-3">Status</th>
+                    <th scope="col" className="px-4 py-3">Target</th>
+                    <th scope="col" className="px-4 py-3">Triggered By</th>
+                    <th scope="col" className="px-4 py-3">Started</th>
+                    <th scope="col" className="px-4 py-3">Duration</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-100">

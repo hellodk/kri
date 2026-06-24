@@ -313,8 +313,8 @@ function HttpRequestsCard({ data }: { data: MonitoringSummary }) {
           <table className="w-full text-xs">
             <thead>
               <tr className="border-b border-gray-100">
-                <th className="text-left py-1.5 px-1 font-semibold text-gray-500 uppercase tracking-wide">Endpoint</th>
-                <th className="text-right py-1.5 px-1 font-semibold text-gray-500 uppercase tracking-wide">Count</th>
+                <th scope="col" className="text-left py-1.5 px-1 font-semibold text-gray-500 uppercase tracking-wide">Endpoint</th>
+                <th scope="col" className="text-right py-1.5 px-1 font-semibold text-gray-500 uppercase tracking-wide">Count</th>
               </tr>
             </thead>
             <tbody>

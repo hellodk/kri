@@ -337,14 +337,14 @@ export function ProvisioningPage() {
           <table className="w-full text-sm">
             <thead>
               <tr className="bg-gray-50 border-b border-gray-200 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide">
-                <th className="px-4 py-3">Name</th>
-                <th className="px-4 py-3">Bundle ID</th>
-                <th className="px-4 py-3">Team</th>
-                <th className="px-4 py-3">Type</th>
-                <th className="px-4 py-3">Expiry</th>
-                <th className="px-4 py-3">Uploaded by</th>
-                <th className="px-4 py-3">Uploaded</th>
-                <th className="px-4 py-3 w-28"></th>
+                <th scope="col" className="px-4 py-3">Name</th>
+                <th scope="col" className="px-4 py-3">Bundle ID</th>
+                <th scope="col" className="px-4 py-3">Team</th>
+                <th scope="col" className="px-4 py-3">Type</th>
+                <th scope="col" className="px-4 py-3">Expiry</th>
+                <th scope="col" className="px-4 py-3">Uploaded by</th>
+                <th scope="col" className="px-4 py-3">Uploaded</th>
+                <th scope="col" className="px-4 py-3 w-28"></th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">
