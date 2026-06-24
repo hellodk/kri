@@ -95,10 +95,14 @@ async def test_get_node_drift_history(admin_client: AsyncClient, node_with_drift
 
 async def test_trigger_drift_compute_queues_task(admin_client: AsyncClient, node_with_drift):
     node, _, _ = node_with_drift
-    with patch("fleet_platform.api.routes.drift.compute_drift") as mock_task:
+    # #749: the route dispatches by task name via celery_app.send_task rather than
+    # importing compute_drift and calling .delay().
+    with patch("fleet_platform.api.routes.drift.celery_app.send_task") as mock_send:
         response = await admin_client.post(f"/api/v1/drift/{node.id}/compute")
     assert response.status_code == 202
-    mock_task.delay.assert_called_once_with(str(node.id))
+    mock_send.assert_called_once_with(
+        "fleet_platform.workers.drift_tasks.compute_drift", args=[str(node.id)], queue="drift"
+    )
 
 
 async def test_drift_requires_auth(client: AsyncClient):

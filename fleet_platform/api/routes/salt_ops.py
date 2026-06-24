@@ -106,13 +106,17 @@ async def apply_state(
         )
     _validate_state_name(payload.state)
     _validate_minion_ids(payload.minion_ids)
-    from fleet_platform.workers.salt_tasks import apply_salt_state
+    from fleet_platform.workers.celery_app import celery_app
 
-    task = apply_salt_state.delay(
-        state_name=payload.state,
-        target_minions=payload.minion_ids,
-        pillar_data=payload.pillar,
-        test_mode=payload.test,
+    task = celery_app.send_task(
+        "fleet_platform.workers.salt_tasks.apply_salt_state",
+        kwargs={
+            "state_name": payload.state,
+            "target_minions": payload.minion_ids,
+            "pillar_data": payload.pillar,
+            "test_mode": payload.test,
+        },
+        queue="maintenance",
     )
     await audit(
         db,
@@ -180,7 +184,7 @@ async def run_cmd(
         SALT_ALLOWED_FUNCTIONS,
         get_setting,
     )
-    from fleet_platform.workers.salt_tasks import run_salt_cmd
+    from fleet_platform.workers.celery_app import celery_app
 
     raw = await get_setting(db, SALT_ALLOWED_FUNCTIONS)
     if raw:
@@ -196,10 +200,14 @@ async def run_cmd(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             detail=(f"Function '{payload.function}' is not in the allowlist. Allowed functions: {sorted(allowed)}"),
         )
-    task = run_salt_cmd.delay(
-        function=payload.function,
-        target_minions=payload.minion_ids,
-        args=payload.args,
+    task = celery_app.send_task(
+        "fleet_platform.workers.salt_tasks.run_salt_cmd",
+        kwargs={
+            "function": payload.function,
+            "target_minions": payload.minion_ids,
+            "args": payload.args,
+        },
+        queue="maintenance",
     )
     await audit(
         db,

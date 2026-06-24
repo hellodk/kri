@@ -47,7 +47,8 @@ _SAMPLE_CYCLONEDX = {
 
 async def test_sbom_ingest_returns_202(client: AsyncClient, sbom_node):
     node, token = sbom_node
-    with patch("fleet_platform.api.routes.ingest.index_sbom"):
+    # #749: dispatch by task name via celery_app.send_task, not index_sbom.delay().
+    with patch("fleet_platform.api.routes.ingest.celery_app.send_task"):
         response = await client.post(
             f"/api/v1/ingest/sbom/{node.minion_id}",
             content=json.dumps(_SAMPLE_CYCLONEDX),
@@ -64,15 +65,16 @@ async def test_sbom_ingest_returns_202(client: AsyncClient, sbom_node):
 
 async def test_sbom_ingest_queues_index_task(client: AsyncClient, sbom_node):
     node, token = sbom_node
-    with patch("fleet_platform.api.routes.ingest.index_sbom") as mock_task:
+    with patch("fleet_platform.api.routes.ingest.celery_app.send_task") as mock_send:
         await client.post(
             f"/api/v1/ingest/sbom/{node.minion_id}",
             content=json.dumps(_SAMPLE_CYCLONEDX),
             headers={"X-Node-Token": token, "Content-Type": "application/json"},
         )
-        mock_task.delay.assert_called_once()
-        call_kwargs = mock_task.delay.call_args.kwargs
-        assert call_kwargs["node_id"] == str(node.id)
+        mock_send.assert_called_once()
+        args, kwargs = mock_send.call_args
+        assert args[0] == "fleet_platform.workers.sbom_tasks.index_sbom"
+        assert kwargs["kwargs"]["node_id"] == str(node.id)
 
 
 async def test_sbom_ingest_invalid_token_returns_401(client: AsyncClient, sbom_node):

@@ -9,8 +9,8 @@ import redis.asyncio as aioredis
 from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
-from fleet_platform.api.deps import get_redis
 from fleet_platform.core.config import settings
+from fleet_platform.core.redis import get_redis
 
 logger = logging.getLogger(__name__)
 

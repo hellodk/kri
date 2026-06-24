@@ -57,8 +57,10 @@ async def test_apply_state_enqueues_task(admin_client: AsyncClient):
     """Valid POST returns 202 with a task_id."""
     fake_task = MagicMock()
     fake_task.id = "fake-task-id-apply"
+    # #749: route enqueues by task name via celery_app.send_task (imported from
+    # fleet_platform.workers.celery_app at call time), not apply_salt_state.delay().
     with patch(
-        "fleet_platform.workers.salt_tasks.apply_salt_state.delay",
+        "fleet_platform.workers.celery_app.celery_app.send_task",
         return_value=fake_task,
     ):
         resp = await admin_client.post(
@@ -111,8 +113,9 @@ async def test_cmd_enqueues_task(admin_client: AsyncClient):
     """Valid POST returns 202 with a task_id."""
     fake_task = MagicMock()
     fake_task.id = "fake-task-id-cmd"
+    # #749: route enqueues by task name via celery_app.send_task, not run_salt_cmd.delay().
     with patch(
-        "fleet_platform.workers.salt_tasks.run_salt_cmd.delay",
+        "fleet_platform.workers.celery_app.celery_app.send_task",
         return_value=fake_task,
     ):
         resp = await admin_client.post(

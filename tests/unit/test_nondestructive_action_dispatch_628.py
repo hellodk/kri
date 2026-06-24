@@ -76,7 +76,12 @@ class TestNonDestructiveBranchSourceContract:
         return src_path.read_text()
 
     def test_run_salt_cmd_delay_present(self, source):
-        assert "run_salt_cmd.delay(" in source, "Non-destructive branch must call run_salt_cmd.delay()"
+        # #749: routes no longer import worker modules / call .delay() directly.
+        # The non-destructive branch dispatches by task name via celery_app.send_task
+        # to keep the api->worker import coupling broken.
+        assert "salt_tasks.run_salt_cmd" in source, (
+            "Non-destructive branch must dispatch run_salt_cmd (via celery_app.send_task by name)"
+        )
 
     def test_build_salt_invocation_called_with_payload_action_type(self, source):
         assert "_build_salt_invocation(payload.action_type" in source, (

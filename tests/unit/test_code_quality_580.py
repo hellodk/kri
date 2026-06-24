@@ -206,9 +206,11 @@ async def test_run_playbook_accepts_external_source_playbook():
             side_effect=_discover_side_effect,
         ),
         patch("fleet_platform.api.routes.ansible.audit", new=AsyncMock()),
+        # #749: the endpoint enqueues via celery_app.send_task(...) (by task name)
+        # rather than importing run_playbook and calling .delay().
         patch(
-            "fleet_platform.api.routes.ansible.run_playbook",
-            new=MagicMock(delay=MagicMock(return_value=MagicMock(id="task-id"))),
+            "fleet_platform.api.routes.ansible.celery_app.send_task",
+            new=MagicMock(return_value=MagicMock(id="task-id")),
         ),
     ):
         # Should NOT raise 404 — external playbook must be found

@@ -74,9 +74,9 @@ async def trigger_collection(
     _: dict = Depends(require_role("admin")),
 ):
     """Trigger an immediate health collection from all online nodes."""
-    from fleet_platform.workers.health_tasks import collect_fleet_health
+    from fleet_platform.workers.celery_app import celery_app
 
-    collect_fleet_health.delay()
+    celery_app.send_task("fleet_platform.workers.health_tasks.collect_fleet_health", queue="maintenance")
     return CollectResponse(status="queued", message="Health collection task queued.")
 
 
