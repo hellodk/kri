@@ -1,5 +1,10 @@
 # tests/unit/test_credential_resolver_sync.py
-"""Unit tests for the sync credential resolver used by the playbook worker (#279)."""
+"""Unit tests for the sync credential resolver used by the playbook worker (#279).
+
+As of #748 (ARC-4) the sync resolver, like its async twin, reads secrets only
+from the ``Credential`` store plus the controller/global platform tiers — never
+the deprecated inline ``ssh_*`` columns.
+"""
 
 import uuid
 from unittest.mock import MagicMock
@@ -17,46 +22,24 @@ def _sync_db(*scalar_returns):
         side_effects.append(result)
     if len(side_effects) == 1:
         db.execute.return_value = side_effects[0]
-    else:
+    elif side_effects:
         db.execute.side_effect = side_effects
     return db
 
 
-def _node(
-    ssh_username=None,
-    ssh_password_enc=None,
-    ssh_key_enc=None,
-    ssh_auth_mode=None,
-    ssh_host_key=None,
-    credential_id=None,
-):
+def _node(ssh_host_key=None, credential_id=None):
     node = MagicMock()
     node.id = uuid.uuid4()
-    node.ssh_username = ssh_username
-    node.ssh_password_enc = ssh_password_enc
-    node.ssh_key_enc = ssh_key_enc
-    node.ssh_auth_mode = ssh_auth_mode
-    node.ssh_host_key = ssh_host_key  # None = not bootstrapped; explicit to avoid MagicMock truthy default
-    node.credential_id = credential_id  # None = no FK; explicit to avoid MagicMock truthy default
+    node.minion_id = "node-01"
+    node.ssh_host_key = ssh_host_key
+    node.credential_id = credential_id
     return node
 
 
-def _group(
-    name="prod",
-    ssh_username="guser",
-    ssh_password_enc=None,
-    ssh_key_enc=None,
-    ssh_auth_mode=None,
-    credential_id=None,
-    credential_priority=0,
-):
+def _group(name="prod", credential_id=None, credential_priority=0):
     g = MagicMock()
     g.name = name
-    g.ssh_username = ssh_username
-    g.ssh_password_enc = ssh_password_enc
-    g.ssh_key_enc = ssh_key_enc
-    g.ssh_auth_mode = ssh_auth_mode
-    g.credential_id = credential_id  # None = no FK; explicit to avoid MagicMock truthy default
+    g.credential_id = credential_id
     g.credential_priority = credential_priority
     return g
 
@@ -76,51 +59,6 @@ def _platform_row(value, is_encrypted=False):
     row.value = value
     row.is_encrypted = is_encrypted
     return row
-
-
-def test_sync_node_level_credentials():
-    from fleet_platform.services.credential_resolver import resolve_node_credentials_sync
-
-    node = _node(ssh_username="admin", ssh_password_enc=encrypt_secret("pw"))
-    db = MagicMock()
-    result = resolve_node_credentials_sync(node, db)
-    assert result["credential_source"] == "node"
-    assert result["ssh_user"] == "admin"
-    assert result["ssh_password"] == "pw"
-    db.execute.assert_not_called()
-
-
-def test_sync_group_level_credentials():
-    from fleet_platform.services.credential_resolver import resolve_node_credentials_sync
-
-    node = _node()
-    group = _group(name="prod", ssh_username="guser", ssh_password_enc=encrypt_secret("gpw"))
-    db = _sync_db(group)
-    result = resolve_node_credentials_sync(node, db)
-    assert result["credential_source"] == "group:prod"
-    assert result["ssh_user"] == "guser"
-    assert result["ssh_password"] == "gpw"
-
-
-def test_sync_global_fallback():
-    from fleet_platform.services.credential_resolver import resolve_node_credentials_sync
-
-    node = _node()
-    encrypted_pw = _fernet().encrypt(b"secretpass").decode()
-    db = _sync_db(None, _platform_row("deploy"), _platform_row(encrypted_pw, is_encrypted=True))
-    result = resolve_node_credentials_sync(node, db)
-    assert result["credential_source"] == "global"
-    assert result["ssh_user"] == "deploy"
-    assert result["ssh_password"] == "secretpass"
-
-
-def test_sync_node_key_auth_mode():
-    from fleet_platform.services.credential_resolver import resolve_node_credentials_sync
-
-    node = _node(ssh_username="admin", ssh_key_enc=encrypt_secret("KEYDATA"), ssh_auth_mode="key")
-    result = resolve_node_credentials_sync(node, MagicMock())
-    assert result["auth_mode"] == "key"
-    assert result["ssh_key"] == "KEYDATA"
 
 
 def test_sync_node_credential_fk():
@@ -145,7 +83,7 @@ def test_sync_group_credential_fk():
     from fleet_platform.services.credential_resolver import resolve_node_credentials_sync
 
     cred = _credential(kind="ssh_key", username="guser", secret_plain="KEYBLOB")
-    group = _group(name="prod", ssh_username=None, credential_id=cred.id)
+    group = _group(name="prod", credential_id=cred.id)
     node = _node()
     db = _sync_db(group)
     db.get.return_value = cred
@@ -158,6 +96,18 @@ def test_sync_group_credential_fk():
     assert result["auth_mode"] == "key"
 
 
+def test_sync_global_fallback():
+    from fleet_platform.services.credential_resolver import resolve_node_credentials_sync
+
+    node = _node()
+    encrypted_pw = _fernet().encrypt(b"secretpass").decode()
+    db = _sync_db(None, _platform_row("deploy"), _platform_row(encrypted_pw, is_encrypted=True))
+    result = resolve_node_credentials_sync(node, db)
+    assert result["credential_source"] == "global"
+    assert result["ssh_user"] == "deploy"
+    assert result["ssh_password"] == "secretpass"
+
+
 def test_sync_node_fk_empty_secret_falls_through_to_group():
     """Sync twin: an empty-secret node FK (#704 Class-A defect) is skipped and
     resolution falls through to the usable group credential."""
@@ -165,7 +115,7 @@ def test_sync_node_fk_empty_secret_falls_through_to_group():
 
     empty_node_cred = _credential(kind="username_password", username="nuser", secret_plain=None)
     group_cred = _credential(kind="username_password", username="guser", secret_plain="gpw")
-    group = _group(name="prod", ssh_username=None, credential_id=group_cred.id)
+    group = _group(name="prod", credential_id=group_cred.id)
     node = _node(credential_id=empty_node_cred.id)
     db = _sync_db(group)
     db.get.side_effect = lambda _model, ident: empty_node_cred if ident == empty_node_cred.id else group_cred
