@@ -1,0 +1,46 @@
+---
+# HPA for the API — scales between 2 and 5 replicas based on CPU utilisation.
+# The base deployment sets replicas: 2 which matches minReplicas; the HPA
+# takes ownership of the replica count once created.
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: kri-api-hpa
+  namespace: kri
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: kri-api
+  minReplicas: 2
+  maxReplicas: 5
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: 70
+---
+# HPA for the worker — scales between 2 and 4 replicas based on CPU.
+# Celery workers are stateless; horizontal scale-out is safe and directly
+# improves task throughput under bursty load.
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: kri-worker-hpa
+  namespace: kri
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: kri-worker
+  minReplicas: 2
+  maxReplicas: 4
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: 80
