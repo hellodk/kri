@@ -47,19 +47,22 @@ async def db_session(test_engine):
 async def app_with_test_db(test_engine):
     from unittest.mock import AsyncMock
 
-    from slowapi import Limiter
-    from slowapi.util import get_remote_address
-
     import fleet_platform.api.limiter as limiter_module
-
-    test_limiter = Limiter(key_func=get_remote_address, storage_uri="memory://")
-    limiter_module.limiter = test_limiter
-
     from fleet_platform.api import deps
     from fleet_platform.api.main import create_app
 
+    # Share the real production limiter (do not swap in a throwaway instance —
+    # the route decorators bind to the limiter present at first import and can't
+    # be rebound, which desynchronises app.state.limiter from the limiter the
+    # decorators use and breaks the behavioural rate-limit tests). Just zero its
+    # in-memory storage so counts from other modules don't cause spurious 429s.
+    try:
+        limiter_module.limiter._storage.reset()
+    except Exception:
+        pass
+
     app = create_app()
-    app.state.limiter = test_limiter
+    app.state.limiter = limiter_module.limiter
     TestSession = async_sessionmaker(test_engine, expire_on_commit=False)
 
     async def override_get_db():
