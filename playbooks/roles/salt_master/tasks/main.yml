@@ -42,6 +42,13 @@
 
 - name: Install salt-master (per OS family)
   include_tasks: "install_{{ _salt_os }}.yml"
+  when: _salt_os == 'macos' or not (salt_linux_airgap | default(false) | bool)
+
+- name: Install salt-master from Linux onedir tarball (air-gapped)
+  include_tasks: install_linux_onedir.yml
+  when:
+    - _salt_os != 'macos'
+    - salt_linux_airgap | default(false) | bool
 
 - import_tasks: configure.yml
 - import_tasks: pki.yml

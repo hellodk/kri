@@ -19,7 +19,11 @@ class PendingAction(Base):
     __tablename__ = "pending_actions"
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    node_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), nullable=True)
+    node_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("nodes.id", ondelete="SET NULL"),
+        nullable=True,
+    )
     action_type: Mapped[str] = mapped_column(String(50), nullable=False)
     params: Mapped[str] = mapped_column(Text, nullable=False, default="{}")
     requested_by: Mapped[str] = mapped_column(String(255), nullable=False)
