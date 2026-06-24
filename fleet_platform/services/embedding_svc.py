@@ -507,6 +507,47 @@ async def retrieve(
     ]
 
 
+def assemble_citations(chunks: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Return a structured citation list from retrieved chunks.
+
+    Each entry carries the source coordinates that the LLM embedded in its
+    answer via ``[src: ...]`` markers.  The caller can attach this list to the
+    API response so the frontend can render clickable source links.
+
+    Returns a deduplicated list ordered by retrieval rank:
+    ``[{"source_type": str, "source_id": str}, ...]``
+    """
+    seen: set[str] = set()
+    citations: list[dict[str, Any]] = []
+    for chunk in chunks:
+        sid = chunk.get("source_id", "")
+        if sid and sid not in seen:
+            seen.add(sid)
+            citations.append(
+                {
+                    "source_type": chunk.get("source_type", ""),
+                    "source_id": sid,
+                }
+            )
+    return citations
+
+
+def validate_embed_model(model: str) -> None:
+    """Raise ``ValueError`` when *model* does not match the expected embed model.
+
+    Call this before any embed request to surface misconfiguration early — a
+    wrong model silently produces wrong-dimension vectors that corrupt the index
+    or fail at ingest time with a confusing ``EmbeddingDimensionError``.
+    """
+    if model != EXPECTED_EMBED_MODEL:
+        raise ValueError(
+            f"Embed model mismatch: configured model is '{model}' but the "
+            f"fleet_embeddings index expects '{EXPECTED_EMBED_MODEL}'. "
+            f"Update LLM_EMBED_MODEL in platform settings or the embed "
+            f"endpoint configuration to match."
+        )
+
+
 def format_retrieved_chunks(chunks: list[dict[str, Any]]) -> str:
     """Format top-N chunks for injection-safe insertion into the LLM context (#773).
 
