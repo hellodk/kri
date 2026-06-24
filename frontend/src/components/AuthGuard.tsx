@@ -1,10 +1,13 @@
 import { useEffect, useRef } from 'react'
 import { Navigate } from 'react-router-dom'
-import { useAuthStore } from '../stores/authStore'
+import { useAuthStore, setAccessToken } from '../stores/authStore'
 import { authApi } from '../api/auth'
 
 export function AuthGuard({ children }: { children: React.ReactNode }) {
-  const token = localStorage.getItem('access_token')
+  // Prefer the in-memory token (#786); fall back to the legacy localStorage key
+  // until token writers (LoginPage/OidcCallbackPage) migrate to setAccessToken.
+  const storeToken = useAuthStore((s) => s.accessToken)
+  const token = storeToken ?? localStorage.getItem('access_token')
   const user = useAuthStore((s) => s.user)
   const hydrating = useAuthStore((s) => s.hydrating)
   const _hasHydrated = useAuthStore((s) => s._hasHydrated)
@@ -24,6 +27,7 @@ export function AuthGuard({ children }: { children: React.ReactNode }) {
           fetchingRef.current = false
         })
         .catch(() => {
+          setAccessToken(null)
           localStorage.removeItem('access_token')
           localStorage.removeItem('refresh_token')
           setHydrating(false)

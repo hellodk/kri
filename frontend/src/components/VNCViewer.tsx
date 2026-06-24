@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
-import { api } from '../api/client'
+import { api, wsUrl, wsAuthProtocols } from '../api/client'
+import { getAccessToken } from '../stores/authStore'
 
 interface VNCViewerProps {
   nodeId: string
@@ -30,10 +31,12 @@ export function VNCViewer({ nodeId, nodeName, onClose }: VNCViewerProps) {
       // @ts-ignore — @novnc/novnc ships JS without bundled type declarations
       const { default: RFB } = await import('@novnc/novnc')
 
-      const token = localStorage.getItem('access_token') || ''
-      const wsUrl = `ws://${window.location.host}/api/v1/vnc/session/${nodeId}?token=${encodeURIComponent(token)}`
+      const token = getAccessToken() || ''
+      // JWT via subprotocol (#783); wss/ws from page protocol (#784). Query param
+      // kept until the backend reads the subprotocol (see PR description).
+      const url = wsUrl(`/api/v1/vnc/session/${nodeId}?token=${encodeURIComponent(token)}`)
 
-      rfb = new RFB(canvasRef.current!, wsUrl)
+      rfb = new RFB(canvasRef.current!, url, { wsProtocols: wsAuthProtocols(token) })
       rfbRef.current = rfb
 
       rfb.addEventListener('connect', () => setStatus('connected'))
