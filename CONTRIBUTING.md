@@ -20,7 +20,7 @@ kri is a build fleet management platform. This guide covers everything you need 
 ### Prerequisites
 
 - Python 3.13+ with [uv](https://docs.astral.sh/uv/)
-- Node.js 20+ and npm
+- Node.js 20+ and [pnpm](https://pnpm.io/) 10+
 - Docker + Docker Compose
 - Git
 
@@ -35,7 +35,7 @@ cd kri
 uv sync --extra dev
 
 # 3. Install frontend dependencies
-cd frontend && npm ci && cd ..
+cd frontend && pnpm install --frozen-lockfile && cd ..
 
 # 4. Configure environment
 cp .env.example .env
@@ -193,7 +193,7 @@ pre-commit run --all-files
 
 ```bash
 cd frontend && npx tsc --noEmit
-cd frontend && npm run build
+cd frontend && pnpm run build
 ```
 
 Both must succeed before a PR can merge.
@@ -206,7 +206,7 @@ Both must succeed before a PR can merge.
 
 - [ ] Tests written before implementation (TDD)
 - [ ] `pytest tests/unit/ tests/integration/ -q` passes locally with no failures
-- [ ] `cd frontend && npm run build` succeeds without errors
+- [ ] `cd frontend && pnpm run build` succeeds without errors
 - [ ] PR title is concise and references the change type (`feat:`, `fix:`, `chore:`)
 - [ ] PR body references the issue with `Closes #N`
 - [ ] All acceptance criteria from the linked issue are covered by tests

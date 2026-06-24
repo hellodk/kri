@@ -958,8 +958,8 @@ export function SaltMastersTab() {
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-gray-100">
-                      {checks.map((chk, i) => (
-                        <tr key={i} className="hover:bg-gray-50">
+                      {checks.map((chk) => (
+                        <tr key={chk.check} className="hover:bg-gray-50">
                           <td className="px-5 py-2 font-mono text-gray-800">{chk.check}</td>
                           <td className="px-5 py-2">
                             <span className={`px-2 py-0.5 rounded-full text-xs font-semibold ${checkStatusPill(chk.status)}`}>

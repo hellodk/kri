@@ -99,8 +99,8 @@ function PreviewTable({ result, loading }: { result: ImportValidateResponse | nu
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100">
-                {rows.map((row, i) => (
-                  <tr key={i} className={row.status === 'new' ? 'bg-white' : row.status === 'duplicate' ? 'bg-amber-50/50' : 'bg-red-50/50'}>
+                {rows.map((row) => (
+                  <tr key={row.minion_id} className={row.status === 'new' ? 'bg-white' : row.status === 'duplicate' ? 'bg-amber-50/50' : 'bg-red-50/50'}>
                     <td className="px-3 py-2 whitespace-nowrap">
                       <StatusBadge status={row.status} />
                     </td>

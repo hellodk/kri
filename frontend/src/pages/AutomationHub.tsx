@@ -70,8 +70,8 @@ export function AutomationHub() {
           ) : (
             <>
               <span className="text-gray-400 font-medium">Synced repos:</span>
-              {syncResults.map((r, i) => (
-                <span key={i} className={`font-semibold ${r.ok ? 'text-green-400' : 'text-red-400'}`}>
+              {syncResults.map((r) => (
+                <span key={r.label} className={`font-semibold ${r.ok ? 'text-green-400' : 'text-red-400'}`}>
                   {r.ok ? '✓' : '✗'} {r.label}
                 </span>
               ))}

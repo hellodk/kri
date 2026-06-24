@@ -1648,6 +1648,7 @@ function ValidationResult({ v }: { v: ValidateState }) {
           {v.status === 'validating' && (
             <p className="text-gray-400 animate-pulse">⏳ Connecting…</p>
           )}
+          {/* Log lines are plain strings with no unique identity; index is safe for this append-only terminal view */}
           {v.status !== 'validating' && logs.map((line, i) => (
             <p key={i} className={
               line.includes('✓') ? 'text-green-400' :
@@ -1832,7 +1833,7 @@ function PlaybookSourcesSection() {
       ) : (
         <div className="space-y-2">
           {(sources as PlaybookSource[]).map((src, i) => (
-            <div key={i} className="flex items-center gap-3 px-3 py-2.5 border border-gray-200 rounded-lg">
+            <div key={src.index} className="flex items-center gap-3 px-3 py-2.5 border border-gray-200 rounded-lg">
               <SourceTypeBadge type={src.type} />
               <span className="text-sm font-mono text-gray-700 flex-1 truncate">
                 {src.label ? <span className="text-gray-900 font-medium mr-2">{src.label}</span> : null}

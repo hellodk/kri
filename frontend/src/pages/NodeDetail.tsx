@@ -1,4 +1,4 @@
-import { Suspense, lazy, useState, useEffect } from 'react'
+import { Suspense, lazy, useState, useEffect, useRef, useMemo } from 'react'
 import { useParams, Link } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { fleetApi } from '../api/fleet'
@@ -45,6 +45,7 @@ import {
 import { Sparkline } from './nodeDetail/Sparkline'
 import { AiRecommendationPanel } from './nodeDetail/AiRecommendationPanel'
 import type { NodeDetail as NodeDetailData } from '../types'
+import { useVirtualizer } from '@tanstack/react-virtual'
 
 // IOSTabPanel is only rendered for macOS/iOS hosts and pulls in heavier
 // dependencies (date-fns differenceInDays/parseISO, ConfirmDialog, the iOS
@@ -386,6 +387,21 @@ export function NodeDetail() {
     refetchInterval: tab === 'processes' ? 30_000 : false,
   })
   const processes = processData?.processes ?? []
+
+  const sortedProcesses = useMemo(() =>
+    [...processes].sort((a, b) =>
+      processSort === 'name' ? a.name.localeCompare(b.name) :
+      processSort === 'cpu' ? (b.cpu_pct ?? -1) - (a.cpu_pct ?? -1) :
+      (b.mem_rss_bytes ?? -1) - (a.mem_rss_bytes ?? -1)
+    ), [processes, processSort])
+
+  const processTableRef = useRef<HTMLDivElement>(null)
+  const processVirtualizer = useVirtualizer({
+    count: sortedProcesses.length,
+    getScrollElement: () => processTableRef.current,
+    estimateSize: () => 37,
+    overscan: 10,
+  })
 
   const { data: serviceTaskResult } = useQuery({
     queryKey: ['service-task', servicesTaskId],
@@ -1524,8 +1540,8 @@ export function NodeDetail() {
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-gray-50">
-                        {missing.map((pkg, i) => (
-                          <tr key={i} className="hover:bg-red-50/30">
+                        {missing.map((pkg) => (
+                          <tr key={pkg.name} className="hover:bg-red-50/30">
                             <td className="px-4 py-2 font-mono font-medium text-gray-900">{pkg.name}</td>
                             <td className="px-4 py-2 font-mono text-gray-600">{pkg.required_version ?? '—'}</td>
                             <td className="px-4 py-2">
@@ -1556,8 +1572,8 @@ export function NodeDetail() {
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-gray-50">
-                        {mismatches.map((pkg, i) => (
-                          <tr key={i} className="hover:bg-amber-50/30">
+                        {mismatches.map((pkg) => (
+                          <tr key={pkg.name} className="hover:bg-amber-50/30">
                             <td className="px-4 py-2 font-mono font-medium text-gray-900">{pkg.name}</td>
                             <td className="px-4 py-2 font-mono text-amber-700">{pkg.actual ?? '—'}</td>
                             <td className="px-4 py-2 font-mono text-gray-600">{pkg.expected ?? '—'}</td>
@@ -1588,8 +1604,8 @@ export function NodeDetail() {
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-gray-50">
-                        {extra.map((pkg, i) => (
-                          <tr key={i} className="hover:bg-blue-50/30">
+                        {extra.map((pkg) => (
+                          <tr key={pkg.name} className="hover:bg-blue-50/30">
                             <td className="px-4 py-2 font-mono font-medium text-gray-900">{pkg.name}</td>
                             <td className="px-4 py-2 font-mono text-gray-600">{pkg.installed_version ?? '—'}</td>
                             <td className="px-4 py-2 text-xs text-gray-600">not in baseline</td>
@@ -1615,8 +1631,8 @@ export function NodeDetail() {
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-gray-50">
-                        {latestDrift.service_drift.map((svc, i) => (
-                          <tr key={i} className="hover:bg-gray-50">
+                        {latestDrift.service_drift.map((svc) => (
+                          <tr key={svc.service ?? svc.name} className="hover:bg-gray-50">
                             <td className="px-4 py-2 font-medium text-gray-900" title={svc.service ?? svc.name}>
                               {formatGrainKey(svc.service ?? svc.name ?? '')}
                             </td>
@@ -1644,8 +1660,8 @@ export function NodeDetail() {
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-gray-50">
-                        {(latestDrift.config_drift as Array<{ key: string; expected: unknown; actual: unknown }>).map((item, i) => (
-                          <tr key={i} className="hover:bg-gray-50">
+                        {(latestDrift.config_drift as Array<{ key: string; expected: unknown; actual: unknown }>).map((item) => (
+                          <tr key={item.key} className="hover:bg-gray-50">
                             <td className="px-4 py-2 font-medium text-gray-900" title={item.key}>
                               {formatGrainKey(item.key)}
                             </td>
@@ -2381,67 +2397,76 @@ export function NodeDetail() {
           </div>
 
           {processes.length > 0 ? (
-            <div className="overflow-x-auto rounded-lg border border-gray-200">
-              <table className="w-full text-xs">
-                <thead>
-                  <tr className="bg-gray-50 border-b border-gray-200">
-                    <th scope="col" className="text-left py-2.5 px-3 text-gray-500 font-medium w-16">PID</th>
-                    <th scope="col" className="text-left py-2.5 px-3 text-gray-500 font-medium">Name</th>
-                    <th scope="col" className="text-left py-2.5 px-3 text-gray-500 font-medium w-24">User</th>
-                    <th scope="col" className="text-right py-2.5 px-3 text-gray-500 font-medium w-16">CPU%</th>
-                    <th scope="col" className="text-right py-2.5 px-3 text-gray-500 font-medium w-20">Mem%</th>
-                    <th scope="col" className="text-right py-2.5 px-3 text-gray-500 font-medium w-24">Mem (RSS)</th>
-                    <th scope="col" className="text-center py-2.5 px-3 text-gray-500 font-medium w-40">Actions</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-100">
-                  {[...processes]
-                    .sort((a, b) =>
-                      processSort === 'name' ? a.name.localeCompare(b.name) :
-                      processSort === 'cpu' ? (b.cpu_pct ?? -1) - (a.cpu_pct ?? -1) :
-                      (b.mem_rss_bytes ?? -1) - (a.mem_rss_bytes ?? -1)
-                    )
-                    .map(p => {
-                      const prot = isProtectedTarget(p.name)
+            <div className="rounded-lg border border-gray-200 overflow-hidden">
+              <div ref={processTableRef} className="overflow-y-auto" style={{ maxHeight: 480 }}>
+                <table className="w-full text-xs">
+                  <thead className="sticky top-0 z-10">
+                    <tr className="bg-gray-50 border-b border-gray-200">
+                      <th scope="col" className="text-left py-2.5 px-3 text-gray-500 font-medium w-16">PID</th>
+                      <th scope="col" className="text-left py-2.5 px-3 text-gray-500 font-medium">Name</th>
+                      <th scope="col" className="text-left py-2.5 px-3 text-gray-500 font-medium w-24">User</th>
+                      <th scope="col" className="text-right py-2.5 px-3 text-gray-500 font-medium w-16">CPU%</th>
+                      <th scope="col" className="text-right py-2.5 px-3 text-gray-500 font-medium w-20">Mem%</th>
+                      <th scope="col" className="text-right py-2.5 px-3 text-gray-500 font-medium w-24">Mem (RSS)</th>
+                      <th scope="col" className="text-center py-2.5 px-3 text-gray-500 font-medium w-40">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-100">
+                    {(() => {
+                      const virtualItems = processVirtualizer.getVirtualItems()
+                      const totalSize = processVirtualizer.getTotalSize()
+                      const paddingTop = virtualItems.length > 0 ? virtualItems[0].start : 0
+                      const paddingBottom = virtualItems.length > 0 ? totalSize - virtualItems[virtualItems.length - 1].end : 0
                       return (
-                      <tr key={p.pid} className={`hover:bg-gray-50 ${p.is_llm ? 'bg-indigo-50' : ''}`}>
-                        <td className="py-2 px-3 font-mono text-gray-500">{p.pid}</td>
-                        <td className="py-2 px-3 font-medium text-gray-900 max-w-[200px] truncate" title={p.cmdline ?? p.name}>
-                          {p.name}
-                          {p.is_llm && (
-                            <span className="ml-1.5 px-1.5 py-0.5 text-[10px] rounded bg-indigo-100 text-indigo-700 font-semibold">LLM</span>
-                          )}
-                        </td>
-                        <td className="py-2 px-3 text-gray-500 truncate max-w-[80px]">{p.username ?? '—'}</td>
-                        <td className={`py-2 px-3 text-right font-mono ${(p.cpu_pct ?? 0) > 50 ? 'text-red-600 font-semibold' : (p.cpu_pct ?? 0) > 20 ? 'text-amber-600' : 'text-gray-700'}`}>
-                          {(p.cpu_pct ?? 0).toFixed(1)}
-                        </td>
-                        <td className={`py-2 px-3 text-right font-mono ${(p.mem_pct ?? 0) > 20 ? 'text-red-600 font-semibold' : (p.mem_pct ?? 0) > 5 ? 'text-amber-600' : 'text-gray-700'}`}>
-                          {(p.mem_pct ?? 0).toFixed(1)}
-                        </td>
-                        <td className="py-2 px-3 text-right font-mono text-gray-600">
-                          {fmtBytes(p.mem_rss_bytes)}
-                        </td>
-                        <td className="py-2 px-3">
-                          <div className="flex items-center justify-center gap-1">
-                            <button onClick={() => requestProcessAction(String(p.pid), p.name, 'process_stop')}
-                              disabled={prot}
-                              title={prot ? 'Protected service — cannot be controlled remotely' : 'Stop (SIGTERM) — requires email approval'}
-                              className="px-2 py-0.5 text-xs bg-amber-50 border border-amber-200 text-amber-700 rounded hover:bg-amber-100 disabled:opacity-40 disabled:cursor-not-allowed">Stop</button>
-                            <button onClick={() => requestProcessAction(String(p.pid), p.name, 'process_suspend')}
-                              disabled={prot}
-                              title={prot ? 'Protected service — cannot be controlled remotely' : 'Suspend (SIGSTOP) — requires email approval'}
-                              className="px-2 py-0.5 text-xs bg-gray-50 border border-gray-200 text-gray-700 rounded hover:bg-gray-100 disabled:opacity-40 disabled:cursor-not-allowed">Suspend</button>
-                            <button onClick={() => requestProcessAction(String(p.pid), p.name, 'process_resume')}
-                              className="px-2 py-0.5 text-xs bg-emerald-50 border border-emerald-200 text-emerald-700 rounded hover:bg-emerald-100"
-                              title="Resume (SIGCONT)">Resume</button>
-                          </div>
-                        </td>
-                      </tr>
+                        <>
+                          {paddingTop > 0 && <tr><td colSpan={7} style={{ height: paddingTop }} /></tr>}
+                          {virtualItems.map(vRow => {
+                            const p = sortedProcesses[vRow.index]
+                            const prot = isProtectedTarget(p.name)
+                            return (
+                              <tr key={p.pid} className={`hover:bg-gray-50 ${p.is_llm ? 'bg-indigo-50' : ''}`}>
+                                <td className="py-2 px-3 font-mono text-gray-500">{p.pid}</td>
+                                <td className="py-2 px-3 font-medium text-gray-900 max-w-[200px] truncate" title={p.cmdline ?? p.name}>
+                                  {p.name}
+                                  {p.is_llm && (
+                                    <span className="ml-1.5 px-1.5 py-0.5 text-[10px] rounded bg-indigo-100 text-indigo-700 font-semibold">LLM</span>
+                                  )}
+                                </td>
+                                <td className="py-2 px-3 text-gray-500 truncate max-w-[80px]">{p.username ?? '—'}</td>
+                                <td className={`py-2 px-3 text-right font-mono ${(p.cpu_pct ?? 0) > 50 ? 'text-red-600 font-semibold' : (p.cpu_pct ?? 0) > 20 ? 'text-amber-600' : 'text-gray-700'}`}>
+                                  {(p.cpu_pct ?? 0).toFixed(1)}
+                                </td>
+                                <td className={`py-2 px-3 text-right font-mono ${(p.mem_pct ?? 0) > 20 ? 'text-red-600 font-semibold' : (p.mem_pct ?? 0) > 5 ? 'text-amber-600' : 'text-gray-700'}`}>
+                                  {(p.mem_pct ?? 0).toFixed(1)}
+                                </td>
+                                <td className="py-2 px-3 text-right font-mono text-gray-600">
+                                  {fmtBytes(p.mem_rss_bytes)}
+                                </td>
+                                <td className="py-2 px-3">
+                                  <div className="flex items-center justify-center gap-1">
+                                    <button onClick={() => requestProcessAction(String(p.pid), p.name, 'process_stop')}
+                                      disabled={prot}
+                                      title={prot ? 'Protected service — cannot be controlled remotely' : 'Stop (SIGTERM) — requires email approval'}
+                                      className="px-2 py-0.5 text-xs bg-amber-50 border border-amber-200 text-amber-700 rounded hover:bg-amber-100 disabled:opacity-40 disabled:cursor-not-allowed">Stop</button>
+                                    <button onClick={() => requestProcessAction(String(p.pid), p.name, 'process_suspend')}
+                                      disabled={prot}
+                                      title={prot ? 'Protected service — cannot be controlled remotely' : 'Suspend (SIGSTOP) — requires email approval'}
+                                      className="px-2 py-0.5 text-xs bg-gray-50 border border-gray-200 text-gray-700 rounded hover:bg-gray-100 disabled:opacity-40 disabled:cursor-not-allowed">Suspend</button>
+                                    <button onClick={() => requestProcessAction(String(p.pid), p.name, 'process_resume')}
+                                      className="px-2 py-0.5 text-xs bg-emerald-50 border border-emerald-200 text-emerald-700 rounded hover:bg-emerald-100"
+                                      title="Resume (SIGCONT)">Resume</button>
+                                  </div>
+                                </td>
+                              </tr>
+                            )
+                          })}
+                          {paddingBottom > 0 && <tr><td colSpan={7} style={{ height: paddingBottom }} /></tr>}
+                        </>
                       )
-                    })}
-                </tbody>
-              </table>
+                    })()}
+                  </tbody>
+                </table>
+              </div>
               <div className="px-3 py-2 bg-gray-50 border-t border-gray-100 text-xs text-gray-400">
                 {processes.length} processes · Stop/Suspend require email approval · Kill (SIGKILL) disabled
               </div>

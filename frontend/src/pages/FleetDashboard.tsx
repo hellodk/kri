@@ -606,6 +606,7 @@ export function FleetDashboard() {
       {/* Stat cards */}
       {ovLoading ? (
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+          {/* Static placeholder array — no stable identity; index key is safe here */}
           {[...Array(4)].map((_, i) => (
             <div key={i} className="h-24 bg-gray-200 rounded-xl animate-pulse" />
           ))}
