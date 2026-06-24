@@ -46,7 +46,7 @@ async def db_session(test_engine):
 
 @pytest_asyncio.fixture(scope="module", loop_scope="module")
 async def app_with_test_db(test_engine):
-    from unittest.mock import AsyncMock
+    from unittest.mock import AsyncMock, MagicMock
 
     from slowapi import Limiter
     from slowapi.util import get_remote_address
@@ -71,6 +71,14 @@ async def app_with_test_db(test_engine):
     mock_redis = AsyncMock()
     mock_redis.get.return_value = None
     mock_redis.setex = AsyncMock()
+    # Pipeline is synchronous in redis.asyncio (only execute() is awaited).
+    # Ingest rate-limiting (#747) uses incr/expire via a pipeline, so return a
+    # sync pipeline mock whose execute() resolves to a low count (allowed).
+    _mock_pipe = MagicMock()
+    _mock_pipe.incr.return_value = _mock_pipe
+    _mock_pipe.expire.return_value = _mock_pipe
+    _mock_pipe.execute = AsyncMock(return_value=[1, True])
+    mock_redis.pipeline = MagicMock(return_value=_mock_pipe)
 
     async def override_get_redis():
         return mock_redis

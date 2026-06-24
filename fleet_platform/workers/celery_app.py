@@ -63,6 +63,32 @@ celery_app.conf.update(
     result_serializer="json",
     timezone="UTC",
     enable_utc=True,
+    # ── Celery Beat HA via RedBeat (#754 — ARC-10) ───────────────────────────
+    # RedBeat stores the beat schedule and a heartbeat key in Redis so that
+    # multiple beat processes can safely compete for leadership. Only one
+    # instance holds the schedule lock at a time; if it crashes, a standby
+    # picks up within one schedule interval (typically ≤ 30 s for the fastest
+    # task here). This eliminates the "silent SPOF" where a single beat crash
+    # stops grain refresh, alert evaluation, and all reapers with no alert.
+    #
+    # Operational notes (CODE change — see also DEPLOY note below):
+    #   • ``beat_scheduler`` replaces the default PersistentScheduler. A
+    #     ``celerybeat-schedule`` file is no longer used.
+    #   • ``redbeat_redis_url`` must point at the same Redis instance as the
+    #     broker so the lock and the broker share a connection pool.
+    #   • ``redbeat_lock_timeout`` defaults to 5 × the shortest schedule
+    #     interval; override if needed (e.g. ``redbeat_lock_timeout=150``).
+    #
+    # DEPLOY note (operational, not code):
+    #   • Run two beat replicas: ``celery -A fleet_platform.workers.celery_app
+    #     beat -S redbeat.RedBeatScheduler --loglevel=info``.
+    #   • The second replica is a hot-standby and takes over within one lock-
+    #     timeout (≈ 150 s at the 30-s ``poll-salt-masters`` schedule) if the
+    #     primary dies. No other config change is needed.
+    #   • In Kubernetes: set ``replicas: 2`` on the beat Deployment; RedBeat
+    #     handles the election. Do NOT use a StatefulSet or single-replica
+    #     Deployment for beat if HA is desired.
+    beat_scheduler="redbeat.RedBeatScheduler",
     redbeat_redis_url=settings.redis_url,
     task_track_started=True,
     worker_prefetch_multiplier=1,

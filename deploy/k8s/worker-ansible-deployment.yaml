@@ -1,6 +1,3 @@
-# Dedicated worker for long-running ansible jobs (#579) — run_playbook,
-# bootstrap_node, provision_master. Isolated from the control-plane worker so a
-# burst of 2h jobs can't starve poll_salt_masters / presence / reapers / health.
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -10,6 +7,19 @@ metadata:
     app: kri-worker-ansible
     component: worker-ansible
 spec:
+  # Ansible playbook tasks have a 30 min soft / 35 min hard time limit
+  # (fleet_platform/workers/celery_app.py: task_soft_time_limit=1800,
+  # task_time_limit=2100). Default terminationGracePeriodSeconds is 30s,
+  # which kills in-flight playbooks during a rolling deploy or eviction.
+  # Set to 3700s (35 min hard limit + 100 s slack) so SIGTERM-then-graceful
+  # Celery shutdown can complete before SIGKILL. preStop hook signals
+  # Celery to stop accepting new tasks immediately, so the grace window
+  # is used to drain rather than to start new work.
+  #
+  # Kept at replicas: 1 — ansible tasks hold per-node SSH locks and playbook
+  # state; running two concurrent ansible workers against the same fleet nodes
+  # can cause conflicting SSH ControlMaster sessions and interleaved playbook
+  # output. Scale horizontally only if tasks are partitioned by node group.
   replicas: 1
   selector:
     matchLabels:
@@ -20,19 +30,23 @@ spec:
         app: kri-worker-ansible
         component: worker-ansible
     spec:
-      # Ansible playbook tasks have a 30 min soft / 35 min hard time limit
-      # (fleet_platform/workers/celery_app.py: task_soft_time_limit=1800,
-      # task_time_limit=2100). Default terminationGracePeriodSeconds is 30s,
-      # which kills in-flight playbooks during a rolling deploy or eviction.
-      # Set to 3700s (35 min hard limit + 100 s slack) so SIGTERM-then-graceful
-      # Celery shutdown can complete before SIGKILL. preStop hook signals
-      # Celery to stop accepting new tasks immediately, so the grace window
-      # is used to drain rather than to start new work.
       terminationGracePeriodSeconds: 3700
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1001
+        runAsGroup: 1001
+        fsGroup: 1001
+        seccompProfile:
+          type: RuntimeDefault
       containers:
         - name: worker-ansible
           image: gitea.local/kri/kri-api:0.1.415
           imagePullPolicy: IfNotPresent
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
           command:
             - uv
             - run
@@ -93,6 +107,18 @@ spec:
               value: "postgresql+psycopg://fleet:$(POSTGRES_PASSWORD)@postgres.utilities.svc.cluster.local:5432/fleet_platform"
             - name: REDIS_URL
               value: "redis://:$(REDIS_PASSWORD)@redis.utilities.svc.cluster.local:6379/0"
+            # Prevent Python from writing .pyc files to the read-only rootfs.
+            - name: PYTHONDONTWRITEBYTECODE
+              value: "1"
+            # Prevent uv from attempting a venv sync on the read-only rootfs.
+            - name: UV_NO_SYNC
+              value: "1"
+            # Direct Ansible to write its fact cache and ControlMaster sockets
+            # into the writable emptyDir rather than the default ~/.ansible/.
+            - name: ANSIBLE_LOCAL_TEMP
+              value: /tmp/ansible
+            - name: ANSIBLE_REMOTE_TEMP
+              value: /tmp/ansible-remote
           # Ansible bootstraps and playbook runs SSH from this pod to fleet
           # nodes. The service-account keypair lives in the kri-worker-ssh
           # Secret. Without this mount, every run_playbook / bootstrap_node
@@ -102,6 +128,14 @@ spec:
             - name: ssh-key
               mountPath: /home/appuser/.ssh
               readOnly: true
+            - name: tmp
+              mountPath: /tmp
+            - name: uv-cache
+              mountPath: /home/appuser/.cache
+            # Ansible writes fact cache and ControlMaster sockets to ~/.ansible/;
+            # mount as emptyDir so these writes succeed with readOnlyRootFilesystem.
+            - name: ansible-home
+              mountPath: /home/appuser/.ansible
           livenessProbe:
             exec:
               command:
@@ -142,3 +176,9 @@ spec:
               - key: known_hosts
                 path: known_hosts
                 mode: 420       # 0644 — known_hosts must be readable, not 0600
+        - name: tmp
+          emptyDir: {}
+        - name: uv-cache
+          emptyDir: {}
+        - name: ansible-home
+          emptyDir: {}

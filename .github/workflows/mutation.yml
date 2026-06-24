@@ -1,0 +1,57 @@
+name: Mutation Testing
+
+# Non-blocking / report-only for now. To make it a hard gate later, remove
+# the `continue-on-error: true` line on the mutmut-run step and set an
+# explicit score threshold via `--min-coverage` (or fail on any survivors).
+
+on:
+  schedule:
+    # Weekly on Sunday at 00:00 UTC — keeps the mutation score baseline fresh
+    # without gating every PR on a potentially slow run.
+    - cron: "0 0 * * 0"
+  pull_request:
+    paths:
+      - "fleet_platform/core/validators.py"
+      - "fleet_platform/core/redaction.py"
+      - "tests/unit/test_validators*.py"
+      - "tests/unit/test_redaction*.py"
+
+jobs:
+  mutation:
+    name: Mutation testing (core validators + redaction)
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      - name: Install uv
+        run: pip install uv --quiet
+
+      - name: Install dev dependencies
+        run: uv pip install --system -e ".[dev]"
+
+      - name: Run mutmut (report-only)
+        # continue-on-error keeps the job green while the mutation score is
+        # still being established.  Remove this line to make the job blocking.
+        continue-on-error: true
+        run: |
+          uv run mutmut run \
+            --paths-to-mutate=fleet_platform/core/validators.py,fleet_platform/core/redaction.py \
+            --runner="python -m pytest tests/unit/ -x -q --tb=no --no-header" \
+            --no-progress
+
+      - name: Print mutation results
+        if: always()
+        run: uv run mutmut results
+
+      - name: Upload mutmut cache
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: mutmut-cache
+          path: .mutmut-cache
+          retention-days: 14

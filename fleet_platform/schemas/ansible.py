@@ -4,12 +4,16 @@ import uuid
 
 from pydantic import BaseModel, field_validator
 
+from fleet_platform.core.validators import validate_minion_id
+
 _VERSION_RE = re.compile(r"^\d+\.\d+\.\d+$")
 _LISTEN_ADDR_RE = re.compile(r"^[\w.\-]*:\d{1,5}$")
 
 
 class BootstrapRequest(BaseModel):
     minion_id: str
+
+    _validate_minion_id = field_validator("minion_id")(validate_minion_id)
     target_ip: str
     ssh_username: str | None = None  # overrides platform setting ssh_bootstrap_username
     ssh_password: str | None = None  # overrides platform setting ssh_bootstrap_password

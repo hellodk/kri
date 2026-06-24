@@ -1,12 +1,16 @@
 # fleet_platform/schemas/ingest.py
 from datetime import datetime
 
-from pydantic import BaseModel
+from pydantic import BaseModel, field_validator
+
+from fleet_platform.core.validators import validate_minion_id
 
 
 class GrainIngestPayload(BaseModel):
     minion_id: str
     grains: dict
+
+    _validate_minion_id = field_validator("minion_id")(validate_minion_id)
 
 
 class ExecutionIngestPayload(BaseModel):
@@ -16,6 +20,8 @@ class ExecutionIngestPayload(BaseModel):
     fun: str
     retcode: int = 0
     success: bool = True
+
+    _validate_minion_id = field_validator("minion_id")(validate_minion_id)
 
 
 class SBOMIngestAck(BaseModel):
@@ -42,3 +48,5 @@ class ProcessStatsIngestPayload(BaseModel):
     minion_id: str
     collected_at: datetime | None = None  # defaults to server now() when absent
     processes: list[ProcessStatItem]
+
+    _validate_minion_id = field_validator("minion_id")(validate_minion_id)

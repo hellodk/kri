@@ -86,7 +86,7 @@ external_auth:
       - 'saltutil.refresh_grains'
       - 'saltutil.refresh_pillar'
       - 'system.reboot'
-      - 'cmd.run'
+      # cmd.run removed: grants arbitrary shell RCE on any minion (#758)
       - 'ps.list_processes'
       - 'ps.kill_pid'
       # Wheel client — minion key management

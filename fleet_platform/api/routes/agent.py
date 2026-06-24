@@ -146,7 +146,12 @@ async def run_agent_stream(
                     elif event.type == "tool_call":
                         tool_calls.append({"name": event.data.get("name"), "args": event.data.get("args")})
                     elif event.type == "final":
-                        final_text = event.data.get("text")
+                        raw_text = event.data.get("text") or ""
+                        from fleet_platform.agent.planner import sanitize_llm_output
+
+                        safe_text = sanitize_llm_output(raw_text)
+                        event.data["text"] = safe_text
+                        final_text = safe_text
                     elif event.type in ("limit_reached", "aborted"):
                         terminal = "aborted"
                     elif event.type == "awaiting_approval":
@@ -179,11 +184,11 @@ async def run_agent_stream(
 
         duration_ms = int((time.perf_counter() - t0) * 1000)
 
-        # Record cloud spend against the daily cap when the run was cloud-served (#715).
-        if routed_via and routed_via.endswith("cloud"):
-            from fleet_platform.services import cost_tracker
+        # Record cloud spend based on the endpoint's provider, not the routing tag
+        # (#780): direct-endpoint selections (routed_via=None) are now also tracked.
+        from fleet_platform.services import cost_tracker
 
-            cost_tracker.record_tokens(planner.input_tokens, planner.output_tokens)
+        cost_tracker.record_tokens_for_endpoint(planner.input_tokens, planner.output_tokens, endpoint=endpoint)
 
         # Finalize the session + persist a linked query log (best-effort).
         try:

@@ -48,12 +48,13 @@ test.describe('Playbooks', () => {
     expect(res.status()).toBe(200)
     const body = await res.json()
     expect(Array.isArray(body)).toBeTruthy()
-    if (body.length > 0) {
-      const entry = body[0]
-      expect(entry).toHaveProperty('filename')
-      expect(entry).toHaveProperty('name')
-      expect(entry).toHaveProperty('entry_type')
-    }
+    // API contract must not be silently skipped on an empty array — the playbooks
+    // directory must always contain at least the built-in bootstrap playbook (#807).
+    expect(body.length).toBeGreaterThan(0)
+    const entry = body[0]
+    expect(entry).toHaveProperty('filename')
+    expect(entry).toHaveProperty('name')
+    expect(entry).toHaveProperty('entry_type')
   })
 
   test('PLAY-17 path traversal in playbook run is rejected', async ({ request }) => {

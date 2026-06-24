@@ -95,7 +95,9 @@ _DEFAULT_SALT_FUNCTIONS: frozenset[str] = frozenset(
         "saltutil.refresh_grains",
         "saltutil.refresh_pillar",
         "system.reboot",
-        "cmd.run",
+        # cmd.run intentionally excluded: it grants arbitrary shell execution
+        # on any minion (operator-level RCE). Remove it from the ACL and from
+        # here so that no kri-dispatched command can invoke it. (#758)
         "ps.list_processes",
         "ps.kill_pid",
     }
@@ -195,38 +197,46 @@ def _fernet_key() -> bytes:
             base64.urlsafe_b64decode(key + b"==")  # quick format check
         except Exception:
             raise ValueError(
-                "FERNET_SECRET_KEY must be a valid Fernet key (url-safe base64, 32 bytes). "
+                "FERNET_KEY must be a valid Fernet key (url-safe base64, 32 bytes). "
                 "Generate: python -c 'from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())'"
             )
         return key
-    # Non-development: FERNET_SECRET_KEY must be set explicitly.
+    # Non-development: FERNET_KEY must be set explicitly.
     # Deriving from JWT_SECRET means a JWT-key rotation silently invalidates all stored secrets.
     #
-    # KEY MIGRATION (if you previously ran without FERNET_SECRET_KEY set):
+    # KEY MIGRATION (if you previously ran without FERNET_KEY set):
     #   1. Generate a new key:
     #      python -c 'from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())'
     #   2. Re-encrypt all platform secrets via the Settings UI before rotating JWT_SECRET.
-    #   3. Set FERNET_SECRET_KEY=<new_key> in your .env / k8s Secret and restart the service.
+    #   3. Set FERNET_KEY=<new_key> in your .env / k8s Secret and restart the service.
     if not settings.is_development:
         raise RuntimeError(
-            "FERNET_SECRET_KEY env var is required in non-development environments. "
+            "FERNET_KEY env var is required in non-development environments. "
             "Generate with: python -c 'from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())' "
-            "and set FERNET_SECRET_KEY in your .env file or k8s Secret."
+            "and set FERNET_KEY in your .env file or k8s Secret."
         )
     # Development-only fallback: derive from JWT_SECRET with a loud warning.
     import logging as _log_mod
 
     _log_mod.getLogger(__name__).warning(
-        "FERNET_SECRET_KEY is not set — deriving encryption key from JWT_SECRET. "
+        "FERNET_KEY is not set — deriving encryption key from JWT_SECRET. "
         "This is insecure and only permitted in development. "
-        "Set FERNET_SECRET_KEY before handling real data."
+        "Set FERNET_KEY before handling real data."
     )
     digest = hashlib.sha256(settings.jwt_secret.encode()).digest()
     return base64.urlsafe_b64encode(digest)
 
 
+# Module-level Fernet cache: (key_bytes, Fernet_instance) — invalidated when _fernet_key() output changes (#751).
+_fernet_cache: tuple[bytes, Fernet] | None = None
+
+
 def _fernet() -> Fernet:
-    return Fernet(_fernet_key())
+    global _fernet_cache
+    key = _fernet_key()
+    if _fernet_cache is None or _fernet_cache[0] != key:
+        _fernet_cache = (key, Fernet(key))
+    return _fernet_cache[1]
 
 
 def encrypt_secret(plaintext: str) -> str:
