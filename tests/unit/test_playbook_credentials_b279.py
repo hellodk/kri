@@ -1,6 +1,7 @@
 """Unit tests for auto-resolved playbook credentials + source banner (#279, #349)."""
 
 import tempfile
+import uuid
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
@@ -17,16 +18,17 @@ def _host(hostname, ip, ssh_user, ssh_password="", ssh_key="", auth_mode="passwo
     }
 
 
-def _make_node(ssh_host_key=None, ssh_username=None, ssh_password_enc=None, ssh_key_enc=None, ssh_auth_mode=None):
-    """Build a minimal Node-like stub for credential resolver tests."""
+def _make_node(ssh_host_key=None, credential_id=None):
+    """Build a minimal Node-like stub for credential resolver tests.
+
+    Inline ssh_* attributes are intentionally NOT set: as of #748 the resolver
+    never reads them, so credential state is expressed via ``credential_id``.
+    """
     node = MagicMock()
     node.id = 1
+    node.minion_id = "node-01"
     node.ssh_host_key = ssh_host_key
-    node.ssh_username = ssh_username
-    node.ssh_password_enc = ssh_password_enc
-    node.ssh_key_enc = ssh_key_enc
-    node.credential_id = None  # no FK; explicit to avoid MagicMock truthy default (#704)
-    node.ssh_auth_mode = ssh_auth_mode
+    node.credential_id = credential_id  # no FK; explicit to avoid MagicMock truthy default (#704)
     return node
 
 
@@ -79,12 +81,23 @@ def test_sync_resolver_bootstrapped_node_key_missing_falls_to_global(tmp_path):
     assert result["credential_source"] == "global"
 
 
-def test_sync_resolver_bootstrapped_node_with_explicit_ssh_username_uses_node_tier():
-    """Node with ssh_host_key set AND ssh_username → node override wins over controller."""
+def test_sync_resolver_bootstrapped_node_with_credential_fk_wins_over_controller():
+    """Node with ssh_host_key set AND a node-level Credential FK → the explicit
+    credential wins over the controller key tier (#748: the FK is the only
+    node-level override now that inline columns are gone)."""
     from fleet_platform.services.credential_resolver import resolve_node_credentials_sync
+    from fleet_platform.services.platform_settings_svc import encrypt_secret
 
-    node = _make_node(ssh_host_key="ecdsa-sha2-nistp256 AAAA...", ssh_username="ops")
+    cred = MagicMock()
+    cred.id = uuid.uuid4()
+    cred.kind = "username_password"
+    cred.username = "ops"
+    cred.secret_enc = encrypt_secret("ops-pw")
+    cred.last_used_at = None
+
+    node = _make_node(ssh_host_key="ecdsa-sha2-nistp256 AAAA...", credential_id=cred.id)
     db = _make_db_no_group_no_global()
+    db.get.return_value = cred
 
     with patch(
         "fleet_platform.services.credential_resolver._read_controller_key",
@@ -94,6 +107,7 @@ def test_sync_resolver_bootstrapped_node_with_explicit_ssh_username_uses_node_ti
 
     assert result["credential_source"] == "node"
     assert result["ssh_user"] == "ops"
+    assert result["ssh_password"] == "ops-pw"
 
 
 def test_sync_resolver_non_bootstrapped_node_uses_global():
