@@ -40,11 +40,11 @@ export function Sidebar() {
             open ? 'px-3 py-2.5' : 'px-2.5 py-2.5 justify-center'
           } ${
             isActive
-              ? 'bg-brand-600/20 text-brand-300 border border-brand-600/30 shadow-sm shadow-brand-600/20'
+              ? 'bg-brand-600/20 text-brand-300 border border-brand-600/30 shadow-xs shadow-brand-600/20'
               : 'text-white/70 hover:text-white/90 hover:bg-white/5 border border-transparent'
           }`}
         >
-          <span className="relative text-base flex-shrink-0 font-mono">
+          <span className="relative text-base shrink-0 font-mono">
             {link.icon}
             {hasBadge && (
               <span className="absolute -top-1.5 -right-1.5 w-3.5 h-3.5 rounded-full bg-amber-500 border border-[#0f0f23] text-[8px] font-bold text-white flex items-center justify-center">
@@ -75,12 +75,12 @@ export function Sidebar() {
 
   return (
     <nav
-      className={`flex-shrink-0 min-h-screen flex flex-col transition-all duration-200 ${open ? 'w-60' : 'w-16'}`}
+      className={`shrink-0 min-h-screen flex flex-col transition-all duration-200 ${open ? 'w-60' : 'w-16'}`}
       style={{ background: 'linear-gradient(180deg, #0f0f23 0%, #1a1a3e 100%)' }}
     >
       {/* Logo */}
       <div className={`flex items-center border-b border-white/10 ${open ? 'gap-3 px-5 py-5' : 'justify-center px-4 py-5'}`}>
-        <div className="w-8 h-8 rounded-lg bg-brand-600 flex items-center justify-center flex-shrink-0 shadow-lg shadow-brand-600/40">
+        <div className="w-8 h-8 rounded-lg bg-brand-600 flex items-center justify-center shrink-0 shadow-lg shadow-brand-600/40">
           <span className="text-white font-black text-sm tracking-tighter">k</span>
         </div>
         {open && (

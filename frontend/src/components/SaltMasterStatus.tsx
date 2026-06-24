@@ -38,7 +38,7 @@ export function SaltMasterStatus() {
   if (!master) {
     return (
       <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-gray-50 border border-gray-200 text-sm">
-        <span className="w-2 h-2 rounded-full bg-gray-300 flex-shrink-0" />
+        <span className="w-2 h-2 rounded-full bg-gray-300 shrink-0" />
         <span className="text-gray-500">
           {isLoading ? 'Checking salt master…' : 'Salt master not configured'}
         </span>
@@ -55,12 +55,12 @@ export function SaltMasterStatus() {
       className={`flex items-center gap-2 px-3 py-2 rounded-lg border border-gray-200 text-sm ${badge.bgClass}`}
       title={master.last_error ?? undefined}
     >
-      <span className={`w-2 h-2 rounded-full flex-shrink-0 ${dot}`} />
+      <span className={`w-2 h-2 rounded-full shrink-0 ${dot}`} />
       <div className="min-w-0">
         <span className={`font-medium ${badge.textClass}`}>Salt master</span>
         <span className="text-gray-500 ml-1.5 font-mono text-xs truncate">{target}</span>
       </div>
-      <span className={`text-xs ml-auto flex-shrink-0 ${badge.textClass}`}>{badge.label}</span>
+      <span className={`text-xs ml-auto shrink-0 ${badge.textClass}`}>{badge.label}</span>
     </div>
   )
 }

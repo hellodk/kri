@@ -116,7 +116,7 @@ function UploadForm({ onDone }: { onDone: () => void }) {
           value={name}
           onChange={e => setName(e.target.value)}
           placeholder="e.g. Wi-Fi Corp Profile"
-          className="w-full px-3 py-1.5 text-sm border border-gray-300 rounded-lg focus:outline-none focus:border-blue-500"
+          className="w-full px-3 py-1.5 text-sm border border-gray-300 rounded-lg focus:outline-hidden focus:border-blue-500"
         />
       </div>
 
@@ -127,7 +127,7 @@ function UploadForm({ onDone }: { onDone: () => void }) {
           value={description}
           onChange={e => setDescription(e.target.value)}
           placeholder="Optional description"
-          className="w-full px-3 py-1.5 text-sm border border-gray-300 rounded-lg focus:outline-none focus:border-blue-500"
+          className="w-full px-3 py-1.5 text-sm border border-gray-300 rounded-lg focus:outline-hidden focus:border-blue-500"
         />
       </div>
 
@@ -204,7 +204,7 @@ function CompliancePanel({
   }
 
   return (
-    <div className="bg-white border border-gray-200 rounded-xl p-5 shadow-sm">
+    <div className="bg-white border border-gray-200 rounded-xl p-5 shadow-xs">
       {/* Header */}
       <div className="flex items-start justify-between mb-4">
         <div>
@@ -375,7 +375,7 @@ export function MobileconfigManager() {
 
       {/* Upload form */}
       {showUpload && (
-        <div className="bg-white border border-gray-200 rounded-xl p-5 shadow-sm">
+        <div className="bg-white border border-gray-200 rounded-xl p-5 shadow-xs">
           <h3 className="text-sm font-semibold text-gray-900 mb-4">Upload Configuration Profile</h3>
           <UploadForm onDone={() => setShowUpload(false)} />
         </div>
@@ -392,7 +392,7 @@ export function MobileconfigManager() {
           )}
         </div>
       ) : (
-        <div className="bg-white border border-gray-200 rounded-xl overflow-hidden shadow-sm">
+        <div className="bg-white border border-gray-200 rounded-xl overflow-hidden shadow-xs">
           {/* Table header */}
           <div className="grid grid-cols-[1fr_180px_80px_100px_80px] bg-gray-50 border-b border-gray-200 px-4 py-2.5 text-xs font-semibold text-gray-600 uppercase tracking-wide">
             <div>Name</div>

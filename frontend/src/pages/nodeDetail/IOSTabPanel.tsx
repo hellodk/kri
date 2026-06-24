@@ -49,13 +49,13 @@ function AddCertForm({
           <label className="block text-xs font-medium text-gray-600 mb-1">Name</label>
           <input type="text" value={form.name}
             onChange={(e) => setForm({ ...form, name: e.target.value })}
-            className="w-full px-3 py-1.5 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-500" />
+            className="w-full px-3 py-1.5 text-sm border border-gray-300 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-brand-500" />
         </div>
         <div>
           <label className="block text-xs font-medium text-gray-600 mb-1">Type</label>
           <select value={form.cert_type}
             onChange={(e) => setForm({ ...form, cert_type: e.target.value })}
-            className="w-full px-3 py-1.5 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-500">
+            className="w-full px-3 py-1.5 text-sm border border-gray-300 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-brand-500">
             {CERT_TYPES.map((t) => <option key={t} value={t}>{t}</option>)}
           </select>
         </div>
@@ -63,20 +63,20 @@ function AddCertForm({
           <label className="block text-xs font-medium text-gray-600 mb-1">Team ID</label>
           <input type="text" value={form.team_id ?? ''}
             onChange={(e) => setForm({ ...form, team_id: e.target.value })}
-            className="w-full px-3 py-1.5 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-500" />
+            className="w-full px-3 py-1.5 text-sm border border-gray-300 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-brand-500" />
         </div>
         <div>
           <label className="block text-xs font-medium text-gray-600 mb-1">Expiry Date</label>
           <input type="date" value={form.expiry_date}
             onChange={(e) => setForm({ ...form, expiry_date: e.target.value })}
-            className="w-full px-3 py-1.5 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-500" />
+            className="w-full px-3 py-1.5 text-sm border border-gray-300 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-brand-500" />
         </div>
       </div>
       <div>
         <label className="block text-xs font-medium text-gray-600 mb-1">Fingerprint (optional)</label>
         <input type="text" value={form.fingerprint ?? ''}
           onChange={(e) => setForm({ ...form, fingerprint: e.target.value })}
-          className="w-full px-3 py-1.5 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-500 font-mono" />
+          className="w-full px-3 py-1.5 text-sm border border-gray-300 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-brand-500 font-mono" />
       </div>
       <div className="flex gap-2">
         <button
@@ -185,14 +185,14 @@ export default function IOSTabPanel({
               <input type="url" value={jenkinsForm.jenkins_url}
                 onChange={(e) => setJenkinsForm({ ...jenkinsForm, jenkins_url: e.target.value })}
                 placeholder="https://jenkins.example.com"
-                className="w-full px-3 py-1.5 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-500" />
+                className="w-full px-3 py-1.5 text-sm border border-gray-300 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-brand-500" />
             </div>
             <div>
               <label className="block text-xs font-medium text-gray-600 mb-1">Agent Name</label>
               <input type="text" value={jenkinsForm.agent_name}
                 onChange={(e) => setJenkinsForm({ ...jenkinsForm, agent_name: e.target.value })}
                 placeholder="mac-mini-agent-01"
-                className="w-full px-3 py-1.5 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-500" />
+                className="w-full px-3 py-1.5 text-sm border border-gray-300 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-brand-500" />
             </div>
             <div className="flex gap-2">
               <button
@@ -216,7 +216,7 @@ export default function IOSTabPanel({
               <dt className="text-gray-500">Status</dt>
               <dd>
                 <span className="inline-flex items-center gap-1.5">
-                  <span className={`w-2 h-2 rounded-full flex-shrink-0 ${
+                  <span className={`w-2 h-2 rounded-full shrink-0 ${
                     agent.status === 'online' ? 'bg-green-500' : agent.status === 'offline' ? 'bg-red-500' : 'bg-gray-400'
                   }`} />
                   <span className="text-xs capitalize text-gray-700">{agent.status}</span>

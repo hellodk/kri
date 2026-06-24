@@ -18,7 +18,7 @@ function PasswordInput({ value, onChange, placeholder }: {
         value={value}
         onChange={e => onChange(e.target.value)}
         placeholder={placeholder}
-        className="w-full px-2.5 py-1.5 pr-9 text-sm border border-gray-300 rounded-lg focus:outline-none focus:border-brand-600"
+        className="w-full px-2.5 py-1.5 pr-9 text-sm border border-gray-300 rounded-lg focus:outline-hidden focus:border-brand-600"
       />
       <button
         type="button"
@@ -333,7 +333,7 @@ export function ImportNodesModal({ onClose }: { onClose: () => void }) {
                 onChange={e => onPasteChange(e.target.value)}
                 rows={6}
                 placeholder={"One per line:\n192.168.1.10\nmm-04,192.168.1.11\nminion-id,hostname,192.168.1.12"}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm text-gray-900 font-mono focus:outline-none focus:border-brand-600 resize-y"
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm text-gray-900 font-mono focus:outline-hidden focus:border-brand-600 resize-y"
               />
               <p className="text-xs text-gray-400 mt-1">
                 Each line: IP, or <code>minion-id,ip</code>, or <code>minion-id,hostname,ip</code>
@@ -425,7 +425,7 @@ export function ImportNodesModal({ onClose }: { onClose: () => void }) {
                   setShowNewGroup(false)
                   setGroupId(e.target.value)
                 }}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm text-gray-900 focus:outline-none focus:border-brand-600 bg-white"
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm text-gray-900 focus:outline-hidden focus:border-brand-600 bg-white"
               >
                 <option value="">No group</option>
                 {(groups?.items ?? []).filter(g => g.type === 'static').map(g => (
@@ -445,7 +445,7 @@ export function ImportNodesModal({ onClose }: { onClose: () => void }) {
                       if (e.key === 'Escape') { setShowNewGroup(false); setNewGroupName('') }
                     }}
                     placeholder="Group name…"
-                    className="flex-1 px-3 py-1.5 border border-brand-400 rounded-lg text-sm text-gray-900 focus:outline-none focus:border-brand-600 bg-white"
+                    className="flex-1 px-3 py-1.5 border border-brand-400 rounded-lg text-sm text-gray-900 focus:outline-hidden focus:border-brand-600 bg-white"
                   />
                   <button
                     type="button"
@@ -476,7 +476,7 @@ export function ImportNodesModal({ onClose }: { onClose: () => void }) {
                   value={sshUsername}
                   onChange={e => setSshUsername(e.target.value)}
                   placeholder="admin"
-                  className="w-full px-2.5 py-1.5 text-sm border border-gray-300 rounded-lg focus:outline-none focus:border-brand-600"
+                  className="w-full px-2.5 py-1.5 text-sm border border-gray-300 rounded-lg focus:outline-hidden focus:border-brand-600"
                 />
               </div>
 
@@ -521,7 +521,7 @@ export function ImportNodesModal({ onClose }: { onClose: () => void }) {
                     onChange={e => setSshKey(e.target.value)}
                     rows={4}
                     placeholder="-----BEGIN OPENSSH PRIVATE KEY-----"
-                    className="w-full px-2.5 py-1.5 text-sm border border-gray-300 rounded-lg font-mono focus:outline-none focus:border-brand-600 resize-y"
+                    className="w-full px-2.5 py-1.5 text-sm border border-gray-300 rounded-lg font-mono focus:outline-hidden focus:border-brand-600 resize-y"
                   />
                 </div>
               )}
