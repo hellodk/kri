@@ -1,6 +1,7 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { format, parseISO } from 'date-fns'
 import { monitoringApi, type MonitoringSummary, type FleetHealth } from '../api/monitoring'
+import { formatLocalTime } from '../utils/time'
 
 // ── Shared card wrapper ────────────────────────────────────────────────────────
 
@@ -385,7 +386,7 @@ export function MonitoringPage() {
   }
 
   const lastUpdated = dataUpdatedAt
-    ? new Date(dataUpdatedAt).toLocaleTimeString('en-IN', { timeZone: 'Asia/Kolkata', hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false }) + ' IST'
+    ? formatLocalTime(dataUpdatedAt)
     : null
 
   return (
