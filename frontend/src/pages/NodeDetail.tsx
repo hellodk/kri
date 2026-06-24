@@ -27,7 +27,7 @@ import { MultiSessionTerminal } from '../components/ssh/MultiSessionTerminal'
 import type { SshTab } from '../components/ssh/SshTabBar'
 import { VNCViewer } from '../components/VNCViewer'
 import { formatDistanceToNow } from 'date-fns'
-import { formatIST, formatISTDate, formatChartDate } from '../utils/time'
+import { formatIST, formatISTDate, formatChartDate, formatLocalDateTime } from '../utils/time'
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts'
 import { useToastStore } from '../stores/toastStore'
 import { useAuthStore } from '../stores/authStore'
@@ -2347,12 +2347,11 @@ export function NodeDetail() {
               <h3 className="text-sm font-semibold text-gray-900">Processes</h3>
               {processData?.collected_at && (
                 <span className="text-xs text-gray-500">
-                  as of {new Date(processData.collected_at).toLocaleString('en-IN', {
-                    timeZone: 'Asia/Kolkata',
+                  as of {formatLocalDateTime(processData.collected_at, {
                     day: '2-digit', month: 'short', year: 'numeric',
                     hour: '2-digit', minute: '2-digit', second: '2-digit',
                     hour12: false,
-                  })} IST
+                  })}
                 </span>
               )}
             </div>

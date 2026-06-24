@@ -7,6 +7,7 @@ import { Skeleton } from '../components/Skeleton'
 import { ErrorState } from '../components/ErrorState'
 import { ConfirmDialog } from '../components/ConfirmDialog'
 import { Pagination } from '../components/Pagination'
+import { formatLocalDate } from '../utils/time'
 
 export function GroupExplorer() {
   const [page, setPage] = useState(1)
@@ -207,7 +208,7 @@ export function GroupExplorer() {
                       </span>
                     </td>
                     <td className="px-4 py-3 text-gray-600">{g.member_count}</td>
-                    <td className="px-4 py-3 text-gray-500">{new Date(g.created_at).toLocaleDateString('en-IN', { timeZone: 'Asia/Kolkata', day: '2-digit', month: 'short', year: 'numeric' })}</td>
+                    <td className="px-4 py-3 text-gray-500">{formatLocalDate(g.created_at)}</td>
                     <td className="px-4 py-3 text-right">
                       <button
                         onClick={() => setDeletingGroup({ id: g.id, name: g.name })}

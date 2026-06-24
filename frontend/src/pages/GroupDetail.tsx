@@ -13,6 +13,7 @@ import { ConfirmDialog } from '../components/ConfirmDialog'
 import { useToastStore } from '../stores/toastStore'
 import { SecretInput } from '../components/SecretInput'
 import { formatDistanceToNow } from 'date-fns'
+import { formatLocalDateTime } from '../utils/time'
 
 type GroupTab = 'Members' | 'Drift' | 'SSH' | 'Secrets'
 
@@ -472,7 +473,7 @@ export function GroupDetail() {
                       <td className="px-4 py-3 font-mono font-medium text-gray-900">{s.key}</td>
                       <td className="px-4 py-3 text-gray-500 text-xs">{s.description ?? '—'}</td>
                       <td className="px-4 py-3 text-gray-400 text-xs">
-                        {new Date(s.updated_at).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata', day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false })} IST
+                        {formatLocalDateTime(s.updated_at, { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false })}
                       </td>
                       <td className="px-4 py-3 text-right">
                         <button
