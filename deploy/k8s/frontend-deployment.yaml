@@ -7,7 +7,8 @@ metadata:
     app: kri-frontend
     component: frontend
 spec:
-  replicas: 1
+  # Two replicas for HA; nginx is fully stateless.
+  replicas: 2
   selector:
     matchLabels:
       app: kri-frontend
@@ -17,14 +18,47 @@ spec:
         app: kri-frontend
         component: frontend
     spec:
+      securityContext:
+        runAsNonRoot: true
+        # nginx:1.27.3-alpine ships with the `nginx` user at uid/gid 101.
+        runAsUser: 101
+        runAsGroup: 101
+        fsGroup: 101
+        seccompProfile:
+          type: RuntimeDefault
       containers:
         - name: frontend
           image: gitea.local/kri/kri-frontend:0.1.415
           imagePullPolicy: IfNotPresent
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+              # nginx must bind to port 80; NET_BIND_SERVICE is the minimal
+              # capability required for non-root processes to bind privileged
+              # ports (< 1024).
+              add: ["NET_BIND_SERVICE"]
           ports:
             - name: http
               containerPort: 80
               protocol: TCP
+          volumeMounts:
+            # nginx needs these paths writable at runtime:
+            - name: nginx-cache
+              mountPath: /var/cache/nginx
+            # PID file location in nginx:alpine is /run/nginx.pid
+            # (/var/run → /run symlink; mount both to cover all paths).
+            - name: nginx-run
+              mountPath: /run
+            - name: nginx-var-run
+              mountPath: /var/run
+            # The nginx image's envsubst entrypoint writes the processed
+            # template to /etc/nginx/conf.d/default.conf at startup.
+            - name: nginx-conf-d
+              mountPath: /etc/nginx/conf.d
+            - name: tmp
+              mountPath: /tmp
           livenessProbe:
             httpGet:
               path: /healthz
@@ -48,3 +82,14 @@ spec:
             limits:
               cpu: "500m"
               memory: "256Mi"
+      volumes:
+        - name: nginx-cache
+          emptyDir: {}
+        - name: nginx-run
+          emptyDir: {}
+        - name: nginx-var-run
+          emptyDir: {}
+        - name: nginx-conf-d
+          emptyDir: {}
+        - name: tmp
+          emptyDir: {}

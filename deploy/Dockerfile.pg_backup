@@ -1,0 +1,26 @@
+# Dedicated backup image — installs age and rclone at build time so the
+# container starts immediately without a runtime apt-get install.
+# Base image is pinned to the same version used by the db service in
+# docker-compose.yml to guarantee pg_dump client/server protocol parity.
+FROM timescale/timescaledb:2.26.4-pg17
+
+USER root
+
+# Install age (https://age-encryption.org) and rclone at build time.
+# Versions are those shipped with Debian 12 Bookworm — deterministic for
+# this base image. Pinning the base image version (above) is the primary
+# supply-chain control; runtime installs are eliminated entirely.
+RUN apt-get update -qq && \
+    apt-get install -y --no-install-recommends \
+        age \
+        rclone \
+    && rm -rf /var/lib/apt/lists/*
+
+# Ensure the backup volume mount point is owned by the postgres user so
+# the container can write dumps without root. Docker copies this ownership
+# to a newly created named volume on first mount.
+RUN mkdir -p /var/backups/postgresql && \
+    chown postgres:postgres /var/backups/postgresql
+
+# Run as the non-root postgres user (uid 999 in debian-based images).
+USER postgres

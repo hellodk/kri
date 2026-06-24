@@ -7,7 +7,8 @@ metadata:
     app: kri-worker
     component: worker
 spec:
-  replicas: 1
+  # Two replicas for HA; HPA scales this up under load.
+  replicas: 2
   selector:
     matchLabels:
       app: kri-worker
@@ -17,10 +18,22 @@ spec:
         app: kri-worker
         component: worker
     spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1001
+        runAsGroup: 1001
+        fsGroup: 1001
+        seccompProfile:
+          type: RuntimeDefault
       containers:
         - name: worker
           image: gitea.local/kri/kri-api:0.1.415
           imagePullPolicy: IfNotPresent
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
           command:
             - uv
             - run
@@ -71,6 +84,12 @@ spec:
               value: "postgresql+psycopg://fleet:$(POSTGRES_PASSWORD)@postgres.utilities.svc.cluster.local:5432/fleet_platform"
             - name: REDIS_URL
               value: "redis://:$(REDIS_PASSWORD)@redis.utilities.svc.cluster.local:6379/0"
+            # Prevent Python from writing .pyc files to the read-only rootfs.
+            - name: PYTHONDONTWRITEBYTECODE
+              value: "1"
+            # Prevent uv from attempting a venv sync on the read-only rootfs.
+            - name: UV_NO_SYNC
+              value: "1"
           # The worker dispatches Salt commands via the HTTP API, but a small
           # number of housekeeping tasks (e.g. PKI key listing) still SSH to
           # the salt master. Mount the dedicated service-account keypair from
@@ -80,6 +99,10 @@ spec:
             - name: ssh-key
               mountPath: /home/appuser/.ssh
               readOnly: true
+            - name: tmp
+              mountPath: /tmp
+            - name: uv-cache
+              mountPath: /home/appuser/.cache
           livenessProbe:
             exec:
               command:
@@ -120,3 +143,7 @@ spec:
               - key: known_hosts
                 path: known_hosts
                 mode: 420       # 0644 — known_hosts must be readable, not 0600
+        - name: tmp
+          emptyDir: {}
+        - name: uv-cache
+          emptyDir: {}

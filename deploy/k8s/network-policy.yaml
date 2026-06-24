@@ -1,0 +1,136 @@
+---
+# Default-deny: block all ingress and egress in the kri namespace unless
+# explicitly allowed by a subsequent policy. This ensures that any newly
+# added workload is isolated until a policy permits its traffic.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: default-deny-all
+  namespace: kri
+spec:
+  podSelector: {}
+  policyTypes:
+    - Ingress
+    - Egress
+---
+# Allow all pods in the kri namespace to resolve DNS via kube-dns (port 53).
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-dns-egress
+  namespace: kri
+spec:
+  podSelector: {}
+  policyTypes:
+    - Egress
+  egress:
+    - ports:
+        - port: 53
+          protocol: UDP
+        - port: 53
+          protocol: TCP
+---
+# Allow unrestricted intra-namespace communication (api ↔ worker ↔ beat etc.).
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-intra-namespace
+  namespace: kri
+spec:
+  podSelector: {}
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kri
+  egress:
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kri
+---
+# Allow the ingress-nginx controller to reach the api (port 8000) and
+# frontend (port 80) pods. The ingress-nginx namespace must carry the
+# `kubernetes.io/metadata.name: ingress-nginx` label (standard in recent
+# ingress-nginx releases; add it manually on older clusters).
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-ingress-controller
+  namespace: kri
+spec:
+  podSelector:
+    matchExpressions:
+      - key: component
+        operator: In
+        values: [api, frontend]
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: ingress-nginx
+---
+# Allow backend pods (api, worker, beat, worker-ansible) to reach the
+# PostgreSQL (5432) and Redis (6379) services in the utilities namespace.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-utilities-egress
+  namespace: kri
+spec:
+  podSelector:
+    matchExpressions:
+      - key: component
+        operator: In
+        values: [api, worker, worker-ansible, beat]
+  policyTypes:
+    - Egress
+  egress:
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: utilities
+      ports:
+        - port: 5432
+          protocol: TCP
+        - port: 6379
+          protocol: TCP
+---
+# Allow the api and worker pods to reach external services (Salt HTTP API
+# on port 8080, HTTPS on 443, SSH on 22 for bootstrapping). Internal RFC-1918
+# ranges are excluded — those should be reached via in-cluster services.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-external-egress
+  namespace: kri
+spec:
+  podSelector:
+    matchExpressions:
+      - key: component
+        operator: In
+        values: [api, worker, worker-ansible]
+  policyTypes:
+    - Egress
+  egress:
+    - to:
+        - ipBlock:
+            cidr: 0.0.0.0/0
+            except:
+              - 10.0.0.0/8
+              - 172.16.0.0/12
+              - 192.168.0.0/16
+      ports:
+        - port: 22
+          protocol: TCP
+        - port: 80
+          protocol: TCP
+        - port: 443
+          protocol: TCP
+        - port: 8080
+          protocol: TCP

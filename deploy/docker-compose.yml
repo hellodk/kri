@@ -28,7 +28,16 @@ services:
     logging: *default-logging
 
   pg_backup:
-    image: timescale/timescaledb:2.26.4-pg17
+    # Built from deploy/Dockerfile.pg_backup — age and rclone are baked in at
+    # image build time, eliminating the runtime apt-get install (supply-chain
+    # risk + ~30 s cold-start penalty, #767).
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile.pg_backup
+    # Run as the non-root postgres user (uid 999 in the debian-based image).
+    # The Dockerfile pre-creates /var/backups/postgresql owned by postgres so
+    # the named volume is writable without root (#762).
+    user: "999:999"
     restart: unless-stopped
     environment:
       # Fail loud if the password is missing — the previous default of `fleet`
@@ -53,29 +62,37 @@ services:
     depends_on:
       db:
         condition: service_healthy
-    # The base image lacks age and rclone; install them once at startup, then
-    # loop. Worth ~30 s extra on container start for a transparent encryption
-    # + offsite-sync path that needs no custom image build.
+    # age and rclone are pre-installed in the image (see Dockerfile.pg_backup).
+    # The loop runs once per 24 h; it writes a heartbeat file that the
+    # healthcheck uses to verify the loop is alive (#762).
     entrypoint: >
       sh -c "
         set -eu;
-        if ! command -v age >/dev/null 2>&1 || ! command -v rclone >/dev/null 2>&1; then
-          echo '[backup] installing age + rclone';
-          apt-get update -qq && \
-            apt-get install -y --no-install-recommends age rclone >/dev/null;
-        fi;
         if [ -n \"$$BACKUP_RCLONE_CONFIG\" ]; then
-          mkdir -p /root/.config/rclone;
-          printf '%s\\n' \"$$BACKUP_RCLONE_CONFIG\" > /root/.config/rclone/rclone.conf;
-          chmod 600 /root/.config/rclone/rclone.conf;
+          mkdir -p \"$$HOME/.config/rclone\";
+          printf '%s\n' \"$$BACKUP_RCLONE_CONFIG\" > \"$$HOME/.config/rclone/rclone.conf\";
+          chmod 600 \"$$HOME/.config/rclone/rclone.conf\";
         fi;
         echo '[backup] PostgreSQL backup service started';
+        if [ -z \"$$BACKUP_AGE_RECIPIENT\" ]; then
+          echo '[backup] WARNING: BACKUP_AGE_RECIPIENT is not set — dumps are stored UNENCRYPTED. Set BACKUP_AGE_RECIPIENT in production!';
+        fi;
+        if [ -z \"$$BACKUP_REMOTE\" ]; then
+          echo '[backup] WARNING: BACKUP_REMOTE is not set — backups are LOCAL ONLY (single-disk-failure away from data loss). Set BACKUP_REMOTE in production!';
+        fi;
         while true; do
+          touch /var/backups/postgresql/.heartbeat;
           TIMESTAMP=$$(date +%Y%m%d_%H%M%S);
           BASE=fleet_$${TIMESTAMP};
           OUT=/var/backups/postgresql/$${BASE}.dump;
           ENCOUT=/var/backups/postgresql/$${BASE}.dump.age;
           echo \"[backup] Starting pg_dump at $$(date)\";
+          if [ -z \"$$BACKUP_AGE_RECIPIENT\" ]; then
+            echo '[backup] WARNING: BACKUP_AGE_RECIPIENT is not set — dumps are stored UNENCRYPTED. Set BACKUP_AGE_RECIPIENT in production!';
+          fi;
+          if [ -z \"$$BACKUP_REMOTE\" ]; then
+            echo '[backup] WARNING: BACKUP_REMOTE is not set — backups are LOCAL ONLY (single-disk-failure away from data loss). Set BACKUP_REMOTE in production!';
+          fi;
           if pg_dump -h db -U fleet -Fc fleet_platform -f \"$$OUT\"; then
             echo \"[backup] Saved $$OUT\";
             FINAL=\"$$OUT\";
@@ -104,6 +121,15 @@ services:
           sleep 86400;
         done
       "
+    # Verify the backup loop is alive by checking the heartbeat file is
+    # recent. start_period covers the time before the first heartbeat touch
+    # at container startup (#762).
+    healthcheck:
+      test: ["CMD-SHELL", "find /var/backups/postgresql -name '.heartbeat' -mmin -1500 | grep -q ."]
+      interval: 300s
+      timeout: 5s
+      retries: 3
+      start_period: 60s
     deploy:
       resources:
         limits:
