@@ -35,6 +35,9 @@ resources:
   - worker-ansible-deployment.yaml
   - beat-deployment.yaml
   - ingress.yaml
+  - network-policy.yaml
+  - pod-disruption-budget.yaml
+  - hpa.yaml
 
 # Image-tag transformer — bump the tag here (or in an overlay) instead of
 # editing every Deployment manifest. The pre-commit VERSION-bump hook can

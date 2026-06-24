@@ -7,7 +7,8 @@ metadata:
     app: kri-api
     component: api
 spec:
-  replicas: 1
+  # Two replicas for HA; HPA scales this up under load.
+  replicas: 2
   selector:
     matchLabels:
       app: kri-api
@@ -17,10 +18,22 @@ spec:
         app: kri-api
         component: api
     spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1001
+        runAsGroup: 1001
+        fsGroup: 1001
+        seccompProfile:
+          type: RuntimeDefault
       containers:
         - name: api
           image: gitea.local/kri/kri-api:0.1.415
           imagePullPolicy: IfNotPresent
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
           ports:
             - name: http
               containerPort: 8000
@@ -71,6 +84,17 @@ spec:
               value: "redis://:$(REDIS_PASSWORD)@redis.utilities.svc.cluster.local:6379/0"
             - name: LOG_LEVEL
               value: "info"
+            # Prevent Python from writing .pyc files to the read-only rootfs.
+            - name: PYTHONDONTWRITEBYTECODE
+              value: "1"
+            # Prevent uv from attempting a venv sync on the read-only rootfs.
+            - name: UV_NO_SYNC
+              value: "1"
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+            - name: uv-cache
+              mountPath: /home/appuser/.cache
           livenessProbe:
             httpGet:
               path: /health
@@ -94,3 +118,8 @@ spec:
             limits:
               cpu: "1000m"
               memory: "1Gi"
+      volumes:
+        - name: tmp
+          emptyDir: {}
+        - name: uv-cache
+          emptyDir: {}
