@@ -89,6 +89,55 @@ async def app_with_test_db(test_engine):
     return app
 
 
+# ---------------------------------------------------------------------------
+# Per-test transaction isolation (#805)
+#
+# Each test runs inside a raw connection with an outer transaction that is
+# rolled back unconditionally in teardown.  The app's get_db override is
+# temporarily replaced with one that creates sessions bound to that same
+# connection using join_transaction_mode="create_savepoint" so that:
+#   • session.commit() inside a route releases the savepoint and opens a new
+#     one, but does NOT flush changes to the outer transaction on disk.
+#   • The outer conn.rollback() at the end of each test discards all writes.
+#
+# Module-scoped user fixtures commit their rows before this fixture runs for
+# the first test in the module, so those rows remain visible throughout the
+# module and are cleaned up by the user fixtures' own teardown.
+# ---------------------------------------------------------------------------
+
+
+@pytest_asyncio.fixture(autouse=True, loop_scope="module")
+async def _per_test_db_savepoint(test_engine, app_with_test_db):
+    """Roll back every test's DB writes via an outer connection-level transaction."""
+    from fleet_platform.api import deps
+
+    conn = await test_engine.connect()
+    await conn.begin()
+
+    # Replace get_db with one that always yields a session bound to our
+    # connection; create_savepoint ensures commit() is a no-op on the outer tx.
+    original_override = app_with_test_db.dependency_overrides.get(deps.get_db)
+
+    async def _get_db_isolated():
+        session = AsyncSession(bind=conn, join_transaction_mode="create_savepoint")
+        try:
+            yield session
+        finally:
+            await session.close()
+
+    app_with_test_db.dependency_overrides[deps.get_db] = _get_db_isolated
+
+    yield  # test executes here
+
+    # Restore the module-level override before rolling back so the next test
+    # gets a fresh isolated session rather than the closed connection above.
+    if original_override is not None:
+        app_with_test_db.dependency_overrides[deps.get_db] = original_override
+
+    await conn.rollback()
+    await conn.close()
+
+
 @pytest_asyncio.fixture(scope="module", loop_scope="module")
 async def client(app_with_test_db):
     async with AsyncClient(
