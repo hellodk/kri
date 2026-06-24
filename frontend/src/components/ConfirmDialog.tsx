@@ -1,4 +1,4 @@
-import { useEffect } from 'react'
+import { useFocusTrap } from '../hooks/useFocusTrap'
 
 interface Props {
   title: string
@@ -19,14 +19,10 @@ export function ConfirmDialog({
   onConfirm,
   onCancel,
 }: Props) {
-  useEffect(() => {
-    const handler = (e: KeyboardEvent) => { if (e.key === 'Escape') onCancel() }
-    document.addEventListener('keydown', handler)
-    return () => document.removeEventListener('keydown', handler)
-  }, [onCancel])
+  const containerRef = useFocusTrap<HTMLDivElement>(true, onCancel)
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" role="dialog" aria-modal="true" aria-labelledby="confirm-dialog-title">
+    <div ref={containerRef} className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" role="dialog" aria-modal="true" aria-labelledby="confirm-dialog-title">
       <div className="bg-white rounded-xl shadow-2xl p-6 w-full max-w-sm mx-4 border border-gray-200">
         <h2 id="confirm-dialog-title" className="text-base font-semibold text-gray-900 mb-2">{title}</h2>
         <p className="text-sm text-gray-600 mb-5">{message}</p>

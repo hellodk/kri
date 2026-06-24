@@ -1,6 +1,7 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { format, parseISO } from 'date-fns'
 import { monitoringApi, type MonitoringSummary, type FleetHealth } from '../api/monitoring'
+import { formatLocalTime } from '../utils/time'
 
 // ── Shared card wrapper ────────────────────────────────────────────────────────
 
@@ -312,8 +313,8 @@ function HttpRequestsCard({ data }: { data: MonitoringSummary }) {
           <table className="w-full text-xs">
             <thead>
               <tr className="border-b border-gray-100">
-                <th className="text-left py-1.5 px-1 font-semibold text-gray-500 uppercase tracking-wide">Endpoint</th>
-                <th className="text-right py-1.5 px-1 font-semibold text-gray-500 uppercase tracking-wide">Count</th>
+                <th scope="col" className="text-left py-1.5 px-1 font-semibold text-gray-500 uppercase tracking-wide">Endpoint</th>
+                <th scope="col" className="text-right py-1.5 px-1 font-semibold text-gray-500 uppercase tracking-wide">Count</th>
               </tr>
             </thead>
             <tbody>
@@ -385,7 +386,7 @@ export function MonitoringPage() {
   }
 
   const lastUpdated = dataUpdatedAt
-    ? new Date(dataUpdatedAt).toLocaleTimeString('en-IN', { timeZone: 'Asia/Kolkata', hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false }) + ' IST'
+    ? formatLocalTime(dataUpdatedAt)
     : null
 
   return (

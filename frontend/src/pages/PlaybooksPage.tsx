@@ -157,11 +157,11 @@ function EntriesTable({
       <table className="w-full">
         <thead>
           <tr className={theadClass}>
-            <th className="px-3 py-2.5 w-8" />
-            <th className="px-5 py-2.5 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide">Name</th>
-            <th className="px-5 py-2.5 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide hidden md:table-cell">File</th>
-            <th className="px-5 py-2.5 text-center text-xs font-semibold text-gray-500 uppercase tracking-wide">Vars</th>
-            <th className="px-5 py-2.5 text-right text-xs font-semibold text-gray-500 uppercase tracking-wide">Actions</th>
+            <th scope="col" className="px-3 py-2.5 w-8" />
+            <th scope="col" className="px-5 py-2.5 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide">Name</th>
+            <th scope="col" className="px-5 py-2.5 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide hidden md:table-cell">File</th>
+            <th scope="col" className="px-5 py-2.5 text-center text-xs font-semibold text-gray-500 uppercase tracking-wide">Vars</th>
+            <th scope="col" className="px-5 py-2.5 text-right text-xs font-semibold text-gray-500 uppercase tracking-wide">Actions</th>
           </tr>
         </thead>
         <tbody>
@@ -382,11 +382,11 @@ export function PlaybooksPage() {
               <table className="w-full">
                 <thead>
                   <tr className="border-b border-amber-100 bg-amber-100/60">
-                    <th className="px-3 py-2.5 w-8" />
-                    <th className="px-5 py-2.5 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide">Name</th>
-                    <th className="px-5 py-2.5 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide hidden md:table-cell">File</th>
-                    <th className="px-5 py-2.5 text-center text-xs font-semibold text-gray-500 uppercase tracking-wide">Vars</th>
-                    <th className="px-5 py-2.5 text-right text-xs font-semibold text-gray-500 uppercase tracking-wide">Actions</th>
+                    <th scope="col" className="px-3 py-2.5 w-8" />
+                    <th scope="col" className="px-5 py-2.5 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide">Name</th>
+                    <th scope="col" className="px-5 py-2.5 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide hidden md:table-cell">File</th>
+                    <th scope="col" className="px-5 py-2.5 text-center text-xs font-semibold text-gray-500 uppercase tracking-wide">Vars</th>
+                    <th scope="col" className="px-5 py-2.5 text-right text-xs font-semibold text-gray-500 uppercase tracking-wide">Actions</th>
                   </tr>
                 </thead>
                 <tbody>

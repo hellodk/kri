@@ -61,7 +61,12 @@ dev = [
     "bandit[toml]>=1.9.4",
     "pre-commit>=4.6.0",
     "hypothesis>=6.155.2",
-    "mutmut>=3.1.0",
+    # Pin below 3.6.0: that release renamed the [tool.mutmut] keys
+    # (paths_to_mutate->source_paths, tests_dir folded into
+    # pytest_add_cli_args_test_selection) AND shipped a config-loader bug that
+    # crashes `mutmut results` with "can only concatenate list (not 'str') to
+    # list", failing the mutation CI job. 3.5.0 reads our string-valued config.
+    "mutmut>=3.1.0,<3.6.0",
 ]
 
 # Only package fleet_platform — exclude playbooks/ and other top-level dirs.
