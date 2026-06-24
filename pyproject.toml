@@ -93,3 +93,9 @@ known-first-party = ["fleet_platform"]
 paths_to_mutate = "fleet_platform/services/"
 tests_dir = "tests/unit/"
 runner = "python -m pytest tests/unit/ -x -q --tb=no --no-header"
+
+# Narrow scope used by the mutation CI workflow (.github/workflows/mutation.yml).
+# Run manually with:
+#   mutmut run --paths-to-mutate=fleet_platform/core/validators.py,fleet_platform/core/redaction.py
+# The workflow overrides paths_to_mutate on the CLI so this section documents
+# intent rather than being read directly by the workflow.

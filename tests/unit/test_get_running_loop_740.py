@@ -6,7 +6,10 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 
 TARGETS = {
     "fleet_platform/api/routes/webssh.py": "get_running_loop()",
-    "fleet_platform/api/routes/nodes.py": "get_running_loop()",
+    # nodes.py no longer needs a loop handle: blocking Celery waits run via
+    # asyncio.to_thread (#864), the modern non-blocking idiom that supersedes
+    # the get_running_loop()/run_in_executor pattern from #740.
+    "fleet_platform/api/routes/nodes.py": "asyncio.to_thread(",
     "fleet_platform/api/routes/platform_settings.py": "_asyncio.get_running_loop()",
 }
 

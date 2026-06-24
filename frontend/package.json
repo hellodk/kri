@@ -1,7 +1,7 @@
 {
   "name": "frontend",
   "private": true,
-  "version": "0.1.548",
+  "version": "0.1.562",
   "packageManager": "pnpm@10.29.3",
   "type": "module",
   "scripts": {

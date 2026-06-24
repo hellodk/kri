@@ -1,7 +1,9 @@
 # fleet_platform/schemas/node_import.py
 """Pydantic schemas for bulk node import endpoints (#360)."""
 
-from pydantic import BaseModel
+from pydantic import BaseModel, field_validator
+
+from fleet_platform.core.validators import validate_minion_id
 
 
 class ImportRow(BaseModel):
@@ -12,6 +14,8 @@ class ImportRow(BaseModel):
     ssh_user: str | None = None
     status: str = "new"
     reason: str = ""
+
+    _validate_minion_id = field_validator("minion_id")(validate_minion_id)
 
 
 class ImportValidateRequest(BaseModel):

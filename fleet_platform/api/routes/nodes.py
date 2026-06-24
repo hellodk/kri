@@ -731,18 +731,17 @@ async def list_node_vms(
     if not minion_id:
         return NodeVMsResponse(node_id=str(node_id), minion_id=None, vms=[], error="Node has no minion_id")
 
-    # Run tart list via Salt cmd.run
+    # Run tart list via Salt cmd.run; asyncio.to_thread keeps the event loop free
+    # while the Celery round-trip completes (#745).
     from fleet_platform.workers.salt_tasks import run_salt_cmd as salt_run_cmd
 
     try:
-        result_dict = await asyncio.get_running_loop().run_in_executor(
-            None,
-            lambda: salt_run_cmd.delay(
-                function="cmd.run",
-                target_minions=[minion_id],
-                args=["tart list --format=json 2>/dev/null || tart list 2>/dev/null || echo 'tart_not_found'"],
-            ).get(timeout=15),
+        task = salt_run_cmd.delay(
+            function="cmd.run",
+            target_minions=[minion_id],
+            args=["tart list --format=json 2>/dev/null || tart list 2>/dev/null || echo 'tart_not_found'"],
         )
+        result_dict = await asyncio.to_thread(task.get, timeout=15)
     except Exception as e:
         return NodeVMsResponse(
             node_id=str(node_id), minion_id=minion_id, vms=[], error=f"Failed to fetch VMs: {str(e)[:200]}"

@@ -1,0 +1,27 @@
+---
+# Ensure at least one api pod remains available during voluntary disruptions
+# (node drains, rolling deploys). Works correctly with replicas >= 2.
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: kri-api-pdb
+  namespace: kri
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app: kri-api
+---
+# Ensure at least one worker pod remains available during voluntary disruptions.
+# The worker processes tasks from Redis queues; at least one replica must be
+# draining the queue at all times.
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: kri-worker-pdb
+  namespace: kri
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app: kri-worker

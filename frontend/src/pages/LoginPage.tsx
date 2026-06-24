@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { authApi } from '../api/auth'
 import { useAuthStore } from '../stores/authStore'
+import { loginErrorMessage } from './loginError'
 
 export function LoginPage() {
   const [email, setEmail] = useState('')
@@ -31,7 +32,7 @@ export function LoginPage() {
       setUser(user)
       navigate('/fleet')
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : 'Login failed')
+      setError(loginErrorMessage(err))
     } finally {
       setLoading(false)
     }

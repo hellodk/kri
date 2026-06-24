@@ -72,3 +72,88 @@ def sanitize_untrusted(value: object, *, cell: bool = False) -> str:
     if cell:
         text = text.replace("|", "\\|").replace("\n", " ").replace("\r", "")
     return text
+
+
+# --- Output sanitization (#782) ---
+
+_SCRIPT_RE = re.compile(r"<script[\s\S]*?</script\s*>", re.IGNORECASE)
+_EVENT_ATTR_RE = re.compile(r"""\s+on\w+\s*=\s*(?:"[^"]*"|'[^']*'|[^\s>]*)""", re.IGNORECASE)
+
+
+def sanitize_llm_output(text: str) -> str:
+    """Strip HTML script blocks and event-handler attrs from model output (#782).
+
+    Applied at the API boundary before emitting the final SSE event so that
+    injection-induced or LLM-hallucinated script payloads cannot execute in the
+    operator's browser.  Safe content (plain prose, Markdown, code blocks) is
+    preserved.
+    """
+    if not text:
+        return text
+    text = _SCRIPT_RE.sub("", text)
+    text = _EVENT_ATTR_RE.sub("", text)
+    return text
+
+
+# --- Observation sanitization helpers (#770) ---
+
+
+def sanitize_result_value(v: object) -> object:
+    """Recursively sanitize string leaf values in a tool result payload (#770).
+
+    Walks dicts and lists; applies sanitize_untrusted to every string found so
+    hostile node data (code-fences, model-control tokens) cannot influence the
+    model's next decision when the observation is fed back into the prompt.
+    Non-string scalars and None pass through unchanged.
+    """
+    if isinstance(v, str):
+        return sanitize_untrusted(v)
+    if isinstance(v, dict):
+        return {k: sanitize_result_value(val) for k, val in v.items()}
+    if isinstance(v, list):
+        return [sanitize_result_value(item) for item in v]
+    return v
+
+
+# --- Audit redaction helpers (#781) ---
+
+# Keys (matched case-insensitively) whose values must always be redacted.
+_SENSITIVE_KEYS: frozenset[str] = frozenset(
+    {
+        "password",
+        "secret",
+        "token",
+        "api_key",
+        "apikey",
+        "value",
+        "content",
+        "private_key",
+        "privatekey",
+        "credential",
+        "passphrase",
+        "auth",
+    }
+)
+
+
+def is_sensitive_key(key: str) -> bool:
+    """Return True if *key* (case-insensitive) matches any sensitive pattern."""
+    return key.lower() in _SENSITIVE_KEYS
+
+
+def redact_args(args: dict) -> dict:
+    """Redact sensitive fields from tool-call argument dicts (#781).
+
+    Two tiers:
+    1. Key-name blocklist: keys matching _SENSITIVE_KEYS → '[REDACTED]'.
+    2. Length cap: non-sensitive strings > 500 chars are truncated.
+    """
+    out: dict = {}
+    for k, v in (args or {}).items():
+        if is_sensitive_key(k):
+            out[k] = "[REDACTED]"
+        elif isinstance(v, str) and len(v) > 500:
+            out[k] = v[:500] + "...[truncated]"
+        else:
+            out[k] = v
+    return out

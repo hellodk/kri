@@ -110,9 +110,21 @@ _CRITICAL_DISPATCH_FUNCTIONS = frozenset(
         "service.stop",
         "service.disable",
         "state.apply",
-        "cmd.run",
+        # cmd.run removed (#758): it grants arbitrary shell execution (RCE) on any
+        # minion — equivalent to operator-level remote code execution.  kri has no
+        # legitimate use-case for cmd.run; all operations use specific Salt modules.
         "ps.list_processes",
         "service.get_all",
+    }
+)
+
+# Functions that MUST NOT appear in any Salt API ACL.
+_DANGEROUS_FUNCTIONS = frozenset(
+    {
+        "cmd.run",
+        "cmd.run_all",
+        "cmd.shell",
+        "cmd.exec_code",
     }
 )
 
@@ -122,6 +134,17 @@ def test_template_acl_contains_critical_dispatch_functions():
     template_acl = _extract_bare_function_strings(text)
     missing = _CRITICAL_DISPATCH_FUNCTIONS - template_acl
     assert not missing, f"Critical dispatch functions missing from kri-master.conf.j2 ACL: {sorted(missing)}"
+
+
+def test_template_acl_does_not_contain_dangerous_functions():
+    """cmd.run and equivalent RCE functions must NOT be in the ACL (#758)."""
+    text = _TEMPLATE.read_text()
+    template_acl = _extract_bare_function_strings(text)
+    present = _DANGEROUS_FUNCTIONS & template_acl
+    assert not present, (
+        f"Dangerous functions found in kri-master.conf.j2 ACL — these grant "
+        f"arbitrary shell execution on any minion (#758): {sorted(present)}"
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -173,3 +196,20 @@ def test_docker_conf_contains_critical_dispatch_functions():
     docker_acl = _extract_bare_function_strings(text)
     missing = _CRITICAL_DISPATCH_FUNCTIONS - docker_acl
     assert not missing, f"Critical dispatch functions missing from deploy/salt-master.conf ACL: {sorted(missing)}"
+
+
+def test_docker_conf_does_not_contain_dangerous_functions():
+    """cmd.run and equivalent RCE functions must NOT be in the docker ACL (#758)."""
+    text = _DOCKER_CONF.read_text()
+    docker_acl = _extract_bare_function_strings(text)
+    present = _DANGEROUS_FUNCTIONS & docker_acl
+    assert not present, (
+        f"Dangerous functions found in deploy/salt-master.conf ACL — these grant "
+        f"arbitrary shell execution on any minion (#758): {sorted(present)}"
+    )
+
+
+def test_default_salt_functions_does_not_contain_dangerous_functions():
+    """_DEFAULT_SALT_FUNCTIONS must not include cmd.run or equivalent RCE functions (#758)."""
+    present = _DANGEROUS_FUNCTIONS & _DEFAULT_SALT_FUNCTIONS
+    assert not present, f"Dangerous functions found in _DEFAULT_SALT_FUNCTIONS — remove them (#758): {sorted(present)}"

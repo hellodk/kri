@@ -18,7 +18,12 @@ class User(Base, TimestampMixin):
     is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
     last_login_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     auth_provider: Mapped[str] = mapped_column(String(20), nullable=False, insert_default="local")
+    # Flag set when an account is seeded with a weak/default password (#757/#820).
+    # The login route returns 403 when True, forcing the user to change their
+    # password via the admin UI before proceeding.
+    must_change_password: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default="false", default=False)
 
     def __init__(self, **kwargs):
         kwargs.setdefault("auth_provider", "local")
+        kwargs.setdefault("must_change_password", False)
         super().__init__(**kwargs)
