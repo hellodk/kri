@@ -5,6 +5,8 @@ import io
 import ipaddress
 import re
 
+from fleet_platform.core.validators import MINION_ID_RE
+
 _HOSTNAME_RE = re.compile(r"^[a-zA-Z0-9]([a-zA-Z0-9\-_.]{0,253}[a-zA-Z0-9])?$")
 
 
@@ -76,6 +78,13 @@ def validate_row(row: dict, existing_minions: set, existing_ips: set) -> dict:
 
     if not mid:
         return {**out, "status": "invalid", "reason": "missing minion_id"}
+
+    if not MINION_ID_RE.match(mid):
+        return {
+            **out,
+            "status": "invalid",
+            "reason": "minion_id must be 1-128 chars, only [a-zA-Z0-9._-] allowed",
+        }
 
     if ip:
         try:
