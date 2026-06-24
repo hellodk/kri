@@ -43,6 +43,32 @@ def test_settings_fernet_key_absent_gives_none():
         assert Settings(_env_file=None).fernet_secret_key is None
 
 
+def test_settings_reads_legacy_fernet_secret_key_from_env():
+    """Backward compat: the legacy FERNET_SECRET_KEY env var must still populate
+    the field, so existing deployments keep decrypting secrets after the rename
+    to FERNET_KEY without an ops change."""
+    from fleet_platform.core.config import Settings
+
+    legacy_key = "TJNUjlTWwn0v5n5raoMUYp-An_l3EnATE7xthpfAFGM="
+    env = {k: v for k, v in os.environ.items() if k not in ("FERNET_KEY", "FERNET_SECRET_KEY")}
+    env["FERNET_SECRET_KEY"] = legacy_key
+    with patch.dict(os.environ, env, clear=True):
+        assert Settings(_env_file=None).fernet_secret_key == legacy_key
+
+
+def test_settings_fernet_key_takes_precedence_over_legacy():
+    """When both env vars are set, the canonical FERNET_KEY wins."""
+    from fleet_platform.core.config import Settings
+
+    canonical = "TJNUjlTWwn0v5n5raoMUYp-An_l3EnATE7xthpfAFGM="
+    legacy = "b3RoZXIta2V5LW90aGVyLWtleS1vdGhlci1rZXktMzI="
+    env = {k: v for k, v in os.environ.items() if k not in ("FERNET_KEY", "FERNET_SECRET_KEY")}
+    env["FERNET_KEY"] = canonical
+    env["FERNET_SECRET_KEY"] = legacy
+    with patch.dict(os.environ, env, clear=True):
+        assert Settings(_env_file=None).fernet_secret_key == canonical
+
+
 # ---------------------------------------------------------------------------
 # 2. .env*.example files document FERNET_KEY
 # ---------------------------------------------------------------------------

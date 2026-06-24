@@ -179,12 +179,14 @@ def test_default_salt_functions_constant_is_correct():
         "grains.items",
         "pkg.install",
         "service.restart",
-        "cmd.run",
         "disk.usage",
         "saltutil.sync_all",
     }
     for fn in expected_subset:
         assert fn in _DEFAULT_SALT_FUNCTIONS, f"{fn!r} missing from _DEFAULT_SALT_FUNCTIONS"
+    # cmd.run grants arbitrary shell execution (RCE) and is intentionally
+    # excluded from the default allowlist as defense-in-depth (#758).
+    assert "cmd.run" not in _DEFAULT_SALT_FUNCTIONS
 
 
 # ---------------------------------------------------------------------------
