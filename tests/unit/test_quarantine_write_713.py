@@ -60,8 +60,12 @@ def test_path_traversal_filename_rejected(tmp_path):
 
 def test_list_artifacts_across_sessions(tmp_path):
     q.write_artifact("op@x.com", "s1", "a.yml", "x: 1", root=tmp_path)
-    time.sleep(0.01)
     q.write_artifact("op@x.com", "s2", "b.yml", "y: 2", root=tmp_path)
+    # Force deterministic mtime ordering: s2/b.yml is "newer" by 2 seconds.
+    s1_file = q.session_dir("op@x.com", "s1", root=tmp_path) / "a.yml"
+    s2_file = q.session_dir("op@x.com", "s2", root=tmp_path) / "b.yml"
+    os.utime(s1_file, (1_000_000_000, 1_000_000_000))
+    os.utime(s2_file, (1_000_000_002, 1_000_000_002))
     items = q.list_artifacts("op@x.com", root=tmp_path)
     names = {i["filename"] for i in items}
     assert names == {"a.yml", "b.yml"}
