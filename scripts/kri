@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # ──────────────────────────────────────────────────────────────────────────────
-# kri — Mac Mini Fleet Management Platform CLI
+# kri — Fleet Management Platform CLI
 # ──────────────────────────────────────────────────────────────────────────────
 set -euo pipefail
 
@@ -962,7 +962,7 @@ cmd_dev() {
 # ══════════════════════════════════════════════════════════════════════════════
 
 cmd_version() {
-    echo -e "${BOLD}kri${NC} v$(version) — Mac Mini Fleet Management Platform"
+    echo -e "${BOLD}kri${NC} v$(version) — Fleet Management Platform"
 }
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -972,7 +972,7 @@ cmd_version() {
 usage() {
     cat <<EOF
 
-${BOLD}kri${NC} — Mac Mini Fleet Management Platform v$(version)
+${BOLD}kri${NC} — Fleet Management Platform v$(version)
 
 ${BOLD}Usage:${NC}  kri [command] [subcommand] [flags]
 
@@ -1025,7 +1025,7 @@ main() {
     shift 2>/dev/null || true
 
     if [[ -z "$cmd" ]]; then
-        echo -e "\n${BOLD}${CYAN}kri${NC} — Mac Mini Fleet Management Platform v$(version)"
+        echo -e "\n${BOLD}${CYAN}kri${NC} — Fleet Management Platform v$(version)"
         _prompt_select "What would you like to do?" \
             "up" "down" "restart" "status" "logs" \
             "deploy" "rolling-deploy" "rollback" \
