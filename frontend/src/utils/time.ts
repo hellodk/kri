@@ -1,12 +1,8 @@
-/**
- * IST time formatting utilities.
- * All timestamps shown to users must be in IST (Asia/Kolkata, UTC+5:30).
- * Relative times (formatDistanceToNow) are left unchanged — they convey
- * "how long ago" which needs no timezone conversion.
- */
+import { getTimezone } from './dateFormat'
 
-const IST_OPTIONS: Intl.DateTimeFormatOptions = {
-  timeZone: 'Asia/Kolkata',
+type DateInput = string | number | Date | null | undefined
+
+const LOCAL_DATE_TIME_OPTIONS: Intl.DateTimeFormatOptions = {
   day: '2-digit',
   month: 'short',
   year: 'numeric',
@@ -15,37 +11,77 @@ const IST_OPTIONS: Intl.DateTimeFormatOptions = {
   hour12: true,
 }
 
-const IST_DATE_ONLY: Intl.DateTimeFormatOptions = {
-  timeZone: 'Asia/Kolkata',
+const LOCAL_DATE_ONLY_OPTIONS: Intl.DateTimeFormatOptions = {
   day: '2-digit',
   month: 'short',
   year: 'numeric',
 }
 
-/**
- * Format a date as "02 Jun 2026, 11:44 PM IST"
- * Pass `dateOnly: true` for "02 Jun 2026 IST" (no time component).
- */
-export function formatIST(date: string | Date | null | undefined, dateOnly = false): string {
-  if (!date) return '—'
-  const d = typeof date === 'string' ? new Date(date) : date
-  if (isNaN(d.getTime())) return '—'
-  const opts = dateOnly ? IST_DATE_ONLY : IST_OPTIONS
-  return d.toLocaleString('en-IN', opts) + ' IST'
+const LOCAL_TIME_ONLY_OPTIONS: Intl.DateTimeFormatOptions = {
+  hour: '2-digit',
+  minute: '2-digit',
+  second: '2-digit',
+  hour12: false,
 }
 
-/** Short date only: "02 Jun 2026 IST" */
-export function formatISTDate(date: string | Date | null | undefined): string {
+function parseDate(date: DateInput): Date | null {
+  if (!date) return null
+  const d = date instanceof Date ? date : new Date(date)
+  return isNaN(d.getTime()) ? null : d
+}
+
+export function getTimezoneName(date: DateInput): string {
+  const d = parseDate(date)
+  if (!d) return ''
+  const parts = new Intl.DateTimeFormat('en-IN', {
+    timeZone: getTimezone(),
+    timeZoneName: 'short',
+  }).formatToParts(d)
+  return parts.find((part) => part.type === 'timeZoneName')?.value ?? getTimezone()
+}
+
+export function formatLocalDateTime(
+  date: DateInput,
+  options: Intl.DateTimeFormatOptions = LOCAL_DATE_TIME_OPTIONS,
+  includeTimezoneName = true,
+): string {
+  const d = parseDate(date)
+  if (!d) return '—'
+  const formatted = d.toLocaleString('en-IN', {
+    timeZone: getTimezone(),
+    ...options,
+  })
+  return includeTimezoneName ? `${formatted} ${getTimezoneName(d)}` : formatted
+}
+
+export function formatLocalDate(
+  date: DateInput,
+  includeTimezoneName = false,
+): string {
+  return formatLocalDateTime(date, LOCAL_DATE_ONLY_OPTIONS, includeTimezoneName)
+}
+
+export function formatLocalTime(
+  date: DateInput,
+  options: Intl.DateTimeFormatOptions = LOCAL_TIME_ONLY_OPTIONS,
+  includeTimezoneName = true,
+): string {
+  return formatLocalDateTime(date, options, includeTimezoneName)
+}
+
+export function formatIST(date: DateInput, dateOnly = false): string {
+  return dateOnly ? formatLocalDate(date, true) : formatLocalDateTime(date)
+}
+
+export function formatISTDate(date: DateInput): string {
   return formatIST(date, true)
 }
 
-/** Month/day only for charts: "Jun 02" — no timezone conversion needed */
-export function formatChartDate(date: string | Date | null | undefined): string {
-  if (!date) return ''
-  const d = typeof date === 'string' ? new Date(date) : date
-  if (isNaN(d.getTime())) return ''
+export function formatChartDate(date: DateInput): string {
+  const d = parseDate(date)
+  if (!d) return ''
   return d.toLocaleString('en-IN', {
-    timeZone: 'Asia/Kolkata',
+    timeZone: getTimezone(),
     month: 'short',
     day: '2-digit',
   })

@@ -13,6 +13,7 @@ import { useToastStore } from '../stores/toastStore'
 import { api } from '../api/client'
 import { buildsApi } from '../api/builds'
 import { PlaybookLibraryTab } from './PlaybookLibraryTab'
+import { formatLocalDate } from '../utils/time'
 
 function UrlStatusPill({ status, checking }: { status?: { ok: boolean; latency_ms: number | null; error?: string } | null; checking: boolean }) {
   if (checking) return <span className="text-xs text-gray-400 flex items-center gap-1"><span className="inline-block animate-spin">⟳</span> Checking</span>
@@ -1469,10 +1470,7 @@ function CredentialsSection() {
               <CredentialUsage credentialId={cred.id} />
               {cred.last_used_at ? (
                 <span className="text-xs text-gray-400 shrink-0">
-                  last used {new Date(cred.last_used_at).toLocaleString('en-IN', {
-                    timeZone: 'Asia/Kolkata',
-                    day: '2-digit', month: 'short', year: 'numeric',
-                  })} IST
+                  last used {formatLocalDate(cred.last_used_at, true)}
                 </span>
               ) : (
                 <span className="text-xs text-gray-300 shrink-0">never used</span>

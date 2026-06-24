@@ -3,6 +3,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { api } from '../api/client'
 import { useToastStore } from '../stores/toastStore'
 import { Skeleton } from '../components/Skeleton'
+import { formatLocalDate, formatLocalDateTime, formatLocalTime } from '../utils/time'
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -316,7 +317,7 @@ export function SecurityPage() {
   const { data: activeSessions } = useQuery({
     queryKey: ['ssh-sessions-active'],
     queryFn: () => api.get<{ items: SSHSessionRow[] }>('/api/v1/ssh/sessions?status=active&limit=20'),
-    refetchInterval: 10_000,
+    refetchInterval: 30_000,
   })
 
   const { data: recentEvents } = useQuery({
@@ -419,7 +420,7 @@ export function SecurityPage() {
           <h2 className="text-sm font-semibold text-gray-700">Node Security Status</h2>
           {d?.last_scan_at && (
             <span className="text-xs text-gray-400">
-              Last scan: {new Date(d.last_scan_at).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata', day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit', hour12: false })} IST
+              Last scan: {formatLocalDateTime(d.last_scan_at, { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit', hour12: false })}
             </span>
           )}
         </div>
@@ -478,7 +479,7 @@ export function SecurityPage() {
                   </td>
                   <td className="px-4 py-3 text-xs text-gray-400">
                     {node.last_scanned_at
-                      ? new Date(node.last_scanned_at).toLocaleDateString('en-IN', { timeZone: 'Asia/Kolkata', day: '2-digit', month: 'short', year: 'numeric' })
+                      ? formatLocalDate(node.last_scanned_at)
                       : <span className="text-gray-300">never</span>}
                   </td>
                   <td className="px-4 py-3 text-right">
@@ -541,7 +542,7 @@ export function SecurityPage() {
                   <td className="px-4 py-2 text-xs text-gray-500">{s.source_ip ?? '—'}</td>
                   <td className="px-4 py-2 text-xs text-gray-500">{s.credential_source}</td>
                   <td className="px-4 py-2 text-xs text-gray-400">
-                    {new Date(s.started_at).toLocaleTimeString('en-IN', { timeZone: 'Asia/Kolkata', hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false })} IST
+                    {formatLocalTime(s.started_at)}
                   </td>
                   <td className="px-4 py-2">
                     <span className={`text-xs px-2 py-0.5 rounded font-medium ${SESSION_STATUS_COLORS[s.status] ?? 'bg-gray-100 text-gray-600'}`}>
@@ -600,7 +601,7 @@ export function SecurityPage() {
                   )}
                 </div>
                 <span className="shrink-0 text-xs text-gray-400">
-                  {new Date(ev.created_at).toLocaleTimeString('en-IN', { timeZone: 'Asia/Kolkata', hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false })} IST
+                  {formatLocalTime(ev.created_at)}
                 </span>
               </div>
             ))}
