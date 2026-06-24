@@ -45,7 +45,9 @@ _SAMPLE_GRAINS = {
 
 async def test_grain_ingest_returns_200(client: AsyncClient, registered_node):
     node, token = registered_node
-    with patch("fleet_platform.api.routes.ingest.compute_drift"):
+    # #749: the route dispatches by task name via celery_app.send_task instead of
+    # importing compute_drift and calling .delay().
+    with patch("fleet_platform.api.routes.ingest.celery_app.send_task"):
         response = await client.post(
             "/api/v1/ingest/grains",
             json={"minion_id": node.minion_id, "grains": _SAMPLE_GRAINS},
@@ -56,13 +58,15 @@ async def test_grain_ingest_returns_200(client: AsyncClient, registered_node):
 
 async def test_grain_ingest_queues_drift_task(client: AsyncClient, registered_node):
     node, token = registered_node
-    with patch("fleet_platform.api.routes.ingest.compute_drift") as mock_task:
+    with patch("fleet_platform.api.routes.ingest.celery_app.send_task") as mock_send:
         await client.post(
             "/api/v1/ingest/grains",
             json={"minion_id": node.minion_id, "grains": _SAMPLE_GRAINS},
             headers={"X-Node-Token": token},
         )
-        mock_task.delay.assert_called_once_with(str(node.id))
+        mock_send.assert_any_call(
+            "fleet_platform.workers.drift_tasks.compute_drift", args=[str(node.id)], queue="drift"
+        )
 
 
 async def test_grain_ingest_invalid_token_returns_401(client: AsyncClient, registered_node):
