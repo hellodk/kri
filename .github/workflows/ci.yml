@@ -202,13 +202,48 @@ jobs:
       - run: PGPASSWORD=fleet psql -h localhost -U fleet -c "CREATE DATABASE fleet_test;" fleet_platform
       - run: pip install uv
       - run: uv sync --extra dev
-      - run: |
+      # Coverage gate measures BOTH fleet_platform/services and
+      # fleet_platform/agent. agent/ (planner, tools, guards, audit, executor,
+      # loop) was previously excluded from measurement entirely (#799), so that
+      # subsystem had no enforced coverage. It now carries the same 80% floor as
+      # services/. Per-package floors are enforced below from coverage.json so a
+      # regression in either package fails the gate independently.
+      - name: Run unit tests with coverage
+        run: |
           uv run pytest tests/unit/ \
             --cov=fleet_platform/services \
+            --cov=fleet_platform/agent \
             --cov-report=term-missing \
             --cov-report=json:coverage.json \
-            --cov-fail-under=80 \
             -q
+      - name: Enforce per-package coverage floors
+        run: |
+          uv run python - <<'PY'
+          import json, sys
+
+          # Per-package coverage floors. Keep services at the established 80% bar;
+          # agent/ joins at the same floor (#799). Raise a floor here once a
+          # package is comfortably and durably above it.
+          GATES = {
+              "fleet_platform/services": 80.0,
+              "fleet_platform/agent": 80.0,
+          }
+          files = json.load(open("coverage.json"))["files"]
+          failed = False
+          for pkg, floor in GATES.items():
+              stmts = covered = 0
+              for path, info in files.items():
+                  norm = path.replace("\\", "/")
+                  if norm == pkg or norm.startswith(pkg + "/"):
+                      s = info["summary"]
+                      stmts += s["num_statements"]
+                      covered += s["covered_lines"]
+              pct = (100.0 * covered / stmts) if stmts else 100.0
+              status = "PASS" if pct >= floor else "FAIL"
+              print(f"[{status}] {pkg}: {pct:.1f}% (floor {floor:.0f}%, {covered}/{stmts} stmts)")
+              failed = failed or pct < floor
+          sys.exit(1 if failed else 0)
+          PY
       - name: Post coverage comment on PR
         if: github.event_name == 'pull_request'
         uses: actions/github-script@v9
@@ -216,9 +251,25 @@ jobs:
           script: |
             const fs = require('fs');
             const cov = JSON.parse(fs.readFileSync('coverage.json'));
-            const pct = cov.totals.percent_covered.toFixed(1);
-            const icon = parseFloat(pct) >= 80 ? '✅' : '⚠️';
-            const body = `## Coverage Report\n\n${icon} **${pct}%** on \`fleet_platform/services/\` (gate: 80%)\n\n${parseFloat(pct) >= 80 ? 'Gate passed' : 'Below gate — add tests before merging'}`;
+            const pkgPct = (prefix) => {
+              let stmts = 0, covered = 0;
+              for (const [path, info] of Object.entries(cov.files)) {
+                const norm = path.replace(/\\/g, '/');
+                if (norm === prefix || norm.startsWith(prefix + '/')) {
+                  stmts += info.summary.num_statements;
+                  covered += info.summary.covered_lines;
+                }
+              }
+              return stmts ? (100 * covered / stmts) : 100;
+            };
+            const row = (label, pct) => {
+              const ok = pct >= 80;
+              return `${ok ? '✅' : '⚠️'} \`${label}\` **${pct.toFixed(1)}%** (gate: 80%)`;
+            };
+            const svc = pkgPct('fleet_platform/services');
+            const agt = pkgPct('fleet_platform/agent');
+            const allOk = svc >= 80 && agt >= 80;
+            const body = `## Coverage Report\n\n${row('fleet_platform/services/', svc)}\n\n${row('fleet_platform/agent/', agt)}\n\n${allOk ? 'Gate passed' : 'Below gate — add tests before merging'}`;
             github.rest.issues.createComment({
               issue_number: context.issue.number,
               owner: context.repo.owner,
