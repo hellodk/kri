@@ -1,6 +1,6 @@
 # kri — Test Cases
 
-> Version: 0.1.0 | Platform: macOS Fleet Management
+> Version: 0.1.0 | Platform: Fleet Management
 > Covers: Authentication · Fleet · Nodes · Bootstrap · Groups · Drift · Baselines · SBOM · Playbooks · Settings · Search
 
 ---
