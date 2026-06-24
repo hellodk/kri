@@ -8,6 +8,8 @@
  */
 import { useEffect, useRef } from 'react'
 import type { SshTab } from './SshTabBar'
+import { wsUrl, wsAuthProtocols } from '../../api/client'
+import { getAccessToken } from '../../stores/authStore'
 
 interface MultiSessionTerminalProps {
   tabs: SshTab[]
@@ -72,9 +74,11 @@ function SingleTerminalPanel({
       requestAnimationFrame(() => { try { fitAddon.fit() } catch { /* ignore */ } })
       terminalRef.current = terminal
 
-      const token = localStorage.getItem('access_token') || ''
-      const wsUrl = `ws://${window.location.host}/api/v1/ssh/session/${tab.nodeId}?token=${encodeURIComponent(token)}`
-      const ws = new WebSocket(wsUrl)
+      const token = getAccessToken() || ''
+      // JWT via subprotocol (#783); wss/ws from page protocol (#784). Query param
+      // kept until the backend reads the subprotocol (see PR description).
+      const url = wsUrl(`/api/v1/ssh/session/${tab.nodeId}?token=${encodeURIComponent(token)}`)
+      const ws = new WebSocket(url, wsAuthProtocols(token))
       wsRef.current = ws
 
       ws.onopen = () => onStatusChange?.('connected')
