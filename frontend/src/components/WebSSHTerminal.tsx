@@ -1,5 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import type { Terminal } from '@xterm/xterm'
+import { wsUrl, wsAuthProtocols } from '../api/client'
+import { getAccessToken } from '../stores/authStore'
 
 interface WebSSHTerminalProps {
   nodeId: string
@@ -47,11 +49,13 @@ export function WebSSHTerminal({ nodeId, nodeName, onClose, sessionId }: WebSSHT
       requestAnimationFrame(() => { try { fitAddon.fit() } catch { /* ignore */ } })
       terminalRef.current = terminal
 
-      // Get auth token from localStorage
-      const token = localStorage.getItem('access_token') || ''
-      const wsUrl = `ws://${window.location.host}/api/v1/ssh/session/${nodeId}?token=${encodeURIComponent(token)}`
+      const token = getAccessToken() || ''
+      // Send the JWT via the WebSocket subprotocol (#783) and pick wss/ws from the
+      // page protocol (#784). The `?token=` query param is retained until the
+      // backend reads the subprotocol (see PR description).
+      const url = wsUrl(`/api/v1/ssh/session/${nodeId}?token=${encodeURIComponent(token)}`)
 
-      const ws = new WebSocket(wsUrl)
+      const ws = new WebSocket(url, wsAuthProtocols(token))
       wsRef.current = ws
 
       ws.onopen = () => setStatus('connected')
