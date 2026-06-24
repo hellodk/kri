@@ -59,7 +59,7 @@ export function ModelCombobox({ models, value, onChange, onRefresh, refreshing }
 
   const inputClass =
     'w-full px-3 py-2 border border-gray-300 rounded-lg text-sm text-gray-900 ' +
-    'focus:outline-none focus:border-brand-600 font-mono'
+    'focus:outline-hidden focus:border-brand-600 font-mono'
 
   return (
     <div ref={containerRef} className="relative">

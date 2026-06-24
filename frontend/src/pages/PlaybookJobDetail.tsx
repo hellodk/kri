@@ -150,7 +150,7 @@ export function PlaybookJobDetail() {
       </div>
 
       {/* Header card */}
-      <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-5 space-y-4">
+      <div className="bg-white rounded-xl border border-gray-200 shadow-xs p-5 space-y-4">
         <div className="flex items-start justify-between gap-4">
           <div className="space-y-1">
             <div className="flex items-center gap-3">
@@ -253,7 +253,7 @@ export function PlaybookJobDetail() {
       </div>
 
       {/* Logs */}
-      <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden flex flex-col flex-1 min-h-0">
+      <div className="bg-white rounded-xl border border-gray-200 shadow-xs overflow-hidden flex flex-col flex-1 min-h-0">
         <div className="flex items-center justify-between px-4 py-2.5 border-b border-gray-100 bg-gray-50">
           <div>
             <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Output</p>

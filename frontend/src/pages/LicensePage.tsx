@@ -35,22 +35,22 @@ export function LicensePage() {
 
       {/* Stat cards */}
       <div className="grid grid-cols-3 gap-4">
-        <div className="bg-white rounded-xl border border-gray-200 border-l-4 border-l-amber-500 p-5 shadow-sm">
+        <div className="bg-white rounded-xl border border-gray-200 border-l-4 border-l-amber-500 p-5 shadow-xs">
           <p className="text-xs font-semibold uppercase tracking-wide text-gray-500 mb-2">Copyleft Packages</p>
           <p className="text-4xl font-black tabular-nums text-amber-700">{data.copyleft_count}</p>
         </div>
-        <div className="bg-white rounded-xl border border-gray-200 border-l-4 border-l-gray-400 p-5 shadow-sm">
+        <div className="bg-white rounded-xl border border-gray-200 border-l-4 border-l-gray-400 p-5 shadow-xs">
           <p className="text-xs font-semibold uppercase tracking-wide text-gray-500 mb-2">Unknown Licenses</p>
           <p className="text-4xl font-black tabular-nums text-gray-700">{data.unknown_license_count}</p>
         </div>
-        <div className="bg-white rounded-xl border border-gray-200 border-l-4 border-l-emerald-500 p-5 shadow-sm">
+        <div className="bg-white rounded-xl border border-gray-200 border-l-4 border-l-emerald-500 p-5 shadow-xs">
           <p className="text-xs font-semibold uppercase tracking-wide text-gray-500 mb-2">Unique Licenses</p>
           <p className="text-4xl font-black tabular-nums text-emerald-700">{data.total_distinct_licenses}</p>
         </div>
       </div>
 
       {/* Copyleft Risk Section */}
-      <div className="bg-white rounded-xl border border-gray-200 border-l-4 border-l-amber-500 shadow-sm p-6">
+      <div className="bg-white rounded-xl border border-gray-200 border-l-4 border-l-amber-500 shadow-xs p-6">
         <div className="flex items-center gap-3 mb-4">
           <h2 className="text-xl font-semibold text-gray-900">Copyleft Risk</h2>
           <span className="ml-auto px-3 py-1 bg-amber-100 text-amber-700 rounded text-sm font-medium">
@@ -93,7 +93,7 @@ export function LicensePage() {
       </div>
 
       {/* Unknown Licenses Section */}
-      <div className="bg-white rounded-xl border border-gray-200 border-l-4 border-l-gray-400 shadow-sm p-6">
+      <div className="bg-white rounded-xl border border-gray-200 border-l-4 border-l-gray-400 shadow-xs p-6">
         <div className="flex items-center gap-3 mb-4">
           <h2 className="text-xl font-semibold text-gray-900">Unknown Licenses</h2>
           <span className="ml-auto px-3 py-1 bg-gray-100 text-gray-600 rounded text-sm font-medium">
@@ -113,7 +113,7 @@ export function LicensePage() {
       </div>
 
       {/* License Distribution Section */}
-      <div className="bg-white rounded-xl border border-gray-200 border-l-4 border-l-brand-600 shadow-sm p-6">
+      <div className="bg-white rounded-xl border border-gray-200 border-l-4 border-l-brand-600 shadow-xs p-6">
         <div className="flex items-center gap-3 mb-4">
           <h2 className="text-xl font-semibold text-gray-900">License Distribution</h2>
           <span className="ml-auto px-3 py-1 bg-blue-100 text-blue-700 rounded text-sm font-medium">

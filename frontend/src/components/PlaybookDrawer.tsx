@@ -169,7 +169,7 @@ export function PlaybookDrawer({
             <h2 className="text-base font-bold text-gray-900 truncate">{playbook.name}</h2>
             <span className="text-xs text-gray-400 font-mono hidden sm:block">{playbook.filename}</span>
           </div>
-          <button onClick={onClose} className="w-8 h-8 flex items-center justify-center text-gray-400 hover:text-gray-600 hover:bg-gray-200 rounded-lg text-lg flex-shrink-0">×</button>
+          <button onClick={onClose} className="w-8 h-8 flex items-center justify-center text-gray-400 hover:text-gray-600 hover:bg-gray-200 rounded-lg text-lg shrink-0">×</button>
         </div>
 
         {/* Two-panel layout */}
@@ -267,7 +267,7 @@ export function PlaybookDrawer({
                     </div>
                   ) : (
                     <textarea
-                      className="w-full h-full resize-none font-mono text-xs p-4 focus:outline-none bg-gray-950 text-green-300 leading-relaxed"
+                      className="w-full h-full resize-none font-mono text-xs p-4 focus:outline-hidden bg-gray-950 text-green-300 leading-relaxed"
                       value={displayContent}
                       onChange={e => handleEdit(e.target.value)}
                       spellCheck={false}
