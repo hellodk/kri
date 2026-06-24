@@ -388,7 +388,7 @@ async def trigger_provision_master(
     Returns 404 if the master does not exist.
     Requires admin role.
     """
-    from fleet_platform.workers.ansible_tasks import provision_master
+    from fleet_platform.workers.celery_app import celery_app
 
     result = await db.execute(select(SaltMaster).where(SaltMaster.id == master_id))
     master = result.scalar_one_or_none()
@@ -397,7 +397,11 @@ async def trigger_provision_master(
 
     action = (body.action if body and body.action else None) or "install"
 
-    task = provision_master.delay(str(master_id), action)
+    task = celery_app.send_task(
+        "fleet_platform.workers.ansible_tasks.provision_master",
+        args=[str(master_id), action],
+        queue="ansible",
+    )
 
     return {
         "task_id": task.id,

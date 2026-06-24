@@ -22,8 +22,7 @@ from fleet_platform.models.node import Node, Tag
 from fleet_platform.models.process_stat import NodeProcessStat
 from fleet_platform.schemas.ingest import ExecutionIngestPayload, GrainIngestPayload, ProcessStatsIngestPayload
 from fleet_platform.services.node_status import verify_node_token
-from fleet_platform.workers.drift_tasks import compute_drift
-from fleet_platform.workers.sbom_tasks import index_sbom, index_sbom_from_grains
+from fleet_platform.workers.celery_app import celery_app
 
 router = APIRouter(prefix="/api/v1/ingest")
 
@@ -283,13 +282,15 @@ async def ingest_grains(
     await update_node_from_grains(node.id, clean_grains, db)
 
     await db.commit()
-    compute_drift.delay(str(node.id))
+    celery_app.send_task("fleet_platform.workers.drift_tasks.compute_drift", args=[str(node.id)], queue="drift")
 
     # Auto-trigger SBOM indexing when grains contain package data
     grains = payload.grains
     has_packages = bool(grains.get("pkgs") or grains.get("brew_pkgs") or grains.get("pip_pkgs"))
     if has_packages:
-        index_sbom_from_grains.delay(str(node.id))
+        celery_app.send_task(
+            "fleet_platform.workers.sbom_tasks.index_sbom_from_grains", args=[str(node.id)], queue="sbom"
+        )
 
     return {"status": "ok", "node_id": str(node.id)}
 
@@ -408,7 +409,11 @@ async def ingest_sbom(
         raise
 
     try:
-        index_sbom.delay(node_id=str(node.id), file_path=tmp.name)
+        celery_app.send_task(
+            "fleet_platform.workers.sbom_tasks.index_sbom",
+            kwargs={"node_id": str(node.id), "file_path": tmp.name},
+            queue="sbom",
+        )
     except Exception:
         os.unlink(tmp.name)
         raise

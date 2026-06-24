@@ -546,13 +546,20 @@ class TestProvisionRoute:
         assert "admin" in src, "trigger_provision_master must require 'admin' role"
 
     def test_provision_route_calls_delay(self):
-        """The route must call provision_master.delay — not call the task directly."""
+        """The route must enqueue provision_master — not call the task directly.
+
+        #749: routes dispatch by task name via celery_app.send_task rather than
+        importing the worker and calling .delay(), to keep the api->worker import
+        coupling broken.
+        """
         import inspect
 
         from fleet_platform.api.routes.salt_masters import trigger_provision_master
 
         src = inspect.getsource(trigger_provision_master)
-        assert "provision_master.delay" in src, "Route must call provision_master.delay(...)"
+        assert "send_task" in src and "provision_master" in src, (
+            "Route must enqueue provision_master via celery_app.send_task(...)"
+        )
 
     def test_provision_route_returns_202_status(self):
         """The endpoint decorator must declare status_code=202."""

@@ -96,8 +96,17 @@ def test_run_playbook_signature_has_no_ssh_password():
 
 
 def test_run_playbook_endpoint_does_not_pass_ssh_password_to_delay():
-    """run_playbook_endpoint must not pass ssh_password= to run_playbook.delay()."""
+    """run_playbook_endpoint must not pass ssh_password to the run_playbook task.
+
+    #749: the endpoint dispatches by task name via celery_app.send_task(...) rather
+    than importing the worker and calling .delay(); the no-plaintext-ssh_password
+    security property (#495) must still hold for the new dispatch site.
+    """
     src = ANSIBLE_PY.read_text()
-    match = re.search(r"run_playbook\.delay\(.*?\)", src, re.DOTALL)
-    assert match, "run_playbook.delay() call not found"
-    assert "ssh_password" not in match.group(0), "ssh_password must not be passed to run_playbook.delay()"
+    match = re.search(
+        r"send_task\(\s*[\"']fleet_platform\.workers\.playbook_tasks\.run_playbook[\"'].*?\)",
+        src,
+        re.DOTALL,
+    )
+    assert match, "celery_app.send_task('...run_playbook') call not found"
+    assert "ssh_password" not in match.group(0), "ssh_password must not be passed to the run_playbook task"

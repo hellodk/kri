@@ -37,7 +37,7 @@ from fleet_platform.services.log_delta import slice_from, split_running_marker
 from fleet_platform.services.platform_settings_svc import decrypt_secret, encrypt_secret
 from fleet_platform.services.playbook_discovery import discover_all
 from fleet_platform.services.playbook_sources import get_all_playbook_dirs, sync_all_git_sources
-from fleet_platform.workers.playbook_tasks import run_playbook
+from fleet_platform.workers.celery_app import celery_app
 
 router = APIRouter(prefix="/api/v1/ansible")
 
@@ -1291,10 +1291,11 @@ async def run_playbook_endpoint(
     await db.commit()
     await db.refresh(job)
 
-    task = run_playbook.delay(
-        str(job.id),
-        ssh_username=payload.ssh_username,
-        verbosity=job.verbosity,
+    task = celery_app.send_task(
+        "fleet_platform.workers.playbook_tasks.run_playbook",
+        args=[str(job.id)],
+        kwargs={"ssh_username": payload.ssh_username, "verbosity": job.verbosity},
+        queue="ansible",
     )
     job.celery_task_id = task.id
     await db.commit()
