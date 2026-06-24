@@ -720,7 +720,7 @@ def build_static_context(
 ) -> str:
     group_line = ", ".join(groups) if groups else "(none)"
     return (
-        "You are an AI assistant embedded in **kri**, a Mac Mini fleet management platform.\n\n"
+        "You are an AI assistant embedded in **kri**, a fleet management platform.\n\n"
         "## Fleet Snapshot\n"
         f"- Total nodes: {node_count}\n"
         f"- Online: {online_count}  |  Offline: {node_count - online_count}\n"

@@ -8,7 +8,7 @@
 
 **Tech Stack:** `gh` CLI, GitHub Actions, GitHub Projects v2 GraphQL API, GitHub Pages, Dependabot, shields.io badges.
 
-**Repo:** `hellodk/kri` — Mac Mini fleet management platform (FastAPI + React + SaltStack)
+**Repo:** `hellodk/kri` — fleet management platform (FastAPI + React + SaltStack)
 
 ---
 
@@ -72,7 +72,7 @@ docs/
 Replace the entire file with:
 
 ```markdown
-# kri — Mac Mini Fleet Platform
+# kri — Fleet Platform
 
 [![CI](https://github.com/hellodk/kri/actions/workflows/ci.yml/badge.svg)](https://github.com/hellodk/kri/actions/workflows/ci.yml)
 [![Version](https://img.shields.io/github/v/release/hellodk/kri?label=release)](https://github.com/hellodk/kri/releases)
@@ -459,7 +459,7 @@ Create `docs/index.html`:
 </head>
 <body>
   <h1>kri Fleet Platform</h1>
-  <p>Enterprise Mac Mini fleet management — bootstrapping, drift detection, Ansible automation, and SaltStack integration.</p>
+  <p>Enterprise fleet management — bootstrapping, drift detection, Ansible automation, and SaltStack integration.</p>
   <h2>Articles</h2>
   <ul>
     <li><a href="blog/testing-and-ci-strategy.html">Testing &amp; CI Strategy</a> <span class="badge">Engineering</span></li>
