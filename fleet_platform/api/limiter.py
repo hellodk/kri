@@ -37,7 +37,9 @@ per-IP rate limits (e.g. flood logins from "different" IPs).
 from typing import Callable
 
 from slowapi import Limiter
+from starlette.datastructures import MutableHeaders
 from starlette.requests import Request
+from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
 
 def make_real_ip_key(proxy_count: int) -> Callable[[Request], str]:
@@ -69,3 +71,53 @@ def _default_key(request: Request) -> str:
 
 
 limiter = Limiter(key_func=_default_key)
+
+
+class RateLimitHeadersMiddleware:
+    """Emit ``X-RateLimit-*`` headers on every HTTP response for rate-limited routes.
+
+    SlowAPI's own header injection is not usable here:
+
+    * ``Limiter(headers_enabled=True)`` makes the ``@limiter.limit`` *decorator*
+      try to inject headers into the endpoint's return value. Our endpoints
+      return plain dicts (not ``Response`` objects) and don't declare a
+      ``response: Response`` parameter, so that path raises
+      "parameter `response` must be an instance of Response" — it would break
+      every decorated dict-returning route.
+    * ``SlowAPIMiddleware`` deliberately *exempts* any route that carries a
+      ``@limiter.limit`` decorator, so it never adds headers to e.g. ``/auth/login``.
+
+    This is a pure-ASGI middleware (not ``BaseHTTPMiddleware``) so it leaves
+    WebSocket scopes completely untouched — wrapping WebSocket routes in
+    ``BaseHTTPMiddleware`` breaks their close-code handshake. For HTTP requests
+    we read ``view_rate_limit`` from the shared scope state (the decorator sets
+    it in ``_check_request_limit`` *before* the endpoint runs, so it is present
+    even when the endpoint raises, e.g. a 401 login) and append the standard
+    headers as the response starts, mirroring ``Limiter._inject_headers``.
+    """
+
+    def __init__(self, app: ASGIApp) -> None:
+        self.app = app
+
+    async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
+        if scope["type"] != "http":
+            await self.app(scope, receive, send)
+            return
+
+        async def send_wrapper(message: Message) -> None:
+            if message["type"] == "http.response.start":
+                current_limit = (scope.get("state") or {}).get("view_rate_limit")
+                limiter_obj = getattr(getattr(scope.get("app"), "state", None), "limiter", None)
+                if current_limit is not None and limiter_obj is not None:
+                    try:
+                        item, args = current_limit
+                        window_stats = limiter_obj.limiter.get_window_stats(item, *args)
+                        headers = MutableHeaders(scope=message)
+                        headers["X-RateLimit-Limit"] = str(item.amount)
+                        headers["X-RateLimit-Remaining"] = str(window_stats[1])
+                        headers["X-RateLimit-Reset"] = str(1 + window_stats[0])
+                    except Exception:  # never let header decoration break a response
+                        pass
+            await send(message)
+
+        await self.app(scope, receive, send_wrapper)

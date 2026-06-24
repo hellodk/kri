@@ -153,10 +153,20 @@ class TestImportRow:
         r = ImportRow(minion_id="build-01.corp")
         assert r.minion_id == "build-01.corp"
 
-    def test_rejects_too_long(self):
-        with pytest.raises(ValidationError):
-            ImportRow(minion_id="b" * 129)
+    # NOTE: ImportRow deliberately does NOT hard-validate minion_id (unlike the
+    # other request schemas above). It is the transport for the bulk-import
+    # *validate* dry-run response, which must be able to carry rows that FAILED
+    # validation (status="invalid") so the UI can show which rows were rejected
+    # and why. Raising at parse time would 500 the validate endpoint. Format
+    # enforcement instead happens softly in node_import.validate_row and again
+    # defensively on the commit path (fleet.import_commit). So a malformed id is
+    # accepted by the model but categorised/skipped before it can be persisted.
+    def test_accepts_too_long_as_transport(self):
+        r = ImportRow(minion_id="b" * 129)
+        assert r.minion_id == "b" * 129
+        assert MINION_ID_RE.match(r.minion_id) is None
 
-    def test_rejects_special_chars(self):
-        with pytest.raises(ValidationError):
-            ImportRow(minion_id="foo bar")
+    def test_accepts_special_chars_as_transport(self):
+        r = ImportRow(minion_id="foo bar")
+        assert r.minion_id == "foo bar"
+        assert MINION_ID_RE.match(r.minion_id) is None

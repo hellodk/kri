@@ -267,10 +267,6 @@ async def test_list_agent_actions_returns_list(admin_client: AsyncClient):
 
 async def test_reject_agent_action_over_http(admin_client: AsyncClient, db_session: AsyncSession):
     """POST /agent/actions/{id}/reject transitions the action to 'rejected'."""
-    from sqlalchemy import select
-
-    from fleet_platform.models.pending_action import PendingAction
-
     action = await _create_pending_action(db_session, requested_by="op@fleet.local")
     action_id = str(action.id)
 
@@ -278,12 +274,14 @@ async def test_reject_agent_action_over_http(admin_client: AsyncClient, db_sessi
     assert resp.status_code == 200
     assert resp.json().get("status") == "rejected"
 
-    # DB must reflect the rejected status
-    refreshed = (
-        await db_session.execute(select(PendingAction).where(PendingAction.id == action.id))
-    ).scalar_one_or_none()
-    assert refreshed is not None
-    assert refreshed.status == "rejected"
+    # DB must reflect the rejected status. The API ran the update in its own
+    # session; this test's db_session (expire_on_commit=False) still holds the
+    # original instance in its identity map, so refresh it to read the committed
+    # row rather than asserting against the stale cached object. refresh() is
+    # awaited, so it is safe in the async session (unlike touching an expired
+    # attribute, which would trigger a sync lazy-load).
+    await db_session.refresh(action)
+    assert action.status == "rejected"
 
 
 async def test_approve_agent_action_over_http(admin_client: AsyncClient, db_session: AsyncSession, admin_user):

@@ -6,6 +6,7 @@ import { Skeleton } from '../components/Skeleton'
 import { ErrorState } from '../components/ErrorState'
 import { Pagination } from '../components/Pagination'
 import { formatDistanceToNow } from 'date-fns'
+import { formatLocalDateTime } from '../utils/time'
 
 const RESOURCE_TYPES = ['node', 'group', 'user', 'setting', 'playbook']
 
@@ -239,12 +240,12 @@ export function AuditPage() {
             <table className="w-full text-sm">
               <thead>
                 <tr className="bg-gray-50 border-b border-gray-200 text-left text-xs text-gray-500 uppercase tracking-wide">
-                  <th className="px-4 py-3">Timestamp</th>
-                  <th className="px-4 py-3">Actor</th>
-                  <th className="px-4 py-3">Action</th>
-                  <th className="px-4 py-3">Resource Type</th>
-                  <th className="px-4 py-3">Resource ID</th>
-                  <th className="px-4 py-3">Changes</th>
+                  <th scope="col" className="px-4 py-3">Timestamp</th>
+                  <th scope="col" className="px-4 py-3">Actor</th>
+                  <th scope="col" className="px-4 py-3">Action</th>
+                  <th scope="col" className="px-4 py-3">Resource Type</th>
+                  <th scope="col" className="px-4 py-3">Resource ID</th>
+                  <th scope="col" className="px-4 py-3">Changes</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100">
@@ -263,7 +264,7 @@ export function AuditPage() {
                       <tr key={e.id} className={`hover:bg-gray-50 ${hasChanges ? 'cursor-pointer' : ''}`} onClick={() => hasChanges && setExpandedId(isExpanded ? null : e.id)}>
                         <td className="px-4 py-3 text-gray-500 whitespace-nowrap text-xs">
                           <span title={formatDistanceToNow(new Date(e.event_at), { addSuffix: true })}>
-                            {new Date(e.event_at).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata', day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false })} IST
+                            {formatLocalDateTime(e.event_at, { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false })}
                           </span>
                         </td>
                         <td className="px-4 py-3 font-mono text-xs text-gray-700 max-w-[180px] truncate">
