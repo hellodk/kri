@@ -951,10 +951,10 @@ export function SaltMastersTab() {
                   <table className="w-full text-xs">
                     <thead>
                       <tr className="bg-gray-50 border-b border-gray-100">
-                        <th className="px-5 py-2 text-left font-semibold text-gray-700">Check</th>
-                        <th className="px-5 py-2 text-left font-semibold text-gray-700">Status</th>
-                        <th className="px-5 py-2 text-left font-semibold text-gray-700">Detail</th>
-                        <th className="px-5 py-2 text-right font-semibold text-gray-700">Latency</th>
+                        <th scope="col" className="px-5 py-2 text-left font-semibold text-gray-700">Check</th>
+                        <th scope="col" className="px-5 py-2 text-left font-semibold text-gray-700">Status</th>
+                        <th scope="col" className="px-5 py-2 text-left font-semibold text-gray-700">Detail</th>
+                        <th scope="col" className="px-5 py-2 text-right font-semibold text-gray-700">Latency</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-gray-100">

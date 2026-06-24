@@ -63,10 +63,10 @@ export function LicensePage() {
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-gray-200">
-                  <th className="text-left px-4 py-3 text-gray-500 font-semibold">Package</th>
-                  <th className="text-left px-4 py-3 text-gray-500 font-semibold">Version</th>
-                  <th className="text-left px-4 py-3 text-gray-500 font-semibold">License</th>
-                  <th className="text-left px-4 py-3 text-gray-500 font-semibold">Node ID</th>
+                  <th scope="col" className="text-left px-4 py-3 text-gray-500 font-semibold">Package</th>
+                  <th scope="col" className="text-left px-4 py-3 text-gray-500 font-semibold">Version</th>
+                  <th scope="col" className="text-left px-4 py-3 text-gray-500 font-semibold">License</th>
+                  <th scope="col" className="text-left px-4 py-3 text-gray-500 font-semibold">Node ID</th>
                 </tr>
               </thead>
               <tbody>

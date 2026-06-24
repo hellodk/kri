@@ -1391,11 +1391,11 @@ export function NodeDetail() {
                 <table className="w-full text-sm">
                   <thead>
                     <tr className="border-b border-gray-200">
-                      <th className="text-left px-3 py-2 font-semibold text-gray-700">Name</th>
-                      <th className="text-left px-3 py-2 font-semibold text-gray-700">State</th>
-                      <th className="text-left px-3 py-2 font-semibold text-gray-700">CPU</th>
-                      <th className="text-left px-3 py-2 font-semibold text-gray-700">Memory</th>
-                      <th className="text-left px-3 py-2 font-semibold text-gray-700">Source</th>
+                      <th scope="col" className="text-left px-3 py-2 font-semibold text-gray-700">Name</th>
+                      <th scope="col" className="text-left px-3 py-2 font-semibold text-gray-700">State</th>
+                      <th scope="col" className="text-left px-3 py-2 font-semibold text-gray-700">CPU</th>
+                      <th scope="col" className="text-left px-3 py-2 font-semibold text-gray-700">Memory</th>
+                      <th scope="col" className="text-left px-3 py-2 font-semibold text-gray-700">Source</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -1518,9 +1518,9 @@ export function NodeDetail() {
                     <table className="w-full text-sm">
                       <thead>
                         <tr className="text-xs text-gray-500 uppercase border-b border-gray-100 bg-gray-50">
-                          <th className="px-4 py-2 text-left font-medium">Package</th>
-                          <th className="px-4 py-2 text-left font-medium">Expected Version</th>
-                          <th className="px-4 py-2 text-left font-medium">Severity Hint</th>
+                          <th scope="col" className="px-4 py-2 text-left font-medium">Package</th>
+                          <th scope="col" className="px-4 py-2 text-left font-medium">Expected Version</th>
+                          <th scope="col" className="px-4 py-2 text-left font-medium">Severity Hint</th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-gray-50">
@@ -1549,10 +1549,10 @@ export function NodeDetail() {
                     <table className="w-full text-sm">
                       <thead>
                         <tr className="text-xs text-gray-500 uppercase border-b border-gray-100 bg-gray-50">
-                          <th className="px-4 py-2 text-left font-medium">Package</th>
-                          <th className="px-4 py-2 text-left font-medium">Installed</th>
-                          <th className="px-4 py-2 text-left font-medium">Expected</th>
-                          <th className="px-4 py-2 text-left font-medium">Δ</th>
+                          <th scope="col" className="px-4 py-2 text-left font-medium">Package</th>
+                          <th scope="col" className="px-4 py-2 text-left font-medium">Installed</th>
+                          <th scope="col" className="px-4 py-2 text-left font-medium">Expected</th>
+                          <th scope="col" className="px-4 py-2 text-left font-medium">Δ</th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-gray-50">
@@ -1582,9 +1582,9 @@ export function NodeDetail() {
                     <table className="w-full text-sm">
                       <thead>
                         <tr className="text-xs text-gray-500 uppercase border-b border-gray-100 bg-gray-50">
-                          <th className="px-4 py-2 text-left font-medium">Package</th>
-                          <th className="px-4 py-2 text-left font-medium">Installed Version</th>
-                          <th className="px-4 py-2 text-left font-medium">Note</th>
+                          <th scope="col" className="px-4 py-2 text-left font-medium">Package</th>
+                          <th scope="col" className="px-4 py-2 text-left font-medium">Installed Version</th>
+                          <th scope="col" className="px-4 py-2 text-left font-medium">Note</th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-gray-50">
@@ -1609,9 +1609,9 @@ export function NodeDetail() {
                     <table className="w-full text-sm">
                       <thead>
                         <tr className="text-xs text-gray-500 uppercase border-b border-gray-100 bg-gray-50">
-                          <th className="px-4 py-2 text-left font-medium">Service</th>
-                          <th className="px-4 py-2 text-left font-medium">Expected</th>
-                          <th className="px-4 py-2 text-left font-medium">Actual</th>
+                          <th scope="col" className="px-4 py-2 text-left font-medium">Service</th>
+                          <th scope="col" className="px-4 py-2 text-left font-medium">Expected</th>
+                          <th scope="col" className="px-4 py-2 text-left font-medium">Actual</th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-gray-50">
@@ -1638,9 +1638,9 @@ export function NodeDetail() {
                     <table className="w-full text-sm">
                       <thead>
                         <tr className="text-xs text-gray-500 uppercase border-b border-gray-100 bg-gray-50">
-                          <th className="px-4 py-2 text-left font-medium">Key</th>
-                          <th className="px-4 py-2 text-left font-medium">Expected</th>
-                          <th className="px-4 py-2 text-left font-medium">Actual</th>
+                          <th scope="col" className="px-4 py-2 text-left font-medium">Key</th>
+                          <th scope="col" className="px-4 py-2 text-left font-medium">Expected</th>
+                          <th scope="col" className="px-4 py-2 text-left font-medium">Actual</th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-gray-50">
@@ -1756,11 +1756,11 @@ export function NodeDetail() {
                 <table className="w-full text-sm">
                   <thead>
                     <tr className="bg-gray-50 border-b border-gray-200 text-left text-xs text-gray-500 uppercase">
-                      <th className="px-4 py-3">Name</th>
-                      <th className="px-4 py-3">Version</th>
-                      <th className="px-4 py-3">Type</th>
-                      <th className="px-4 py-3">Licenses</th>
-                      <th className="px-4 py-3">CVEs</th>
+                      <th scope="col" className="px-4 py-3">Name</th>
+                      <th scope="col" className="px-4 py-3">Version</th>
+                      <th scope="col" className="px-4 py-3">Type</th>
+                      <th scope="col" className="px-4 py-3">Licenses</th>
+                      <th scope="col" className="px-4 py-3">CVEs</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-100">
@@ -1824,10 +1824,10 @@ export function NodeDetail() {
               <table className="w-full text-sm">
                 <thead>
                   <tr className="bg-gray-50 border-b border-gray-200 text-left text-xs text-gray-500 uppercase">
-                    <th className="px-4 py-2">Playbook</th>
-                    <th className="px-4 py-2">Status</th>
-                    <th className="px-4 py-2">Started</th>
-                    <th className="px-4 py-2">RC</th>
+                    <th scope="col" className="px-4 py-2">Playbook</th>
+                    <th scope="col" className="px-4 py-2">Status</th>
+                    <th scope="col" className="px-4 py-2">Started</th>
+                    <th scope="col" className="px-4 py-2">RC</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-100">
@@ -1869,10 +1869,10 @@ export function NodeDetail() {
             <table className="w-full text-sm">
               <thead>
                 <tr className="bg-gray-50 border-b border-gray-200 text-left text-xs text-gray-500 uppercase">
-                  <th className="px-4 py-3">Type</th>
-                  <th className="px-4 py-3">Status</th>
-                  <th className="px-4 py-3">Triggered By</th>
-                  <th className="px-4 py-3">Started</th>
+                  <th scope="col" className="px-4 py-3">Type</th>
+                  <th scope="col" className="px-4 py-3">Status</th>
+                  <th scope="col" className="px-4 py-3">Triggered By</th>
+                  <th scope="col" className="px-4 py-3">Started</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100">
@@ -2016,10 +2016,10 @@ export function NodeDetail() {
               <table className="w-full text-sm">
                 <thead>
                   <tr className="bg-gray-50 border-b border-gray-200 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide">
-                    <th className="px-4 py-3">Key</th>
-                    <th className="px-4 py-3">Description</th>
-                    <th className="px-4 py-3">Last Updated</th>
-                    <th className="px-4 py-3 w-20"></th>
+                    <th scope="col" className="px-4 py-3">Key</th>
+                    <th scope="col" className="px-4 py-3">Description</th>
+                    <th scope="col" className="px-4 py-3">Last Updated</th>
+                    <th scope="col" className="px-4 py-3 w-20"></th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-100">
@@ -2268,9 +2268,9 @@ export function NodeDetail() {
             <table className="w-full text-xs">
               <thead>
                 <tr className="bg-gray-50 border-b border-gray-200">
-                  <th className="text-left py-2.5 px-3 text-gray-600 font-medium">Service</th>
-                  <th className="text-center py-2.5 px-3 text-gray-600 font-medium">State</th>
-                  <th className="text-center py-2.5 px-3 text-gray-600 font-medium">Actions</th>
+                  <th scope="col" className="text-left py-2.5 px-3 text-gray-600 font-medium">Service</th>
+                  <th scope="col" className="text-center py-2.5 px-3 text-gray-600 font-medium">State</th>
+                  <th scope="col" className="text-center py-2.5 px-3 text-gray-600 font-medium">Actions</th>
                 </tr>
               </thead>
               <tbody>
@@ -2385,13 +2385,13 @@ export function NodeDetail() {
               <table className="w-full text-xs">
                 <thead>
                   <tr className="bg-gray-50 border-b border-gray-200">
-                    <th className="text-left py-2.5 px-3 text-gray-500 font-medium w-16">PID</th>
-                    <th className="text-left py-2.5 px-3 text-gray-500 font-medium">Name</th>
-                    <th className="text-left py-2.5 px-3 text-gray-500 font-medium w-24">User</th>
-                    <th className="text-right py-2.5 px-3 text-gray-500 font-medium w-16">CPU%</th>
-                    <th className="text-right py-2.5 px-3 text-gray-500 font-medium w-20">Mem%</th>
-                    <th className="text-right py-2.5 px-3 text-gray-500 font-medium w-24">Mem (RSS)</th>
-                    <th className="text-center py-2.5 px-3 text-gray-500 font-medium w-40">Actions</th>
+                    <th scope="col" className="text-left py-2.5 px-3 text-gray-500 font-medium w-16">PID</th>
+                    <th scope="col" className="text-left py-2.5 px-3 text-gray-500 font-medium">Name</th>
+                    <th scope="col" className="text-left py-2.5 px-3 text-gray-500 font-medium w-24">User</th>
+                    <th scope="col" className="text-right py-2.5 px-3 text-gray-500 font-medium w-16">CPU%</th>
+                    <th scope="col" className="text-right py-2.5 px-3 text-gray-500 font-medium w-20">Mem%</th>
+                    <th scope="col" className="text-right py-2.5 px-3 text-gray-500 font-medium w-24">Mem (RSS)</th>
+                    <th scope="col" className="text-center py-2.5 px-3 text-gray-500 font-medium w-40">Actions</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-100">

@@ -7,6 +7,7 @@ import { fleetApi } from '../api/fleet'
 import { groupsApi } from '../api/groups'
 import { saltMastersApi } from '../api/saltMasters'
 import { canBootstrap, saltMasterBadge } from '../lib/saltMasterHelpers'
+import { useFocusTrap } from '../hooks/useFocusTrap'
 import { useToastStore } from '../stores/toastStore'
 import type { Node } from '../types'
 
@@ -985,9 +986,9 @@ function BulkMode({ onClose }: { onClose: () => void }) {
           <table className="w-full text-sm">
             <thead>
               <tr className="bg-gray-100 text-xs font-semibold text-gray-500 uppercase tracking-wide">
-                <th className="px-3 py-2 text-left">Minion ID</th>
-                <th className="px-3 py-2 text-left">IP</th>
-                <th className="px-3 py-2 text-left">Status</th>
+                <th scope="col" className="px-3 py-2 text-left">Minion ID</th>
+                <th scope="col" className="px-3 py-2 text-left">IP</th>
+                <th scope="col" className="px-3 py-2 text-left">Status</th>
               </tr>
             </thead>
             <tbody className="px-3">
@@ -1152,9 +1153,10 @@ function BulkMode({ onClose }: { onClose: () => void }) {
 
 export function BootstrapModal({ onClose }: Props) {
   const [mode, setMode] = useState<Mode>('single')
+  const containerRef = useFocusTrap<HTMLDivElement>(true, onClose)
 
   return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+    <div ref={containerRef} className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4" role="dialog" aria-modal="true">
       <div className="bg-white rounded-2xl shadow-2xl w-full max-w-5xl flex flex-col max-h-[95vh]">
         {/* Header */}
         <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200 shrink-0">

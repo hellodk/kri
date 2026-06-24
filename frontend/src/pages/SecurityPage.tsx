@@ -434,15 +434,15 @@ export function SecurityPage() {
           <table className="w-full text-sm">
             <thead>
               <tr className="text-left text-xs font-semibold text-gray-500 uppercase tracking-wide bg-gray-50 border-b border-gray-100">
-                <th className="px-4 py-3">Node</th>
-                <th className="px-4 py-3">Risk</th>
-                <th className="px-4 py-3 text-red-600">Critical</th>
-                <th className="px-4 py-3 text-orange-600">High</th>
-                <th className="px-4 py-3 text-amber-600">Medium</th>
-                <th className="px-4 py-3 text-blue-600">Low</th>
-                <th className="px-4 py-3 text-purple-600">Lic. Risks</th>
-                <th className="px-4 py-3">Last Scanned</th>
-                <th className="px-4 py-3 w-24"></th>
+                <th scope="col" className="px-4 py-3">Node</th>
+                <th scope="col" className="px-4 py-3">Risk</th>
+                <th scope="col" className="px-4 py-3 text-red-600">Critical</th>
+                <th scope="col" className="px-4 py-3 text-orange-600">High</th>
+                <th scope="col" className="px-4 py-3 text-amber-600">Medium</th>
+                <th scope="col" className="px-4 py-3 text-blue-600">Low</th>
+                <th scope="col" className="px-4 py-3 text-purple-600">Lic. Risks</th>
+                <th scope="col" className="px-4 py-3">Last Scanned</th>
+                <th scope="col" className="px-4 py-3 w-24"></th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">
@@ -523,13 +523,13 @@ export function SecurityPage() {
           <table className="w-full text-sm">
             <thead>
               <tr className="text-left text-xs font-semibold text-gray-500 uppercase tracking-wide bg-gray-50 border-b border-gray-100">
-                <th className="px-4 py-3">Node ID</th>
-                <th className="px-4 py-3">SSH User</th>
-                <th className="px-4 py-3">Source IP</th>
-                <th className="px-4 py-3">Credentials</th>
-                <th className="px-4 py-3">Started</th>
-                <th className="px-4 py-3">Status</th>
-                <th className="px-4 py-3 text-red-600">Alerts</th>
+                <th scope="col" className="px-4 py-3">Node ID</th>
+                <th scope="col" className="px-4 py-3">SSH User</th>
+                <th scope="col" className="px-4 py-3">Source IP</th>
+                <th scope="col" className="px-4 py-3">Credentials</th>
+                <th scope="col" className="px-4 py-3">Started</th>
+                <th scope="col" className="px-4 py-3">Status</th>
+                <th scope="col" className="px-4 py-3 text-red-600">Alerts</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">

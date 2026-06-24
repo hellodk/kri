@@ -78,11 +78,11 @@ export function DriftExplorer() {
             <table className="w-full text-sm">
               <thead>
                 <tr className="bg-gray-50 border-b border-gray-200 text-left text-xs text-gray-500 uppercase tracking-wide">
-                  <th className="px-4 py-3">Hostname</th>
-                  <th className="px-4 py-3">Drift Score</th>
-                  <th className="px-4 py-3">Severity</th>
-                  <th className="px-4 py-3">Baseline</th>
-                  <th className="px-4 py-3">Computed</th>
+                  <th scope="col" className="px-4 py-3">Hostname</th>
+                  <th scope="col" className="px-4 py-3">Drift Score</th>
+                  <th scope="col" className="px-4 py-3">Severity</th>
+                  <th scope="col" className="px-4 py-3">Baseline</th>
+                  <th scope="col" className="px-4 py-3">Computed</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100">

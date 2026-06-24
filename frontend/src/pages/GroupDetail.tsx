@@ -247,11 +247,11 @@ export function GroupDetail() {
                   <table className="w-full text-sm">
                     <thead>
                       <tr className="bg-gray-50 border-b border-gray-200 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide">
-                        <th className="px-4 py-3">Node</th>
-                        <th className="px-4 py-3">Drift Score</th>
-                        <th className="px-4 py-3">Severity</th>
-                        <th className="px-4 py-3">Last Seen</th>
-                        <th className="px-4 py-3 w-24"></th>
+                        <th scope="col" className="px-4 py-3">Node</th>
+                        <th scope="col" className="px-4 py-3">Drift Score</th>
+                        <th scope="col" className="px-4 py-3">Severity</th>
+                        <th scope="col" className="px-4 py-3">Last Seen</th>
+                        <th scope="col" className="px-4 py-3 w-24"></th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-gray-100">
@@ -461,10 +461,10 @@ export function GroupDetail() {
               <table className="w-full text-sm">
                 <thead>
                   <tr className="bg-gray-50 border-b border-gray-200 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide">
-                    <th className="px-4 py-3">Key</th>
-                    <th className="px-4 py-3">Description</th>
-                    <th className="px-4 py-3">Last Updated</th>
-                    <th className="px-4 py-3 w-20"></th>
+                    <th scope="col" className="px-4 py-3">Key</th>
+                    <th scope="col" className="px-4 py-3">Description</th>
+                    <th scope="col" className="px-4 py-3">Last Updated</th>
+                    <th scope="col" className="px-4 py-3 w-20"></th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-100">
@@ -604,11 +604,11 @@ export function GroupDetail() {
             <table className="w-full text-sm">
               <thead>
                 <tr className="bg-gray-50 border-b border-gray-200 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide">
-                  <th className="px-4 py-3">Hostname</th>
-                  <th className="px-4 py-3">Status</th>
-                  <th className="px-4 py-3">Drift</th>
-                  <th className="px-4 py-3">OS</th>
-                  {isStatic && <th className="px-4 py-3 w-16"></th>}
+                  <th scope="col" className="px-4 py-3">Hostname</th>
+                  <th scope="col" className="px-4 py-3">Status</th>
+                  <th scope="col" className="px-4 py-3">Drift</th>
+                  <th scope="col" className="px-4 py-3">OS</th>
+                  {isStatic && <th scope="col" className="px-4 py-3 w-16"></th>}
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100">

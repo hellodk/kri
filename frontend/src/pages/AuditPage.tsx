@@ -240,12 +240,12 @@ export function AuditPage() {
             <table className="w-full text-sm">
               <thead>
                 <tr className="bg-gray-50 border-b border-gray-200 text-left text-xs text-gray-500 uppercase tracking-wide">
-                  <th className="px-4 py-3">Timestamp</th>
-                  <th className="px-4 py-3">Actor</th>
-                  <th className="px-4 py-3">Action</th>
-                  <th className="px-4 py-3">Resource Type</th>
-                  <th className="px-4 py-3">Resource ID</th>
-                  <th className="px-4 py-3">Changes</th>
+                  <th scope="col" className="px-4 py-3">Timestamp</th>
+                  <th scope="col" className="px-4 py-3">Actor</th>
+                  <th scope="col" className="px-4 py-3">Action</th>
+                  <th scope="col" className="px-4 py-3">Resource Type</th>
+                  <th scope="col" className="px-4 py-3">Resource ID</th>
+                  <th scope="col" className="px-4 py-3">Changes</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100">

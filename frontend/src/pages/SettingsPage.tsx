@@ -2229,14 +2229,14 @@ function LLMEndpointsSection() {
             <table className="w-full text-sm">
               <thead>
                 <tr className="bg-gray-50 border-b border-gray-200">
-                  <th className="text-left px-4 py-2.5 text-xs font-semibold text-gray-600 uppercase tracking-wide">Name</th>
-                  <th className="text-left px-4 py-2.5 text-xs font-semibold text-gray-600 uppercase tracking-wide">Provider</th>
-                  <th className="text-left px-4 py-2.5 text-xs font-semibold text-gray-600 uppercase tracking-wide">Model</th>
-                  <th className="text-left px-4 py-2.5 text-xs font-semibold text-gray-600 uppercase tracking-wide">Status</th>
-                  <th className="text-center px-4 py-2.5 text-xs font-semibold text-gray-600 uppercase tracking-wide">Default</th>
-                  <th className="text-center px-4 py-2.5 text-xs font-semibold text-gray-600 uppercase tracking-wide">Enabled</th>
-                  <th className="text-center px-4 py-2.5 text-xs font-semibold text-gray-600 uppercase tracking-wide">Has Key</th>
-                  <th className="text-right px-4 py-2.5 text-xs font-semibold text-gray-600 uppercase tracking-wide">Actions</th>
+                  <th scope="col" className="text-left px-4 py-2.5 text-xs font-semibold text-gray-600 uppercase tracking-wide">Name</th>
+                  <th scope="col" className="text-left px-4 py-2.5 text-xs font-semibold text-gray-600 uppercase tracking-wide">Provider</th>
+                  <th scope="col" className="text-left px-4 py-2.5 text-xs font-semibold text-gray-600 uppercase tracking-wide">Model</th>
+                  <th scope="col" className="text-left px-4 py-2.5 text-xs font-semibold text-gray-600 uppercase tracking-wide">Status</th>
+                  <th scope="col" className="text-center px-4 py-2.5 text-xs font-semibold text-gray-600 uppercase tracking-wide">Default</th>
+                  <th scope="col" className="text-center px-4 py-2.5 text-xs font-semibold text-gray-600 uppercase tracking-wide">Enabled</th>
+                  <th scope="col" className="text-center px-4 py-2.5 text-xs font-semibold text-gray-600 uppercase tracking-wide">Has Key</th>
+                  <th scope="col" className="text-right px-4 py-2.5 text-xs font-semibold text-gray-600 uppercase tracking-wide">Actions</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100">
