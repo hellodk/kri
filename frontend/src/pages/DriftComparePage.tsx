@@ -142,7 +142,7 @@ export function DriftComparePage() {
             placeholder="Search by hostname…"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            className="w-full text-sm border border-gray-300 rounded px-2 py-1.5 focus:outline-none focus:ring-2 focus:ring-brand-400"
+            className="w-full text-sm border border-gray-300 rounded px-2 py-1.5 focus:outline-hidden focus:ring-2 focus:ring-brand-400"
           />
           {nodesLoading ? (
             <Skeleton rows={6} />

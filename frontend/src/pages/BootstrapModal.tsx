@@ -364,7 +364,7 @@ function SingleMode({ onClose }: { onClose: () => void }) {
               if (settingsData) setSshUsername(settingsData.ssh_bootstrap_username || '')
             }}
               className={`flex-1 py-1.5 text-sm font-medium rounded-md transition-colors ${
-                subMode === m ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'
+                subMode === m ? 'bg-white text-gray-900 shadow-xs' : 'text-gray-500 hover:text-gray-700'
               }`}>
               {m === 'existing' ? 'Existing node' : 'New node'}
             </button>
@@ -380,7 +380,7 @@ function SingleMode({ onClose }: { onClose: () => void }) {
                 placeholder="Search nodes…"
                 value={nodeSearch}
                 onChange={(e) => setNodeSearch(e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm text-gray-900 focus:outline-none focus:border-brand-600 mb-2"
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm text-gray-900 focus:outline-hidden focus:border-brand-600 mb-2"
               />
               <div className="border border-gray-200 rounded-lg max-h-48 overflow-y-auto">
                 {filtered.map((n) => (
@@ -414,7 +414,7 @@ function SingleMode({ onClose }: { onClose: () => void }) {
                   <input
                     value={targetIp}
                     readOnly
-                    className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm text-gray-500 bg-gray-50 cursor-not-allowed focus:outline-none"
+                    className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm text-gray-500 bg-gray-50 cursor-not-allowed focus:outline-hidden"
                   />
                 </div>
 
@@ -431,7 +431,7 @@ function SingleMode({ onClose }: { onClose: () => void }) {
                         value={sshUsername}
                         onChange={(e) => setSshUsername(e.target.value)}
                         placeholder="admin"
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm text-gray-900 focus:outline-none focus:border-brand-600"
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm text-gray-900 focus:outline-hidden focus:border-brand-600"
                       />
                     </div>
                     <div>
@@ -448,7 +448,7 @@ function SingleMode({ onClose }: { onClose: () => void }) {
                             value={sshPassword}
                             onChange={(e) => setSshPassword(e.target.value)}
                             placeholder={selectedNodeHasSavedPassword ? 'Override saved password' : '••••••••'}
-                            className="w-full px-3 py-2 pr-9 border border-gray-300 rounded-lg text-sm text-gray-900 focus:outline-none focus:border-brand-600"
+                            className="w-full px-3 py-2 pr-9 border border-gray-300 rounded-lg text-sm text-gray-900 focus:outline-hidden focus:border-brand-600"
                           />
                           <button type="button" onClick={() => setShowSshPassword(!showSshPassword)}
                             className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">
@@ -474,7 +474,7 @@ function SingleMode({ onClose }: { onClose: () => void }) {
                   if (!existingNodeDbId) setTargetIp('')
                 }}
                 placeholder="mac-mini-01"
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm text-gray-900 focus:outline-none focus:border-brand-600" />
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm text-gray-900 focus:outline-hidden focus:border-brand-600" />
               {existingNode && (
                 <p className="text-xs text-brand-600 mt-1 flex items-center gap-1">
                   <span>✓</span> Node found in fleet — IP pre-filled and locked
@@ -495,7 +495,7 @@ function SingleMode({ onClose }: { onClose: () => void }) {
                 readOnly={!!existingNodeDbId}
                 onChange={(e) => !existingNodeDbId && setTargetIp(e.target.value)}
                 placeholder="10.0.1.11"
-                className={`w-full px-3 py-2 border rounded-lg text-sm text-gray-900 focus:outline-none ${
+                className={`w-full px-3 py-2 border rounded-lg text-sm text-gray-900 focus:outline-hidden ${
                   existingNodeDbId
                     ? 'bg-gray-50 border-gray-200 text-gray-500 cursor-not-allowed'
                     : 'border-gray-300 focus:border-brand-600'
@@ -511,7 +511,7 @@ function SingleMode({ onClose }: { onClose: () => void }) {
                     value={sshUsername}
                     onChange={(e) => setSshUsername(e.target.value)}
                     placeholder="admin"
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm text-gray-900 focus:outline-none focus:border-brand-600"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm text-gray-900 focus:outline-hidden focus:border-brand-600"
                   />
                 </div>
                 <div>
@@ -522,7 +522,7 @@ function SingleMode({ onClose }: { onClose: () => void }) {
                       value={sshPassword}
                       onChange={(e) => setSshPassword(e.target.value)}
                       placeholder="••••••••"
-                      className="w-full px-3 py-2 pr-9 border border-gray-300 rounded-lg text-sm text-gray-900 focus:outline-none focus:border-brand-600"
+                      className="w-full px-3 py-2 pr-9 border border-gray-300 rounded-lg text-sm text-gray-900 focus:outline-hidden focus:border-brand-600"
                     />
                     <button type="button" onClick={() => setShowSshPassword(!showSshPassword)}
                       className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">
@@ -565,7 +565,7 @@ function SingleMode({ onClose }: { onClose: () => void }) {
                     value={neVersion}
                     onChange={(e) => setNeVersion(e.target.value)}
                     placeholder="1.8.2"
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm text-gray-900 focus:outline-none focus:border-brand-600"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm text-gray-900 focus:outline-hidden focus:border-brand-600"
                   />
                 </div>
                 <div>
@@ -576,7 +576,7 @@ function SingleMode({ onClose }: { onClose: () => void }) {
                     value={neListenAddress}
                     onChange={(e) => setNeListenAddress(e.target.value)}
                     placeholder=":9100"
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm text-gray-900 focus:outline-none focus:border-brand-600"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm text-gray-900 focus:outline-hidden focus:border-brand-600"
                   />
                 </div>
               </div>
@@ -588,7 +588,7 @@ function SingleMode({ onClose }: { onClose: () => void }) {
                   value={neUrlOverride}
                   onChange={(e) => setNeUrlOverride(e.target.value)}
                   placeholder="leave blank for default"
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm text-gray-900 focus:outline-none focus:border-brand-600"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm text-gray-900 focus:outline-hidden focus:border-brand-600"
                 />
               </div>
               <label className="flex items-start gap-3 cursor-pointer">
@@ -1013,7 +1013,7 @@ function BulkMode({ onClose }: { onClose: () => void }) {
         {(['group', 'csv'] as const).map((m) => (
           <button key={m} type="button" onClick={() => setBulkSubMode(m)}
             className={`flex-1 py-1.5 text-sm font-medium rounded-md transition-colors ${
-              bulkSubMode === m ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'
+              bulkSubMode === m ? 'bg-white text-gray-900 shadow-xs' : 'text-gray-500 hover:text-gray-700'
             }`}>
             {m === 'group' ? 'From Group' : 'CSV paste'}
           </button>
@@ -1028,7 +1028,7 @@ function BulkMode({ onClose }: { onClose: () => void }) {
             <select
               value={selectedGroupId}
               onChange={(e) => { setSelectedGroupId(e.target.value); setCheckedIds(new Set()) }}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm text-gray-900 focus:outline-none focus:border-brand-600 bg-white"
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm text-gray-900 focus:outline-hidden focus:border-brand-600 bg-white"
             >
               <option value="">— choose a group —</option>
               {(groups?.items ?? []).map((g) => (
@@ -1117,7 +1117,7 @@ function BulkMode({ onClose }: { onClose: () => void }) {
               value={input}
               onChange={(e) => setInput(e.target.value)}
               placeholder={`# minion-id  IP  [optional key=value pairs]\nmac-mini-01  10.0.1.11  serial=C02XK1JFLVCG  location=rack-A  role=worker\nmac-mini-02  10.0.1.12  serial=C02XK1JFLVCH  location=rack-A\nmac-mini-03  10.0.1.13`}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm text-gray-900 focus:outline-none focus:border-brand-600 font-mono resize-none"
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm text-gray-900 focus:outline-hidden focus:border-brand-600 font-mono resize-none"
             />
             {parsedRows.length > 0 && (
               <p className="text-xs text-gray-500 mt-1">
@@ -1170,7 +1170,7 @@ export function BootstrapModal({ onClose }: Props) {
             {(['single', 'bulk'] as Mode[]).map((m) => (
               <button key={m} onClick={() => setMode(m)}
                 className={`flex-1 py-1.5 text-sm font-medium rounded-md transition-colors ${
-                  mode === m ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'
+                  mode === m ? 'bg-white text-gray-900 shadow-xs' : 'text-gray-500 hover:text-gray-700'
                 }`}>
                 {m === 'single' ? 'Single node' : 'Bulk (multiple nodes)'}
               </button>

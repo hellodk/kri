@@ -62,7 +62,7 @@ export function SaltKeysPage() {
 
       {keys?.degraded && (
         <div className="flex items-start gap-3 p-4 rounded-lg border border-red-200 bg-red-50">
-          <svg width="20" height="20" viewBox="0 0 20 20" fill="none" className="flex-shrink-0 mt-0.5" aria-hidden="true">
+          <svg width="20" height="20" viewBox="0 0 20 20" fill="none" className="shrink-0 mt-0.5" aria-hidden="true">
             <path d="M10 2a8 8 0 100 16A8 8 0 0010 2zm0 4a.75.75 0 01.75.75v3.5a.75.75 0 01-1.5 0v-3.5A.75.75 0 0110 6zm0 7a1 1 0 110 2 1 1 0 010-2z" fill="#DC2626"/>
           </svg>
           <div>

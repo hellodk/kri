@@ -104,7 +104,7 @@ export function PlaybookFileBrowser() {
   const displayContent = editedContent ?? fileData?.content ?? ''
 
   return (
-    <div className="flex h-[70vh] border border-gray-200 rounded-xl overflow-hidden bg-white shadow-sm">
+    <div className="flex h-[70vh] border border-gray-200 rounded-xl overflow-hidden bg-white shadow-xs">
       {/* File tree */}
       <div className="w-64 shrink-0 border-r border-gray-200 flex flex-col">
         <div className="px-3 py-2 border-b border-gray-100 bg-gray-50">
@@ -156,7 +156,7 @@ export function PlaybookFileBrowser() {
                 <div className="flex items-center justify-center h-full text-sm text-gray-400">Loading…</div>
               ) : (
                 <textarea
-                  className="w-full h-full resize-none font-mono text-xs p-4 focus:outline-none bg-gray-950 text-green-300 leading-relaxed"
+                  className="w-full h-full resize-none font-mono text-xs p-4 focus:outline-hidden bg-gray-950 text-green-300 leading-relaxed"
                   value={displayContent}
                   onChange={(e) => handleEdit(e.target.value)}
                   spellCheck={false}

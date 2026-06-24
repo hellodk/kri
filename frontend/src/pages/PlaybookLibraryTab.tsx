@@ -195,7 +195,7 @@ export function PlaybookLibraryTab() {
           placeholder="Search…"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
-          className="w-48 px-3 py-1.5 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-indigo-500"
+          className="w-48 px-3 py-1.5 text-sm border border-gray-200 rounded-lg focus:outline-hidden focus:ring-1 focus:ring-indigo-500"
         />
       </div>
 
@@ -210,7 +210,7 @@ export function PlaybookLibraryTab() {
           return (
             <div
               key={group.key}
-              className="bg-white border border-gray-200 rounded-xl overflow-hidden shadow-sm"
+              className="bg-white border border-gray-200 rounded-xl overflow-hidden shadow-xs"
             >
               <button
                 onClick={() => toggle(group.key)}
@@ -292,7 +292,7 @@ export function PlaybookLibraryTab() {
                           }
                         }}
                         disabled={pendingEntryIds.has(entryKey(entry))}
-                        className={`relative w-10 h-5 rounded-full transition-colors focus:outline-none disabled:opacity-50 shrink-0 ${
+                        className={`relative w-10 h-5 rounded-full transition-colors focus:outline-hidden disabled:opacity-50 shrink-0 ${
                           entry.enabled ? 'bg-emerald-500' : 'bg-gray-200'
                         }`}
                         title={entry.enabled ? 'Disable' : 'Enable'}

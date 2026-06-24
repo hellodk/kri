@@ -99,7 +99,7 @@ function CaptureMode({
         <select
           value={nodeId}
           onChange={e => { setNodeId(e.target.value); setCaptured(null) }}
-          className="flex-1 px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:border-brand-600"
+          className="flex-1 px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-hidden focus:border-brand-600"
         >
           <option value="">Select a live node…</option>
           {onlineNodes.map(n => (
@@ -152,15 +152,15 @@ function CaptureMode({
                         setRequired(required.map((r, j) => j === i ? { ...r, name: captured.packages[i].name } : r))
                       }
                     }}
-                    className="accent-brand-600 flex-shrink-0"
+                    className="accent-brand-600 shrink-0"
                   />
                   <span className="text-sm font-mono text-gray-800 flex-1 truncate">
                     {captured.packages[i].name}
                   </span>
-                  <span className="text-xs text-gray-400 font-mono w-20 text-right flex-shrink-0">
+                  <span className="text-xs text-gray-400 font-mono w-20 text-right shrink-0">
                     {captured.packages[i].version ?? '—'}
                   </span>
-                  <label className="flex items-center gap-1.5 flex-shrink-0">
+                  <label className="flex items-center gap-1.5 shrink-0">
                     <input
                       type="checkbox"
                       checked={row.enforce}
@@ -204,7 +204,7 @@ function ManualMode({
   forbidden: PkgRow[]; setForbidden: (r: PkgRow[]) => void
   services: SvcRow[]; setServices: (s: SvcRow[]) => void
 }) {
-  const inputClass = 'px-3 py-1.5 border border-gray-300 rounded-lg text-sm focus:outline-none focus:border-brand-600'
+  const inputClass = 'px-3 py-1.5 border border-gray-300 rounded-lg text-sm focus:outline-hidden focus:border-brand-600'
   const [focusedPkgIdx, setFocusedPkgIdx] = useState<number | null>(null)
 
   const { data: suggestions = [] } = useQuery({
@@ -247,7 +247,7 @@ function ManualMode({
                   />
                   <button
                     onClick={() => setRequired(required.filter((_, j) => j !== i))}
-                    className="text-gray-400 hover:text-red-500 text-lg leading-none flex-shrink-0"
+                    className="text-gray-400 hover:text-red-500 text-lg leading-none shrink-0"
                   >×</button>
                 </div>
                 {showDropdown && (
@@ -501,7 +501,7 @@ function CreateBaselineModal({ onClose, existing }: { onClose: () => void; exist
                     value={name}
                     onChange={e => setName(e.target.value)}
                     placeholder="macOS production standard"
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:border-brand-600"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-hidden focus:border-brand-600"
                   />
                 </div>
                 <div>
@@ -510,7 +510,7 @@ function CreateBaselineModal({ onClose, existing }: { onClose: () => void; exist
                     value={description}
                     onChange={e => setDescription(e.target.value)}
                     placeholder="Expected state for production Mac Minis"
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:border-brand-600"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-hidden focus:border-brand-600"
                   />
                 </div>
                 <div>
@@ -528,7 +528,7 @@ function CreateBaselineModal({ onClose, existing }: { onClose: () => void; exist
                   </div>
                   {targetType !== 'global' && (
                     <select value={targetId} onChange={e => setTargetId(e.target.value)}
-                      className="mt-2 w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:border-brand-600">
+                      className="mt-2 w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-hidden focus:border-brand-600">
                       <option value="">Select {targetType}…</option>
                       {targetType === 'group'
                         ? groups?.items.map(g => <option key={g.id} value={g.id}>{g.name}</option>)
@@ -544,7 +544,7 @@ function CreateBaselineModal({ onClose, existing }: { onClose: () => void; exist
                   <select
                     value={osFamily ?? 'any'}
                     onChange={e => setOsFamily(e.target.value as typeof osFamily)}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:border-brand-600"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-hidden focus:border-brand-600"
                   >
                     <option value="any">Any OS (apply to all)</option>
                     <option value="Darwin">Darwin (macOS)</option>
@@ -648,7 +648,7 @@ export function BaselinesPage() {
         </div>
         <button
           onClick={() => setShowCreate(true)}
-          className="px-4 py-2 bg-brand-600 text-white text-sm font-medium rounded-lg hover:bg-brand-700 shadow-sm"
+          className="px-4 py-2 bg-brand-600 text-white text-sm font-medium rounded-lg hover:bg-brand-700 shadow-xs"
         >
           + New Baseline
         </button>
@@ -681,7 +681,7 @@ export function BaselinesPage() {
           </button>
         </div>
       ) : (
-        <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
+        <div className="bg-white rounded-xl border border-gray-200 shadow-xs overflow-hidden">
           <table className="w-full text-sm">
             <thead>
               <tr className="bg-gray-50 border-b border-gray-200 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide">

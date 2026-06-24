@@ -200,7 +200,7 @@ export function SaltOpsPage() {
           </button>
           <button
             onClick={() => setShowQuickInstall(true)}
-            className="px-4 py-2 text-sm font-medium bg-white border border-gray-200 text-gray-700 rounded-lg hover:bg-gray-50 shadow-sm"
+            className="px-4 py-2 text-sm font-medium bg-white border border-gray-200 text-gray-700 rounded-lg hover:bg-gray-50 shadow-xs"
           >
             ⚡ Quick Install
           </button>
@@ -245,7 +245,7 @@ export function SaltOpsPage() {
                 <select
                   value={quickPkgManager}
                   onChange={(e) => setQuickPkgManager(e.target.value as 'pip' | 'brew' | 'pkg')}
-                  className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
+                  className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-hidden focus:ring-2 focus:ring-brand-500"
                 >
                   <option value="pip">pip</option>
                   <option value="brew">brew</option>
@@ -260,7 +260,7 @@ export function SaltOpsPage() {
                   value={quickPackage}
                   onChange={(e) => setQuickPackage(e.target.value)}
                   onKeyDown={(e) => { if (e.key === 'Enter') runQuickInstall() }}
-                  className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
+                  className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-hidden focus:ring-2 focus:ring-brand-500"
                 />
               </div>
               <p className="text-xs text-gray-400">
@@ -291,7 +291,7 @@ export function SaltOpsPage() {
       {/* Main two-panel layout: 40/60 */}
       <div className="flex gap-5 items-start">
         {/* Left: States browser — 40% */}
-        <div className="w-2/5 bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden flex-shrink-0">
+        <div className="w-2/5 bg-white rounded-xl border border-gray-200 shadow-xs overflow-hidden shrink-0">
           <div className="px-4 py-3 border-b border-gray-100">
             <p className="text-sm font-semibold text-gray-700 mb-2">Salt States</p>
             <input
@@ -299,7 +299,7 @@ export function SaltOpsPage() {
               placeholder="Filter states…"
               value={stateFilter}
               onChange={(e) => setStateFilter(e.target.value)}
-              className="w-full px-3 py-1.5 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-500 bg-gray-50"
+              className="w-full px-3 py-1.5 text-sm border border-gray-200 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-brand-500 bg-gray-50"
             />
             <p className="text-xs text-gray-400 mt-1.5">{statesData?.states_dir ?? '/srv/salt/states'}</p>
           </div>
@@ -369,7 +369,7 @@ export function SaltOpsPage() {
         {/* Right: Action panel — 60% */}
         <div className="flex-1 space-y-4">
           {/* Node selector — always visible */}
-          <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-4">
+          <div className="bg-white rounded-xl border border-gray-200 shadow-xs p-4">
             <div className="flex items-center justify-between mb-3">
               <span className="text-sm font-semibold text-gray-700">Target Nodes</span>
               <div className="flex items-center gap-3">
@@ -401,7 +401,7 @@ export function SaltOpsPage() {
                           : 'bg-white border-gray-200 text-gray-600 hover:bg-gray-50'
                       }`}
                     >
-                      <span className={`w-2 h-2 rounded-full flex-shrink-0 ${n.status === 'online' ? 'bg-emerald-500' : 'bg-gray-300'}`} />
+                      <span className={`w-2 h-2 rounded-full shrink-0 ${n.status === 'online' ? 'bg-emerald-500' : 'bg-gray-300'}`} />
                       {n.hostname ?? n.minion_id}
                     </button>
                   )
@@ -412,7 +412,7 @@ export function SaltOpsPage() {
 
           {/* Selected state + Apply, or empty state */}
           {selectedState ? (
-            <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-4">
+            <div className="bg-white rounded-xl border border-gray-200 shadow-xs p-4">
               <div className="flex items-center justify-between mb-4">
                 <div className="flex items-center gap-2">
                   <span className="text-xs font-mono px-2 py-1 bg-brand-50 text-brand-700 rounded border border-brand-200">
@@ -510,7 +510,7 @@ export function SaltOpsPage() {
                                     !sr.result ? 'bg-red-50' : sr.changes ? 'bg-emerald-50' : ''
                                   }`}
                                 >
-                                  <span className={`text-base flex-shrink-0 mt-0.5 ${
+                                  <span className={`text-base shrink-0 mt-0.5 ${
                                     !sr.result ? 'text-red-500' : sr.changes ? 'text-emerald-600' : 'text-gray-300'
                                   }`}>
                                     {!sr.result ? '✗' : sr.changes ? '✓' : '·'}
@@ -576,7 +576,7 @@ export function SaltOpsPage() {
               )}
             </div>
           ) : (
-            <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-8 text-center">
+            <div className="bg-white rounded-xl border border-gray-200 shadow-xs p-8 text-center">
               <div className="text-4xl mb-3 text-gray-300">▹</div>
               <p className="text-sm font-medium text-gray-700 mb-1">No state selected</p>
               <p className="text-xs text-gray-400">Choose a Salt state from the left panel to apply it to the selected nodes.</p>
@@ -599,4 +599,3 @@ export function SaltOpsPage() {
     </div>
   )
 }
-

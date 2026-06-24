@@ -123,7 +123,7 @@ export function ExecutionHistory() {
 
       {/* Ansible Playbook Runs */}
       {(typeFilter === 'all' || typeFilter === 'playbook') && !ansibleLoading && (
-        <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
+        <div className="bg-white rounded-lg shadow-xs border border-gray-200 overflow-hidden">
           <div className="px-4 py-3 border-b border-gray-100 bg-gray-50 flex items-center justify-between">
             <h2 className="text-sm font-semibold text-gray-700">▷ Ansible Playbook Runs</h2>
             <span className="text-xs text-gray-400">{ansibleItems.length} run{ansibleItems.length !== 1 ? 's' : ''}</span>
@@ -218,7 +218,7 @@ export function ExecutionHistory() {
 
       {/* Salt State Runs */}
       {(typeFilter === 'all' || typeFilter === 'salt') && !saltLoading && (
-        <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
+        <div className="bg-white rounded-lg shadow-xs border border-gray-200 overflow-hidden">
           <div className="px-4 py-3 border-b border-gray-100 bg-gray-50 flex items-center justify-between">
             <h2 className="text-sm font-semibold text-gray-700">⬡ Salt State Runs</h2>
             <span className="text-xs text-gray-400">{saltItems.length} / {saltData?.total ?? 0} jobs</span>
