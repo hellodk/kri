@@ -1,4 +1,4 @@
-# macOS Fleet Management and Observability Platform — Architecture RFC
+# Fleet Management and Observability Platform — Architecture RFC
 
 **RFC-001 | Status: Draft | Date: 2026-05-09**
 **Classification: Internal Engineering Document**
@@ -32,7 +32,7 @@
 
 ## 1. Executive Summary
 
-This RFC defines the full architecture for a production-grade macOS fleet management and observability platform targeting an initial fleet of 40+ Mac Minis, designed from the ground up to scale to 1000+ nodes without architectural rework.
+This RFC defines the full architecture for a production-grade fleet management and observability platform targeting an initial fleet of 40+ Mac Minis, designed from the ground up to scale to 1000+ nodes without architectural rework.
 
 The platform is a control plane and observability layer — not a custom MDM replacement. It delegates all node execution to SaltStack and provides fleet-wide visibility, drift detection, SBOM inspection, grouping, and execution history through a React frontend backed by a Python/FastAPI monolith.
 
@@ -2748,6 +2748,6 @@ Tailwind purges unused classes in production build. Vite handles tree-shaking.
 
 ---
 
-*RFC-001 — macOS Fleet Management Platform Architecture*
+*RFC-001 — Fleet Management Platform Architecture*
 *Prepared for internal engineering review*
 *Date: 2026-05-09*

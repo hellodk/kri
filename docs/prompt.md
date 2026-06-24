@@ -1,6 +1,6 @@
 You are a senior staff-level platform architect and principal frontend engineer.
 
-I am building a macOS fleet management and observability platform for approximately 40+ Mac Minis.
+I am building a fleet management and observability platform for approximately 40+ Mac Minis.
 
 IMPORTANT CONSTRAINTS:
 - I do NOT want to build a custom node agent.
@@ -22,7 +22,7 @@ IMPORTANT CONSTRAINTS:
 HIGH LEVEL OBJECTIVE
 ====================================================
 
-Design a production-grade architecture for a macOS fleet management platform where:
+Design a production-grade architecture for a fleet management platform where:
 - Ansible or SaltStack handles node execution/configuration
 - The platform acts as:
   - observability layer
@@ -344,7 +344,7 @@ DO NOT:
 
 DO:
 - Focus on practical implementation
-- Focus on macOS fleet operations
+- Focus on fleet operations
 - Focus on observability
 - Focus on frontend usability
 - Focus on drift detection quality
