@@ -135,25 +135,30 @@ function FleetStatusBar({
 // ── Main dashboard ─────────────────────────────────────────────────────────────
 
 export function DashboardPage() {
+  // All dashboard queries pause when the tab is hidden; intervals are staggered
+  // so they don't fire simultaneously and pile up concurrent requests.
   const { data: overview, isFetching: overviewFetching } = useQuery({
     queryKey: ['fleet-overview'],
     queryFn: fleetApi.overview,
     staleTime: 15_000,
     refetchInterval: 30_000,
+    refetchIntervalInBackground: false,
   })
 
   const { data: nodesData, isFetching: nodesFetching } = useQuery({
     queryKey: ['dashboard-nodes'],
     queryFn: () => fleetApi.nodes({ page: 1, per_page: 50, sort: 'drift_score:desc' }),
     staleTime: 30_000,
-    refetchInterval: 30_000,
+    refetchInterval: 45_000,
+    refetchIntervalInBackground: false,
   })
 
   const { data: security, isFetching: secFetching } = useQuery({
     queryKey: ['security-dashboard'],
     queryFn: () => api.get<SecurityDashboard>('/api/v1/security/dashboard'),
     staleTime: 60_000,
-    refetchInterval: 30_000,
+    refetchInterval: 60_000,
+    refetchIntervalInBackground: false,
   })
 
   // Read from the store — SaltKeyWatcher in App.tsx already polls this every 30s
@@ -164,6 +169,7 @@ export function DashboardPage() {
     queryFn: saltMastersApi.list,
     staleTime: 60_000,
     refetchInterval: 120_000,
+    refetchIntervalInBackground: false,
   })
   const mastersHealth = masterHealthSummary(saltMasters ?? [])
 
@@ -171,7 +177,8 @@ export function DashboardPage() {
     queryKey: ['dashboard-drift'],
     queryFn: () => api.get<Paginated<DriftSummaryItem>>('/api/v1/drift?sort=drift_score:desc&per_page=5'),
     staleTime: 30_000,
-    refetchInterval: 30_000,
+    refetchInterval: 60_000,
+    refetchIntervalInBackground: false,
   })
 
   // Live clock for the header (updates every minute)

@@ -318,13 +318,13 @@ function HttpRequestsCard({ data }: { data: MonitoringSummary }) {
               </tr>
             </thead>
             <tbody>
-              {http_requests.map((r, i) => {
+              {http_requests.map((r) => {
                 const pct = (r.count / maxCount) * 100
                 const isError = r.status_code.startsWith('4') || r.status_code.startsWith('5')
                 const endpointLabel = `${r.method} ${r.status_code}`
                 return (
                   <tr
-                    key={i}
+                    key={`${r.method}-${r.status_code}`}
                     className="border-b border-gray-50 hover:bg-gray-50 transition-colors"
                   >
                     <td className="py-1.5 px-1">
@@ -424,6 +424,7 @@ export function MonitoringPage() {
       {/* Loading skeleton */}
       {isLoading && (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          {/* Static placeholder array — no stable identity; index key is safe here */}
           {[...Array(4)].map((_, i) => <SkeletonCard key={i} />)}
         </div>
       )}

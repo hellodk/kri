@@ -87,8 +87,8 @@ export function SBOMExplorer() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100">
-                {displayData?.map((r, i) => (
-                  <tr key={i} className="hover:bg-gray-50">
+                {displayData?.map((r) => (
+                  <tr key={`${r.node_id}-${r.name}`} className="hover:bg-gray-50">
                     <td className="px-4 py-3 font-mono text-xs font-medium">{r.name}</td>
                     <td className="px-4 py-3 text-gray-600">{r.version ?? '—'}</td>
                     <td className="px-4 py-3 text-gray-600">{r.component_type ?? '—'}</td>

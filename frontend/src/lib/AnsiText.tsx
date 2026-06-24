@@ -8,6 +8,7 @@ export function AnsiText({ raw }: { raw: string }) {
   const spans = useMemo(() => ansiToSpans(raw), [raw])
   return (
     <>
+      {/* Spans are derived from a parsed string and have no stable identity; index is safe since the array is fully replaced when `raw` changes */}
       {spans.map((s, i) => (
         <span
           key={i}
