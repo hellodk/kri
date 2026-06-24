@@ -1,4 +1,5 @@
 import { ApiError, api } from './client'
+import { getAccessToken } from '../stores/authStore'
 
 // ── Quarantined artifacts (#713) ─────────────────────────────────────────────
 
@@ -164,7 +165,7 @@ async function runAgentStream(
   callbacks: AgentCallbacks,
   controller: AbortController,
 ): Promise<void> {
-  const token = localStorage.getItem('access_token') || ''
+  const token = getAccessToken() || ''
   const res = await fetch('/api/v1/agent/run/stream', {
     method: 'POST',
     headers: {

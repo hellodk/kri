@@ -1,4 +1,5 @@
 import { api } from './client'
+import { getAccessToken } from '../stores/authStore'
 
 export interface ProvisioningProfile {
   id: string
@@ -26,7 +27,7 @@ export const provisioningApi = {
   },
 
   download: (id: string, filename: string) => {
-    const token = localStorage.getItem('access_token')
+    const token = getAccessToken()
     return fetch(`/api/v1/provisioning/${id}/download`, {
       headers: { Authorization: `Bearer ${token ?? ''}` },
     })
