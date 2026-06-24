@@ -1,12 +1,18 @@
 # fleet_platform/schemas/node_import.py
 """Pydantic schemas for bulk node import endpoints (#360)."""
 
-from pydantic import BaseModel, field_validator
-
-from fleet_platform.core.validators import validate_minion_id
+from pydantic import BaseModel
 
 
 class ImportRow(BaseModel):
+    # NOTE: minion_id is intentionally NOT hard-validated here. ImportRow is the
+    # transport for the dry-run *validate* response, which must be able to
+    # represent rows that FAILED validation (status="invalid") so the UI can
+    # show the user exactly which rows were rejected and why. Raising at parse
+    # time would 500 the validate endpoint instead of reporting invalid rows.
+    # Format enforcement happens in node_import.validate_row (soft, categorising)
+    # and again defensively on the commit path (see fleet.import_commit), so a
+    # bad minion_id can never be persisted.
     minion_id: str
     hostname: str | None = None
     ip: str | None = None
@@ -14,8 +20,6 @@ class ImportRow(BaseModel):
     ssh_user: str | None = None
     status: str = "new"
     reason: str = ""
-
-    _validate_minion_id = field_validator("minion_id")(validate_minion_id)
 
 
 class ImportValidateRequest(BaseModel):
