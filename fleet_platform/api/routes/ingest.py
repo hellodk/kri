@@ -6,6 +6,7 @@ import os
 import tempfile
 from datetime import UTC, datetime
 
+import redis.asyncio as aioredis
 from fastapi import APIRouter, Depends, Header, HTTPException, Request, status
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
@@ -44,11 +45,12 @@ def _strip_nulls(obj: object) -> object:
     return obj
 
 
-async def _check_ingest_rate_limit(node_id: str) -> bool:
+async def _check_ingest_rate_limit(node_id: str, r: aioredis.Redis) -> bool:
     """Return True if allowed, False if rate limit exceeded.
 
-    Uses the shared async Redis singleton from deps.get_redis() — no per-request
-    connection is created (#747).
+    The Redis client is injected (via Depends(get_redis)) rather than fetched
+    inline, so it reuses the shared async singleton (#747) and remains
+    overridable in tests.
 
     Fail-closed policy: if Redis is unreachable, raise HTTP 503 rather than
     allowing the request through unchecked.  An open failure would let any
@@ -56,7 +58,6 @@ async def _check_ingest_rate_limit(node_id: str) -> bool:
     turning a dependency outage into an uncontrolled ingest spike.
     """
     try:
-        r = await get_redis()
         key = f"ingest_rl:{node_id}"
         pipe = r.pipeline()
         pipe.incr(key)
@@ -235,12 +236,13 @@ async def ingest_grains(
     payload: GrainIngestPayload,
     x_node_token: str | None = Header(alias="X-Node-Token", default=None),
     db: AsyncSession = Depends(get_db),
+    redis: aioredis.Redis = Depends(get_redis),
 ):
     if not x_node_token:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Missing X-Node-Token")
 
     node = await _resolve_node(payload.minion_id, x_node_token, db)
-    if not await _check_ingest_rate_limit(str(node.id)):
+    if not await _check_ingest_rate_limit(str(node.id), redis):
         raise HTTPException(
             status_code=429,
             detail="Rate limit exceeded -- max 10 ingest requests per minute per node",
