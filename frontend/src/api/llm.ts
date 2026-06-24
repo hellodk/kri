@@ -1,4 +1,5 @@
 import { ApiError, api } from './client'
+import { getAccessToken } from '../stores/authStore'
 
 export type LLMProvider = 'openai_compat' | 'anthropic' | 'ollama' | 'vllm' | 'llamacpp'
 export type LLMIntent = 'salt_state' | 'ansible_playbook' | 'fleet_command' | 'explain' | 'fleet_query' | 'auto'
@@ -147,7 +148,7 @@ async function runStream(
   callbacks: StreamCallbacks,
   controller: AbortController,
 ): Promise<void> {
-  const token = localStorage.getItem('access_token') || ''
+  const token = getAccessToken() || ''
   const res = await fetch('/api/v1/llm/query/stream', {
     method: 'POST',
     headers: {
