@@ -1,12 +1,17 @@
 from collections.abc import AsyncGenerator
 
-import redis.asyncio as aioredis
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from fleet_platform.core.config import settings
+# Redis client lifecycle now lives in fleet_platform.core.redis so that the service
+# layer can use the shared client without importing the API layer (#746 / ARC-2).
+# init_redis() configures the client with health_check_interval=30. Re-exported here
+# for backward compatibility — existing imports of get_redis/init_redis/close_redis
+# from this module (and FastAPI dependency_overrides keyed on deps.get_redis) keep
+# working because they reference the very same objects.
+from fleet_platform.core.redis import close_redis, get_redis, init_redis
 from fleet_platform.db.session import AsyncSessionLocal
 
-_redis_client: aioredis.Redis | None = None
+__all__ = ["get_db", "get_redis", "init_redis", "close_redis"]
 
 
 async def get_db() -> AsyncGenerator[AsyncSession, None]:
@@ -16,22 +21,3 @@ async def get_db() -> AsyncGenerator[AsyncSession, None]:
         except Exception:
             await session.rollback()
             raise
-
-
-async def init_redis() -> None:
-    global _redis_client
-    _redis_client = aioredis.from_url(settings.redis_url, decode_responses=True, health_check_interval=30)
-
-
-async def close_redis() -> None:
-    global _redis_client
-    if _redis_client is not None:
-        await _redis_client.aclose()
-        _redis_client = None
-
-
-async def get_redis() -> aioredis.Redis:
-    global _redis_client
-    if _redis_client is None:
-        _redis_client = aioredis.from_url(settings.redis_url, decode_responses=True, health_check_interval=30)
-    return _redis_client

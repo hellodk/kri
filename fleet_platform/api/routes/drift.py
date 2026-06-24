@@ -15,7 +15,7 @@ from fleet_platform.schemas.drift import (
     DriftSummaryResponse,
     drift_severity,
 )
-from fleet_platform.workers.drift_tasks import compute_drift
+from fleet_platform.workers.celery_app import celery_app
 
 # ---------------------------------------------------------------------------
 # helpers
@@ -376,5 +376,5 @@ async def trigger_drift_compute(
 
     await audit(db, actor=claims["email"], action="drift.compute.triggered", resource_type="node", resource_id=node_id)
     await db.commit()
-    compute_drift.delay(str(node_id))
+    celery_app.send_task("fleet_platform.workers.drift_tasks.compute_drift", args=[str(node_id)], queue="drift")
     return {"status": "queued", "node_id": str(node_id)}

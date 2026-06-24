@@ -113,7 +113,7 @@ async def trigger_digest_now(
     _: dict = Depends(require_role("admin")),
 ):
     """Trigger the weekly digest immediately. Dispatches as a Celery task (returns task_id)."""
-    from fleet_platform.workers.digest_tasks import weekly_digest
+    from fleet_platform.workers.celery_app import celery_app
 
-    task = weekly_digest.delay()
+    task = celery_app.send_task("fleet_platform.workers.digest_tasks.weekly_digest", queue="maintenance")
     return {"status": "queued", "task_id": task.id}

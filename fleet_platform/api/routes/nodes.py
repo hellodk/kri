@@ -384,10 +384,10 @@ async def refresh_all_ssh(
     Reuses the same Celery task as the 15-minute beat schedule; results land on
     each node's ``ssh_state`` and the dashboard picks them up on its next poll.
     """
-    # Lazy import: keep Celery/worker imports out of the API module load path.
-    from fleet_platform.workers.connectivity_tasks import check_ssh_connectivity
+    # Dispatch by name: keep Celery worker task imports out of the API module graph.
+    from fleet_platform.workers.celery_app import celery_app
 
-    task = check_ssh_connectivity.delay()
+    task = celery_app.send_task("fleet_platform.workers.connectivity_tasks.check_ssh_connectivity", queue="maintenance")
     return {"status": "queued", "task_id": getattr(task, "id", None)}
 
 
@@ -733,13 +733,17 @@ async def list_node_vms(
 
     # Run tart list via Salt cmd.run; asyncio.to_thread keeps the event loop free
     # while the Celery round-trip completes (#745).
-    from fleet_platform.workers.salt_tasks import run_salt_cmd as salt_run_cmd
+    from fleet_platform.workers.celery_app import celery_app
 
     try:
-        task = salt_run_cmd.delay(
-            function="cmd.run",
-            target_minions=[minion_id],
-            args=["tart list --format=json 2>/dev/null || tart list 2>/dev/null || echo 'tart_not_found'"],
+        task = celery_app.send_task(
+            "fleet_platform.workers.salt_tasks.run_salt_cmd",
+            kwargs={
+                "function": "cmd.run",
+                "target_minions": [minion_id],
+                "args": ["tart list --format=json 2>/dev/null || tart list 2>/dev/null || echo 'tart_not_found'"],
+            },
+            queue="maintenance",
         )
         result_dict = await asyncio.to_thread(task.get, timeout=15)
     except Exception as e:

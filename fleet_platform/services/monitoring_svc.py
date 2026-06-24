@@ -10,7 +10,7 @@ from datetime import UTC, datetime, timedelta
 from sqlalchemy import and_, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from fleet_platform.api.deps import get_redis
+from fleet_platform.core.redis import get_redis
 from fleet_platform.models.alert import AlertEvent
 from fleet_platform.models.node import Node
 from fleet_platform.models.node_health_snapshot import NodeHealthSnapshot

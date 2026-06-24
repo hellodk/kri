@@ -147,7 +147,7 @@ async def deploy_profile(
     from sqlalchemy import select as _select
 
     from fleet_platform.models.node import Node
-    from fleet_platform.workers.mobileconfig_tasks import deploy_mobileconfig_task
+    from fleet_platform.workers.celery_app import celery_app
 
     profile = await mobileconfig_svc.get_profile(db, profile_id)
     if profile is None:
@@ -174,14 +174,18 @@ async def deploy_profile(
         db.add(log)
         await db.flush()  # populate log.id before passing to Celery
 
-        task = deploy_mobileconfig_task.delay(
-            profile_id=str(profile_id),
-            profile_name=profile.name,
-            profile_payload_xml=profile.payload_xml if body.action == "install" else "",
-            profile_identifier=profile.profile_uuid or "",
-            node_hostname=node.hostname or node.minion_id or str(node.id),
-            action=body.action,
-            log_id=str(log.id),
+        task = celery_app.send_task(
+            "fleet_platform.workers.mobileconfig_tasks.deploy_mobileconfig_task",
+            kwargs={
+                "profile_id": str(profile_id),
+                "profile_name": profile.name,
+                "profile_payload_xml": profile.payload_xml if body.action == "install" else "",
+                "profile_identifier": profile.profile_uuid or "",
+                "node_hostname": node.hostname or node.minion_id or str(node.id),
+                "action": body.action,
+                "log_id": str(log.id),
+            },
+            queue="maintenance",
         )
         job_ids.append(task.id)
 

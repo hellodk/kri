@@ -305,14 +305,19 @@ async def trigger_node_scan(
         raise HTTPException(
             status_code=422, detail=f"Invalid scanner '{scanner}'. Must be one of: {sorted(_VALID_SCANNERS)}"
         )  # noqa: E501
-    from fleet_platform.workers.security_tasks import scan_node_security
+    from fleet_platform.workers.celery_app import celery_app
 
     result = await db.execute(select(Node).where(Node.id == node_id))
     node = result.scalar_one_or_none()
     if not node:
         raise HTTPException(status_code=404, detail="Node not found")
 
-    task = scan_node_security.delay(str(node_id), scanner=scanner)
+    task = celery_app.send_task(
+        "fleet_platform.workers.security_tasks.scan_node_security",
+        args=[str(node_id)],
+        kwargs={"scanner": scanner},
+        queue="default",
+    )
     await audit(
         db,
         actor=claims["email"],
@@ -336,9 +341,13 @@ async def trigger_fleet_scan(
         raise HTTPException(
             status_code=422, detail=f"Invalid scanner '{scanner}'. Must be one of: {sorted(_VALID_SCANNERS)}"
         )  # noqa: E501
-    from fleet_platform.workers.security_tasks import scan_all_nodes
+    from fleet_platform.workers.celery_app import celery_app
 
-    task = scan_all_nodes.delay(scanner=scanner)
+    task = celery_app.send_task(
+        "fleet_platform.workers.security_tasks.scan_all_nodes",
+        kwargs={"scanner": scanner},
+        queue="default",
+    )
     await audit(
         db,
         actor=claims["email"],
