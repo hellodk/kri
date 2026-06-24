@@ -493,7 +493,7 @@ export default function LLMAssistant() {
           tabIndex={open ? 0 : -1}
           role="button"
           aria-label="Move assistant — use arrow keys to reposition, Home to reset"
-          className="flex items-center justify-between px-4 py-3 bg-blue-600 text-white cursor-move select-none focus:outline-none focus:ring-2 focus:ring-inset focus:ring-white/70"
+          className="flex items-center justify-between px-4 py-3 bg-blue-600 text-white cursor-move select-none focus:outline-hidden focus:ring-2 focus:ring-inset focus:ring-white/70"
         >
           <span className="font-semibold text-sm">AI Fleet Assistant</span>
           <div className="flex items-center gap-2">
@@ -668,7 +668,7 @@ export default function LLMAssistant() {
               onKeyDown={handleKeyDown}
               placeholder={mode === 'agent' ? 'Investigate with tools… (Enter to run)' : 'Ask about your fleet… (Enter to send)'}
               rows={2}
-              className="flex-1 resize-none border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 placeholder-gray-400"
+              className="flex-1 resize-none border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-hidden focus:ring-2 focus:ring-blue-500 placeholder-gray-400"
               disabled={streaming}
             />
             {streaming ? (

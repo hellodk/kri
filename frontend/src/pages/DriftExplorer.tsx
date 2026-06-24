@@ -65,7 +65,7 @@ export function DriftExplorer() {
         </select>
         {data && <span className="text-sm text-gray-500">{data.total} nodes</span>}
       </div>
-      <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
+      <div className="bg-white rounded-lg shadow-xs border border-gray-200 overflow-hidden">
         {isLoading ? <Skeleton rows={10} /> : isError ? (
           <ErrorState message="Failed to load drift data" retry={refetch} />
         ) : (!data?.items || data.items.length === 0) ? (

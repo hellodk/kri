@@ -227,7 +227,7 @@ export function GroupDetail() {
 
       {/* Drift tab */}
       {activeTab === 'Drift' && (
-        <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
+        <div className="bg-white rounded-xl border border-gray-200 shadow-xs overflow-hidden">
           {allMembersLoading ? (
             <Skeleton rows={5} />
           ) : (() => {
@@ -284,7 +284,7 @@ export function GroupDetail() {
       )}
 
       {/* SSH Credentials card */}
-      {activeTab === 'SSH' && <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
+      {activeTab === 'SSH' && <div className="bg-white rounded-xl border border-gray-200 shadow-xs overflow-hidden">
         <div className="px-4 py-3 border-b border-gray-200">
           <p className="text-sm font-semibold text-gray-700">SSH Credentials</p>
           <p className="text-xs text-gray-400 mt-0.5">
@@ -350,7 +350,7 @@ export function GroupDetail() {
                 value={sshUsername}
                 onChange={(e) => setSshUsername(e.target.value)}
                 placeholder="admin"
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm text-gray-900 focus:outline-none focus:border-brand-600"
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm text-gray-900 focus:outline-hidden focus:border-brand-600"
               />
             </div>
 
@@ -367,7 +367,7 @@ export function GroupDetail() {
                   value={sshPassword}
                   onChange={setSshPassword}
                   placeholder={creds?.has_ssh_password ? '••••••••' : 'Enter password'}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm text-gray-900 focus:outline-none focus:border-brand-600"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm text-gray-900 focus:outline-hidden focus:border-brand-600"
                 />
               </div>
             ) : (
@@ -383,7 +383,7 @@ export function GroupDetail() {
                   value={sshKey}
                   onChange={(e) => setSshKey(e.target.value)}
                   placeholder={'-----BEGIN OPENSSH PRIVATE KEY-----\n...'}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm font-mono text-gray-900 focus:outline-none focus:border-brand-600 resize-none"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm font-mono text-gray-900 focus:outline-hidden focus:border-brand-600 resize-none"
                 />
                 <p className="text-xs text-gray-400 mt-1">
                   Paste the private key. The public key will be authorized on the node automatically during bootstrap.
@@ -405,7 +405,7 @@ export function GroupDetail() {
                     value={sessionMaxMins}
                     onChange={(e) => setSessionMaxMins(e.target.value)}
                     placeholder="60"
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm text-gray-900 focus:outline-none focus:border-brand-600"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm text-gray-900 focus:outline-hidden focus:border-brand-600"
                   />
                 </div>
                 <div>
@@ -418,7 +418,7 @@ export function GroupDetail() {
                     value={sessionRetentionDays}
                     onChange={(e) => setSessionRetentionDays(e.target.value)}
                     placeholder="30"
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm text-gray-900 focus:outline-none focus:border-brand-600"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm text-gray-900 focus:outline-hidden focus:border-brand-600"
                   />
                 </div>
               </div>
@@ -450,7 +450,7 @@ export function GroupDetail() {
             </p>
           </div>
 
-          <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
+          <div className="bg-white rounded-xl border border-gray-200 shadow-xs overflow-hidden">
             <div className="px-4 py-3 border-b border-gray-200">
               <p className="text-sm font-semibold text-gray-700">Group Secrets</p>
               <p className="text-xs text-gray-400 mt-0.5">Values are write-only and never displayed.</p>
@@ -491,7 +491,7 @@ export function GroupDetail() {
             )}
           </div>
 
-          <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-4 space-y-3">
+          <div className="bg-white rounded-xl border border-gray-200 shadow-xs p-4 space-y-3">
             <p className="text-sm font-semibold text-gray-700">Add / Update Secret</p>
             <form
               onSubmit={(e) => { e.preventDefault(); addGroupSecretMutation.mutate() }}
@@ -505,7 +505,7 @@ export function GroupDetail() {
                     onChange={(e) => setSecretKey(e.target.value)}
                     placeholder="e.g. jenkins_url"
                     required
-                    className="w-full text-sm border border-gray-300 rounded px-2 py-1.5 font-mono focus:outline-none focus:ring-2 focus:ring-brand-400"
+                    className="w-full text-sm border border-gray-300 rounded px-2 py-1.5 font-mono focus:outline-hidden focus:ring-2 focus:ring-brand-400"
                   />
                 </div>
                 <div className="flex-1 min-w-40">
@@ -517,7 +517,7 @@ export function GroupDetail() {
                       onChange={(e) => setSecretValue(e.target.value)}
                       placeholder="Secret value"
                       required
-                      className="w-full text-sm border border-gray-300 rounded px-2 py-1.5 pr-16 focus:outline-none focus:ring-2 focus:ring-brand-400"
+                      className="w-full text-sm border border-gray-300 rounded px-2 py-1.5 pr-16 focus:outline-hidden focus:ring-2 focus:ring-brand-400"
                     />
                     <button
                       type="button"
@@ -534,7 +534,7 @@ export function GroupDetail() {
                     value={secretDesc}
                     onChange={(e) => setSecretDesc(e.target.value)}
                     placeholder="Brief description"
-                    className="w-full text-sm border border-gray-300 rounded px-2 py-1.5 focus:outline-none focus:ring-2 focus:ring-brand-400"
+                    className="w-full text-sm border border-gray-300 rounded px-2 py-1.5 focus:outline-hidden focus:ring-2 focus:ring-brand-400"
                   />
                 </div>
               </div>
@@ -553,7 +553,7 @@ export function GroupDetail() {
       )}
 
       {/* Members table */}
-      {activeTab === 'Members' && <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
+      {activeTab === 'Members' && <div className="bg-white rounded-xl border border-gray-200 shadow-xs overflow-hidden">
         <div className="px-4 py-3 border-b border-gray-200 flex items-center justify-between">
           <span className="text-sm font-semibold text-gray-700">
             Members <span className="text-gray-400 font-normal">({group.member_count})</span>
@@ -574,7 +574,7 @@ export function GroupDetail() {
             <select
               value={addNodeId}
               onChange={(e) => setAddNodeId(e.target.value)}
-              className="flex-1 text-sm bg-white border border-gray-300 text-gray-900 rounded-lg px-3 py-1.5 focus:outline-none focus:border-brand-600"
+              className="flex-1 text-sm bg-white border border-gray-300 text-gray-900 rounded-lg px-3 py-1.5 focus:outline-hidden focus:border-brand-600"
             >
               <option value="">Select a node…</option>
               {nonMembers.map((n) => (

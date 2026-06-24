@@ -271,7 +271,7 @@ export function SettingsPage() {
 
   if (isLoading) return <div className="p-6"><Skeleton rows={8} /></div>
 
-  const inputClass = 'w-full px-3 py-2 border border-gray-300 rounded-lg text-sm text-gray-900 focus:outline-none focus:border-brand-600'
+  const inputClass = 'w-full px-3 py-2 border border-gray-300 rounded-lg text-sm text-gray-900 focus:outline-hidden focus:border-brand-600'
   const monoInputClass = inputClass + ' font-mono'
 
   return (
@@ -300,7 +300,7 @@ export function SettingsPage() {
       {activeTab === 'General' && (
         <div className="space-y-6">
           {/* kri External URL */}
-          <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-6 space-y-4">
+          <div className="bg-white rounded-xl border border-gray-200 shadow-xs p-6 space-y-4">
             <div>
               <h2 className="text-base font-semibold text-gray-900">kri External URL</h2>
               <p className="text-sm text-gray-500 mt-1">
@@ -329,7 +329,7 @@ export function SettingsPage() {
           </div>
 
           {/* Display Timezone */}
-          <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-6 space-y-4">
+          <div className="bg-white rounded-xl border border-gray-200 shadow-xs p-6 space-y-4">
             <div>
               <h2 className="text-base font-semibold text-gray-900">Display Timezone</h2>
               <p className="text-sm text-gray-500 mt-1">
@@ -376,7 +376,7 @@ export function SettingsPage() {
           <CredentialsSection />
 
           {/* Default SSH Bootstrap Credentials (formerly Bootstrap tab) */}
-          <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-6 space-y-4">
+          <div className="bg-white rounded-xl border border-gray-200 shadow-xs p-6 space-y-4">
             <div>
               <h2 className="text-base font-semibold text-gray-900">Default SSH Bootstrap Credentials</h2>
               <p className="text-sm text-gray-500 mt-1">
@@ -419,7 +419,7 @@ export function SettingsPage() {
           </div>
 
           {/* Controller SSH public key */}
-          <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-6 space-y-3">
+          <div className="bg-white rounded-xl border border-gray-200 shadow-xs p-6 space-y-3">
             <div>
               <h2 className="text-base font-semibold text-gray-900">Controller SSH Public Key</h2>
               <p className="text-sm text-gray-500 mt-1">
@@ -447,7 +447,7 @@ export function SettingsPage() {
           </div>
 
           {/* Pillar directory */}
-          <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-6 space-y-4">
+          <div className="bg-white rounded-xl border border-gray-200 shadow-xs p-6 space-y-4">
             <div>
               <h2 className="text-base font-semibold text-gray-900">Salt Pillar Directory</h2>
               <p className="text-sm text-gray-500 mt-1">
@@ -464,7 +464,7 @@ export function SettingsPage() {
           </div>
 
           {/* Playbooks directory */}
-          <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-6 space-y-4">
+          <div className="bg-white rounded-xl border border-gray-200 shadow-xs p-6 space-y-4">
             <div>
               <h2 className="text-base font-semibold text-gray-900">Playbooks Directory</h2>
               <p className="text-sm text-gray-500 mt-1">Override the directory kri scans for Ansible playbooks and roles.</p>
@@ -495,7 +495,7 @@ export function SettingsPage() {
       {/* Remote Access tab */}
       {activeTab === 'Remote Access' && (
         <div className="space-y-6">
-          <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-6 space-y-4">
+          <div className="bg-white rounded-xl border border-gray-200 shadow-xs p-6 space-y-4">
             <div>
               <h2 className="text-base font-semibold text-gray-900">Remote Access</h2>
               <p className="text-sm text-gray-500 mt-1">
@@ -526,7 +526,7 @@ export function SettingsPage() {
               <button
                 type="button"
                 onClick={() => setVncEnabled(!vncEnabled)}
-                className={`relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 focus:outline-none ${
+                className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 focus:outline-hidden ${
                   vncEnabled ? 'bg-brand-600' : 'bg-gray-300'
                 }`}
                 role="switch"
@@ -554,7 +554,7 @@ export function SettingsPage() {
       {activeTab === 'Integrations' && (
         <div className="space-y-6">
           {/* Security Integrations */}
-          <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-6 space-y-4">
+          <div className="bg-white rounded-xl border border-gray-200 shadow-xs p-6 space-y-4">
             <div>
               <h2 className="text-base font-semibold text-gray-900">Security Integrations</h2>
               <p className="text-sm text-gray-500 mt-1">
@@ -614,7 +614,7 @@ export function SettingsPage() {
           </div>
 
           {/* OIDC / SSO */}
-          <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-6 space-y-4">
+          <div className="bg-white rounded-xl border border-gray-200 shadow-xs p-6 space-y-4">
             <div className="flex items-center justify-between">
               <h2 className="text-base font-semibold text-gray-900">OIDC / SSO</h2>
               <label className="flex items-center gap-2 cursor-pointer">
@@ -666,7 +666,7 @@ export function SettingsPage() {
           </div>
 
           {/* External Ansible endpoint */}
-          <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-6 space-y-4">
+          <div className="bg-white rounded-xl border border-gray-200 shadow-xs p-6 space-y-4">
             <div>
               <h2 className="text-base font-semibold text-gray-900">External Ansible Endpoint</h2>
               <p className="text-sm text-gray-500 mt-1">
@@ -717,7 +717,7 @@ export function SettingsPage() {
           <LLMEndpointsSection />
 
           {/* RAG Embedding endpoint */}
-          <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-6 space-y-4">
+          <div className="bg-white rounded-xl border border-gray-200 shadow-xs p-6 space-y-4">
             <div>
               <h2 className="text-base font-semibold text-gray-900">RAG Embedding</h2>
               <p className="text-sm text-gray-500 mt-1">
@@ -757,7 +757,7 @@ export function SettingsPage() {
                 role="switch"
                 aria-checked={llmIncludeNodeIps}
                 onClick={() => setLlmIncludeNodeIps(v => !v)}
-                className={`relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 focus:outline-none ${llmIncludeNodeIps ? 'bg-brand-600' : 'bg-gray-200'}`}
+                className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 focus:outline-hidden ${llmIncludeNodeIps ? 'bg-brand-600' : 'bg-gray-200'}`}
               >
                 <span className={`inline-block h-5 w-5 transform rounded-full bg-white shadow transition-transform duration-200 ${llmIncludeNodeIps ? 'translate-x-5' : 'translate-x-0'}`} />
               </button>
@@ -765,7 +765,7 @@ export function SettingsPage() {
             <button
               onClick={() => saveMutation.mutate()}
               disabled={saveMutation.isPending}
-              className="px-4 py-2 bg-brand-600 text-white text-sm rounded-lg font-medium hover:bg-brand-700 disabled:opacity-50 shadow-sm"
+              className="px-4 py-2 bg-brand-600 text-white text-sm rounded-lg font-medium hover:bg-brand-700 disabled:opacity-50 shadow-xs"
             >
               {saveMutation.isPending ? 'Saving…' : 'Save Embedding URL'}
             </button>
@@ -778,7 +778,7 @@ export function SettingsPage() {
         <div className="space-y-6">
 
           {/* Jenkins Ingest */}
-          <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-6 space-y-4">
+          <div className="bg-white rounded-xl border border-gray-200 shadow-xs p-6 space-y-4">
             <div>
               <h2 className="text-base font-semibold text-gray-900">Jenkins Build Ingest</h2>
               <p className="text-sm text-gray-500 mt-1">
@@ -858,7 +858,7 @@ export function SettingsPage() {
           </div>
 
           {/* SMTP settings */}
-          <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-6 space-y-4">
+          <div className="bg-white rounded-xl border border-gray-200 shadow-xs p-6 space-y-4">
             <div>
               <h2 className="text-base font-semibold text-gray-900">Email (SMTP)</h2>
               <p className="text-sm text-gray-500 mt-1">
@@ -933,7 +933,7 @@ export function SettingsPage() {
           </div>
 
           {/* Save + Test */}
-          <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-6 space-y-4">
+          <div className="bg-white rounded-xl border border-gray-200 shadow-xs p-6 space-y-4">
             <div className="flex items-center gap-3">
               <button
                 onClick={() => saveMutation.mutate()}
@@ -1018,7 +1018,7 @@ export function SettingsPage() {
           <button
             onClick={() => saveMutation.mutate()}
             disabled={saveMutation.isPending}
-            className="px-6 py-2.5 bg-brand-600 text-white rounded-lg font-medium hover:bg-brand-700 disabled:opacity-50 shadow-sm"
+            className="px-6 py-2.5 bg-brand-600 text-white rounded-lg font-medium hover:bg-brand-700 disabled:opacity-50 shadow-xs"
           >
             {saveMutation.isPending ? 'Saving…' : 'Save Settings'}
           </button>
@@ -1085,7 +1085,7 @@ function SaltAllowlistSection() {
 
   if (isLoading) {
     return (
-      <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-6">
+      <div className="bg-white rounded-xl border border-gray-200 shadow-xs p-6">
         <div className="h-4 bg-gray-100 rounded animate-pulse w-48 mb-4" />
         <div className="h-3 bg-gray-100 rounded animate-pulse w-64" />
       </div>
@@ -1093,7 +1093,7 @@ function SaltAllowlistSection() {
   }
 
   return (
-    <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-6 space-y-4">
+    <div className="bg-white rounded-xl border border-gray-200 shadow-xs p-6 space-y-4">
       <div>
         <h2 className="text-base font-semibold text-gray-900">Salt Function Allowlist</h2>
         <p className="text-sm text-gray-500 mt-1">
@@ -1116,7 +1116,7 @@ function SaltAllowlistSection() {
               }`}
             >
               {locked && (
-                <svg width="10" height="10" viewBox="0 0 12 12" fill="none" className="flex-shrink-0">
+                <svg width="10" height="10" viewBox="0 0 12 12" fill="none" className="shrink-0">
                   <rect x="2" y="5" width="8" height="6" rx="1" fill="currentColor" opacity="0.6"/>
                   <path d="M4 5V3.5a2 2 0 0 1 4 0V5" stroke="currentColor" strokeWidth="1.2" fill="none"/>
                 </svg>
@@ -1128,7 +1128,7 @@ function SaltAllowlistSection() {
                   aria-label={`Remove ${fn}`}
                   className="ml-0.5 text-gray-400 hover:text-red-600 transition-colors leading-none"
                 >
-                  <svg width="10" height="10" viewBox="0 0 10 10" fill="none" className="flex-shrink-0">
+                  <svg width="10" height="10" viewBox="0 0 10 10" fill="none" className="shrink-0">
                     <path d="M2 2l6 6M8 2L2 8" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
                   </svg>
                 </button>
@@ -1149,7 +1149,7 @@ function SaltAllowlistSection() {
           onChange={(e) => setNewFn(e.target.value)}
           onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addFunction() } }}
           placeholder="e.g. file.managed"
-          className="flex-1 px-3 py-2 border border-gray-300 rounded-lg text-sm font-mono text-gray-900 focus:outline-none focus:border-brand-600"
+          className="flex-1 px-3 py-2 border border-gray-300 rounded-lg text-sm font-mono text-gray-900 focus:outline-hidden focus:border-brand-600"
         />
         <button
           onClick={addFunction}
@@ -1231,7 +1231,7 @@ function SaltDenylistSection() {
 
   if (isLoading) {
     return (
-      <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-6">
+      <div className="bg-white rounded-xl border border-gray-200 shadow-xs p-6">
         <div className="h-4 bg-gray-100 rounded animate-pulse w-48 mb-4" />
         <div className="h-3 bg-gray-100 rounded animate-pulse w-64" />
       </div>
@@ -1239,7 +1239,7 @@ function SaltDenylistSection() {
   }
 
   return (
-    <div className="bg-white rounded-xl border border-red-100 shadow-sm p-6 space-y-4">
+    <div className="bg-white rounded-xl border border-red-100 shadow-xs p-6 space-y-4">
       <div>
         <h2 className="text-base font-semibold text-gray-900">Salt Function Deny List</h2>
         <p className="text-sm text-gray-500 mt-1">
@@ -1262,7 +1262,7 @@ function SaltDenylistSection() {
               aria-label={`Remove ${fn} from denylist`}
               className="ml-0.5 text-red-400 hover:text-red-700 transition-colors leading-none"
             >
-              <svg width="10" height="10" viewBox="0 0 10 10" fill="none" className="flex-shrink-0">
+              <svg width="10" height="10" viewBox="0 0 10 10" fill="none" className="shrink-0">
                 <path d="M2 2l6 6M8 2L2 8" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
               </svg>
             </button>
@@ -1281,7 +1281,7 @@ function SaltDenylistSection() {
           onChange={(e) => setNewFn(e.target.value)}
           onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addFunction() } }}
           placeholder="e.g. system.reboot"
-          className="flex-1 px-3 py-2 border border-gray-300 rounded-lg text-sm font-mono text-gray-900 focus:outline-none focus:border-red-400"
+          className="flex-1 px-3 py-2 border border-gray-300 rounded-lg text-sm font-mono text-gray-900 focus:outline-hidden focus:border-red-400"
         />
         <button
           onClick={addFunction}
@@ -1438,12 +1438,12 @@ function CredentialsSection() {
     },
   })
 
-  const inputClass = 'w-full px-3 py-2 border border-gray-300 rounded-lg text-sm text-gray-900 focus:outline-none focus:border-brand-600'
+  const inputClass = 'w-full px-3 py-2 border border-gray-300 rounded-lg text-sm text-gray-900 focus:outline-hidden focus:border-brand-600'
   const btnPrimary = 'px-4 py-2 bg-brand-600 text-white text-sm rounded-lg font-medium hover:bg-brand-700 disabled:opacity-50'
   const btnSecondary = 'px-4 py-2 bg-white border border-gray-300 text-gray-700 text-sm rounded-lg font-medium hover:bg-gray-50 disabled:opacity-50'
 
   return (
-    <div id="credentials-section" className="bg-white rounded-xl border border-gray-200 shadow-sm p-6 space-y-5">
+    <div id="credentials-section" className="bg-white rounded-xl border border-gray-200 shadow-xs p-6 space-y-5">
       <div>
         <h2 className="text-base font-semibold text-gray-900">Credentials</h2>
         <p className="text-sm text-gray-500 mt-0.5">
@@ -1796,12 +1796,12 @@ function PlaybookSourcesSection() {
     }
   }
 
-  const inputClass = 'flex-1 px-3 py-2 border border-gray-300 rounded-lg text-sm text-gray-900 focus:outline-none focus:border-brand-600 font-mono'
+  const inputClass = 'flex-1 px-3 py-2 border border-gray-300 rounded-lg text-sm text-gray-900 focus:outline-hidden focus:border-brand-600 font-mono'
   const btnPrimary = 'px-4 py-2 bg-brand-600 text-white text-sm rounded-lg font-medium hover:bg-brand-700 disabled:opacity-50'
   const btnSecondary = 'px-4 py-2 bg-white border border-gray-300 text-gray-700 text-sm rounded-lg font-medium hover:bg-gray-50 disabled:opacity-50'
 
   return (
-    <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-6 space-y-5">
+    <div className="bg-white rounded-xl border border-gray-200 shadow-xs p-6 space-y-5">
       <div className="flex items-start justify-between">
         <div>
           <h2 className="text-base font-semibold text-gray-900">Playbook Sources</h2>
@@ -1954,7 +1954,7 @@ function PlaybookSourcesSection() {
                   setGitCredentialId(val)
                   setGitValidation({ status: 'idle' })
                 }}
-                className={`w-full px-3 py-2 border rounded-lg text-sm text-gray-900 focus:outline-none focus:border-brand-600 ${
+                className={`w-full px-3 py-2 border rounded-lg text-sm text-gray-900 focus:outline-hidden focus:border-brand-600 ${
                   gitValidation.status === 'invalid' && gitValidation.authRequired && !gitCredentialId
                     ? 'border-amber-400 ring-2 ring-amber-200'
                     : 'border-gray-300'
@@ -2004,7 +2004,7 @@ function PlaybookSourcesSection() {
               value={csvText}
               onChange={(e) => setCsvText(e.target.value)}
               placeholder={`local,/path/to/playbooks,,My Playbooks\ngit,https://github.com/org/repo.git,main,Shared Roles`}
-              className="w-full h-24 px-3 py-2 border border-gray-300 rounded-lg text-xs font-mono focus:outline-none focus:border-brand-600"
+              className="w-full h-24 px-3 py-2 border border-gray-300 rounded-lg text-xs font-mono focus:outline-hidden focus:border-brand-600"
             />
             <p className="text-xs text-amber-600">⚠ CSV import validates sources but skips inaccessible ones rather than failing.</p>
             <div className="flex gap-2 justify-end">
@@ -2036,13 +2036,13 @@ function StatusPill({ result, checking }: {
   if (!result) return <span className="text-xs text-gray-300">—</span>
   if (result.ok) return (
     <span className="inline-flex items-center gap-1 text-xs font-medium text-emerald-600 whitespace-nowrap">
-      <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 inline-block flex-shrink-0" />
+      <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 inline-block shrink-0" />
       {result.latency_ms != null ? `${result.latency_ms} ms` : 'OK'}
     </span>
   )
   return (
     <span className="inline-flex items-center gap-1 text-xs font-medium text-red-600 whitespace-nowrap">
-      <span className="w-1.5 h-1.5 rounded-full bg-red-500 inline-block flex-shrink-0" />
+      <span className="w-1.5 h-1.5 rounded-full bg-red-500 inline-block shrink-0" />
       {result.error?.slice(0, 30) ?? 'Unreachable'}
     </span>
   )
@@ -2180,7 +2180,7 @@ function LLMEndpointsSection() {
         />
       )}
 
-      <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-6 space-y-5">
+      <div className="bg-white rounded-xl border border-gray-200 shadow-xs p-6 space-y-5">
         <div className="flex items-start justify-between">
           <div>
             <h2 className="text-base font-semibold text-gray-900">LLM Endpoints</h2>
@@ -2200,7 +2200,7 @@ function LLMEndpointsSection() {
             )}
             <button
               onClick={openAdd}
-              className="px-4 py-2 bg-brand-600 text-white text-sm rounded-lg font-medium hover:bg-brand-700 shadow-sm"
+              className="px-4 py-2 bg-brand-600 text-white text-sm rounded-lg font-medium hover:bg-brand-700 shadow-xs"
             >
               Add Endpoint
             </button>

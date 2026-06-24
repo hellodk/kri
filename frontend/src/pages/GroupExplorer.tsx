@@ -143,7 +143,7 @@ export function GroupExplorer() {
         </form>
       )}
 
-      <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
+      <div className="bg-white rounded-lg shadow-xs border border-gray-200 overflow-hidden">
         {isLoading ? <Skeleton rows={6} /> : isError ? (
           <ErrorState message="Failed to load groups" retry={refetch} />
         ) : (

@@ -97,7 +97,7 @@ export function LoginPage() {
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 placeholder="admin@fleet.local"
-                className="w-full px-4 py-3 rounded-lg bg-white/5 border border-white/10 text-white placeholder-white/20 focus:outline-none focus:border-brand-500 focus:bg-white/8 transition-colors"
+                className="w-full px-4 py-3 rounded-lg bg-white/5 border border-white/10 text-white placeholder-white/20 focus:outline-hidden focus:border-brand-500 focus:bg-white/8 transition-colors"
               />
             </div>
             <div>
@@ -108,7 +108,7 @@ export function LoginPage() {
                   required
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  className="w-full px-4 py-3 pr-11 rounded-lg bg-white/5 border border-white/10 text-white placeholder-white/20 focus:outline-none focus:border-brand-500 focus:bg-white/8 transition-colors"
+                  className="w-full px-4 py-3 pr-11 rounded-lg bg-white/5 border border-white/10 text-white placeholder-white/20 focus:outline-hidden focus:border-brand-500 focus:bg-white/8 transition-colors"
                 />
                 <button
                   type="button"

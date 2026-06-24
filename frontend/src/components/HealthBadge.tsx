@@ -124,7 +124,7 @@ export function HealthBadge({
         onBlur={hide}
         aria-label={`Health: ${style.label}`}
       >
-        <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${test.isPending ? 'bg-brand-400 animate-pulse' : style.dot}`} />
+        <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${test.isPending ? 'bg-brand-400 animate-pulse' : style.dot}`} />
         {style.label}
       </span>
 
