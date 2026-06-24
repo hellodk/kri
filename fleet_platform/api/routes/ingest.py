@@ -45,12 +45,12 @@ def _strip_nulls(obj: object) -> object:
     return obj
 
 
-async def _check_ingest_rate_limit(node_id: str, r: aioredis.Redis) -> bool:
+async def _check_ingest_rate_limit(node_id: str, r: aioredis.Redis | None = None) -> bool:
     """Return True if allowed, False if rate limit exceeded.
 
-    The Redis client is injected (via Depends(get_redis)) rather than fetched
-    inline, so it reuses the shared async singleton (#747) and remains
-    overridable in tests.
+    Prefers an injected Redis client (via Depends(get_redis) from the endpoint),
+    which keeps the FastAPI dependency override working in tests. When called
+    without one it falls back to the shared async singleton get_redis() (#747).
 
     Fail-closed policy: if Redis is unreachable, raise HTTP 503 rather than
     allowing the request through unchecked.  An open failure would let any
@@ -58,6 +58,8 @@ async def _check_ingest_rate_limit(node_id: str, r: aioredis.Redis) -> bool:
     turning a dependency outage into an uncontrolled ingest spike.
     """
     try:
+        if r is None:
+            r = await get_redis()
         key = f"ingest_rl:{node_id}"
         pipe = r.pipeline()
         pipe.incr(key)
