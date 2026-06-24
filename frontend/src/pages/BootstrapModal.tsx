@@ -7,6 +7,7 @@ import { fleetApi } from '../api/fleet'
 import { groupsApi } from '../api/groups'
 import { saltMastersApi } from '../api/saltMasters'
 import { canBootstrap, saltMasterBadge } from '../lib/saltMasterHelpers'
+import { AnsiText } from '../lib/AnsiText'
 import { useFocusTrap } from '../hooks/useFocusTrap'
 import { useToastStore } from '../stores/toastStore'
 import type { Node } from '../types'
@@ -31,33 +32,6 @@ const STATUS_LABEL: Record<string, { label: string; colour: string }> = {
   bootstrapping:{ label: 'Running…', colour: 'text-brand-600' },
   completed:    { label: 'Done ✓',   colour: 'text-emerald-700' },
   failed:       { label: 'Failed',   colour: 'text-red-700' },
-}
-
-// ─── Ansible log colourizer ───────────────────────────────────────────────────
-
-function colorizeAnsibleLog(raw: string): string {
-  return raw
-    .split('\n')
-    .map((line) => {
-      const esc = line
-        .replace(/&/g, '&amp;')
-        .replace(/</g, '&lt;')
-        .replace(/>/g, '&gt;')
-      if (/^PLAY \[/.test(line))
-        return `<span class="font-bold text-indigo-400">${esc}</span>`
-      if (/^TASK \[/.test(line))
-        return `<span class="font-bold text-gray-300">${esc}</span>`
-      if (/\bok:/.test(line))
-        return `<span class="text-green-400">${esc}</span>`
-      if (/fatal:|FAILED/.test(line))
-        return `<span class="text-red-400">${esc}</span>`
-      if (/\bchanged:/.test(line))
-        return `<span class="text-amber-400">${esc}</span>`
-      if (/^PLAY RECAP/.test(line))
-        return `<span class="font-bold text-purple-400">${esc}</span>`
-      return `<span class="text-gray-300">${esc}</span>`
-    })
-    .join('\n')
 }
 
 // ─── Single bootstrap ────────────────────────────────────────────────────────
@@ -793,12 +767,13 @@ function SingleMode({ onClose }: { onClose: () => void }) {
           <pre
             ref={preRef}
             className="text-xs font-mono bg-gray-900 p-3 overflow-auto max-h-[42rem] whitespace-pre-wrap"
-            dangerouslySetInnerHTML={{
-              __html: (localLogs ?? logsData.ansible_stdout)
-                ? colorizeAnsibleLog(localLogs ?? logsData.ansible_stdout ?? '')
-                : '<span class="text-gray-500">(no output captured yet — run in progress or not started)</span>',
-            }}
-          />
+          >
+            {(localLogs ?? logsData.ansible_stdout) ? (
+              <AnsiText raw={localLogs ?? logsData.ansible_stdout ?? ''} />
+            ) : (
+              <span className="text-gray-500">(no output captured yet — run in progress or not started)</span>
+            )}
+          </pre>
         </div>
       )}
 
