@@ -2,6 +2,7 @@ import { lazy, useEffect, useRef, useState } from 'react'
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { AuthGuard } from './components/AuthGuard'
+import { ErrorBoundary } from './components/ErrorBoundary'
 import { Layout } from './components/Layout/Layout'
 import { LoginPage } from './pages/LoginPage'
 import { OidcCallbackPage } from './pages/OidcCallbackPage'
@@ -130,6 +131,7 @@ export default function App() {
   })
 
   return (
+    <ErrorBoundary>
     <QueryClientProvider client={queryClient}>
       <BrowserRouter>
         <SaltKeyWatcher />
@@ -182,5 +184,6 @@ export default function App() {
         </Routes>
       </BrowserRouter>
     </QueryClientProvider>
+    </ErrorBoundary>
   )
 }
