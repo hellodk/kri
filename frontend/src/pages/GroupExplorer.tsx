@@ -171,7 +171,7 @@ export function GroupExplorer() {
             <table className="w-full text-sm">
               <thead>
                 <tr className="bg-gray-50 border-b border-gray-200 text-left text-xs text-gray-500 uppercase">
-                  <th className="pl-4 py-3 w-8">
+                  <th scope="col" className="pl-4 py-3 w-8">
                     <input
                       type="checkbox"
                       checked={allSelected}
@@ -180,11 +180,11 @@ export function GroupExplorer() {
                       className="accent-brand-600 cursor-pointer"
                     />
                   </th>
-                  <th className="px-4 py-3">Name</th>
-                  <th className="px-4 py-3">Type</th>
-                  <th className="px-4 py-3">Members</th>
-                  <th className="px-4 py-3">Created</th>
-                  <th className="px-4 py-3 w-16"></th>
+                  <th scope="col" className="px-4 py-3">Name</th>
+                  <th scope="col" className="px-4 py-3">Type</th>
+                  <th scope="col" className="px-4 py-3">Members</th>
+                  <th scope="col" className="px-4 py-3">Created</th>
+                  <th scope="col" className="px-4 py-3 w-16"></th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100">
