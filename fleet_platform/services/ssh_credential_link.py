@@ -110,14 +110,23 @@ async def owner_secret_flags(
     db: AsyncSession,
     *,
     credential_id: uuid.UUID | None,
-    inline_password_enc: str | None,
-    inline_key_enc: str | None,
+    inline_password_enc: str | None = None,
+    inline_key_enc: str | None = None,
 ) -> tuple[bool, bool]:
-    """Return ``(has_password, has_key)`` for an owner, credential-aware.
+    """Return ``(has_password, has_key)`` for an owner from the Credential store.
 
-    Prefers the linked Credential; falls back to the inline columns when no FK
-    is set (one-release read-fallback).
+    Resolution goes solely through the linked ``Credential`` (#748 — ARC-4): the
+    deprecated inline ``ssh_password_enc`` / ``ssh_key_enc`` columns are NO LONGER
+    consulted. An owner with no ``credential_id`` (or a dangling FK) has no stored
+    secret, so this returns ``(False, False)``.
+
+    ``inline_password_enc`` / ``inline_key_enc`` are accepted but ignored: they
+    are kept only so existing callers (sibling-owned ``api/routes``) keep
+    type-checking during the staged inline-column removal. They will be dropped
+    once those callers stop passing them. Do NOT reintroduce a read of them — that
+    would restore the dual secret-resolution path this change removed.
     """
+    del inline_password_enc, inline_key_enc  # deprecated, intentionally unused (#748)
     if credential_id is not None:
         cred = await db.get(Credential, credential_id)
         if cred is not None:
@@ -125,4 +134,4 @@ async def owner_secret_flags(
             if cred.kind == "ssh_key":
                 return (False, has_secret)
             return (has_secret, False)
-    return (bool(inline_password_enc), bool(inline_key_enc))
+    return (False, False)

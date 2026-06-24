@@ -1,10 +1,9 @@
 """Resolve effective SSH credentials for a node.
 
 Priority chain (first match wins):
-  1. Node-level credential   (node.credential_id -> Credential; inline ssh_* as
-                              a one-release read-fallback)
+  1. Node-level credential   (node.credential_id -> Credential)
   2. Group credential        (member group, highest credential_priority then
-                              name; credential_id deref, inline ssh_* fallback)
+                              name; credential_id deref)
   3. Controller key          (node was bootstrapped — ssh_host_key set — and
                               ~/.kri/id_rsa exists)
   4. Global default          (platform settings: SSH_USERNAME / SSH_PASSWORD)
@@ -15,11 +14,20 @@ recorded) and have no explicit override; the controller private key was
 installed on the node during bootstrap.  Tier 4 is the legacy password
 fallback for nodes that have never been bootstrapped.
 
-Credential consolidation (#704): node/group SSH creds now live in the
-first-class ``Credential`` store, referenced by ``credential_id``. The inline
-``ssh_username`` / ``ssh_password_enc`` / ``ssh_key_enc`` columns remain readable
-for one release as a fallback (staged column drop) and are mapped here onto the
-same resolved dict shape, so ``credential_source`` is unchanged for the UI.
+Single secret-resolution path (#748 — ARC-4): node/group SSH creds live solely
+in the first-class ``Credential`` store, referenced by ``credential_id``. The
+deprecated inline ``ssh_username`` / ``ssh_password_enc`` / ``ssh_key_enc`` /
+``ssh_auth_mode`` columns are **no longer read** here — migration 055 copied
+them into the Credential store, 058 NULLed them, and 061 drops them. Eliminating
+the inline read closes the dual secret-resolution path: there is now exactly one
+place a node/group secret can come from (the Credential store), plus the
+controller/global platform tiers, which are not per-row secrets.
+
+Callers that *require* a usable secret (WebSSH, VNC, password-mode bootstrap)
+should use :func:`require_usable_node_credentials` /
+:func:`require_usable_node_credentials_sync`, which raise
+:class:`NoUsableCredentialError` instead of silently returning a credential-less
+result — the pre-#748 behaviour quietly fell back to the inline columns.
 """
 
 from __future__ import annotations
@@ -27,7 +35,7 @@ from __future__ import annotations
 import logging
 from datetime import UTC, datetime
 
-from sqlalchemy import or_, select
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from fleet_platform.models.credential import Credential
@@ -43,6 +51,19 @@ from fleet_platform.services.platform_settings_svc import (
 from fleet_platform.services.ssh_keypair import _DEFAULT_PRIV
 
 logger = logging.getLogger(__name__)
+
+
+class NoUsableCredentialError(RuntimeError):
+    """Raised when an SSH credential is required but none can be resolved.
+
+    The deprecated inline ``ssh_*`` columns are no longer consulted (#748 —
+    ARC-4). A node with no node/group ``credential_id`` (or one pointing at a
+    secret-less Credential), no controller key, and no global password has no
+    usable secret. Pre-#748 such a node would silently fall back to the inline
+    columns — a second secret path. Callers that *require* a credential must now
+    fail loudly via :func:`require_usable_node_credentials` rather than attempt a
+    connection with no secret.
+    """
 
 
 def has_usable_secret(creds: dict) -> bool:
@@ -104,38 +125,20 @@ def _credential_to_creds(cred: Credential, source: str) -> dict:
     }
 
 
-def _inline_node_creds(node: Node) -> dict:
-    return {
-        "ssh_user": node.ssh_username,
-        "ssh_password": _decrypt_or_blank("node", node.id, "ssh_password", node.ssh_password_enc),
-        "ssh_key": _decrypt_or_blank("node", node.id, "ssh_key", node.ssh_key_enc),
-        "auth_mode": node.ssh_auth_mode or "password",
-        "credential_source": "node",
-    }
-
-
-def _inline_group_creds(group: Group) -> dict:
-    return {
-        "ssh_user": group.ssh_username,
-        "ssh_password": _decrypt_or_blank("group", group.name, "ssh_password", group.ssh_password_enc),
-        "ssh_key": _decrypt_or_blank("group", group.name, "ssh_key", group.ssh_key_enc),
-        "auth_mode": group.ssh_auth_mode or "password",
-        "credential_source": f"group:{group.name}",
-    }
-
-
 def _primary_group_stmt(node_id):
-    """Member group with a credential (FK or inline), highest priority then name.
+    """Member group that carries a Credential FK, highest priority then name.
 
     Ordering by ``credential_priority DESC, name ASC`` makes the multi-group
     tiebreak deterministic (#699); alphabetical name is the stable final
-    tiebreak, so all-default-priority fleets behave exactly as before.
+    tiebreak, so all-default-priority fleets behave exactly as before. Only
+    groups with a ``credential_id`` are eligible — inline ``ssh_*`` columns are
+    no longer a credential source (#748).
     """
     return (
         select(Group)
         .join(GroupMember, GroupMember.group_id == Group.id)
         .where(GroupMember.node_id == node_id)
-        .where(or_(Group.credential_id.isnot(None), Group.ssh_username.isnot(None)))
+        .where(Group.credential_id.isnot(None))
         .order_by(Group.credential_priority.desc(), Group.name.asc())
         .limit(1)
     )
@@ -147,7 +150,7 @@ async def resolve_node_credentials(node: Node, db: AsyncSession) -> dict:
     Returns dict with keys: ssh_user, ssh_password, ssh_key, auth_mode,
     credential_source ('node' | 'group:<name>' | 'controller' | 'global')
     """
-    # 1. Node-level credential — FK first, inline columns as read-fallback.
+    # 1. Node-level credential — Credential store only (#748: no inline fallback).
     #    An FK pointing at a secret-less Credential (#704 birth defect) is not a
     #    real credential: skip it and fall through rather than short-circuiting.
     if node.credential_id:
@@ -156,20 +159,15 @@ async def resolve_node_credentials(node: Node, db: AsyncSession) -> dict:
             creds = _credential_to_creds(cred, "node")
             if has_usable_secret(creds):
                 return creds
-    if node.ssh_username:
-        return _inline_node_creds(node)
 
     # 2. Primary group credential (highest priority, then name).
     group = (await db.execute(_primary_group_stmt(node.id))).scalar_one_or_none()
-    if group is not None:
-        if group.credential_id:
-            cred = await db.get(Credential, group.credential_id)
-            if cred is not None:
-                creds = _credential_to_creds(cred, f"group:{group.name}")
-                if has_usable_secret(creds):
-                    return creds
-        if group.ssh_username:
-            return _inline_group_creds(group)
+    if group is not None and group.credential_id:
+        cred = await db.get(Credential, group.credential_id)
+        if cred is not None:
+            creds = _credential_to_creds(cred, f"group:{group.name}")
+            if has_usable_secret(creds):
+                return creds
 
     # 3. Controller key — node was bootstrapped (ssh_host_key set) and key file exists
     if node.ssh_host_key:
@@ -205,7 +203,7 @@ def resolve_node_credentials_sync(node: Node, db) -> dict:
     node → primary-group → controller → global priority chain and returns the
     identical dict shape, including ``credential_source`` (#279, #349, #698).
     """
-    # 1. Node-level credential — FK first, inline columns as read-fallback.
+    # 1. Node-level credential — Credential store only (#748: no inline fallback).
     #    An FK pointing at a secret-less Credential (#704 birth defect) is not a
     #    real credential: skip it and fall through rather than short-circuiting.
     if node.credential_id:
@@ -214,20 +212,15 @@ def resolve_node_credentials_sync(node: Node, db) -> dict:
             creds = _credential_to_creds(cred, "node")
             if has_usable_secret(creds):
                 return creds
-    if node.ssh_username:
-        return _inline_node_creds(node)
 
     # 2. Primary group credential (highest priority, then name).
     group = db.execute(_primary_group_stmt(node.id)).scalar_one_or_none()
-    if group is not None:
-        if group.credential_id:
-            cred = db.get(Credential, group.credential_id)
-            if cred is not None:
-                creds = _credential_to_creds(cred, f"group:{group.name}")
-                if has_usable_secret(creds):
-                    return creds
-        if group.ssh_username:
-            return _inline_group_creds(group)
+    if group is not None and group.credential_id:
+        cred = db.get(Credential, group.credential_id)
+        if cred is not None:
+            creds = _credential_to_creds(cred, f"group:{group.name}")
+            if has_usable_secret(creds):
+                return creds
 
     # 3. Controller key — node was bootstrapped (ssh_host_key set) and key file exists
     if node.ssh_host_key:
@@ -249,6 +242,38 @@ def resolve_node_credentials_sync(node: Node, db) -> dict:
         "auth_mode": "password",
         "credential_source": "global",
     }
+
+
+def _no_usable_secret_message(node: Node) -> str:
+    minion = getattr(node, "minion_id", None) or getattr(node, "id", "<unknown>")
+    return (
+        f"No usable SSH credential for node {minion}: link a Credential via "
+        "credential_id (node- or group-level), bootstrap the node, or configure "
+        "global SSH credentials. Inline ssh_* columns are no longer a credential "
+        "source (#748)."
+    )
+
+
+async def require_usable_node_credentials(node: Node, db: AsyncSession) -> dict:
+    """Resolve credentials and raise if none carry a usable secret (#748).
+
+    Use from credential-required actions (WebSSH, VNC, password-mode bootstrap)
+    that must fail loudly. This is the explicit replacement for the old inline
+    read-fallback: a node with no resolvable secret now raises
+    :class:`NoUsableCredentialError` instead of silently degrading.
+    """
+    creds = await resolve_node_credentials(node, db)
+    if not has_usable_secret(creds):
+        raise NoUsableCredentialError(_no_usable_secret_message(node))
+    return creds
+
+
+def require_usable_node_credentials_sync(node: Node, db) -> dict:
+    """Synchronous twin of :func:`require_usable_node_credentials` (#748)."""
+    creds = resolve_node_credentials_sync(node, db)
+    if not has_usable_secret(creds):
+        raise NoUsableCredentialError(_no_usable_secret_message(node))
+    return creds
 
 
 def _get_global_setting_sync(db, key: str, encrypted: bool = False) -> str:
@@ -316,7 +341,6 @@ async def nodes_using_credential(credential_id, db: AsyncSession) -> list[tuple[
                 .join(Group, Group.id == GroupMember.group_id)
                 .where(Group.credential_id == credential_id)
                 .where(Node.credential_id.is_(None))
-                .where(Node.ssh_username.is_(None))
                 .distinct()
             )
         )
