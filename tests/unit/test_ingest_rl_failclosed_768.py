@@ -1,27 +1,25 @@
 """Unit tests for #768 — ingest rate limiter must fail CLOSED on Redis failure.
 
-The previous behaviour was to return True (allow) when Redis was unavailable.
-After the fix, a Redis error on the ingest path must result in a 503 Service
-Unavailable rather than allowing the request through unchecked.
+Updated for #747: _check_ingest_rate_limit is now async and uses the shared
+aioredis singleton from deps.get_redis() instead of a per-module sync client.
 """
 
 from __future__ import annotations
 
-from unittest.mock import MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from fastapi import HTTPException
 
-MODULE = "fleet_platform.api.routes.ingest"
+import fleet_platform.api.routes.ingest as _ingest_mod
 
 
-@pytest.fixture(autouse=True)
-def reset_ingest_redis_client():
-    import fleet_platform.api.routes.ingest as ingest_mod
-
-    ingest_mod._ingest_redis_client = None
-    yield
-    ingest_mod._ingest_redis_client = None
+def _make_redis_mock(count: int = 1) -> tuple:
+    mock_pipe = MagicMock()
+    mock_pipe.execute = AsyncMock(return_value=[count, True])
+    mock_redis = MagicMock()
+    mock_redis.pipeline.return_value = mock_pipe
+    return mock_redis, mock_pipe
 
 
 # ---------------------------------------------------------------------------
@@ -29,66 +27,55 @@ def reset_ingest_redis_client():
 # ---------------------------------------------------------------------------
 
 
-def test_redis_connection_failure_raises_503():
+@pytest.mark.asyncio
+async def test_redis_connection_failure_raises_503():
     """If Redis is unreachable, _check_ingest_rate_limit must raise HTTP 503."""
-    with patch(f"{MODULE}.sync_redis.Redis.from_url", side_effect=Exception("redis down")):
-        from fleet_platform.api.routes.ingest import _check_ingest_rate_limit
-
+    with patch.object(_ingest_mod, "get_redis", AsyncMock(side_effect=Exception("redis down"))):
         with pytest.raises(HTTPException) as exc_info:
-            _check_ingest_rate_limit("node-offline")
+            await _ingest_mod._check_ingest_rate_limit("node-offline")
 
     assert exc_info.value.status_code == 503
 
 
-def test_redis_pipeline_failure_raises_503():
+@pytest.mark.asyncio
+async def test_redis_pipeline_failure_raises_503():
     """If Redis pipeline.execute() raises, _check_ingest_rate_limit must raise 503."""
-    mock_redis = MagicMock()
     mock_pipe = MagicMock()
-    mock_pipe.execute.side_effect = Exception("pipeline broken")
+    mock_pipe.execute = AsyncMock(side_effect=Exception("pipeline broken"))
+    mock_redis = MagicMock()
     mock_redis.pipeline.return_value = mock_pipe
 
-    with patch(f"{MODULE}.sync_redis.Redis.from_url", return_value=mock_redis):
-        from fleet_platform.api.routes.ingest import _check_ingest_rate_limit
-
+    with patch.object(_ingest_mod, "get_redis", AsyncMock(return_value=mock_redis)):
         with pytest.raises(HTTPException) as exc_info:
-            _check_ingest_rate_limit("node-pipe-fail")
+            await _ingest_mod._check_ingest_rate_limit("node-pipe-fail")
 
     assert exc_info.value.status_code == 503
 
 
-def test_normal_allow_still_works():
+@pytest.mark.asyncio
+async def test_normal_allow_still_works():
     """Happy-path: within limit → True (allow)."""
-    mock_redis = MagicMock()
-    mock_pipe = MagicMock()
-    mock_pipe.execute.return_value = [1, True]
-    mock_redis.pipeline.return_value = mock_pipe
+    mock_redis, _ = _make_redis_mock(1)
 
-    with patch(f"{MODULE}.sync_redis.Redis.from_url", return_value=mock_redis):
-        from fleet_platform.api.routes.ingest import _check_ingest_rate_limit
-
-        assert _check_ingest_rate_limit("node-ok") is True
+    with patch.object(_ingest_mod, "get_redis", AsyncMock(return_value=mock_redis)):
+        assert await _ingest_mod._check_ingest_rate_limit("node-ok") is True
 
 
-def test_normal_deny_still_works():
+@pytest.mark.asyncio
+async def test_normal_deny_still_works():
     """Happy-path: over limit → False (deny)."""
-    mock_redis = MagicMock()
-    mock_pipe = MagicMock()
-    mock_pipe.execute.return_value = [999, True]
-    mock_redis.pipeline.return_value = mock_pipe
+    mock_redis, _ = _make_redis_mock(999)
 
-    with patch(f"{MODULE}.sync_redis.Redis.from_url", return_value=mock_redis):
-        from fleet_platform.api.routes.ingest import _check_ingest_rate_limit
-
-        assert _check_ingest_rate_limit("node-over") is False
+    with patch.object(_ingest_mod, "get_redis", AsyncMock(return_value=mock_redis)):
+        assert await _ingest_mod._check_ingest_rate_limit("node-over") is False
 
 
-def test_503_detail_mentions_rate_limit_service():
+@pytest.mark.asyncio
+async def test_503_detail_mentions_rate_limit_service():
     """The 503 response should give operators a clue why ingest was rejected."""
-    with patch(f"{MODULE}.sync_redis.Redis.from_url", side_effect=ConnectionError("refused")):
-        from fleet_platform.api.routes.ingest import _check_ingest_rate_limit
-
+    with patch.object(_ingest_mod, "get_redis", AsyncMock(side_effect=ConnectionError("refused"))):
         with pytest.raises(HTTPException) as exc_info:
-            _check_ingest_rate_limit("node-detail")
+            await _ingest_mod._check_ingest_rate_limit("node-detail")
 
     detail = str(exc_info.value.detail).lower()
     assert "rate" in detail or "redis" in detail or "unavailable" in detail
