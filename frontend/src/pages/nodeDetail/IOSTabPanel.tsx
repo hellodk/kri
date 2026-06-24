@@ -273,12 +273,12 @@ export default function IOSTabPanel({
             <table className="w-full text-sm">
               <thead>
                 <tr className="bg-gray-50 border-b border-gray-200 text-left text-xs text-gray-500 uppercase tracking-wide">
-                  <th className="px-4 py-3">Name</th>
-                  <th className="px-4 py-3">Type</th>
-                  <th className="px-4 py-3">Team ID</th>
-                  <th className="px-4 py-3">Expiry</th>
-                  <th className="px-4 py-3">Fingerprint</th>
-                  <th className="px-4 py-3"></th>
+                  <th scope="col" className="px-4 py-3">Name</th>
+                  <th scope="col" className="px-4 py-3">Type</th>
+                  <th scope="col" className="px-4 py-3">Team ID</th>
+                  <th scope="col" className="px-4 py-3">Expiry</th>
+                  <th scope="col" className="px-4 py-3">Fingerprint</th>
+                  <th scope="col" className="px-4 py-3"></th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100">

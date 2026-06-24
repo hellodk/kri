@@ -152,6 +152,65 @@ def test_send_digest_raises_when_no_recipients():
             send_digest(MagicMock())
 
 
+def test_get_week_stats_includes_offline_and_rates():
+    from fleet_platform.services.digest_svc import get_week_stats
+
+    db = _make_db(builds=[], total_nodes=10, online_nodes=7)
+    stats = get_week_stats(db)
+
+    assert stats["offline_nodes"] == 3
+    assert stats["online_rate"] == 70
+    assert stats["pass_rate"] == 100  # no builds -> treated as 100%
+
+
+def test_render_html_includes_offline_nodes_and_availability():
+    from fleet_platform.services.digest_svc import render_html
+
+    stats = {
+        "builds_total": 0,
+        "builds_passed": 0,
+        "builds_failed": 0,
+        "top_failing_jobs": [],
+        "total_nodes": 10,
+        "online_nodes": 7,
+        "offline_nodes": 3,
+        "online_rate": 70,
+        "pass_rate": 100,
+        "period_start": "2026-05-20",
+        "period_end": "2026-05-27",
+    }
+    html = render_html(stats)
+
+    assert "Nodes Offline" in html
+    assert "70%" in html  # fleet availability
+
+
+def test_render_text_contains_all_sections():
+    from fleet_platform.services.digest_svc import render_text
+
+    stats = {
+        "builds_total": 42,
+        "builds_passed": 38,
+        "builds_failed": 4,
+        "top_failing_jobs": [("deploy-prod", 3)],
+        "total_nodes": 20,
+        "online_nodes": 18,
+        "offline_nodes": 2,
+        "online_rate": 90,
+        "pass_rate": 90,
+        "period_start": "2026-05-20",
+        "period_end": "2026-05-27",
+    }
+    text = render_text(stats)
+
+    assert "FLEET HEALTH" in text
+    assert "JENKINS BUILDS" in text
+    assert "TOP FAILING JOBS" in text
+    assert "deploy-prod" in text
+    assert "Offline: 2" in text
+    assert "Pass rate: 90%" in text
+
+
 def test_get_setting_sync_returns_none_when_missing():
     from fleet_platform.services.platform_settings_svc import get_setting_sync
 

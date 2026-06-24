@@ -7,6 +7,7 @@ import { saltMastersApi } from '../api/saltMasters'
 import { masterHealthSummary } from '../lib/masterNodes'
 import { useSaltKeysStore } from '../stores/saltKeysStore'
 import { formatRelative, formatDate } from '../utils/dateFormat'
+import { formatLocalTime } from '../utils/time'
 import type { Paginated, Node } from '../types'
 
 interface SecurityDashboard {
@@ -175,11 +176,11 @@ export function DashboardPage() {
 
   // Live clock for the header (updates every minute)
   const [clockTime, setClockTime] = useState(() =>
-    new Date().toLocaleTimeString('en-IN', { timeZone: 'Asia/Kolkata', hour: '2-digit', minute: '2-digit', hour12: false })
+    formatLocalTime(new Date(), { hour: '2-digit', minute: '2-digit', hour12: false }, false)
   )
   useEffect(() => {
     const id = setInterval(() => {
-      setClockTime(new Date().toLocaleTimeString('en-IN', { timeZone: 'Asia/Kolkata', hour: '2-digit', minute: '2-digit', hour12: false }))
+      setClockTime(formatLocalTime(new Date(), { hour: '2-digit', minute: '2-digit', hour12: false }, false))
     }, 60_000)
     return () => clearInterval(id)
   }, [])

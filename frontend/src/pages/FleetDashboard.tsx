@@ -553,7 +553,7 @@ export function FleetDashboard() {
     const isActive = sortField === field
     const nextDir = isActive && sortDir === 'asc' ? 'desc' : 'asc'
     return (
-      <th
+      <th scope="col"
         className={`px-4 py-3 cursor-pointer select-none hover:bg-gray-100 group ${className ?? ''}`}
         onClick={() => { setSort(`${field}:${isActive ? nextDir : 'desc'}`); setPage(1) }}
       >
@@ -886,20 +886,20 @@ export function FleetDashboard() {
                   <thead className="sticky top-0 z-10 bg-white">
                     <tr className="bg-white border-b border-gray-200 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide">
                       {canManage && (
-                        <th className="pl-4 py-3 w-8">
+                        <th scope="col" className="pl-4 py-3 w-8">
                           <input type="checkbox" checked={allSelected} onChange={toggleAll}
                             className="accent-brand-600 cursor-pointer" />
                         </th>
                       )}
                       <SortTh field="hostname" label="Hostname" />
-                      <th className="px-4 py-3">Connectivity</th>
-                      <th className="px-4 py-3">OS</th>
+                      <th scope="col" className="px-4 py-3">Connectivity</th>
+                      <th scope="col" className="px-4 py-3">OS</th>
                       <SortTh field="drift_score" label="Drift" />
                       <SortTh field="last_seen_at" label="Last Seen" />
-                      <th className="px-4 py-3">Tags</th>
-                      {macosOnly && <th className="px-4 py-3">Xcode</th>}
-                      {macosOnly && <th className="px-4 py-3">Certs</th>}
-                      {canManage && <th className="px-4 py-3 w-24"></th>}
+                      <th scope="col" className="px-4 py-3">Tags</th>
+                      {macosOnly && <th scope="col" className="px-4 py-3">Xcode</th>}
+                      {macosOnly && <th scope="col" className="px-4 py-3">Certs</th>}
+                      {canManage && <th scope="col" className="px-4 py-3 w-24"></th>}
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-100">

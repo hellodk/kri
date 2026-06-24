@@ -16,24 +16,22 @@ import { Skeleton } from '../components/Skeleton'
 import { ErrorState } from '../components/ErrorState'
 import { ConfirmDialog } from '../components/ConfirmDialog'
 import { SecretInput } from '../components/SecretInput'
+import { formatLocalDateTime } from '../utils/time'
 
 // ---------------------------------------------------------------------------
 // Timestamp helpers
 // ---------------------------------------------------------------------------
 
-function formatIst(isoString: string): string {
-  return (
-    new Date(isoString).toLocaleString('en-IN', {
-      timeZone: 'Asia/Kolkata',
-      day: '2-digit',
-      month: 'short',
-      year: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit',
-      second: '2-digit',
-      hour12: false,
-    }) + ' IST'
-  )
+function formatTimestamp(isoString: string): string {
+  return formatLocalDateTime(isoString, {
+    day: '2-digit',
+    month: 'short',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    hour12: false,
+  })
 }
 
 function relativeTime(isoString: string): string {
@@ -547,14 +545,14 @@ function MasterProvisionPanel({ masterId, onRunStatusChange }: MasterProvisionPa
           <span>
             <span className="font-medium text-gray-700">Started:</span>{' '}
             <span title={relativeTime(run.started_at)}>
-              {formatIst(run.started_at)}
+              {formatTimestamp(run.started_at)}
             </span>
           </span>
           {run.finished_at && (
             <span>
               <span className="font-medium text-gray-700">Finished:</span>{' '}
               <span title={relativeTime(run.finished_at)}>
-                {formatIst(run.finished_at)}
+                {formatTimestamp(run.finished_at)}
               </span>
             </span>
           )}
@@ -924,7 +922,7 @@ export function SaltMastersTab() {
                   <span>
                     <span className="font-medium text-gray-700">Provisioned:</span>{' '}
                     <span title={relativeTime(master.last_provisioned_at)}>
-                      {formatIst(master.last_provisioned_at)}
+                      {formatTimestamp(master.last_provisioned_at)}
                     </span>
                   </span>
                 )}
@@ -932,7 +930,7 @@ export function SaltMastersTab() {
                   <span className="font-medium text-gray-700">Last checked:</span>{' '}
                   {master.last_checked_at ? (
                     <span title={relativeTime(master.last_checked_at)}>
-                      {formatIst(master.last_checked_at)}
+                      {formatTimestamp(master.last_checked_at)}
                     </span>
                   ) : (
                     <span className="text-gray-500 italic">never checked</span>
@@ -953,10 +951,10 @@ export function SaltMastersTab() {
                   <table className="w-full text-xs">
                     <thead>
                       <tr className="bg-gray-50 border-b border-gray-100">
-                        <th className="px-5 py-2 text-left font-semibold text-gray-700">Check</th>
-                        <th className="px-5 py-2 text-left font-semibold text-gray-700">Status</th>
-                        <th className="px-5 py-2 text-left font-semibold text-gray-700">Detail</th>
-                        <th className="px-5 py-2 text-right font-semibold text-gray-700">Latency</th>
+                        <th scope="col" className="px-5 py-2 text-left font-semibold text-gray-700">Check</th>
+                        <th scope="col" className="px-5 py-2 text-left font-semibold text-gray-700">Status</th>
+                        <th scope="col" className="px-5 py-2 text-left font-semibold text-gray-700">Detail</th>
+                        <th scope="col" className="px-5 py-2 text-right font-semibold text-gray-700">Latency</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-gray-100">

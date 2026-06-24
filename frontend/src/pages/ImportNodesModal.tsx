@@ -3,6 +3,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { fleetApi } from '../api/fleet'
 import type { ImportRow, ImportValidateResponse } from '../api/fleet'
 import { groupsApi } from '../api/groups'
+import { useFocusTrap } from '../hooks/useFocusTrap'
 import { useToastStore } from '../stores/toastStore'
 
 // ─── Password input with show/hide toggle ──────────────────────────────────────
@@ -90,11 +91,11 @@ function PreviewTable({ result, loading }: { result: ImportValidateResponse | nu
             <table className="w-full text-xs">
               <thead className="sticky top-0 bg-gray-50 border-b border-gray-200">
                 <tr>
-                  <th className="text-left px-3 py-2 font-semibold text-gray-700 whitespace-nowrap">Status</th>
-                  <th className="text-left px-3 py-2 font-semibold text-gray-700 whitespace-nowrap">Minion ID</th>
-                  <th className="text-left px-3 py-2 font-semibold text-gray-700 whitespace-nowrap">Hostname</th>
-                  <th className="text-left px-3 py-2 font-semibold text-gray-700 whitespace-nowrap">IP</th>
-                  <th className="text-left px-3 py-2 font-semibold text-gray-700">Reason</th>
+                  <th scope="col" className="text-left px-3 py-2 font-semibold text-gray-700 whitespace-nowrap">Status</th>
+                  <th scope="col" className="text-left px-3 py-2 font-semibold text-gray-700 whitespace-nowrap">Minion ID</th>
+                  <th scope="col" className="text-left px-3 py-2 font-semibold text-gray-700 whitespace-nowrap">Hostname</th>
+                  <th scope="col" className="text-left px-3 py-2 font-semibold text-gray-700 whitespace-nowrap">IP</th>
+                  <th scope="col" className="text-left px-3 py-2 font-semibold text-gray-700">Reason</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100">
@@ -122,6 +123,7 @@ function PreviewTable({ result, loading }: { result: ImportValidateResponse | nu
 export function ImportNodesModal({ onClose }: { onClose: () => void }) {
   const qc = useQueryClient()
   const toast = useToastStore((s) => s.add)
+  const containerRef = useFocusTrap<HTMLDivElement>(true, onClose)
 
   // Tab state
   const [tab, setTab] = useState<'paste' | 'csv' | 'salt'>('paste')
@@ -286,7 +288,7 @@ export function ImportNodesModal({ onClose }: { onClose: () => void }) {
   ]
 
   return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+    <div ref={containerRef} className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4" role="dialog" aria-modal="true">
       <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl flex flex-col" style={{ maxHeight: '90vh' }}>
 
         {/* Header */}

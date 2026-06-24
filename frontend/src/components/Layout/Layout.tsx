@@ -2,6 +2,7 @@ import { Suspense } from 'react'
 import { Link } from 'react-router-dom'
 import { Outlet } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
+import { ErrorBoundary } from '../ErrorBoundary'
 import { Sidebar } from './Sidebar'
 import { TopBar } from './TopBar'
 import { ToastContainer } from '../ToastContainer'
@@ -90,9 +91,11 @@ export function Layout() {
           {/* Route-level Suspense boundary for the lazy-loaded pages
               imported in App.tsx. The fallback is intentionally minimal so
               switching tabs doesn't flash a layout-breaking placeholder. */}
-          <Suspense fallback={<RouteSpinner />}>
-            <Outlet />
-          </Suspense>
+          <ErrorBoundary>
+            <Suspense fallback={<RouteSpinner />}>
+              <Outlet />
+            </Suspense>
+          </ErrorBoundary>
         </main>
       </div>
       <ToastContainer />
