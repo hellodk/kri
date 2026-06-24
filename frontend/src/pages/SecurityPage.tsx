@@ -316,7 +316,7 @@ export function SecurityPage() {
   const { data: activeSessions } = useQuery({
     queryKey: ['ssh-sessions-active'],
     queryFn: () => api.get<{ items: SSHSessionRow[] }>('/api/v1/ssh/sessions?status=active&limit=20'),
-    refetchInterval: 10_000,
+    refetchInterval: 30_000,
   })
 
   const { data: recentEvents } = useQuery({
