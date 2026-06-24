@@ -10,6 +10,7 @@ from slowapi.errors import RateLimitExceeded
 from starlette.responses import Response
 
 from fleet_platform.api.limiter import limiter
+from fleet_platform.api.metrics_auth import verify_metrics_request
 from fleet_platform.api.metrics_collectors import refresh_all_gauges
 from fleet_platform.api.routes import (
     ansible,
@@ -53,6 +54,7 @@ from fleet_platform.core.config import VERSION, settings
 from fleet_platform.core.errors import AppError, error_code_for_status
 from fleet_platform.core.logging import configure_logging, get_logger
 from fleet_platform.middleware.prometheus import PrometheusMiddleware
+from fleet_platform.middleware.security_headers import SecurityHeaderMiddleware
 
 _log = get_logger(__name__)
 
@@ -141,9 +143,15 @@ def create_app() -> FastAPI:
             content={"error_code": "UNPROCESSABLE", "detail": exc.errors()},
         )
 
-    # Prometheus middleware must be added before CORS so it sees every request.
-    # Starlette applies middleware in reverse-registration order (last-added runs first),
-    # so PrometheusMiddleware is registered first and therefore executes outermost.
+    # Middleware execution order (Starlette applies in reverse-registration order;
+    # last-added runs first / outermost):
+    #   1. PrometheusMiddleware  — outermost, sees every request including CORS preflights
+    #   2. CORSMiddleware        — handles preflight OPTIONS before auth/business logic
+    #   3. SecurityHeaderMiddleware — innermost, adds security headers to all responses
+    #
+    # SecurityHeaderMiddleware is registered last so it runs innermost and adds headers
+    # to the actual response after all routing; it must come after CORS so that CORS
+    # headers set by CORSMiddleware are not overwritten.
     app.add_middleware(PrometheusMiddleware)
 
     app.add_middleware(
@@ -153,6 +161,8 @@ def create_app() -> FastAPI:
         allow_methods=["GET", "POST", "PATCH", "PUT", "DELETE"],
         allow_headers=["Authorization", "Content-Type", "X-Node-Token", "X-Jenkins-Secret"],
     )
+
+    app.add_middleware(SecurityHeaderMiddleware)
 
     app.include_router(health.router, tags=["health"])
     app.include_router(auth.router, tags=["auth"])
@@ -192,14 +202,23 @@ def create_app() -> FastAPI:
     app.include_router(agent_router, tags=["agent"])
 
     @app.get("/metrics", include_in_schema=False)
-    async def metrics_endpoint():
+    async def metrics_endpoint(request: Request):
         """Prometheus scrape endpoint — returns metrics in text/plain exposition format.
+
+        Authentication (#763):
+          Accepts one of:
+            - Authorization: Bearer <METRICS_TOKEN>  (static scrape token; set via
+              the METRICS_TOKEN env var and mirror it in the Prometheus scrape config:
+                authorization: { credentials: <token> })
+            - Authorization: Bearer <JWT>             (any valid kri access token)
+          Returns 401 Unauthorized if neither is provided or both fail.
 
         Refreshes Redis-backed gauges (e.g. kri_node_ssh_reachable) and DB-backed
         gauges (node counts, beat heartbeat) before generating output so that each
         scrape reflects the latest state without any cross-process registry sharing
         (#356, #576).
         """
+        verify_metrics_request(request, metrics_token=settings.metrics_token)
         refresh_all_gauges()
         return Response(generate_latest(), media_type=CONTENT_TYPE_LATEST)
 

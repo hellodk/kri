@@ -38,6 +38,17 @@ class Settings(BaseSettings):
         validation_alias=AliasChoices("FERNET_KEY", "FERNET_SECRET_KEY"),
     )
 
+    # Static bearer token for the /metrics Prometheus scrape endpoint (#763).
+    # If unset, only valid JWT bearer tokens are accepted.
+    # Prometheus scrape config: authorization: { credentials: <METRICS_TOKEN> }
+    metrics_token: str | None = None
+
+    # Number of trusted reverse-proxy hops in front of the API (#759).
+    # 0 = use request.client.host directly (no proxy; default).
+    # N = skip the N rightmost X-Forwarded-For entries; the entry immediately
+    # to their left is the real client IP used for rate-limiting.
+    trusted_proxy_count: int = 0
+
     oidc_enabled: bool = False
     oidc_issuer_url: str = ""  # e.g. https://keycloak.example.com/realms/kri
     oidc_client_id: str = ""
