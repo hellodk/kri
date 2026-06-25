@@ -3,7 +3,13 @@
 from pathlib import Path
 
 _WORKTREE = Path(__file__).resolve().parents[2]
-_SRC = (_WORKTREE / "fleet_platform/api/routes/ansible.py").read_text()
+# #750: ansible.py was decomposed into the fleet_platform/api/routes/ansible/
+# package and the shared services/extravars.py helper. Concatenate the package
+# sources (+ extravars) so these source-contract checks still see the full
+# route surface regardless of which sub-module a handler now lives in.
+_ANSIBLE_PKG = _WORKTREE / "fleet_platform/api/routes/ansible"
+_SRC = "\n".join(p.read_text() for p in sorted(_ANSIBLE_PKG.glob("*.py")))
+_SRC += "\n" + (_WORKTREE / "fleet_platform/services/extravars.py").read_text()
 
 
 def test_extravars_scrub_helper_exists():

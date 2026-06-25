@@ -4,7 +4,19 @@ import ast
 import re
 from pathlib import Path
 
-ANSIBLE_PY = Path(__file__).parent.parent.parent / "fleet_platform/api/routes/ansible.py"
+_ANSIBLE_ROUTES_DIR = Path(__file__).parent.parent.parent / "fleet_platform/api/routes/ansible"
+# ansible.py became a package; combine all sub-module sources for pattern checks.
+ANSIBLE_PY = _ANSIBLE_ROUTES_DIR  # kept for backward-compat name; read via helper below
+
+
+def _ansible_src() -> str:
+    """Return concatenated source of all ansible route sub-modules."""
+    parts = []
+    for p in sorted(_ANSIBLE_ROUTES_DIR.glob("*.py")):
+        parts.append(p.read_text())
+    return "\n".join(parts)
+
+
 TASKS_PY = Path(__file__).parent.parent.parent / "fleet_platform/workers/playbook_tasks.py"
 
 
@@ -102,7 +114,7 @@ def test_run_playbook_endpoint_does_not_pass_ssh_password_to_delay():
     than importing the worker and calling .delay(); the no-plaintext-ssh_password
     security property (#495) must still hold for the new dispatch site.
     """
-    src = ANSIBLE_PY.read_text()
+    src = _ansible_src()
     match = re.search(
         r"send_task\(\s*[\"']fleet_platform\.workers\.playbook_tasks\.run_playbook[\"'].*?\)",
         src,
