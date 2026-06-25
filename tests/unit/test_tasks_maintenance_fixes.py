@@ -1,31 +1,106 @@
-"""Tests for #444, #445, #450, #456, #462 fixes — updated with behavioural assertions (#505)."""
+"""Tests for #444, #445, #450, #456, #462 fixes — updated with behavioural assertions (#505).
 
-from pathlib import Path
+Behavioral conversion (#800): the decorator/signature/WHERE-clause checks used to
+scrape ``ansible_tasks.py`` / ``maintenance.py`` source for substrings. They now
+introspect the live Celery task objects and drive the real beat tasks against a
+mocked sync session, asserting on the SQL that is actually constructed and on the
+task's runtime configuration.
+"""
 
-_WORKTREE = Path(__file__).resolve().parents[2]
-_TASKS_SRC = (_WORKTREE / "fleet_platform/workers/ansible_tasks.py").read_text()
-_MAINT_SRC = (_WORKTREE / "fleet_platform/workers/maintenance.py").read_text()
+from contextlib import contextmanager
+from unittest.mock import MagicMock, patch
+
+from sqlalchemy.dialects import postgresql
+
+
+def _compiled(stmt) -> str:
+    return str(stmt.compile(dialect=postgresql.dialect()))
+
+
+# ---------------------------------------------------------------------------
+# #444 — bootstrap_node Celery task configuration / signature
+# ---------------------------------------------------------------------------
 
 
 def test_bootstrap_acks_late_false():
-    assert "acks_late=False" in _TASKS_SRC, "bootstrap_node decorator must have acks_late=False"
+    """bootstrap_node must run with acks_late=False to prevent double-bootstrap on SIGKILL."""
+    from fleet_platform.workers.ansible_tasks import bootstrap_node
+
+    assert bootstrap_node.acks_late is False
 
 
 def test_bootstrap_no_ssh_password_param():
-    import ast
+    """bootstrap_node's real signature must not accept an ssh_password argument."""
+    import inspect
 
-    tree = ast.parse(_TASKS_SRC)
-    for node in ast.walk(tree):
-        if isinstance(node, ast.FunctionDef) and node.name == "bootstrap_node":
-            args = [a.arg for a in node.args.args]
-            assert "ssh_password" not in args, "bootstrap_node must not accept ssh_password"
+    from fleet_platform.workers.ansible_tasks import bootstrap_node
+
+    params = inspect.signature(bootstrap_node.run).parameters
+    assert "ssh_password" not in params, "bootstrap_node must not accept ssh_password"
+
+
+# ---------------------------------------------------------------------------
+# #456 — mark_stale_nodes must exclude maintenance-mode nodes
+# ---------------------------------------------------------------------------
 
 
 def test_mark_stale_excludes_maintenance_mode():
-    # Find mark_stale_nodes function body
-    start = _MAINT_SRC.find("def mark_stale_nodes(")
-    segment = _MAINT_SRC[start : start + 2000]
-    assert "maintenance_mode" in segment, "mark_stale_nodes must filter maintenance_mode nodes"
+    """Both UPDATEs issued by mark_stale_nodes must filter out maintenance_mode nodes."""
+    from fleet_platform.workers import maintenance
+
+    db = MagicMock()
+    db.execute.return_value = MagicMock(rowcount=0)
+
+    @contextmanager
+    def fake_db():
+        yield db
+
+    with (
+        patch.object(maintenance, "get_sync_db", fake_db),
+        patch.object(maintenance, "get_setting_sync", return_value=None),
+        patch.object(maintenance, "sync_redis", MagicMock()),
+    ):
+        maintenance.mark_stale_nodes()
+
+    updates = [_compiled(c.args[0]) for c in db.execute.call_args_list]
+    assert updates, "mark_stale_nodes must issue UPDATE statements"
+    for sql in updates:
+        assert "maintenance_mode" in sql, f"mark_stale_nodes UPDATE must filter maintenance_mode (#456); got:\n{sql}"
+
+
+# ---------------------------------------------------------------------------
+# #445 Part B — cleanup_old_bootstrap_runs must handle NULL finished_at
+# ---------------------------------------------------------------------------
+
+
+def test_cleanup_handles_null_finished_at():
+    """The DELETE built by cleanup_old_bootstrap_runs must include a finished_at IS NULL branch."""
+    from fleet_platform.workers import maintenance
+
+    setting_result = MagicMock()
+    setting_result.scalar_one_or_none.return_value = None  # → default retention (30 days)
+    delete_result = MagicMock(rowcount=0)
+
+    db = MagicMock()
+    db.execute.side_effect = [setting_result, delete_result]
+
+    @contextmanager
+    def fake_db():
+        yield db
+
+    with patch.object(maintenance, "get_sync_db", fake_db):
+        result = maintenance.cleanup_old_bootstrap_runs()
+
+    assert result["cutoff_days"] == 30
+    delete_stmt = _compiled(db.execute.call_args_list[1].args[0])
+    assert "finished_at IS NULL" in delete_stmt, (
+        f"cleanup must delete stuck rows with NULL finished_at (#445 Part B); got:\n{delete_stmt}"
+    )
+
+
+# ---------------------------------------------------------------------------
+# #445 Part C — reap_orphaned_bootstraps updates both BootstrapRun and Node rows
+# ---------------------------------------------------------------------------
 
 
 def test_reap_orphaned_bootstraps_updates_stuck_node(monkeypatch):
@@ -41,8 +116,6 @@ def test_reap_orphaned_bootstraps_updates_stuck_node(monkeypatch):
     stuck_node_id = _uuid.uuid4()
     executed_stmts = []
 
-    # Call sequence: execute(SELECT) → .scalars().all(), execute(UPDATE BootstrapRun),
-    # execute(UPDATE Node).  We return different objects per call.
     call_counter = {"n": 0}
 
     class FakeSelectResult:
@@ -83,19 +156,8 @@ def test_reap_orphaned_bootstraps_updates_stuck_node(monkeypatch):
 
     result = reap_orphaned_bootstraps()
 
-    # Must return a 'reaped' count (not error)
     assert "reaped" in result
 
-    # Must have executed at least 3 statements:
-    # 1. SELECT stuck node ids
-    # 2. UPDATE BootstrapRun (mark failed)
-    # 3. UPDATE Node (mark bootstrap_status=failed)
     assert len(executed_stmts) >= 3, (
         f"reap_orphaned_bootstraps must issue at least 3 SQL statements (SELECT + 2x UPDATE), got {len(executed_stmts)}"
     )
-
-
-def test_cleanup_handles_null_finished_at():
-    start = _MAINT_SRC.find("def cleanup_old_bootstrap_runs")
-    segment = _MAINT_SRC[start : start + 1000]
-    assert "is_(None)" in segment or "IS NULL" in segment.upper(), "cleanup must handle NULL finished_at"
