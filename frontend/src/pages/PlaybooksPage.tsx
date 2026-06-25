@@ -14,6 +14,7 @@ import { PlaybookDrawer } from '../components/PlaybookDrawer'
 import { fuzzyAny } from '../utils/fuzzy'
 import { ansibleCardCta } from '../lib/ansibleCta'
 import { useToastStore } from '../stores/toastStore'
+import { useJobEventStream } from '../hooks/useJobEventStream'
 
 function filterAndSort(entries: PlaybookEntry[], q: string): PlaybookEntry[] {
   if (!q) return entries
@@ -194,6 +195,12 @@ export function PlaybooksPage() {
   const navigate = useNavigate()
   const toast = useToastStore((s) => s.add)
   const qc = useQueryClient()
+
+  // Live push: subscribe to ansible-job / bootstrap transitions so caches shared
+  // with the run flow refresh on PUSH instead of via tight polling (#756). This
+  // page's own queries (playbooks/library/settings) are static metadata; the
+  // salt-master health poll below is left as-is (health, not job state).
+  useJobEventStream()
 
   const { data, isLoading, isError, refetch } = useQuery({
     queryKey: ['playbooks'],
