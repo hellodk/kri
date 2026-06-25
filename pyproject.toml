@@ -95,7 +95,7 @@ select = ["E", "F", "I"]
 known-first-party = ["fleet_platform"]
 
 [tool.mutmut]
-paths_to_mutate = "fleet_platform/services/"
+paths_to_mutate = "fleet_platform/services/,fleet_platform/agent/"
 tests_dir = "tests/unit/"
 runner = "python -m pytest tests/unit/ -x -q --tb=no --no-header"
 
