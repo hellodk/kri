@@ -26,6 +26,19 @@ if TYPE_CHECKING:
 pytestmark = pytest.mark.asyncio
 
 
+@pytest.fixture(autouse=True)
+def _enable_agent_surface(monkeypatch):
+    """Enable the agent surface for this module.
+
+    #887 added the AGENT_ENABLED kill-switch (default off), which gates every
+    mutating agent endpoint behind ``require_agent_enabled``. These tests
+    exercise that surface, so flip the env override on (precedence over the DB
+    setting) for the duration of each test. Scoped per-test via monkeypatch so
+    the disabled-by-default behavior covered elsewhere is unaffected.
+    """
+    monkeypatch.setenv("AGENT_ENABLED", "1")
+
+
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
