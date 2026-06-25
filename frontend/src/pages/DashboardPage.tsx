@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { Link } from 'react-router-dom'
-import { useQuery } from '@tanstack/react-query'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { useJobEventStream } from '../hooks/useJobEventStream'
 import { api } from '../api/client'
 import { fleetApi } from '../api/fleet'
 import { saltMastersApi } from '../api/saltMasters'
@@ -135,6 +136,19 @@ function FleetStatusBar({
 // ── Main dashboard ─────────────────────────────────────────────────────────────
 
 export function DashboardPage() {
+  const qc = useQueryClient()
+
+  // Live push: bootstrap transitions invalidate ['fleet-overview'] directly and,
+  // via the handler below, the dashboard node panel. The staggered polls stay as
+  // slow safety-net fallbacks rather than the primary freshness mechanism (#756).
+  useJobEventStream({
+    onEvent: (ev) => {
+      if (ev.kind === 'bootstrap') {
+        void qc.invalidateQueries({ queryKey: ['dashboard-nodes'] })
+      }
+    },
+  })
+
   // All dashboard queries pause when the tab is hidden; intervals are staggered
   // so they don't fire simultaneously and pile up concurrent requests.
   const { data: overview, isFetching: overviewFetching } = useQuery({
