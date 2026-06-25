@@ -40,6 +40,17 @@ export interface AgentAction {
   created_at: string | null
 }
 
+// ── Agent kill-switch status (#879) ──────────────────────────────────────────
+
+export interface AgentStatus {
+  enabled: boolean
+}
+
+export const agentApi = {
+  /** Whether the agent surface is enabled (master kill-switch). */
+  status: () => api.get<AgentStatus>('/api/v1/agent/status'),
+}
+
 export const actionApi = {
   list: () => api.get<{ actions: AgentAction[] }>('/api/v1/agent/actions'),
   approve: (id: string) => api.post<{ status: string; message?: string }>(`/api/v1/agent/actions/${id}/approve`, {}),

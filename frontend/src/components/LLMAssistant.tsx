@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect, useCallback } from 'react'
 import { streamQuery } from '../api/llm'
-import { streamAgent, type AgentEvent } from '../api/agent'
+import { streamAgent, agentApi, type AgentEvent } from '../api/agent'
 import { ToolStep, ToolResultCard, type ToolStepData } from './AgentToolStep'
 import { ArtifactsPanel } from './ArtifactsPanel'
 import { AgentApprovals } from './AgentApprovals'
@@ -61,6 +61,10 @@ export default function LLMAssistant() {
   })
   const [streaming, setStreaming] = useState(false)
   const [mode, setMode] = useState<AssistantMode>('qa')
+  // Master kill-switch (#879): the agent surface is off by default. Start
+  // disabled and only enable once /status confirms it; treat any error as
+  // disabled so we fail safe and never expose a dead "Agent" toggle.
+  const [agentEnabled, setAgentEnabled] = useState(false)
   const [agentView, setAgentView] = useState<'run' | 'artifacts' | 'approvals'>('run')
   const [agentTurns, setAgentTurns] = useState<AgentTurn[]>([])
   const { messages, addMessage, clearMessages, appendToLastMessage, patchLastMessage } = useLLMStore()
@@ -73,6 +77,24 @@ export default function LLMAssistant() {
     // is in-flight, abort it so the upstream LLM call is cancelled rather
     // than leaking tokens.
     return () => streamControllerRef.current?.abort()
+  }, [])
+
+  // Fetch the agent kill-switch state on mount (#879). The Agent-mode toggle
+  // stays disabled until /status confirms the surface is enabled, so the user
+  // can never enter a dead agent mode; any error fails safe to disabled.
+  useEffect(() => {
+    let cancelled = false
+    agentApi
+      .status()
+      .then((res) => {
+        if (!cancelled) setAgentEnabled(!!res.enabled)
+      })
+      .catch(() => {
+        if (!cancelled) setAgentEnabled(false)
+      })
+    return () => {
+      cancelled = true
+    }
   }, [])
 
   // Drag state kept in refs to avoid re-renders during pointer move
@@ -508,10 +530,10 @@ export default function LLMAssistant() {
                 Q&amp;A
               </button>
               <button
-                onClick={() => !streaming && setMode('agent')}
-                disabled={streaming}
-                className={`px-2 py-0.5 transition-colors ${mode === 'agent' ? 'bg-white text-blue-700' : 'text-white/80 hover:bg-white/10'} disabled:opacity-60`}
-                title="Multi-tool agent run"
+                onClick={() => !streaming && agentEnabled && setMode('agent')}
+                disabled={streaming || !agentEnabled}
+                className={`px-2 py-0.5 transition-colors ${mode === 'agent' ? 'bg-white text-blue-700' : 'text-white/80 hover:bg-white/10'} disabled:opacity-60 disabled:cursor-not-allowed`}
+                title={agentEnabled ? 'Multi-tool agent run' : 'Agent surface disabled'}
               >
                 Agent
               </button>
