@@ -347,11 +347,20 @@ jobs:
       - uses: pnpm/action-setup@v6
         with:
           version: 10.29.3
-      - run: pnpm install --frozen-lockfile
-        working-directory: frontend
-      - name: Install Playwright browsers
-        run: pnpm exec playwright install --with-deps chromium
-        working-directory: frontend
+      - name: Install Playwright runner + browsers (repo root)
+        # The Playwright config (playwright.config.ts) and specs (tests/e2e/) live
+        # at the repo ROOT, and the "Run Playwright tests" step below runs
+        # `pnpm exec playwright test` from root — so the @playwright/test runner
+        # must be installed at root. Previously this installed in frontend/, which
+        # left root/node_modules empty and made `pnpm exec playwright` fail with
+        # `Command "playwright" not found` (exit 254). frontend/ itself is built
+        # inside Docker by docker-compose, so the runner never needs its deps.
+        # Root has only package.json (no committed lockfile) — hence no
+        # --frozen-lockfile. Browsers install into the shared ~/.cache/ms-playwright.
+        run: |
+          pnpm install --no-frozen-lockfile
+          pnpm exec playwright install --with-deps chromium
+        working-directory: .
       - name: Materialize CI .env.docker
         # Generate a deterministic .env.docker from the secrets above so the
         # docker-compose stack can boot without depending on developer-only
