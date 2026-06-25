@@ -1,12 +1,20 @@
-"""LLM-backed planner for the agent loop (#711).
+"""LLM-backed planner for the agent loop (#711, #651).
 
 The :class:`AgentLoop` depends only on a ``Planner`` protocol; this module
-provides the production implementation. It uses **prompt-embedded** tool calling
-(``tool_mode="json"``): the available tools are rendered into the system prompt
-and the model replies either with a JSON tool-call object or a plain-text final
-answer. This works with the existing buffered LLM callers (``call_openai_compat``
-/ ``call_anthropic``) without any change to the streaming infrastructure, and the
-backend-agnostic :func:`parse_tool_calls_from_content` extracts the call.
+provides the production implementation. It honours ``LLMEndpoint.tool_mode``:
+
+* ``json`` (default) — **prompt-embedded** tool calling: the available tools are
+  rendered into the system prompt and the model replies with either a JSON
+  tool-call object or a plain-text final answer. Uses the buffered callers
+  (``call_openai_compat`` / ``call_anthropic``) and extracts calls from content.
+* ``native`` — provider-native OpenAI ``tools=[...]`` calling via
+  ``call_openai_compat_tools``; native ``tool_calls`` are read off the returned
+  message (with a content-parse fallback).
+* ``anthropic`` — Anthropic ``tools=[...]`` (``tool_use``) calling via
+  ``call_anthropic_tools``.
+
+In every mode :func:`extract_tool_calls` falls back to content parsing when the
+endpoint returns no native call, so a weak/quirky model still works.
 
 Token usage accumulates across iterations so the route can persist it.
 """
@@ -18,7 +26,7 @@ from typing import Any
 
 from fleet_platform.agent.loop import PlanDecision, ToolCall
 from fleet_platform.agent.registry import ToolRegistry
-from fleet_platform.services.tool_calling import parse_tool_calls_from_content
+from fleet_platform.services.tool_calling import extract_tool_calls, parse_tool_calls_from_content
 
 # Hard cap on a single tool result fed back into the planner prompt (#715). Keeps
 # a hostile/huge tool result from blowing the context window or smuggling payload.
@@ -34,6 +42,22 @@ _SYSTEM_PREAMBLE = (
     "- Only use tools from the list below; never invent tool names or arguments.\n"
     "- When you have enough information, reply with a plain-text final answer "
     "(NO JSON). Be concise and cite the node/minion ids you inspected.\n"
+    "- If a tool errors or a question cannot be answered with the available tools, "
+    "say so plainly in a final answer.\n"
+)
+
+# Native / anthropic modes pass tool schemas out-of-band (``tools=[...]``), so the
+# system prompt must NOT instruct a JSON reply shape or list the tools inline —
+# doing so confuses provider-native tool-calling. Only the behavioural rules stay.
+_NATIVE_SYSTEM_PREAMBLE = (
+    "You are kri's fleet operations agent. You answer the operator's question by "
+    "calling read-only tools, observing their results, and reasoning step by step.\n\n"
+    "RULES:\n"
+    "- Use the provided tools to gather information. Call one tool at a time and "
+    "wait for its result before deciding the next step.\n"
+    "- Only use the tools provided; never invent tool names or arguments.\n"
+    "- When you have enough information, reply with a plain-text final answer. "
+    "Be concise and cite the node/minion ids you inspected.\n"
     "- If a tool errors or a question cannot be answered with the available tools, "
     "say so plainly in a final answer.\n"
 )
@@ -83,7 +107,12 @@ def sanitize_llm_output(text: str) -> str:
 
 @dataclass
 class LLMPlanner:
-    """Planner that asks an LLM endpoint which tool to call next (json tool_mode)."""
+    """Planner that asks an LLM endpoint which tool to call next.
+
+    ``tool_mode`` selects how tools are exposed: ``json`` (prompt-embedded,
+    default), ``native`` (OpenAI ``tools=[...]``), or ``anthropic``
+    (``tool_use``). See the module docstring for the per-mode call path.
+    """
 
     registry: ToolRegistry
     role: str
@@ -94,6 +123,7 @@ class LLMPlanner:
     provider: str = "openai"
     model_context_length: int | None = None
     model_capabilities: list[str] = field(default_factory=list)
+    tool_mode: str = "json"
 
     input_tokens: int = 0
     output_tokens: int = 0
@@ -111,12 +141,66 @@ class LLMPlanner:
             "Decide the next tool call, or give your final answer."
         )
 
-    async def plan(self, *, prompt: str, history: list[dict], tool_results: list[Any]) -> PlanDecision:
-        from fleet_platform.services.llm_caller import call_anthropic, call_openai_compat
+    def _accumulate(self, in_tok: Any, out_tok: Any) -> None:
+        self.input_tokens += int(in_tok or 0)
+        self.output_tokens += int(out_tok or 0)
 
-        system_prompt = self._system_prompt()
+    def _decide(self, calls: list[Any], content: str) -> PlanDecision:
+        """Pick the first role-permitted tool call, else a plain-text final answer.
+
+        Only calls naming a tool the role may actually use are kept; the executor
+        re-checks at dispatch, but filtering here avoids burning a tool-call slot
+        on hallucinated names.
+        """
+        valid = [c for c in calls if self.registry.get(c.name) is not None]
+        if valid:
+            return PlanDecision(tool_calls=[ToolCall(name=c.name, args=c.arguments) for c in valid[:1]])
+        return PlanDecision(final=(content or "").strip())
+
+    async def plan(self, *, prompt: str, history: list[dict], tool_results: list[Any]) -> PlanDecision:
+        from fleet_platform.services.llm_caller import (
+            call_anthropic,
+            call_anthropic_tools,
+            call_openai_compat,
+            call_openai_compat_tools,
+        )
+
         user_prompt = self._user_prompt(prompt, tool_results)
 
+        if self.tool_mode == "native":
+            message, in_tok, out_tok = await call_openai_compat_tools(
+                base_url=self.base_url,
+                api_key=self.api_key,
+                model=self.model,
+                max_tokens=self.max_tokens,
+                system_prompt=_NATIVE_SYSTEM_PREAMBLE,
+                user_prompt=user_prompt,
+                tools=self.registry.to_openai_tools(self.role),
+                history=None,
+                model_context_length=self.model_context_length,
+                model_capabilities=self.model_capabilities,
+            )
+            self._accumulate(in_tok, out_tok)
+            # extract_tool_calls reads native tool_calls, falling back to
+            # content parsing when the endpoint returned none.
+            return self._decide(extract_tool_calls(message), message.get("content") or "")
+
+        if self.tool_mode == "anthropic":
+            message, in_tok, out_tok = await call_anthropic_tools(
+                api_key=self.api_key or "",
+                model=self.model,
+                max_tokens=self.max_tokens,
+                system_prompt=_NATIVE_SYSTEM_PREAMBLE,
+                user_prompt=user_prompt,
+                tools=self.registry.to_anthropic_tools(self.role),
+                history=None,
+                model_context_length=self.model_context_length,
+            )
+            self._accumulate(in_tok, out_tok)
+            return self._decide(extract_tool_calls(message), message.get("content") or "")
+
+        # Default json (prompt-embedded) path — unchanged behaviour.
+        system_prompt = self._system_prompt()
         if self.provider == "anthropic":
             content, in_tok, out_tok = await call_anthropic(
                 api_key=self.api_key or "",
@@ -139,14 +223,5 @@ class LLMPlanner:
                 model_capabilities=self.model_capabilities,
             )
 
-        self.input_tokens += int(in_tok or 0)
-        self.output_tokens += int(out_tok or 0)
-
-        calls = parse_tool_calls_from_content(content or "")
-        # Keep only calls naming a tool the role may actually use; the executor
-        # re-checks, but filtering here avoids burning a tool-call slot on noise.
-        valid = [c for c in calls if self.registry.get(c.name) is not None]
-        if valid:
-            return PlanDecision(tool_calls=[ToolCall(name=c.name, args=c.arguments) for c in valid[:1]])
-
-        return PlanDecision(final=(content or "").strip())
+        self._accumulate(in_tok, out_tok)
+        return self._decide(parse_tool_calls_from_content(content or ""), content or "")

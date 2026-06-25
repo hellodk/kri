@@ -261,6 +261,138 @@ async def call_openai_compat(
     return content, prompt_tokens, completion_tokens
 
 
+async def call_openai_compat_tools(
+    *,
+    base_url: str,
+    api_key: str | None,
+    model: str,
+    max_tokens: int,
+    system_prompt: str,
+    user_prompt: str,
+    tools: list[dict],
+    history: list[dict] | None = None,
+    model_context_length: int | None = None,
+    model_capabilities: list[str] | None = None,
+) -> tuple[dict, int, int]:
+    """Native-tool-calling sibling of :func:`call_openai_compat` (#651).
+
+    Sends a top-level ``tools=[...]`` array so the endpoint can emit native
+    OpenAI ``tool_calls`` rather than prompt-embedded JSON. Returns the assistant
+    ``message`` dict — ``{"role", "content", "tool_calls"}`` — alongside the same
+    ``(input_tokens, output_tokens)`` counts as the plain caller, so the planner
+    can feed it straight into :func:`extract_tool_calls`.
+
+    Kept separate from :func:`call_openai_compat` on purpose: the existing 3-tuple
+    ``(content, in, out)`` contract has many callers and must not change shape.
+    """
+    import re as _re
+
+    from fleet_platform.services.tool_calling import ToolCallAccumulator
+
+    headers: dict[str, str] = {"Content-Type": "application/json"}
+    if api_key:
+        headers["Authorization"] = f"Bearer {api_key}"
+
+    is_thinking = bool(model_capabilities and "thinking" in model_capabilities)
+
+    ctx = model_context_length or 8192
+    if max_tokens > ctx:
+        max_tokens = ctx
+
+    system_prompt, budgeted_history = _budget_inputs(
+        system_prompt=system_prompt,
+        history=history,
+        user_prompt=user_prompt,
+        ctx=ctx,
+        max_tokens=max_tokens,
+    )
+
+    messages: list[dict] = [{"role": "system", "content": system_prompt}]
+    messages.extend(budgeted_history)
+    messages.append({"role": "user", "content": user_prompt})
+
+    payload: dict = {
+        "model": model,
+        "max_tokens": max_tokens,
+        "temperature": 0.3,
+        "top_p": 0.9,
+        "messages": messages,
+        "tools": tools,
+        "stream": True,
+    }
+    # Stop tokens can truncate a native tool-call argument stream mid-JSON, so we
+    # omit them here regardless of model size — the accumulator needs the full
+    # arguments fragment sequence to parse.
+
+    content_parts: list[str] = []
+    accumulator = ToolCallAccumulator()
+    prompt_tokens = 0
+    completion_tokens = 0
+
+    try:
+        async with httpx.AsyncClient(timeout=_STREAM_TIMEOUT) as client:
+            async with client.stream(
+                "POST",
+                f"{normalize_openai_base_url(base_url)}/v1/chat/completions",
+                headers=headers,
+                json=payload,
+            ) as response:
+                response.raise_for_status()
+                async for raw_line in response.aiter_lines():
+                    line = raw_line.strip()
+                    if not line or not line.startswith("data:"):
+                        continue
+                    data_str = line[len("data:") :].strip()
+                    if data_str == "[DONE]":
+                        break
+                    try:
+                        chunk = _json.loads(data_str)
+                    except _json.JSONDecodeError:
+                        continue
+                    for choice in chunk.get("choices", []):
+                        delta = choice.get("delta", {})
+                        if delta.get("content"):
+                            content_parts.append(delta["content"])
+                        if delta.get("tool_calls"):
+                            accumulator.add_delta(delta)
+                    if "usage" in chunk and chunk["usage"]:
+                        prompt_tokens = chunk["usage"].get("prompt_tokens", 0) or 0
+                        completion_tokens = chunk["usage"].get("completion_tokens", 0) or 0
+    except httpx.HTTPStatusError as exc:
+        raise LLMCallError(_describe_http_error(exc, base_url)) from exc
+    except httpx.ReadTimeout as exc:
+        raise LLMCallError(
+            f"Stream stalled — no chunk received within {_READ_TIMEOUT}s. Model may be overloaded or still loading."
+        ) from exc
+    except httpx.TimeoutException as exc:
+        raise LLMCallError(f"Connection timed out after {_CONNECT_TIMEOUT}s") from exc
+    except httpx.RequestError as exc:
+        raise LLMCallError(f"Network error: {exc}") from exc
+
+    content: str = "".join(content_parts)
+    finalized = accumulator.finalize()
+    # Re-emit as raw OpenAI-shaped tool_calls so extract_tool_calls() can
+    # normalize them through the same path as a non-streaming response.
+    tool_calls: list[dict] = [
+        {"id": tc.id, "function": {"name": tc.name, "arguments": _json.dumps(tc.arguments)}} for tc in finalized
+    ]
+
+    # Empty AND no tool calls AND zero tokens means a server-side crash returning
+    # HTTP 200 with nothing (#840). A tool-call-only reply (no content) is valid.
+    if not content and not tool_calls and completion_tokens == 0:
+        raise LLMCallError("Model returned no content (0 tokens) — the endpoint or model may be broken")
+
+    if is_thinking:
+        content = _re.sub(r"<think>.*?</think>", "", content, flags=_re.DOTALL).strip()
+    elif not tool_calls and content:
+        # Only validate plain-text final answers; a tool-call reply legitimately
+        # carries little or no prose and must not be flagged as an echo.
+        content = _validate_response(content, system_prompt)
+
+    message = {"role": "assistant", "content": content, "tool_calls": tool_calls}
+    return message, prompt_tokens, completion_tokens
+
+
 def _validate_response(content: str, system_prompt: str) -> str:
     """Detect common small-model failure modes and return a clean error message."""
     stripped = content.strip()
@@ -330,6 +462,78 @@ async def call_anthropic(
     if not content and message.usage.output_tokens == 0:
         raise LLMCallError("Model returned no content (0 tokens) — the endpoint or model may be broken")
     return content, message.usage.input_tokens, message.usage.output_tokens
+
+
+async def call_anthropic_tools(
+    *,
+    api_key: str,
+    model: str,
+    max_tokens: int,
+    system_prompt: str,
+    user_prompt: str,
+    tools: list[dict],
+    history: list[dict] | None = None,
+    model_context_length: int | None = None,
+) -> tuple[dict, int, int]:
+    """Native-tool-calling sibling of :func:`call_anthropic` (#651).
+
+    Sends Anthropic ``tools=[...]`` and flattens the response content blocks into
+    an assistant ``message`` dict — text blocks joined into ``content`` and any
+    ``tool_use`` blocks re-emitted under ``tool_calls`` — so the planner can pass
+    it straight to :func:`extract_tool_calls` (which understands the ``tool_use``
+    shape). Returns ``(message, input_tokens, output_tokens)``.
+    """
+    import anthropic
+
+    ctx = model_context_length or _ANTHROPIC_DEFAULT_CTX
+    system_prompt, budgeted_history = _budget_inputs(
+        system_prompt=system_prompt,
+        history=history,
+        user_prompt=user_prompt,
+        ctx=ctx,
+        max_tokens=min(max_tokens, ctx),
+    )
+
+    client = anthropic.AsyncAnthropic(api_key=api_key, timeout=_ANTHROPIC_TIMEOUT)
+    messages: list[dict] = list(budgeted_history)
+    messages.append({"role": "user", "content": user_prompt})
+    try:
+        message = await client.messages.create(
+            model=model,
+            max_tokens=max_tokens,
+            system=system_prompt,
+            messages=messages,  # type: ignore[arg-type]
+            tools=tools,  # type: ignore[arg-type]
+        )
+    except anthropic.APIError as exc:
+        raise LLMCallError(f"Anthropic API error: {exc}") from exc
+    except httpx.TimeoutException as exc:
+        raise LLMCallError(f"Anthropic call timed out after {_READ_TIMEOUT}s") from exc
+
+    text_parts: list[str] = []
+    tool_calls: list[dict] = []
+    for block in message.content or []:
+        btype = getattr(block, "type", None)
+        if btype == "tool_use":
+            tool_calls.append(
+                {
+                    "type": "tool_use",
+                    "id": getattr(block, "id", None),
+                    "name": getattr(block, "name", ""),
+                    "input": getattr(block, "input", {}) or {},
+                }
+            )
+        else:
+            text = getattr(block, "text", None)
+            if text:
+                text_parts.append(text)
+
+    content = "".join(text_parts)
+    if not content and not tool_calls and message.usage.output_tokens == 0:
+        raise LLMCallError("Model returned no content (0 tokens) — the endpoint or model may be broken")
+
+    result_message = {"role": "assistant", "content": content, "tool_calls": tool_calls}
+    return result_message, message.usage.input_tokens, message.usage.output_tokens
 
 
 # ── Streaming variants (SSE-friendly) ────────────────────────────────────────
