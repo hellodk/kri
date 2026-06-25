@@ -153,9 +153,13 @@ async def request_node_action(
     if not PendingAction.is_destructive(payload.action_type):
         # Non-destructive (start/restart/enable/resume): execute immediately, no approval.
         function, args = _build_salt_invocation(payload.action_type, payload.params)
-        from fleet_platform.workers.salt_tasks import run_salt_cmd
+        from fleet_platform.workers.celery_app import celery_app
 
-        run_salt_cmd.delay(function=function, target_minions=[node.minion_id], args=args)
+        celery_app.send_task(
+            "fleet_platform.workers.salt_tasks.run_salt_cmd",
+            kwargs={"function": function, "target_minions": [node.minion_id], "args": args},
+            queue="maintenance",
+        )
         node_action_total.labels(action_type=payload.action_type, status="requested").inc()
         node_action_total.labels(action_type=payload.action_type, status="executed").inc()
         await audit(
@@ -227,12 +231,12 @@ async def list_services(
     node = node_result.scalar_one_or_none()
     if not node:
         raise HTTPException(status_code=404, detail="Node not found")
-    from fleet_platform.workers.salt_tasks import run_salt_cmd
+    from fleet_platform.workers.celery_app import celery_app
 
-    task = run_salt_cmd.delay(
-        function="service.get_all",
-        target_minions=[node.minion_id],
-        args=[],
+    task = celery_app.send_task(
+        "fleet_platform.workers.salt_tasks.run_salt_cmd",
+        kwargs={"function": "service.get_all", "target_minions": [node.minion_id], "args": []},
+        queue="maintenance",
     )
     return {"task_id": task.id, "minion_id": node.minion_id}
 
