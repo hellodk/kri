@@ -70,6 +70,7 @@ class PendingAction(Base):
             "process_suspend",  # SIGSTOP
             "service_stop",
             "service_disable",
+            "harden",  # apply base.harden_compute (disables a conservative service set) (#675)
         }
     )
 
