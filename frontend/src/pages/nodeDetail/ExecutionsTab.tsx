@@ -5,9 +5,14 @@ import { formatDistanceToNow } from 'date-fns'
 import { executionsApi } from '../../api/executions'
 import { playbooksApi, type AnsibleJob } from '../../api/playbooks'
 import { Pagination } from '../../components/Pagination'
+import { useJobEventStream } from '../../hooks/useJobEventStream'
 
 export const ExecutionsTab = memo(function ExecutionsTab({ nodeId }: { nodeId: string }) {
   const [execPage, setExecPage] = useState(1)
+
+  // Live push: server pushes ansible-job transitions; the lists below refetch on
+  // push and only fall back to a slow 30s safety-net poll (#756).
+  useJobEventStream({ enabled: !!nodeId })
 
   const { data: executions } = useQuery({
     queryKey: ['executions-node', nodeId, execPage],
@@ -20,7 +25,7 @@ export const ExecutionsTab = memo(function ExecutionsTab({ nodeId }: { nodeId: s
     queryKey: ['ansible-jobs-node', nodeId],
     queryFn: () => playbooksApi.listJobs({ node_id: nodeId, per_page: 25 }),
     staleTime: 10_000,
-    refetchInterval: 15_000,
+    refetchInterval: 30_000,
     enabled: !!nodeId,
   })
 
