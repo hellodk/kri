@@ -70,7 +70,25 @@ def _default_key(request: Request) -> str:
     return make_real_ip_key(settings.trusted_proxy_count)(request)
 
 
-limiter = Limiter(key_func=_default_key)
+def _rate_limiting_enabled() -> bool:
+    """Rate limiting is on everywhere except the automated E2E test stack.
+
+    The Playwright suite (#905) drives many ``/auth/login`` calls from a single
+    runner IP — the login/refresh/logout endpoint tests, the UI login journeys,
+    and per-spec API logins for two seeded users. Even with the helper's 12-min
+    token cache this legitimately exceeds the 10/min per-IP budget, and once the
+    limit trips every downstream test cascades into 429-derived failures (empty
+    token bodies → 401/403/422, and 30s ``beforeEach`` login timeouts). A real
+    test deployment turns the limiter off the same way. Production and
+    development keep it ENABLED — only ENVIRONMENT=test disables it, and this is
+    resolved once at process start (the E2E api container sets ENVIRONMENT=test).
+    """
+    from fleet_platform.core.config import settings
+
+    return settings.environment != "test"
+
+
+limiter = Limiter(key_func=_default_key, enabled=_rate_limiting_enabled())
 
 
 class RateLimitHeadersMiddleware:

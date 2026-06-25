@@ -2,7 +2,7 @@
  * GROUP CREDENTIALS — Group SSH credential journeys
  */
 import { test, expect } from '@playwright/test'
-import { loginViaApi, getToken, ADMIN, API } from './helpers'
+import { loginViaApi, getToken, ADMIN, VIEWER, API } from './helpers'
 
 test.describe('Group Credentials', () => {
 
@@ -49,7 +49,7 @@ test.describe('Group Credentials', () => {
 
   test('GCRED-03 viewer cannot patch credentials', async ({ request }) => {
     const loginRes = await request.post(`${API}/auth/login`, {
-      data: { email: 'viewer@fleet.local', password: 'changeme' },
+      data: VIEWER,
     })
     const { access_token } = await loginRes.json()
     const res = await request.patch(`${API}/api/v1/groups/${groupId}/credentials`, {
