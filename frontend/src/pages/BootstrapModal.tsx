@@ -9,6 +9,7 @@ import { saltMastersApi } from '../api/saltMasters'
 import { canBootstrap, saltMasterBadge } from '../lib/saltMasterHelpers'
 import { AnsiText } from '../lib/AnsiText'
 import { useFocusTrap } from '../hooks/useFocusTrap'
+import { useJobEventStream } from '../hooks/useJobEventStream'
 import { useToastStore } from '../stores/toastStore'
 import type { Node } from '../types'
 
@@ -182,13 +183,17 @@ function SingleMode({ onClose }: { onClose: () => void }) {
     onError: (e: Error) => { setLocalLogs(null); toast(e.message, 'error') },
   })
 
+  // Live push: refetch bootstrap status/logs on server-pushed transitions
+  // (#756). Polling below drops to a slow 30s safety-net.
+  useJobEventStream({ enabled: !!nodeId })
+
   const { data: statusData } = useQuery({
     queryKey: ['bootstrap-status', nodeId],
     queryFn: () => ansibleApi.bootstrapStatus(nodeId!),
     enabled: !!nodeId,
     refetchInterval: (query) => {
       const s = query.state.data?.bootstrap_status
-      return (s === 'pending' || s === 'bootstrapping') ? 3000 : false
+      return (s === 'pending' || s === 'bootstrapping') ? 30_000 : false
     },
   })
 
@@ -208,7 +213,7 @@ function SingleMode({ onClose }: { onClose: () => void }) {
     queryKey: ['bootstrap-logs', nodeId],
     queryFn: () => ansibleApi.bootstrapLogs(nodeId!),
     enabled: showLogs && !!nodeId,
-    refetchInterval: showLogs && (status === 'pending' || status === 'bootstrapping') ? 2500 : false,
+    refetchInterval: showLogs && (status === 'pending' || status === 'bootstrapping') ? 30_000 : false,
   })
 
   // Keep localLogs in sync: once the query returns real data, promote it so clearing works
@@ -794,7 +799,7 @@ function BulkJobRow({ job }: { job: BulkJob }) {
     enabled: !!job.nodeId,
     refetchInterval: (query) => {
       const s = query.state.data?.bootstrap_status
-      return (s === 'pending' || s === 'bootstrapping') ? 3000 : false
+      return (s === 'pending' || s === 'bootstrapping') ? 30_000 : false
     },
   })
 
@@ -842,6 +847,10 @@ function BulkMode({ onClose }: { onClose: () => void }) {
   const [launching, setLaunching] = useState(false)
   const toast = useToastStore((s) => s.add)
   const qc = useQueryClient()
+
+  // Live push: bulk rows refetch bootstrap status on server-pushed transitions
+  // (#756); per-row polling drops to a slow 30s safety-net.
+  useJobEventStream({ enabled: jobs.length > 0 })
 
   // Group mode state
   const [selectedGroupId, setSelectedGroupId] = useState('')

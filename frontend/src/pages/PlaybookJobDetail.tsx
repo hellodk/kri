@@ -4,6 +4,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { playbooksApi, type AnsibleJob } from '../api/playbooks'
 import { PlaybookRunModal } from './PlaybookRunModal'
 import { LogPane } from '../lib/LogPane'
+import { useJobEventStream } from '../hooks/useJobEventStream'
 import { formatDistanceToNow, formatDuration, intervalToDuration } from 'date-fns'
 import { formatIST } from '../utils/time'
 
@@ -56,14 +57,19 @@ export function PlaybookJobDetail() {
     setLogText('')
   }, [jobId])
 
+  // Live push: refetch on server-pushed job-state transitions (#756). The poll
+  // below is now only a slow safety-net for missed/dropped events.
+  useJobEventStream({ enabled: !!jobId })
+
   const { data: job, isLoading, isError } = useQuery({
     queryKey: ['ansible-job', jobId],
     queryFn: () => playbooksApi.getJob(jobId!, acc.current.total),
     enabled: !!jobId,
-    // Poll while running so logs update in real time
+    // Safety-net poll while running (push handles the common case); 30s instead
+    // of the old 3s tight loop (#756).
     refetchInterval: (q) => {
       const s = q.state.data?.status
-      return s === 'running' || s === 'pending' ? 3000 : false
+      return s === 'running' || s === 'pending' ? 30_000 : false
     },
   })
 
@@ -266,7 +272,7 @@ export function PlaybookJobDetail() {
             })()}
           </div>
           {isLive && (
-            <span className="text-xs text-blue-500">Polling every 3s…</span>
+            <span className="text-xs text-blue-500">Live · updating on push…</span>
           )}
         </div>
         <LogPane raw={logText} isLive={isLive} emptyText="No output recorded" />

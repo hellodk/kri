@@ -22,6 +22,7 @@ from fleet_platform.models.node import Node
 from fleet_platform.models.platform_setting import PlatformSetting
 from fleet_platform.models.salt_master import SaltMaster
 from fleet_platform.services.grains_collector import _grains_via_salt_api, _grains_via_ssh
+from fleet_platform.services.job_events import publish_job_event
 from fleet_platform.services.node_credentials import (
     _get_bootstrap_settings,
     _get_group_credentials,
@@ -95,6 +96,7 @@ def bootstrap_node(
         node.bootstrap_logs = ""  # clear any previous run's logs
         node.bootstrap_error = None
         db.commit()
+        publish_job_event("bootstrap", node_id, "running")
 
         _settings_ssh_user, _settings_ssh_password, controller_pubkey = _get_bootstrap_settings(db)
 
@@ -450,6 +452,7 @@ def bootstrap_node(
                 run_record.error = bootstrap_error
 
             db.commit()
+            publish_job_event("bootstrap", node_id, node.bootstrap_status)
 
         # 6a. (#555) Auto-accept minion key on each master that has auto_accept=True.
         # Runs only on successful bootstrap; never blocks or fails the overall task.

@@ -20,6 +20,7 @@ from fleet_platform.db.session import get_sync_db
 from fleet_platform.models.ansible_job import AnsibleJob
 from fleet_platform.models.node import Node
 from fleet_platform.services.credential_resolver import resolve_node_credentials_sync
+from fleet_platform.services.job_events import publish_job_event
 from fleet_platform.services.ssh_host_key_svc import to_known_hosts_token
 from fleet_platform.workers.celery_app import celery_app
 
@@ -390,6 +391,7 @@ def run_playbook(self, job_id: str, ssh_username: str | None = None, verbosity: 
             job.status = "running"
             job.started_at = datetime.now(UTC)
             db.commit()
+            publish_job_event("ansible_job", job_id, "running", node_id=str(job.target_id))
             # Explicit per-call override (optional, e.g. via API). When absent,
             # credentials are auto-resolved per host (node → group → global).
             override = {"ssh_user": ssh_username} if ssh_username else None
@@ -595,6 +597,7 @@ def run_playbook(self, job_id: str, ssh_username: str | None = None, verbosity: 
                     job.stdout += _classify_failure("\n".join(stdout_lines), hosts, _last_task, final_rc, final_status)
             job.completed_at = datetime.now(UTC)
             db.commit()
+            publish_job_event("ansible_job", job_id, job.status, node_id=str(job.target_id), rc=final_rc)
 
         return {"status": final_status, "rc": final_rc, "job_id": job_id}
 
