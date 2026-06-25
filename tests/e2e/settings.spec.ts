@@ -2,7 +2,7 @@
  * SETTINGS — Platform settings journeys
  */
 import { test, expect } from '@playwright/test'
-import { loginViaApi, getToken, ADMIN, API } from './helpers'
+import { loginViaApi, getToken, ADMIN, VIEWER, API } from './helpers'
 
 test.describe('Settings', () => {
 
@@ -52,7 +52,7 @@ test.describe('Settings', () => {
 
   test('SETTINGS-05 settings API requires admin', async ({ request }) => {
     const loginRes = await request.post(`${API}/auth/login`, {
-      data: { email: 'viewer@fleet.local', password: 'changeme' },
+      data: VIEWER,
     })
     const { access_token } = await loginRes.json()
     const res = await request.get(`${API}/api/v1/settings`, {

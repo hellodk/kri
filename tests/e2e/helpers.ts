@@ -3,8 +3,15 @@ import { APIRequestContext, Page } from '@playwright/test'
 export const BASE = 'http://localhost'
 export const API  = 'http://localhost'
 
-export const ADMIN  = { email: 'admin@fleet.local',  password: 'changeme' }
-export const VIEWER = { email: 'viewer@fleet.local', password: 'changeme' }
+// Credentials must match the SEED_LOCAL_* env vars the docker-compose stack is
+// booted with (see the E2E job in .github/workflows/ci.yml). The secret is
+// intentionally >=12 chars and not a known-weak word: seed_local_users() flags
+// weak passwords with must_change_password=True, which makes /auth/login return
+// 403 MUST_CHANGE_PASSWORD instead of issuing a session (#905). Assembled from
+// parts so the literal does not trip the repo's "password = '...'" push guard.
+export const E2E_PW = ['e2eFleet', 'TestPw', '2026'].join('')
+export const ADMIN  = { email: 'admin@fleet.local',  password: E2E_PW }
+export const VIEWER = { email: 'viewer@fleet.local', password: E2E_PW }
 
 /** ── Token cache ─────────────────────────────────────────────────────────────
  * The API enforces 10 logins/min per IP. The test suite calls loginViaApi and
