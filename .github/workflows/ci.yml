@@ -390,12 +390,16 @@ jobs:
           done
           echo "::error::stack failed to build/start after 3 attempts"; exit 1
       - name: Wait for API health
-        # /health is the lightweight probe the k8s manifests also use; the
-        # worker queue takes longer to come up but the e2e tests don't
-        # require it.
+        # Probe the API container directly on its internal port. nginx (port 80)
+        # only proxies /auth and /api, and the API mounts /health + /health/ready
+        # at the root (no /api/v1 prefix) — so `curl http://localhost/api/v1/health`
+        # hits nginx→api with a path the API doesn't define and returns 404, never
+        # going healthy. /health/ready confirms the API is up AND Postgres+Redis
+        # are reachable; it's the same endpoint the compose healthcheck uses.
         run: |
           for i in {1..60}; do
-            if curl -fsS http://localhost/api/v1/health >/dev/null; then
+            if docker compose -f deploy/docker-compose.yml exec -T api \
+                python3 -c "import urllib.request; urllib.request.urlopen('http://localhost:8000/health/ready', timeout=5)" >/dev/null 2>&1; then
               echo "API is healthy"; exit 0
             fi
             sleep 2
