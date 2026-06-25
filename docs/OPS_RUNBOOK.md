@@ -110,7 +110,7 @@ A bootstrap runs as a Celery task (`bootstrap_node`) that:
 
 ```bash
 # Find node by minion ID in database
-docker exec deploy-postgres-1 psql -U fleet -d fleet_demo -c \
+docker exec deploy-postgres-1 psql -U fleet -d fleet_platform -c \
   "SELECT id, minion_id, bootstrap_status, bootstrap_error, bootstrap_ip \
    FROM nodes WHERE minion_id LIKE '%mm1%';"
 
@@ -185,10 +185,10 @@ With verbosity 2, SSH connection details, module arguments, and return values ar
 
 ```bash
 # Open an interactive psql session
-docker exec -it deploy-postgres-1 psql -U fleet -d fleet_demo
+docker exec -it deploy-postgres-1 psql -U fleet -d fleet_platform
 
 # Or run a one-liner
-docker exec deploy-postgres-1 psql -U fleet -d fleet_demo -c "<SQL>"
+docker exec deploy-postgres-1 psql -U fleet -d fleet_platform -c "<SQL>"
 ```
 
 ### Useful queries
@@ -235,7 +235,7 @@ Configuration lives in `.env` at the repo root. Never commit this file to versio
 
 | Variable | Example | Purpose |
 |----------|---------|---------|
-| `DATABASE_URL` | `postgresql+psycopg://fleet:fleet@localhost:5432/fleet_demo` | PostgreSQL connection string used by the API and Celery worker |
+| `DATABASE_URL` | `postgresql+psycopg://fleet:fleet@localhost:5432/fleet_platform` | PostgreSQL connection string used by the API and Celery worker |
 | `TEST_DATABASE_URL` | `postgresql+psycopg://fleet:fleet@localhost:5432/fleet_test` | Separate DB used by pytest — kept isolated from demo data |
 | `REDIS_URL` | `redis://:redispass@localhost:6379/0` | Redis connection for Celery broker and result backend |
 | `JWT_SECRET` | `change-me-…` | HMAC key for signing JWTs — **must be changed before any production use** (generate with `openssl rand -hex 32`) |
@@ -380,7 +380,7 @@ Look for database connection errors, Redis errors, or import failures.
 **Fix:**
 ```bash
 # Check DB is running and accessible
-docker exec deploy-postgres-1 pg_isready -U fleet -d fleet_demo
+docker exec deploy-postgres-1 pg_isready -U fleet -d fleet_platform
 
 # Check Redis is running
 docker exec deploy-redis-1 redis-cli ping
@@ -449,7 +449,7 @@ ssh <mac_mini_ip> "ping <salt_master_ip>"
 
 ```bash
 # Find the node
-docker exec deploy-postgres-1 psql -U fleet -d fleet_demo -c \
+docker exec deploy-postgres-1 psql -U fleet -d fleet_platform -c \
   "SELECT id, minion_id, bootstrap_status, bootstrap_error FROM nodes WHERE bootstrap_status = 'bootstrapping';"
 
 # Check the last recorded Ansible task
@@ -464,7 +464,7 @@ curl -s -X POST http://localhost:8000/api/v1/ansible/bootstrap/<node_id>/cancel 
   -H "Authorization: Bearer <token>"
 
 # If API not available, reset directly in database
-docker exec deploy-postgres-1 psql -U fleet -d fleet_demo -c \
+docker exec deploy-postgres-1 psql -U fleet -d fleet_platform -c \
   "UPDATE nodes SET bootstrap_status = 'failed', bootstrap_error = 'Reset by operator' WHERE id = <node_id>;"
 ```
 
@@ -522,14 +522,14 @@ docker restart deploy-redis-1
 tail -100 .kri-logs/api.log | grep -i "migration\|alembic"
 
 # Check for migration advisory locks
-docker exec deploy-postgres-1 psql -U fleet -d fleet_demo -c \
+docker exec deploy-postgres-1 psql -U fleet -d fleet_platform -c \
   "SELECT * FROM pg_locks WHERE NOT granted;"
 ```
 
 **Fix:**
 ```bash
 # Manually unlock migration (if advisory lock is stuck)
-docker exec deploy-postgres-1 psql -U fleet -d fleet_demo -c \
+docker exec deploy-postgres-1 psql -U fleet -d fleet_platform -c \
   "SELECT pg_advisory_unlock_all();"
 
 # Restart the API (will retry migration)

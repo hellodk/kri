@@ -642,7 +642,7 @@ End-to-end flows that span multiple features. Each journey should be tested as a
 
 ```bash
 # Seed a test node directly in DB (for testing without a real Mac Mini)
-docker exec deploy-postgres-1 psql -U fleet -d fleet_demo -c "
+docker exec deploy-postgres-1 psql -U fleet -d fleet_platform -c "
 INSERT INTO nodes (id, minion_id, hostname, ip_address, status, drift_score,
   node_token_hash, first_seen_at, bootstrap_status)
 VALUES (
@@ -651,12 +651,12 @@ VALUES (
 ) ON CONFLICT DO NOTHING;"
 
 # Reset a stuck bootstrap node
-docker exec deploy-postgres-1 psql -U fleet -d fleet_demo -c "
+docker exec deploy-postgres-1 psql -U fleet -d fleet_platform -c "
 UPDATE nodes SET bootstrap_status='failed', bootstrap_error='Manually reset for testing'
 WHERE minion_id='test-mini-01';"
 
 # Create a test tag directly
-docker exec deploy-postgres-1 psql -U fleet -d fleet_demo -c "
+docker exec deploy-postgres-1 psql -U fleet -d fleet_platform -c "
 INSERT INTO tags (id, node_id, key, value, source, created_at)
 SELECT gen_random_uuid(), id, 'test-key', 'test-value', 'user', now()
 FROM nodes WHERE minion_id='test-mini-01'
