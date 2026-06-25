@@ -1,10 +1,14 @@
 """Behavioral tests for fleet_platform.core.redaction.redact_cmdline.
 
-Source-contract test: verifies ingest.py calls redact_cmdline so the gate
-cannot be silently removed.
+Also drives the ingest_process_stats route end-to-end (DB mocked) to prove the
+secret-redaction gate is actually applied to rows written to the database — not
+merely that the source references redact_cmdline (#800).
 """
 
-from pathlib import Path
+from unittest.mock import AsyncMock, patch
+
+import pytest
+from sqlalchemy.dialects import postgresql
 
 from fleet_platform.core.redaction import redact_cmdline
 
@@ -109,14 +113,70 @@ def test_no_secrets_unchanged():
 
 
 # ---------------------------------------------------------------------------
-# Source-contract: ingest.py must call redact_cmdline in ingest_process_stats
+# Behavioral wiring: ingest_process_stats must redact cmdline before the DB write
 # ---------------------------------------------------------------------------
 
 
-def test_ingest_calls_redact_cmdline():
-    """Verify ingest.py references redact_cmdline so the guard cannot be silently removed."""
-    ingest_path = Path(__file__).resolve().parents[2] / "fleet_platform" / "api" / "routes" / "ingest.py"
-    source = ingest_path.read_text()
-    assert "redact_cmdline(" in source, (
-        "ingest.py must call redact_cmdline() in ingest_process_stats — secret guard was silently removed"
+def _unwrap(func):
+    """Return the undecorated coroutine behind slowapi's @limiter.limit wrapper."""
+    return getattr(func, "__wrapped__", func)
+
+
+@pytest.mark.asyncio
+async def test_ingest_process_stats_redacts_cmdline_before_db_write():
+    """Drive ingest_process_stats and assert the row sent to the DB carries the
+    redacted command line — the secret value must never reach the INSERT."""
+    import uuid
+
+    from fleet_platform.api.routes import ingest
+    from fleet_platform.schemas.ingest import ProcessStatItem, ProcessStatsIngestPayload
+
+    secret = "hunter2supersecret"
+    payload = ProcessStatsIngestPayload(
+        minion_id="mac-01",
+        processes=[ProcessStatItem(pid=42, name="serve", cmdline=f"python serve.py --password={secret} --port 8080")],
     )
+
+    fake_node = type("Node", (), {"id": uuid.uuid4()})()
+    db = AsyncMock()
+
+    with patch.object(ingest, "_resolve_node", AsyncMock(return_value=fake_node)):
+        result = await _unwrap(ingest.ingest_process_stats)(
+            request=object(),
+            payload=payload,
+            x_node_token="tok-123",
+            db=db,
+        )
+
+    assert result["rows"] == 1
+    # Capture the INSERT statement actually handed to the DB and inspect its bound params.
+    assert db.execute.await_count == 1
+    stmt = db.execute.await_args.args[0]
+    params = stmt.compile(dialect=postgresql.dialect()).params
+    param_values = [str(v) for v in params.values()]
+
+    # The raw secret must NOT appear in any bound parameter; the redacted form must.
+    assert not any(secret in v for v in param_values), f"raw secret leaked into INSERT params: {param_values}"
+    assert any("--password=<REDACTED>" in v for v in param_values), (
+        f"redacted cmdline not found in INSERT params: {param_values}"
+    )
+
+
+@pytest.mark.asyncio
+async def test_ingest_process_stats_rejects_missing_token():
+    """No token → 401, and nothing is written (auth gate precedes redaction)."""
+    from fastapi import HTTPException
+
+    from fleet_platform.api.routes import ingest
+    from fleet_platform.schemas.ingest import ProcessStatItem, ProcessStatsIngestPayload
+
+    payload = ProcessStatsIngestPayload(
+        minion_id="mac-01",
+        processes=[ProcessStatItem(pid=1, name="x", cmdline="echo hi")],
+    )
+    db = AsyncMock()
+
+    with pytest.raises(HTTPException) as exc:
+        await _unwrap(ingest.ingest_process_stats)(request=object(), payload=payload, x_node_token=None, db=db)
+    assert exc.value.status_code == 401
+    db.execute.assert_not_called()
