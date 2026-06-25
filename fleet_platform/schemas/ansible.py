@@ -23,7 +23,6 @@ class BootstrapRequest(BaseModel):
     node_exporter_version: str | None = None
     node_exporter_listen_address: str | None = None
     node_exporter_url_override: str | None = None
-    bootstrap_full: bool | None = None
 
     @field_validator("node_exporter_version")
     @classmethod

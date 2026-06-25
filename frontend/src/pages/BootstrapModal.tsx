@@ -55,7 +55,6 @@ function SingleMode({ onClose }: { onClose: () => void }) {
   const [neVersion, setNeVersion] = useState('1.8.2')
   const [neListenAddress, setNeListenAddress] = useState(':9100')
   const [neUrlOverride, setNeUrlOverride] = useState('')
-  const [bootstrapFull, setBootstrapFull] = useState(false)
 
   const toast = useToastStore((s) => s.add)
   const qc = useQueryClient()
@@ -175,7 +174,6 @@ function SingleMode({ onClose }: { onClose: () => void }) {
         nodeExporterVersion: neVersion !== '1.8.2' ? neVersion : undefined,
         nodeExporterListenAddress: neListenAddress !== ':9100' ? neListenAddress : undefined,
         nodeExporterUrlOverride: neUrlOverride || undefined,
-        bootstrapFull: bootstrapFull || undefined,
       },
     ),
     onMutate: () => { setLocalLogs('') },
@@ -570,23 +568,6 @@ function SingleMode({ onClose }: { onClose: () => void }) {
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm text-gray-900 focus:outline-hidden focus:border-brand-600"
                 />
               </div>
-              <label className="flex items-start gap-3 cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={bootstrapFull}
-                  onChange={(e) => setBootstrapFull(e.target.checked)}
-                  className="mt-0.5 rounded"
-                  aria-label="Full bootstrap (VNC, brew inventory, salt schedules)"
-                />
-                <div>
-                  <span className="text-sm font-medium text-gray-700">
-                    Full bootstrap (VNC, brew inventory, salt schedules)
-                  </span>
-                  <p className="text-xs text-gray-400 mt-0.5">
-                    Off = minimal: salt-minion + node_exporter + registration only
-                  </p>
-                </div>
-              </label>
             </div>
           )}
         </div>
