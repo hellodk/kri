@@ -67,7 +67,6 @@ def bootstrap_node(
     node_exporter_version: str | None = None,
     node_exporter_listen_address: str | None = None,
     node_exporter_url_override: str | None = None,
-    bootstrap_full: bool | None = None,
 ) -> dict:
     """Run bootstrap_node.yml against a fleet node (macOS or Linux).
 
@@ -332,8 +331,6 @@ def bootstrap_node(
                 runtime_extravars["node_exporter_listen_address"] = node_exporter_listen_address
             if node_exporter_url_override is not None:
                 runtime_extravars["node_exporter_url_override"] = node_exporter_url_override
-            if bootstrap_full is not None:
-                runtime_extravars["bootstrap_full"] = bootstrap_full
 
             thread, runner = ansible_runner.run_async(
                 private_data_dir=tmpdir,

@@ -36,7 +36,6 @@ async def queue_node_bootstrap(
     node_exporter_version: str | None = None,
     node_exporter_listen_address: str | None = None,
     node_exporter_url_override: str | None = None,
-    bootstrap_full: bool | None = None,
 ):
     """Persist SSH creds, mark the node pending, audit, commit, and queue bootstrap.
 
@@ -93,5 +92,4 @@ async def queue_node_bootstrap(
         node_exporter_version=node_exporter_version,
         node_exporter_listen_address=node_exporter_listen_address,
         node_exporter_url_override=node_exporter_url_override,
-        bootstrap_full=bootstrap_full,
     )

@@ -341,7 +341,7 @@
       become: true
       failed_when: false
       changed_when: false
-      when: ansible_os_family == 'Darwin' and bootstrap_full | default(false)
+      when: ansible_os_family == 'Darwin'
 
     # ── macOS: Collect grains ─────────────────────────────────────────────────
     - name: Collect macOS version
@@ -399,13 +399,20 @@
         PATH: "{{ brew_prefix }}/bin:/usr/local/bin:/usr/bin:/bin"
         HOME: "/Users/{{ brew_user }}"
       failed_when: false
-      when: ansible_os_family == 'Darwin' and bootstrap_full | default(false)
+      when: ansible_os_family == 'Darwin'
 
     - name: Parse brew packages into dict (macOS)
       set_fact:
         brew_pkgs: "{{ brew_pkgs | default({}) | combine({item.split()[0]: item.split()[1] | default('')}) }}"
       loop: "{{ brew_list_result.stdout_lines | default([]) | select('match', '^[a-zA-Z].*') | list }}"
-      when: ansible_os_family == 'Darwin' and bootstrap_full | default(false) and brew_list_result is defined and brew_list_result.rc == 0 and brew_list_result.stdout != ''
+      when: ansible_os_family == 'Darwin' and brew_list_result is defined and brew_list_result.rc == 0 and brew_list_result.stdout != ''
+
+    # ── Node telemetry / tooling dependencies ─────────────────────────────────
+    # Install psutil (both OS — required by the Salt process_collector that feeds
+    # the Processes tab), plus macmon and tart (macOS-only Homebrew CLIs).
+    # Placed before the process_report schedule so psutil is present first.
+    - name: Install node telemetry and tooling dependencies (psutil, macmon, tart)
+      include_tasks: tasks/bootstrap/node_deps.yml
 
     # ── Install kri heartbeat schedule via Salt ───────────────────────────────
     # This runs base.heartbeat on the minion so grain_report is sent every
@@ -428,7 +435,7 @@
       become: true
       changed_when: false
       failed_when: false
-      when: salt_ping.rc == 0 and bootstrap_full | default(false)
+      when: salt_ping.rc == 0
 
     # ── Install kri process-telemetry schedule via Salt ───────────────────────
     # Runs base.process_report every 30s so the node reports per-process
@@ -439,7 +446,7 @@
       become: true
       changed_when: false
       failed_when: false
-      when: salt_ping.rc == 0 and bootstrap_full | default(false)
+      when: salt_ping.rc == 0
 
     # ── Push initial grains to kri Fleet Platform (macOS) ────────────────────
     - name: Push Ansible facts + packages as grains to kri ingest API (macOS)

@@ -4,8 +4,11 @@
  * TDD: written FIRST (red) before the implementation makes them green.
  *
  * Asserts that SingleMode renders an "Advanced" collapsible section with
- * node_exporter_version, node_exporter_listen_address, node_exporter_url_override,
- * and bootstrap_full fields, and that their values are passed to ansibleApi.bootstrap().
+ * node_exporter_version, node_exporter_listen_address, and node_exporter_url_override
+ * fields, and that their values are passed to ansibleApi.bootstrap().
+ *
+ * Note: the bootstrap_full toggle was removed (#625) — brew inventory + the
+ * telemetry deps now run on every bootstrap — so this no longer asserts it.
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { render, screen, waitFor } from '@testing-library/react'
@@ -108,8 +111,6 @@ describe('BootstrapModal — Advanced options (issue #830)', () => {
     })
     // listen address input
     expect(screen.getByPlaceholderText(':9100')).toBeInTheDocument()
-    // bootstrap_full checkbox
-    expect(screen.getByRole('checkbox', { name: /full bootstrap/i })).toBeInTheDocument()
   })
 
   it('default values are pre-filled in advanced fields', async () => {
@@ -125,9 +126,6 @@ describe('BootstrapModal — Advanced options (issue #830)', () => {
       const listenInput = screen.getByPlaceholderText(':9100') as HTMLInputElement
       expect(listenInput.value).toBe(':9100')
     })
-
-    const fullCheckbox = screen.getByRole('checkbox', { name: /full bootstrap/i }) as HTMLInputElement
-    expect(fullCheckbox.checked).toBe(false)
   })
 
   it('passes advanced values to ansibleApi.bootstrap when form is submitted', async () => {
@@ -158,9 +156,6 @@ describe('BootstrapModal — Advanced options (issue #830)', () => {
     await user.clear(versionInput)
     await user.type(versionInput, '1.9.0')
 
-    // Enable full bootstrap
-    await user.click(screen.getByRole('checkbox', { name: /full bootstrap/i }))
-
     // Submit — button may be disabled until canSubmit; findByRole waits
     const submitBtn = await screen.findByRole('button', { name: /^bootstrap$/i })
     await user.click(submitBtn)
@@ -170,7 +165,6 @@ describe('BootstrapModal — Advanced options (issue #830)', () => {
       const [, , , , , opts] = (ansibleApi.bootstrap as ReturnType<typeof vi.fn>).mock.calls[0]
       expect(opts).toMatchObject({
         nodeExporterVersion: '1.9.0',
-        bootstrapFull: true,
       })
     })
   })
