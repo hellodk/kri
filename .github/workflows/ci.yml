@@ -374,7 +374,21 @@ jobs:
           PILLAR_DIR=/srv/salt/pillar
           EOF
       - name: Build + start stack
-        run: docker compose -f deploy/docker-compose.yml up -d --build api worker pg_backup redis db frontend
+        # Retry the build/start: anonymous docker.io pulls of the base images
+        # (library/nginx, library/python, library/node) intermittently fail the
+        # whole job with `failed to authorize: ... EOF` under registry rate
+        # limiting (#891). A short backoff between attempts clears the transient
+        # auth/EOF without needing a registry mirror or Docker Hub credentials.
+        run: |
+          for attempt in 1 2 3; do
+            if docker compose -f deploy/docker-compose.yml up -d --build api worker pg_backup redis db frontend; then
+              echo "stack up (attempt $attempt)"; exit 0
+            fi
+            echo "::warning::stack build/start failed (attempt $attempt) — retrying after backoff"
+            docker compose -f deploy/docker-compose.yml down -v || true
+            sleep $((attempt * 20))
+          done
+          echo "::error::stack failed to build/start after 3 attempts"; exit 1
       - name: Wait for API health
         # /health is the lightweight probe the k8s manifests also use; the
         # worker queue takes longer to come up but the e2e tests don't

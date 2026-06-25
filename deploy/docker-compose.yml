@@ -34,10 +34,11 @@ services:
     build:
       context: ..
       dockerfile: deploy/Dockerfile.pg_backup
-    # Run as the non-root postgres user (uid 999 in the debian-based image).
-    # The Dockerfile pre-creates /var/backups/postgresql owned by postgres so
-    # the named volume is writable without root (#762).
-    user: "999:999"
+    # Run as the non-root postgres user. timescale/timescaledb is Alpine-based,
+    # where the postgres account is uid 70 (not Debian's 999) — so reference it
+    # by name. The Dockerfile pre-creates /var/backups/postgresql owned by
+    # postgres so the named volume is writable without root (#762 #891).
+    user: "postgres"
     restart: unless-stopped
     environment:
       # Fail loud if the password is missing — the previous default of `fleet`
