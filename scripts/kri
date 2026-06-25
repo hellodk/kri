@@ -682,7 +682,7 @@ cmd_pki_push() {
     local TARGETS=("${@}")
     if [[ ${#TARGETS[@]} -eq 0 ]]; then
         info "Reading node IPs from DB…"
-        mapfile -t TARGETS < <(docker exec deploy-db-1 psql -U fleet -d fleet_demo -t -c \
+        mapfile -t TARGETS < <(docker exec deploy-db-1 psql -U fleet -d fleet_platform -t -c \
             "SELECT bootstrap_ip FROM nodes WHERE bootstrap_ip IS NOT NULL;" \
             2>/dev/null | tr -d ' ' | grep -v '^$' || true)
     fi
@@ -778,10 +778,10 @@ cmd_saltmaster_install() {
 
         # Discover known nodes from DB if possible
         local known_nodes=""
-        if docker exec deploy-db-1 psql -U fleet fleet_demo \
+        if docker exec deploy-db-1 psql -U fleet fleet_platform \
               -t -c "SELECT bootstrap_ip || '  (' || hostname || ')' FROM nodes WHERE bootstrap_ip IS NOT NULL ORDER BY hostname" \
               2>/dev/null | grep -q '\.' ; then
-            known_nodes=$(docker exec deploy-db-1 psql -U fleet fleet_demo \
+            known_nodes=$(docker exec deploy-db-1 psql -U fleet fleet_platform \
               -t -c "SELECT bootstrap_ip || '  (' || hostname || ')' FROM nodes WHERE bootstrap_ip IS NOT NULL ORDER BY hostname" \
               2>/dev/null | grep '\.' | sed 's/^ */  /' )
             info "Known fleet nodes:"

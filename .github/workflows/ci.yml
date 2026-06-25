@@ -347,18 +347,27 @@ jobs:
       - uses: pnpm/action-setup@v6
         with:
           version: 10.29.3
-      - run: pnpm install --frozen-lockfile
-        working-directory: frontend
-      - name: Install Playwright browsers
-        run: pnpm exec playwright install --with-deps chromium
-        working-directory: frontend
+      - name: Install Playwright runner + browsers (repo root)
+        # The Playwright config (playwright.config.ts) and specs (tests/e2e/) live
+        # at the repo ROOT, and the "Run Playwright tests" step below runs
+        # `pnpm exec playwright test` from root — so the @playwright/test runner
+        # must be installed at root. Previously this installed in frontend/, which
+        # left root/node_modules empty and made `pnpm exec playwright` fail with
+        # `Command "playwright" not found` (exit 254). frontend/ itself is built
+        # inside Docker by docker-compose, so the runner never needs its deps.
+        # Root has only package.json (no committed lockfile) — hence no
+        # --frozen-lockfile. Browsers install into the shared ~/.cache/ms-playwright.
+        run: |
+          pnpm install --no-frozen-lockfile
+          pnpm exec playwright install --with-deps chromium
+        working-directory: .
       - name: Materialize CI .env.docker
         # Generate a deterministic .env.docker from the secrets above so the
         # docker-compose stack can boot without depending on developer-only
         # files. See deploy/.env.docker.example for the full contract.
         run: |
           cat > .env.docker <<EOF
-          DATABASE_URL=postgresql+psycopg://fleet:${POSTGRES_PASSWORD}@db:5432/fleet_demo
+          DATABASE_URL=postgresql+psycopg://fleet:${POSTGRES_PASSWORD}@db:5432/fleet_platform
           TEST_DATABASE_URL=postgresql+psycopg://fleet:${POSTGRES_PASSWORD}@db:5432/fleet_test
           REDIS_URL=redis://:${REDIS_PASSWORD}@redis:6379/0
           POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
@@ -390,12 +399,16 @@ jobs:
           done
           echo "::error::stack failed to build/start after 3 attempts"; exit 1
       - name: Wait for API health
-        # /health is the lightweight probe the k8s manifests also use; the
-        # worker queue takes longer to come up but the e2e tests don't
-        # require it.
+        # Probe the API container directly on its internal port. nginx (port 80)
+        # only proxies /auth and /api, and the API mounts /health + /health/ready
+        # at the root (no /api/v1 prefix) — so `curl http://localhost/api/v1/health`
+        # hits nginx→api with a path the API doesn't define and returns 404, never
+        # going healthy. /health/ready confirms the API is up AND Postgres+Redis
+        # are reachable; it's the same endpoint the compose healthcheck uses.
         run: |
           for i in {1..60}; do
-            if curl -fsS http://localhost/api/v1/health >/dev/null; then
+            if docker compose -f deploy/docker-compose.yml exec -T api \
+                python3 -c "import urllib.request; urllib.request.urlopen('http://localhost:8000/health/ready', timeout=5)" >/dev/null 2>&1; then
               echo "API is healthy"; exit 0
             fi
             sleep 2
