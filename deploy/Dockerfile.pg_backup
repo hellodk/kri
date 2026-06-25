@@ -1,5 +1,5 @@
 # Dedicated backup image — installs age and rclone at build time so the
-# container starts immediately without a runtime apt-get install.
+# container starts immediately without a runtime package install.
 # Base image is pinned to the same version used by the db service in
 # docker-compose.yml to guarantee pg_dump client/server protocol parity.
 FROM timescale/timescaledb:2.26.4-pg17
@@ -7,14 +7,12 @@ FROM timescale/timescaledb:2.26.4-pg17
 USER root
 
 # Install age (https://age-encryption.org) and rclone at build time.
-# Versions are those shipped with Debian 12 Bookworm — deterministic for
-# this base image. Pinning the base image version (above) is the primary
-# supply-chain control; runtime installs are eliminated entirely.
-RUN apt-get update -qq && \
-    apt-get install -y --no-install-recommends \
-        age \
-        rclone \
-    && rm -rf /var/lib/apt/lists/*
+# timescale/timescaledb is Alpine-based, so use apk — NOT apt-get, which does
+# not exist on Alpine and previously failed the build with `apt-get: not found`
+# (exit 127, #891). Both packages live in Alpine's community repo, which the
+# official base image enables by default. Pinning the base image version
+# (above) is the primary supply-chain control; runtime installs are eliminated.
+RUN apk add --no-cache age rclone
 
 # Ensure the backup volume mount point is owned by the postgres user so
 # the container can write dumps without root. Docker copies this ownership
@@ -22,5 +20,5 @@ RUN apt-get update -qq && \
 RUN mkdir -p /var/backups/postgresql && \
     chown postgres:postgres /var/backups/postgresql
 
-# Run as the non-root postgres user (uid 999 in debian-based images).
+# Run as the non-root postgres user (the Alpine base ships postgres as uid 70).
 USER postgres
