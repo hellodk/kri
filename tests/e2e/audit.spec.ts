@@ -49,12 +49,14 @@ test.describe('Audit Log', () => {
     }
   })
 
-  test('AUDIT-05 viewer can read audit log', async ({ request }) => {
-    // Use cached getToken to avoid triggering rate limiter with fresh login
+  test('AUDIT-05 viewer is forbidden from reading the audit log', async ({ request }) => {
+    // The audit list endpoint requires admin or auditor (require_role("admin",
+    // "auditor") in routes/audit.py); a viewer is intentionally forbidden. The
+    // old assertion expected 200, which never matched the product RBAC (#905).
     const viewerToken = await getToken(request, VIEWER)
     const res = await request.get(`${API}/api/v1/audit`, {
       headers: { Authorization: `Bearer ${viewerToken}` },
     })
-    expect(res.status()).toBe(200)
+    expect(res.status()).toBe(403)
   })
 })
