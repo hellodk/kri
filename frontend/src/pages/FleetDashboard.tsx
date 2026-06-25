@@ -623,26 +623,26 @@ export function FleetDashboard() {
             {
               label: 'Total Nodes', value: overview.total_nodes,
               accent: 'border-l-brand-600', num: 'text-gray-900',
-              onClick: () => { setStatusFilter(''); setSort('drift_score:desc'); setPage(1) },
+              onClick: () => { setStatusFilter(''); setHealthFilter(''); setSort('drift_score:desc'); setPage(1) },
               title: 'Show all nodes',
             },
             {
-              label: 'Online', value: overview.online,
+              label: 'Online', value: overview.health_online,
               accent: 'border-l-emerald-500', num: 'text-emerald-700',
-              onClick: () => { setStatusFilter('online'); setSort('last_seen_at:desc'); setPage(1) },
-              title: 'Filter to online nodes',
+              onClick: () => { setStatusFilter(''); setHealthFilter('online'); setSort('last_seen_at:desc'); setPage(1) },
+              title: 'Filter to healthy (online) nodes',
             },
             {
-              label: 'Offline / Stale', value: overview.offline + overview.stale,
-              accent: 'border-l-red-500', num: 'text-red-700',
-              onClick: () => { setStatusFilter('offline'); setSort('last_seen_at:asc'); setPage(1) },
-              title: 'Filter to offline/stale nodes',
-            },
-            {
-              label: 'Avg Drift Score', value: overview.avg_drift_score,
+              label: 'Degraded', value: overview.health_degraded,
               accent: 'border-l-amber-500', num: 'text-amber-700',
-              onClick: () => { setStatusFilter(''); setSort('drift_score:desc'); setPage(1) },
-              title: 'Sort by highest drift',
+              onClick: () => { setStatusFilter(''); setHealthFilter('degraded'); setSort('drift_score:desc'); setPage(1) },
+              title: 'Filter to degraded nodes',
+            },
+            {
+              label: 'Down', value: overview.health_down,
+              accent: 'border-l-red-500', num: 'text-red-700',
+              onClick: () => { setStatusFilter(''); setHealthFilter('down'); setSort('last_seen_at:asc'); setPage(1) },
+              title: 'Filter to down nodes',
             },
           ].map(({ label, value, accent, num, onClick, title }) => (
             <button
@@ -948,6 +948,8 @@ export function FleetDashboard() {
                               sshDetail={node.ssh_detail}
                               lastSeenAt={node.last_seen_at}
                               maintenanceMode={node.maintenance_mode}
+                              isMaster={node.is_master ?? masterNodeIds.has(node.id)}
+                              masterStatus={node.master_status}
                               canManage={canManage}
                             />
                             {((node.cpu_usage_pct ?? 0) > 0 || (node.mem_usage_pct ?? 0) > 0) && (

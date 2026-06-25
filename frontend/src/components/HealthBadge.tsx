@@ -3,7 +3,7 @@ import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { formatDistanceToNow } from 'date-fns'
 import { fleetApi } from '../api/fleet'
 import { useToastStore } from '../stores/toastStore'
-import type { HealthState, SshState } from '../types'
+import type { HealthState, MasterStatus, SshState } from '../types'
 
 interface HealthStyle {
   badge: string
@@ -33,18 +33,30 @@ const SSH_META: Record<SshState, { dot: string; label: string }> = {
   unknown:     { dot: 'bg-gray-300',    label: 'not checked' },
 }
 
+const MASTER_META: Record<MasterStatus, { dot: string; label: string }> = {
+  healthy:     { dot: 'bg-emerald-500', label: 'healthy' },
+  degraded:    { dot: 'bg-amber-500',   label: 'degraded' },
+  unreachable: { dot: 'bg-red-500',     label: 'unreachable' },
+  unknown:     { dot: 'bg-gray-300',    label: 'not checked' },
+}
+
 function deriveHealth(
   status: string,
   sshState: SshState | null | undefined,
   maintenanceMode: boolean,
+  masterStatus: MasterStatus | null | undefined,
 ): HealthState {
   if (maintenanceMode) return 'maintenance'
-  const presence = ({ online: 'good', stale: 'degraded', offline: 'down' } as const)[status as 'online' | 'stale' | 'offline']
-  const ssh = sshState ? ({ ok: 'good', auth_failed: 'degraded', unreachable: 'down' } as const)[sshState as 'ok' | 'auth_failed' | 'unreachable'] : undefined
-  const levels = [presence, ssh]
-  if (levels.includes('down')) return 'down'
-  if (levels.includes('degraded')) return 'degraded'
-  if (levels.includes('good')) return 'online'
+  const minion = ({ online: 'good', stale: 'warn', offline: 'bad' } as const)[status as 'online' | 'stale' | 'offline']
+  const ssh = sshState ? ({ ok: 'good', auth_failed: 'warn', unreachable: 'bad' } as const)[sshState as 'ok' | 'auth_failed' | 'unreachable'] : undefined
+  const levels: Array<'good' | 'warn' | 'bad' | undefined> = [minion, ssh]
+  if (masterStatus != null) {
+    levels.push(({ healthy: 'good', degraded: 'warn', unreachable: 'bad' } as const)[masterStatus as 'healthy' | 'degraded' | 'unreachable'])
+  }
+  if (levels.includes('bad')) return 'down'
+  if (levels.includes('warn')) return 'degraded'
+  if (minion === 'good') return 'online'
+  if (levels.includes('good')) return 'degraded'
   return 'unknown'
 }
 
@@ -57,11 +69,30 @@ function relTime(iso: string | null | undefined): string | null {
   }
 }
 
+function RefreshIcon({ spinning = false }: { spinning?: boolean }) {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      className={`w-3.5 h-3.5 flex-shrink-0 ${spinning ? 'animate-spin' : ''}`}
+      aria-hidden="true"
+    >
+      <path d="M21 12a9 9 0 1 1-2.64-6.36" />
+      <path d="M21 3v6h-6" />
+    </svg>
+  )
+}
+
 /**
  * Unified node-health indicator (#356 follow-up). One badge replaces the stacked
  * Salt-status + SSH-reachability rows in the Fleet table: it shows the worst-of
  * rollup at a glance and reveals the full per-dimension breakdown on hover, with
- * an on-demand "Test SSH now" probe in the tooltip.
+ * an on-demand "Re-check all" refresh in the tooltip that re-probes SSH and
+ * re-pulls the minion + master dimensions in one click.
  */
 export function HealthBadge({
   nodeId,
@@ -72,6 +103,8 @@ export function HealthBadge({
   sshDetail,
   lastSeenAt,
   maintenanceMode = false,
+  isMaster = false,
+  masterStatus,
   canManage = false,
 }: {
   nodeId: string
@@ -82,6 +115,8 @@ export function HealthBadge({
   sshDetail?: string | null
   lastSeenAt?: string | null
   maintenanceMode?: boolean
+  isMaster?: boolean
+  masterStatus?: MasterStatus | null
   canManage?: boolean
 }) {
   const qc = useQueryClient()
@@ -89,19 +124,28 @@ export function HealthBadge({
   const [open, setOpen] = useState(false)
   const closeTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
 
-  const resolved: HealthState = health ?? deriveHealth(status, sshState, maintenanceMode)
+  const effectiveMasterStatus = isMaster ? (masterStatus ?? 'unknown') : null
+  const resolved: HealthState = health ?? deriveHealth(status, sshState, maintenanceMode, effectiveMasterStatus)
   const style = HEALTH_STYLES[resolved] ?? HEALTH_STYLES.unknown
   const ssh = SSH_META[sshState ?? 'unknown']
+  const master = effectiveMasterStatus ? MASTER_META[effectiveMasterStatus] : null
 
+  // Re-check every dimension shown in the tooltip. SSH is the one actively
+  // probed here (synchronous); minion presence and master control-plane status
+  // are server-derived columns on the node payload, so invalidating the node /
+  // fleet / health queries re-pulls their freshest values in the same click.
   const test = useMutation({
     mutationFn: () => fleetApi.sshTest(nodeId),
     onSuccess: (res) => {
       qc.invalidateQueries({ queryKey: ['nodes'] })
       qc.invalidateQueries({ queryKey: ['node', nodeId] })
+      qc.invalidateQueries({ queryKey: ['fleet-health'] })
+      qc.invalidateQueries({ queryKey: ['node-health', nodeId] })
+      qc.invalidateQueries({ queryKey: ['salt-masters'] })
       const s = SSH_META[res.ssh_state]
-      toast(`SSH: ${s.label}`, res.ssh_state === 'ok' ? 'success' : res.ssh_state === 'unknown' ? 'info' : 'warning')
+      toast(`Re-checked · SSH: ${s.label}`, res.ssh_state === 'ok' ? 'success' : res.ssh_state === 'unknown' ? 'info' : 'warning')
     },
-    onError: () => toast('SSH probe failed', 'error'),
+    onError: () => toast('Re-check failed', 'error'),
   })
 
   const show = () => {
@@ -143,13 +187,25 @@ export function HealthBadge({
           <div className="font-mono leading-relaxed text-gray-600 space-y-0.5">
             <div className="flex items-center gap-2">
               <span className={`w-1.5 h-1.5 rounded-full ${PRESENCE_DOT[status] ?? 'bg-gray-400'}`} />
-              Salt: {status} · {seen ?? 'never seen'}
+              Minion: {status} · {seen ?? 'never seen'}
             </div>
             <div className="flex items-center gap-2">
               <span className={`w-1.5 h-1.5 rounded-full ${ssh.dot}`} />
               SSH: {test.isPending ? 'testing…' : ssh.label} · {checked ?? 'never probed'}
             </div>
+            {master && (
+              <div className="flex items-center gap-2">
+                <span className={`w-1.5 h-1.5 rounded-full ${master.dot}`} />
+                Master: {master.label}
+              </div>
+            )}
           </div>
+
+          {resolved === 'degraded' && status !== 'online' && (ssh.label === 'reachable') && (
+            <div className="mt-2 text-amber-800 bg-amber-50 border border-amber-100 rounded px-2 py-1">
+              Reachable over SSH but the Salt minion isn&apos;t reporting — check the minion.
+            </div>
+          )}
 
           {maintenanceMode && (
             <div className="mt-2 text-indigo-700 bg-indigo-50 border border-indigo-100 rounded px-2 py-1">
@@ -166,9 +222,12 @@ export function HealthBadge({
               type="button"
               onClick={() => test.mutate()}
               disabled={test.isPending}
-              className="mt-2.5 w-full text-xs px-2 py-1 rounded-md bg-brand-50 text-brand-700 border border-brand-200 hover:bg-brand-100 disabled:opacity-50 disabled:cursor-not-allowed"
+              title="Re-check all health checks (minion, SSH, master)"
+              aria-label="Re-check all health checks"
+              className="mt-2.5 w-full inline-flex items-center justify-center gap-1.5 text-xs px-2 py-1 rounded-md bg-brand-50 text-brand-700 border border-brand-200 hover:bg-brand-100 disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              {test.isPending ? 'Testing…' : 'Test SSH now'}
+              <RefreshIcon spinning={test.isPending} />
+              {test.isPending ? 'Re-checking…' : 'Re-check all'}
             </button>
           )}
         </div>

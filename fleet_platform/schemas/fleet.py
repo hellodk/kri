@@ -44,17 +44,26 @@ class NodeListItem(BaseModel):
     ssh_state: str | None = None
     ssh_checked_at: datetime | None = None
     ssh_detail: str | None = None
+    # Salt-master role + control-plane health, populated by the route from a join
+    # over ``salt_masters`` (master_status is None for non-master nodes).
+    is_master: bool = False
+    master_status: str | None = None
 
     @computed_field  # type: ignore[prop-decorator]
     @property
     def health(self) -> str:
-        """Unified worst-of rollup of Salt presence + SSH state (#356 follow-up).
+        """Unified worst-of rollup of minion presence + SSH + master health (#356).
 
-        Derived, never stored. The granular ``status`` / ``ssh_state`` fields are
-        still emitted for the UI's hover breakdown — this just adds the single
-        at-a-glance read.
+        Derived, never stored. The granular ``status`` / ``ssh_state`` /
+        ``master_status`` fields are still emitted for the UI's hover breakdown —
+        this just adds the single at-a-glance read.
         """
-        return compute_health(self.status, self.ssh_state, self.maintenance_mode)
+        return compute_health(
+            self.status,
+            self.ssh_state,
+            self.maintenance_mode,
+            self.master_status if self.is_master else None,
+        )
 
     model_config = {"from_attributes": True}
 
@@ -131,10 +140,21 @@ class NodeUpdateRequest(BaseModel):
 
 class FleetOverviewResponse(BaseModel):
     total_nodes: int
+    # Salt minion presence counts (raw `Node.status`). Retained for backward
+    # compatibility; these reflect *only* the Salt push signal, not SSH.
     online: int
     stale: int
     offline: int
     unknown: int
+    # Unified health rollup counts (worst-of Salt presence + SSH + maintenance),
+    # computed via `compute_health` so the summary agrees with the per-node
+    # HealthBadge shown on cards/table. Defaulted to 0 so older cached payloads
+    # (pre-rollup) still deserialize cleanly during the cache TTL window.
+    health_online: int = 0
+    health_degraded: int = 0
+    health_down: int = 0
+    health_unknown: int = 0
+    health_maintenance: int = 0
     avg_drift_score: int
     nodes_clean: int
     nodes_low: int

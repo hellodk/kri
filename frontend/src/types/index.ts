@@ -44,9 +44,14 @@ export interface Node {
   ssh_state?: SshState | null
   ssh_checked_at?: string | null
   ssh_detail?: string | null
-  // Unified worst-of rollup of Salt presence + SSH state (derived server-side)
+  // Unified worst-of rollup of minion presence + SSH + master health (derived server-side)
   health?: HealthState
+  // Salt-master role + control-plane health (master_status null for non-masters)
+  is_master?: boolean
+  master_status?: MasterStatus | null
 }
+
+export type MasterStatus = 'healthy' | 'degraded' | 'unreachable' | 'unknown'
 
 export type SshState = 'ok' | 'auth_failed' | 'unreachable' | 'unknown'
 
@@ -73,10 +78,17 @@ export interface NodeDetail extends Node {
 
 export interface FleetOverview {
   total_nodes: number
+  // Salt minion presence counts (raw status; SSH-agnostic). Kept for back-compat.
   online: number
   stale: number
   offline: number
   unknown: number
+  // Unified health rollup counts (compute_health) — match the per-node HealthBadge.
+  health_online: number
+  health_degraded: number
+  health_down: number
+  health_unknown: number
+  health_maintenance: number
   avg_drift_score: number
   nodes_clean: number
   nodes_low: number

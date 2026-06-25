@@ -1,9 +1,11 @@
 """Unit tests for the unified node health rollup (compute_health).
 
-The rollup combines two independent signals — Salt presence (``status``) and the
-SSH probe (``ssh_state``) — into a single worst-of value, where an "unknown"
-signal counts as *no data* rather than a failure, and maintenance mode overrides
-everything.
+The rollup combines minion presence (``status``), the SSH probe (``ssh_state``)
+and — for master nodes — the salt-master control-plane status into a single
+worst-of value. Minion presence is the *primary* signal: green requires it to be
+online; a positive secondary signal (SSH/master) alone only earns ``degraded``,
+while a *missing* secondary signal never penalises an otherwise-good node.
+Maintenance mode overrides everything.
 """
 
 import pytest
@@ -59,9 +61,11 @@ class TestComputeHealth:
         # Salt online + SSH never probed → don't penalise a probe that hasn't run.
         assert compute_health("online", ssh_state) == HEALTH_ONLINE
 
-    def test_online_when_ssh_ok_but_salt_unknown(self):
-        # One positive signal, nothing bad → online.
-        assert compute_health("unknown", "ok") == HEALTH_ONLINE
+    @pytest.mark.parametrize("ssh_state", ["ok", "auth_failed"])
+    def test_degraded_when_reachable_but_salt_never_seen(self, ssh_state):
+        # Minion is the primary signal: SSH-reachable but Salt never saw it is NOT
+        # online — surface it as degraded ("minion not reporting").
+        assert compute_health("unknown", ssh_state) == HEALTH_DEGRADED
 
     @pytest.mark.parametrize(
         "status,ssh_state",
@@ -74,3 +78,29 @@ class TestComputeHealth:
     )
     def test_unknown_when_no_signal_either_way(self, status, ssh_state):
         assert compute_health(status, ssh_state) == HEALTH_UNKNOWN
+
+
+class TestMasterDimension:
+    """Master nodes fold salt-master control-plane health into the rollup."""
+
+    def test_online_when_minion_ssh_and_master_all_good(self):
+        assert compute_health("online", "ok", master_status="healthy") == HEALTH_ONLINE
+
+    def test_down_when_master_api_unreachable_even_if_minion_online(self):
+        # A master whose control-plane is unreachable is Down even if its
+        # co-located minion happens to still report.
+        assert compute_health("online", "ok", master_status="unreachable") == HEALTH_DOWN
+
+    def test_degraded_when_master_degraded(self):
+        assert compute_health("online", "ok", master_status="degraded") == HEALTH_DEGRADED
+
+    def test_master_unknown_does_not_penalise_otherwise_good_node(self):
+        assert compute_health("online", "ok", master_status="unknown") == HEALTH_ONLINE
+
+    def test_master_healthy_but_minion_not_reporting_is_degraded(self):
+        # Control-plane healthy, but the node's own minion isn't reporting → degraded.
+        assert compute_health("unknown", "unknown", master_status="healthy") == HEALTH_DEGRADED
+
+    def test_non_master_ignores_master_dimension(self):
+        # master_status=None means "not a master" — dimension absent.
+        assert compute_health("online", "ok", master_status=None) == HEALTH_ONLINE

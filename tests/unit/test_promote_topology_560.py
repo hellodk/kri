@@ -47,6 +47,8 @@ def _make_node(
     n.ssh_state = None
     n.ssh_checked_at = None
     n.ssh_detail = None
+    n.is_master = False
+    n.master_status = None
     return n
 
 

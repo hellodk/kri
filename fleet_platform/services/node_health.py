@@ -1,26 +1,29 @@
 """Unified node health rollup.
 
-A node carries two *independent* reachability signals that are written by two
-different subsystems:
+A node carries up to three *independent* health signals, written by different
+subsystems:
 
-- ``status``    — Salt minion presence (push): online / stale / offline / unknown.
-                  Answers "is the agent phoning home?".
-- ``ssh_state`` — direct SSH probe (pull): ok / auth_failed / unreachable / unknown.
-                  Answers "can we reach and authenticate to the box right now?".
+- ``status``    — Salt **minion** presence (push): online / stale / offline / unknown.
+                  The *primary* signal — "is this node a working, managed member of
+                  the fleet?". Set by ``manage.up`` presence sync and grain ingest.
+- ``ssh_state`` — direct **SSH** probe (pull): ok / auth_failed / unreachable / unknown.
+                  A *secondary* signal — "can we reach the box directly for remediation?".
+- master status — for nodes that *run* a salt-master, the control-plane health
+                  (``SaltMaster.status``): healthy / degraded / unreachable / unknown.
+                  Covers salt-api auth, ports 4505/4506, key store, etc.
 
-Operators kept asking "is this node actually healthy?" and had to mentally
-combine the two. :func:`compute_health` does that combination once, server-side,
-so the dashboard, the node detail page, the LLM context and any metrics all agree
-on a single rollup. The granular signals are still carried on the response for
-the hover/drill-down — this only adds a derived read, it never replaces them.
+:func:`compute_health` rolls these into a single worst-of value so the dashboard,
+node detail and metrics agree on one read. The granular signals are still carried
+on the response for the hover/drill-down — this only adds a derived read.
 
-Rollup rule (worst-of, with "unknown" meaning *no data* rather than *failure*):
+Key principle: **minion presence is primary**. SSH-reachable but never-seen-by-Salt
+is *not* "Online" — the box is up but its minion isn't reporting (down, or an id
+mismatch), which is exactly what an operator needs to see. So green requires the
+minion to actually be reporting; a positive secondary signal alone only earns
+``degraded``. A *missing* secondary signal, by contrast, never penalises a node
+that is otherwise good.
 
-- ``maintenance`` — node is in maintenance mode (overrides everything; neutral).
-- ``down``        — Salt offline OR SSH unreachable (we genuinely can't reach it).
-- ``degraded``    — Salt stale OR SSH auth_failed (reachable but something's wrong).
-- ``online``      — at least one positive signal and nothing bad.
-- ``unknown``     — never seen and never probed (no signal either way).
+Rollup states: ``online`` / ``degraded`` / ``down`` / ``unknown`` / ``maintenance``.
 """
 
 from __future__ import annotations
@@ -32,63 +35,82 @@ HEALTH_DOWN = "down"
 HEALTH_UNKNOWN = "unknown"
 HEALTH_MAINTENANCE = "maintenance"
 
-# Per-dimension severity buckets. "unknown" is deliberately absent so a missing
-# signal is treated as "no data", never penalised as a failure.
+# Per-dimension severity buckets.
 _GOOD = "good"
-_DEGRADED = "degraded"
-_DOWN = "down"
+_WARN = "warn"
+_BAD = "bad"
 
-_PRESENCE_LEVEL = {"online": _GOOD, "stale": _DEGRADED, "offline": _DOWN}
-_SSH_LEVEL = {"ok": _GOOD, "auth_failed": _DEGRADED, "unreachable": _DOWN}
+_MINION_LEVEL = {"online": _GOOD, "stale": _WARN, "offline": _BAD}
+_SSH_LEVEL = {"ok": _GOOD, "auth_failed": _WARN, "unreachable": _BAD}
+_MASTER_LEVEL = {"healthy": _GOOD, "degraded": _WARN, "unreachable": _BAD}
 
 
 def compute_health(
     status: str | None,
     ssh_state: str | None,
     maintenance_mode: bool = False,
+    master_status: str | None = None,
 ) -> str:
-    """Roll a node's Salt presence + SSH state into one health value.
+    """Roll a node's minion presence + SSH + (optional) master health into one value.
+
+    ``master_status`` is supplied only for nodes that run a salt-master; ``None``
+    means the node is not a master and that dimension is absent.
 
     Returns one of ``online`` / ``degraded`` / ``down`` / ``unknown`` /
-    ``maintenance``. Pure and total — any unrecognised input degrades to the
-    "no data" bucket rather than raising.
+    ``maintenance``. Pure and total — unrecognised inputs degrade to the "no data"
+    bucket rather than raising.
     """
     if maintenance_mode:
         return HEALTH_MAINTENANCE
 
-    levels = [
-        _PRESENCE_LEVEL.get(status or ""),
-        _SSH_LEVEL.get(ssh_state or ""),
-    ]
+    minion_level = _MINION_LEVEL.get(status or "")
+    levels = [minion_level, _SSH_LEVEL.get(ssh_state or "")]
+    if master_status is not None:
+        levels.append(_MASTER_LEVEL.get(master_status or ""))
 
-    if _DOWN in levels:
+    if _BAD in levels:
         return HEALTH_DOWN
-    if _DEGRADED in levels:
+    if _WARN in levels:
         return HEALTH_DEGRADED
-    if _GOOD in levels:
+    if minion_level == _GOOD:
         return HEALTH_ONLINE
+    if _GOOD in levels:
+        # Reachable by some signal, but the primary (minion presence) is NOT online
+        # — e.g. SSH-ok but Salt never saw it. Surface it, never call it green.
+        return HEALTH_DEGRADED
     return HEALTH_UNKNOWN
 
 
-def health_case(model):
+def health_case(model, master_status=None):
     """SQL ``CASE`` mirroring :func:`compute_health` for one Node model/alias.
 
     Lets the API filter on the derived rollup in-database (so pagination stays
-    correct) instead of computing it per-row in Python after the fact. The WHEN
-    ordering encodes the same worst-of precedence as :func:`compute_health`.
+    correct) instead of computing it per-row in Python. ``master_status`` is a SQL
+    expression (typically a correlated scalar subquery over ``salt_masters``) that
+    resolves to the master control-plane status, or NULL for non-master nodes —
+    NULL never matches the master conditions, so the dimension is simply absent.
     """
     from sqlalchemy import case, or_
 
+    bad = or_(model.status == "offline", model.ssh_state == "unreachable")
+    warn = or_(model.status == "stale", model.ssh_state == "auth_failed")
+    good_any = or_(model.status == "online", model.ssh_state == "ok")
+    if master_status is not None:
+        bad = or_(bad, master_status == "unreachable")
+        warn = or_(warn, master_status == "degraded")
+        good_any = or_(good_any, master_status == "healthy")
+
     return case(
         (model.maintenance_mode.is_(True), HEALTH_MAINTENANCE),
-        (or_(model.status == "offline", model.ssh_state == "unreachable"), HEALTH_DOWN),
-        (or_(model.status == "stale", model.ssh_state == "auth_failed"), HEALTH_DEGRADED),
-        (or_(model.status == "online", model.ssh_state == "ok"), HEALTH_ONLINE),
+        (bad, HEALTH_DOWN),
+        (warn, HEALTH_DEGRADED),
+        (model.status == "online", HEALTH_ONLINE),
+        (good_any, HEALTH_DEGRADED),
         else_=HEALTH_UNKNOWN,
     )
 
 
-def health_sort_rank(model):
+def health_sort_rank(model, master_status=None):
     """SQL ``CASE`` ranking health by severity for ORDER BY (worst = highest).
 
     ``desc`` therefore surfaces nodes needing attention first: down > degraded >
@@ -96,7 +118,7 @@ def health_sort_rank(model):
     """
     from sqlalchemy import case
 
-    label = health_case(model)
+    label = health_case(model, master_status)
     return case(
         (label == HEALTH_DOWN, 4),
         (label == HEALTH_DEGRADED, 3),
