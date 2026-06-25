@@ -103,7 +103,8 @@ async def test_build_fleet_context_assembles_prompt():
         }
 
     with patch.object(svc_mod, "get_settings_bulk", side_effect=fake_get_settings_bulk):
-        ctx = await build_fleet_context(mock_db, "salt_state")
+        # #883: build_fleet_context now returns (system_prompt, citations).
+        ctx, _ = await build_fleet_context(mock_db, "salt_state")
 
     assert "7" in ctx
     assert "5" in ctx
@@ -144,7 +145,8 @@ async def test_build_fleet_context_appends_intent_addendum():
                 membership_result2,
             ]
         )
-        ctx = await build_fleet_context(mock_db, "ansible_playbook")
+        # #883: build_fleet_context now returns (system_prompt, citations).
+        ctx, _ = await build_fleet_context(mock_db, "ansible_playbook")
 
     assert INTENT_ADDENDUM["ansible_playbook"] in ctx
 
