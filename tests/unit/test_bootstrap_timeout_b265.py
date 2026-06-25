@@ -8,7 +8,10 @@ def _ansible_tasks_src() -> str:
 
 
 def _ansible_route_src() -> str:
-    return Path("fleet_platform/api/routes/ansible.py").read_text()
+    # #750: ansible.py is now the api/routes/ansible/ package; the bootstrap_status
+    # route (with the stale_cutoff timedelta) lives in bootstrap.py.
+    pkg = Path("fleet_platform/api/routes/ansible")
+    return "\n".join(p.read_text() for p in sorted(pkg.glob("*.py")))
 
 
 def test_bootstrap_timeout_constant_exists():

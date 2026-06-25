@@ -165,8 +165,10 @@ def test_cancel_route_cancels_running_job():
         mock_celery.control.revoke = MagicMock()
 
         with (
-            patch("fleet_platform.api.routes.ansible.celery_app", mock_celery, create=True),
-            patch("fleet_platform.api.routes.ansible.audit", new=AsyncMock()),
+            # #750: cancel_playbook_job (and its celery_app/audit deps) lives in
+            # the jobs sub-module now; patch them where they are used.
+            patch("fleet_platform.api.routes.ansible.jobs.celery_app", mock_celery, create=True),
+            patch("fleet_platform.api.routes.ansible.jobs.audit", new=AsyncMock()),
         ):
             result = await cancel_playbook_job(uuid.uuid4(), db=db, claims=claims)
 

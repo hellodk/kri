@@ -82,9 +82,13 @@ def test_routes_do_not_import_worker_tasks_at_module_top_level():
 
 def test_converted_routes_dispatch_by_name():
     """The routes that previously imported tasks at top level now dispatch by name."""
-    for name in ("ingest.py", "drift.py", "ansible.py"):
+    for name in ("ingest.py", "drift.py"):
         src = (_ROUTES_DIR / name).read_text()
         assert "celery_app.send_task(" in src, f"{name} should dispatch Celery tasks by name via send_task"
+    # ansible.py was decomposed into a package — check the sub-modules collectively.
+    ansible_dir = _ROUTES_DIR / "ansible"
+    combined = "\n".join(p.read_text() for p in sorted(ansible_dir.glob("*.py")))
+    assert "celery_app.send_task(" in combined, "ansible package should dispatch Celery tasks by name via send_task"
 
 
 def test_shared_redis_module_exists_and_is_reexported():

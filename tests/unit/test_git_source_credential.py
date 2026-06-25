@@ -47,21 +47,28 @@ class TestPlaybookSourceValidateResponseSchema:
 
 
 class TestNoTokenInURL:
+    # #750: ansible.py is now the api/routes/ansible/ package (git-source handling
+    # lives in sources.py). Read the whole package so these guards still apply.
+    @staticmethod
+    def _ansible_src() -> str:
+        pkg = pathlib.Path("fleet_platform/api/routes/ansible")
+        return "\n".join(p.read_text() for p in sorted(pkg.glob("*.py")))
+
     def test_ansible_py_has_no_token_url_injection(self):
-        src = pathlib.Path("fleet_platform/api/routes/ansible.py").read_text()
+        src = self._ansible_src()
         # Old pattern that injects token directly into URL string
         bad_pattern = 'f"{scheme_match.group(1)}{payload.token}@'
-        assert bad_pattern not in src, "ansible.py still injects token into URL — remove token-in-URL block"
+        assert bad_pattern not in src, "ansible package still injects token into URL — remove token-in-URL block"
 
     def test_ansible_py_uses_git_auth_env(self):
-        src = pathlib.Path("fleet_platform/api/routes/ansible.py").read_text()
-        assert "git_auth_env" in src, "ansible.py must use git_auth_env from fleet_platform.services.git_auth"
+        src = self._ansible_src()
+        assert "git_auth_env" in src, "ansible package must use git_auth_env from fleet_platform.services.git_auth"
 
     def test_ansible_py_uses_classify_git_error(self):
-        src = pathlib.Path("fleet_platform/api/routes/ansible.py").read_text()
-        assert (
-            "classify_git_error" in src
-        ), "ansible.py must use classify_git_error from fleet_platform.services.git_auth"
+        src = self._ansible_src()
+        assert "classify_git_error" in src, (
+            "ansible package must use classify_git_error from fleet_platform.services.git_auth"
+        )
 
 
 # ---------------------------------------------------------------------------

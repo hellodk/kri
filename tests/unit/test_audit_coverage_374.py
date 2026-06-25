@@ -17,7 +17,15 @@ _ROOT = Path(__file__).parent.parent.parent / "fleet_platform"
 
 
 def _src(rel: str) -> str:
-    return (_ROOT / rel).read_text()
+    p = _ROOT / rel
+    # #750: api/routes/ansible.py is now the api/routes/ansible/ package.
+    # Concatenate the package sources so audit-coverage checks still see the
+    # full route surface regardless of which sub-module a handler lives in.
+    if not p.exists():
+        pkg = p.with_suffix("")
+        if pkg.is_dir():
+            return "\n".join(f.read_text() for f in sorted(pkg.glob("*.py")))
+    return p.read_text()
 
 
 # ---------------------------------------------------------------------------

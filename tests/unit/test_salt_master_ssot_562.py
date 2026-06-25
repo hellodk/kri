@@ -385,7 +385,9 @@ class TestGrepGuardAnsibleTasks:
         mock_db.execute.return_value.scalar_one_or_none.return_value = None
         with (
             patch("fleet_platform.services.platform_settings_svc._fernet", MagicMock()),
-            patch("fleet_platform.workers.ansible_tasks.get_controller_pubkey", return_value="ssh-rsa AAAA"),
+            # #750: _get_bootstrap_settings (and its get_controller_pubkey call)
+            # moved to fleet_platform.services.node_credentials.
+            patch("fleet_platform.services.node_credentials.get_controller_pubkey", return_value="ssh-rsa AAAA"),
         ):
             result = ansible_tasks._get_bootstrap_settings(mock_db)
         assert isinstance(result, tuple), "_get_bootstrap_settings must return a tuple"

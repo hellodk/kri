@@ -2,7 +2,10 @@
 
 from pathlib import Path
 
-ANSIBLE_ROUTE = (Path(__file__).parent.parent.parent / "fleet_platform/api/routes/ansible.py").read_text()
+# #750: ansible.py is now the fleet_platform/api/routes/ansible/ package.
+# Concatenate its sources so these playbook-stats source checks still resolve.
+_ANSIBLE_PKG = Path(__file__).parent.parent.parent / "fleet_platform/api/routes/ansible"
+ANSIBLE_ROUTE = "\n".join(p.read_text() for p in sorted(_ANSIBLE_PKG.glob("*.py")))
 
 
 def test_playbook_stats_endpoint_exists():
