@@ -1,4 +1,11 @@
-"""Tests for #369: worker emits ANSI colour + caps stored stdout."""
+"""Behavioral tests for #369: worker emits ANSI colour + caps stored stdout.
+
+The stdout-capping contract is exercised against the real ``_append_capped``
+helper. Two checks remain source-contract because the behaviour lives inside
+``run_playbook``'s local ``_event_handler`` closure / the ``ansible_runner``
+envvars dict — neither is importable or observable at the unit level without
+actually launching ansible-runner (an integration concern).
+"""
 
 from pathlib import Path
 
@@ -12,13 +19,21 @@ WORKER_SRC = (Path(__file__).parent.parent.parent / "fleet_platform/workers/play
 
 
 def test_force_color_env_set():
+    # behavioral conversion blocked: ANSIBLE_FORCE_COLOR is injected into the
+    # envvars dict passed to ansible_runner.run_async() inside run_playbook;
+    # observing it requires launching ansible-runner (integration-level).
     assert '"ANSIBLE_FORCE_COLOR": "1"' in WORKER_SRC
 
 
-def test_stdout_stored_verbatim_no_ansi_strip():
-    # Capture path appends event stdout verbatim; no ANSI-stripping regex on the worker.
-    assert "_append_capped(stdout_lines, msg, _trunc_ref)" in WORKER_SRC
-    assert r"\x1b[" not in WORKER_SRC  # no SGR-stripping regex on the capture path
+def test_append_capped_stores_ansi_codes_verbatim():
+    """Stdout is stored verbatim — ANSI SGR sequences must NOT be stripped, so
+    the UI can render CLI-identical colour."""
+    lines, state = [], {"size": 0, "truncated": False}
+    coloured = "\x1b[0;32mok:\x1b[0m [web-1] => changed"
+    _append_capped(lines, coloured, state)
+    assert lines == [coloured]
+    assert lines[0] == coloured  # exact bytes preserved, no stripping
+    assert state["size"] == len(coloured)
 
 
 def test_append_capped_appends_normally():
@@ -53,6 +68,7 @@ def test_append_capped_just_under_cap_keeps_appending():
 
 
 def test_task_name_extracted_from_event_data_not_stdout():
-    # Task name (for the [running: ...] marker) must come from structured event_data,
-    # so colourised stdout never corrupts it.
+    # behavioral conversion blocked: the task name is captured in run_playbook's
+    # local _event_handler closure (not importable); asserting it behaviorally
+    # would require running ansible_runner and feeding it real events.
     assert 'event.get("event_data", {}).get("task"' in WORKER_SRC
