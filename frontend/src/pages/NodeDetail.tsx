@@ -17,7 +17,7 @@ import { formatDistanceToNow } from 'date-fns'
 import { useToastStore } from '../stores/toastStore'
 import { useAuthStore } from '../stores/authStore'
 import { api } from '../api/client'
-import { bootstrapRefetchInterval } from '../lib/bootstrapRefetchInterval'
+import { useJobEventStream } from '../hooks/useJobEventStream'
 import { isMacOSNode, type Tab } from './nodeDetail/utils'
 import { OverviewTab } from './nodeDetail/OverviewTab'
 import { DriftTab } from './nodeDetail/DriftTab'
@@ -60,12 +60,17 @@ export function NodeDetail() {
   const isAdmin = currentUser?.role === 'admin'
   const canManage = currentUser?.role === 'admin' || currentUser?.role === 'operator'
 
+  // Live push: bootstrap transitions are pushed over SSE and invalidate the
+  // ['node', id] cache, so the node header refreshes on PUSH. The tight
+  // bootstrap-aware poll is relaxed to a slow 30s safety-net fallback (#756).
+  useJobEventStream({ enabled: !!nodeId })
+
   const { data: node, isLoading, isError, refetch } = useQuery({
     queryKey: ['node', nodeId],
     queryFn: () => fleetApi.node(nodeId!),
     staleTime: 60_000,
     enabled: !!nodeId,
-    refetchInterval: (q) => bootstrapRefetchInterval(q.state.data?.bootstrap_status),
+    refetchInterval: 30_000,
   })
 
   const { data: platformSettings } = useQuery({

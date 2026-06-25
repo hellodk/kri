@@ -9,6 +9,7 @@ import { Pagination } from '../components/Pagination'
 import { formatDistanceToNow, formatDuration, intervalToDuration } from 'date-fns'
 import { formatIST } from '../utils/time'
 import { useFilterStore } from '../stores/filterStore'
+import { useJobEventStream } from '../hooks/useJobEventStream'
 
 function jobDuration(job: { started_at: string | null; completed_at: string | null }): string {
   if (!job.started_at || !job.completed_at) return '—'
@@ -37,6 +38,18 @@ export function ExecutionHistory() {
   const dateFrom = searchParams.get('from') || ''
   const dateTo = searchParams.get('to') || ''
 
+  // Live push: ansible-job transitions are pushed over SSE; invalidate the global
+  // playbook-run list so it refetches on PUSH. Its poll below is relaxed to a slow
+  // 30s safety-net. The salt list keeps its own poll — salt ExecutionJobs come
+  // from minion ingest and have no push event (#756).
+  useJobEventStream({
+    onEvent: (ev) => {
+      if (ev.kind === 'ansible_job') {
+        void qc.invalidateQueries({ queryKey: ['ansible-jobs'] })
+      }
+    },
+  })
+
   // Salt execution history (ExecutionJob — from minion ingest)
   const { data: saltData, isLoading: saltLoading, isError: saltError, refetch: saltRefetch } = useQuery({
     queryKey: ['executions', executionStatus, page],
@@ -51,10 +64,7 @@ export function ExecutionHistory() {
     queryKey: ['ansible-jobs', executionStatus, ansiblePage],
     queryFn: () => playbooksApi.listJobs({ status: executionStatus || undefined, page: ansiblePage, per_page: 25 }),
     staleTime: 10_000,
-    refetchInterval: (q) => {
-      const hasRunning = (q.state.data ?? []).some((j: AnsibleJob) => j.status === 'running' || j.status === 'pending')
-      return hasRunning ? 3000 : 15_000
-    },
+    refetchInterval: 30_000,
     enabled: typeFilter === 'all' || typeFilter === 'playbook',
   })
 

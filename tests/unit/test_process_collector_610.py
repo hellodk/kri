@@ -21,6 +21,8 @@ _COLLECTOR_PATH = Path(__file__).parent.parent.parent / "salt" / "states" / "bas
 
 _SLS_PATH = Path(__file__).parent.parent.parent / "salt" / "states" / "base" / "process_report.sls"
 
+_SCHEDULE_SLS_PATH = Path(__file__).parent.parent.parent / "salt" / "states" / "base" / "process_report_schedule.sls"
+
 
 def _load_collector():
     """Load process_collector.py by file path without importing psutil."""
@@ -38,6 +40,11 @@ def collector():
 @pytest.fixture(scope="module")
 def sls_text():
     return _SLS_PATH.read_text()
+
+
+@pytest.fixture(scope="module")
+def schedule_sls_text():
+    return _SCHEDULE_SLS_PATH.read_text()
 
 
 # ---------------------------------------------------------------------------
@@ -165,9 +172,54 @@ class TestProcessReportSlsContract:
         assert "import psutil" in sls_text
 
     def test_psutil_pip_install(self, sls_text):
-        """Must contain a pip install for psutil."""
+        """macOS branch must keep an idempotent pip install for psutil (#673)."""
         assert "pip install" in sls_text
         assert "psutil" in sls_text
+
+
+class TestProcessReportSlsLinuxParity:
+    """#673: process_report.sls must work on Linux as well as macOS."""
+
+    def test_os_family_guard_present(self, sls_text):
+        """psutil install must branch on grains['os_family']."""
+        assert "grains['os_family']" in sls_text
+        assert "is_linux" in sls_text
+
+    def test_linux_uses_distro_package(self, sls_text):
+        """Linux must install psutil via pkg.installed (no runtime pip)."""
+        assert "pkg.installed" in sls_text
+        assert "python3-psutil" in sls_text
+
+    def test_macos_branch_retained(self, sls_text):
+        """macOS must still use the user-pip install path (regression guard)."""
+        assert "python3 -m pip install --quiet --user psutil" in sls_text
+
+    def test_run_requires_branch_on_install_module(self, sls_text):
+        """The run step's require must match the per-OS install module type."""
+        assert "- pkg: kri_psutil_install" in sls_text
+        assert "- cmd: kri_psutil_install" in sls_text
+
+
+class TestProcessReportScheduleSlsParity:
+    """#673: process_report_schedule.sls must restart the minion per-OS."""
+
+    def test_os_family_guard_present(self, schedule_sls_text):
+        assert "grains['os_family']" in schedule_sls_text
+        assert "is_linux" in schedule_sls_text
+
+    def test_linux_uses_systemctl(self, schedule_sls_text):
+        """Linux must reload the minion via systemctl."""
+        assert "systemctl restart salt-minion" in schedule_sls_text
+
+    def test_macos_retains_launchctl(self, schedule_sls_text):
+        """macOS must still reload the minion via launchctl (regression guard)."""
+        assert "launchctl stop com.saltstack.salt.minion" in schedule_sls_text
+        assert "launchctl start com.saltstack.salt.minion" in schedule_sls_text
+
+    def test_conf_group_is_os_appropriate(self, schedule_sls_text):
+        """minion.d conf group must be wheel on macOS, root on Linux."""
+        assert "wheel" in schedule_sls_text
+        assert "root" in schedule_sls_text
 
     def test_collector_file_path_deployed(self, sls_text):
         """Collector must be deployed to /opt/kri/process_collector.py."""

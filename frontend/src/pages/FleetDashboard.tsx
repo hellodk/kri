@@ -1,6 +1,7 @@
 import { useState, useMemo, useEffect } from 'react'
 import { Link } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { useJobEventStream } from '../hooks/useJobEventStream'
 import { fleetApi } from '../api/fleet'
 import { api } from '../api/client'
 import { iosTrackingApi } from '../api/iosTracking'
@@ -380,6 +381,11 @@ export function FleetDashboard() {
 
   const qc = useQueryClient()
   const toast = useToastStore((s) => s.add)
+
+  // Live push: bootstrap transitions invalidate ['fleet-overview'] and ['nodes'],
+  // so the overview counters and node table refresh on PUSH. The list polls below
+  // stay as slow safety-net fallbacks (SSH reachability has no push event) (#756).
+  useJobEventStream()
 
   const { data: saltMasters } = useQuery({
     queryKey: ['salt-masters'],

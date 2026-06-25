@@ -1,0 +1,9 @@
+# Jekyll configuration for the GitHub Pages site served from docs/.
+#
+# These directories hold internal planning/spec artifacts, not site pages.
+# They contain Liquid-looking tokens (e.g. `{% set %}` in the Salt/Jinja
+# snippets) that Jekyll tries to render and fails on, breaking the Pages
+# build. Exclude them so only real documentation pages are rendered.
+exclude:
+  - superpowers/
+  - sprints/
