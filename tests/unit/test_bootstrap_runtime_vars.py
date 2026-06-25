@@ -23,7 +23,6 @@ def test_bootstrap_request_accepts_no_new_fields():
     assert req.node_exporter_version is None
     assert req.node_exporter_listen_address is None
     assert req.node_exporter_url_override is None
-    assert req.bootstrap_full is None
 
 
 def test_bootstrap_request_accepts_valid_version():
@@ -112,18 +111,12 @@ def test_bootstrap_request_rejects_listen_address_non_numeric_port():
         BootstrapRequest(minion_id="mm1", target_ip="10.0.0.1", node_exporter_listen_address=":http")
 
 
-def test_bootstrap_request_accepts_bootstrap_full_true():
+def test_bootstrap_request_ignores_removed_bootstrap_full_field():
+    """bootstrap_full was removed (unified bootstrap); extra fields are ignored."""
     from fleet_platform.schemas.ansible import BootstrapRequest
 
-    req = BootstrapRequest(minion_id="mm1", target_ip="10.0.0.1", bootstrap_full=True)
-    assert req.bootstrap_full is True
-
-
-def test_bootstrap_request_accepts_bootstrap_full_false():
-    from fleet_platform.schemas.ansible import BootstrapRequest
-
-    req = BootstrapRequest(minion_id="mm1", target_ip="10.0.0.1", bootstrap_full=False)
-    assert req.bootstrap_full is False
+    req = BootstrapRequest(minion_id="mm1", target_ip="10.0.0.1", bootstrap_full=True)  # type: ignore[call-arg]
+    assert not hasattr(req, "bootstrap_full")
 
 
 def test_bootstrap_request_accepts_url_override():
@@ -149,7 +142,8 @@ def test_queue_node_bootstrap_signature_accepts_runtime_vars():
     assert "node_exporter_version" in src
     assert "node_exporter_listen_address" in src
     assert "node_exporter_url_override" in src
-    assert "bootstrap_full" in src
+    # bootstrap_full was removed in the unified-bootstrap change
+    assert "bootstrap_full" not in src
 
 
 def test_queue_node_bootstrap_forwards_vars_to_delay():
@@ -162,7 +156,6 @@ def test_queue_node_bootstrap_forwards_vars_to_delay():
     assert "node_exporter_version=node_exporter_version" in src
     assert "node_exporter_listen_address=node_exporter_listen_address" in src
     assert "node_exporter_url_override=node_exporter_url_override" in src
-    assert "bootstrap_full=bootstrap_full" in src
 
 
 # ── 3. bootstrap_node celery task merges runtime vars into extravars ───────────
@@ -185,7 +178,6 @@ def test_bootstrap_node_extravars_include_runtime_overrides():
     assert "node_exporter_version" in src
     assert "node_exporter_listen_address" in src
     assert "node_exporter_url_override" in src
-    assert "bootstrap_full" in src
 
     # runtime_extravars must be spread into the final extravars dict passed to ansible-runner
     assert "**runtime_extravars" in src, "runtime_extravars must be unpacked into extravars"
@@ -203,4 +195,5 @@ def test_bootstrap_node_extravars_include_runtime_overrides():
     assert "node_exporter_version" in sig
     assert "node_exporter_listen_address" in sig
     assert "node_exporter_url_override" in sig
-    assert "bootstrap_full" in sig
+    # bootstrap_full was removed in the unified-bootstrap change
+    assert "bootstrap_full" not in sig
