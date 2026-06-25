@@ -131,6 +131,7 @@ async def run_agent_stream(
         provider=endpoint.provider,
         model_context_length=endpoint.model_context_length,
         model_capabilities=model_caps,
+        tool_mode=endpoint.tool_mode,
     )
     ctx = ToolCtx(actor=claims["email"], role=claims["role"], session_id=session.id, db=db)
     loop = AgentLoop(executor, planner, ctx)
