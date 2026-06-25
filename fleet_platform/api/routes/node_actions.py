@@ -67,6 +67,11 @@ def _validate_action_params(action_type: str, params: dict) -> None:
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail=f"{svc!r} is a protected service and cannot be controlled remotely.",
             )
+    elif action_type in ("harden", "unharden"):
+        # Node-wide harden/unharden takes no target params — it applies a fixed
+        # Salt state whose never-disable denylist (salt-minion, sshd, exo, …) is
+        # baked into base.harden_compute itself. Nothing to validate per-target.
+        return
 
 
 def _build_salt_invocation(action_type: str, params: dict) -> tuple[str, list[str]]:
@@ -93,6 +98,11 @@ def _build_salt_invocation(action_type: str, params: dict) -> tuple[str, list[st
         if not fn:
             raise HTTPException(status_code=400, detail=f"Unsupported service action {action_type!r}")
         return fn, [svc]
+    if action_type in ("harden", "unharden"):
+        # Reversible compute-harden: apply the conservative disable set, or its
+        # exact inverse. The state's never-disable list is the safety boundary.
+        state = "base.harden_compute" if action_type == "harden" else "base.unharden_compute"
+        return "state.apply", [state]
     raise HTTPException(status_code=400, detail=f"Unsupported action {action_type!r}")
 
 
