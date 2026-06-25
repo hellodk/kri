@@ -61,7 +61,10 @@ _prompt_input() {
 
 prompt_confirm() {
     local prompt="$1"
-    local reply
+    # Initialize to empty: under `set -u`, if /dev/tty can't be opened (e.g. a
+    # non-interactive/piped run) the redirection fails before `read` assigns
+    # reply, and an unset reply would crash the script. Empty → fail closed (No).
+    local reply=""
     echo -en "${BOLD}  ${prompt} (y/N):${NC} "
     read -r reply </dev/tty || true
     [[ "$reply" =~ ^[Yy]$ ]]
@@ -75,6 +78,86 @@ VENV="$REPO_DIR/.venv/bin/activate"
 FRONTEND_DIR="$REPO_DIR/frontend"
 
 version() { cat "$REPO_DIR/VERSION" 2>/dev/null || echo "unknown"; }
+
+# Resolve a human-readable "<branch>@<shortsha>" label for the working tree the
+# deploy is being built from. Empty string when not inside a git checkout.
+deploy_source_label() {
+    git -C "$REPO_DIR" rev-parse --is-inside-work-tree >/dev/null 2>&1 || return 0
+    local b s
+    b=$(git -C "$REPO_DIR" rev-parse --abbrev-ref HEAD 2>/dev/null || echo "?")
+    s=$(git -C "$REPO_DIR" rev-parse --short HEAD 2>/dev/null || echo "?")
+    printf ' (%s@%s)' "$b" "$s"
+}
+
+# Strip --allow-stale / --no-fetch out of an arg list so the rest can still be
+# treated as positional subcommands. Sets FRESHNESS_ALLOW_STALE /
+# FRESHNESS_NO_FETCH and the remaining args in the FRESHNESS_ARGS array.
+parse_freshness_flags() {
+    FRESHNESS_ALLOW_STALE=0
+    FRESHNESS_NO_FETCH=0
+    FRESHNESS_ARGS=()
+    local a
+    for a in "$@"; do
+        case "$a" in
+            --allow-stale) FRESHNESS_ALLOW_STALE=1 ;;
+            --no-fetch)    FRESHNESS_NO_FETCH=1 ;;
+            *)             FRESHNESS_ARGS+=("$a") ;;
+        esac
+    done
+}
+
+# Guard against deploying a stale / off-master checkout (#902). `kri deploy`
+# derives both the shipped code and the VERSION banner straight from the local
+# working tree, so a forgotten feature branch silently deploys stale code with
+# no warning. Compare HEAD against origin/master and require an explicit confirm
+# (or --allow-stale / KRI_ALLOW_STALE=1) before proceeding.
+#   $1 = allow_stale (1 to skip the gate)   $2 = no_fetch (1 to skip git fetch)
+deploy_freshness_guard() {
+    local allow_stale="${1:-0}" no_fetch="${2:-0}"
+    local remote_ref="origin/master"
+
+    # Only meaningful inside a git checkout (e.g. release tarballs skip this).
+    git -C "$REPO_DIR" rev-parse --is-inside-work-tree >/dev/null 2>&1 || return 0
+
+    if [[ "$no_fetch" == "1" ]]; then
+        info "Skipping git fetch (--no-fetch); comparing against last-known $remote_ref."
+    elif ! git -C "$REPO_DIR" fetch --quiet origin master 2>/dev/null; then
+        warn "git fetch failed (offline?) — skipping freshness check; deploying local checkout as-is."
+        return 0
+    fi
+
+    # Without an origin/master ref there's nothing to compare against.
+    git -C "$REPO_DIR" rev-parse --verify --quiet "$remote_ref" >/dev/null 2>&1 || {
+        warn "No $remote_ref to compare against — skipping freshness check."
+        return 0
+    }
+
+    local branch head_sha behind
+    branch=$(git -C "$REPO_DIR" rev-parse --abbrev-ref HEAD 2>/dev/null || echo "unknown")
+    head_sha=$(git -C "$REPO_DIR" rev-parse --short HEAD 2>/dev/null || echo "unknown")
+    behind=$(git -C "$REPO_DIR" rev-list --count "HEAD..$remote_ref" 2>/dev/null || echo 0)
+
+    if [[ "$branch" == "master" && "$behind" == "0" ]]; then
+        info "Source is up to date with $remote_ref (master@$head_sha)."
+        return 0
+    fi
+
+    local remote_ver
+    remote_ver=$(git -C "$REPO_DIR" show "$remote_ref:VERSION" 2>/dev/null || echo "unknown")
+    warn "Deploy source looks STALE / off-master:"
+    warn "  branch:          $branch  (expected: master)"
+    warn "  HEAD:            $head_sha, behind $remote_ref by $behind commit(s)"
+    warn "  local VERSION:   $(version)   |   $remote_ref VERSION: $remote_ver"
+    warn "  → you may ship stale code. Refresh with: git checkout master && git pull --ff-only"
+
+    if [[ "$allow_stale" == "1" || "${KRI_ALLOW_STALE:-0}" == "1" ]]; then
+        warn "Proceeding anyway (--allow-stale / KRI_ALLOW_STALE set)."
+        return 0
+    fi
+
+    prompt_confirm "Deploy this stale/off-master checkout anyway?" \
+        || error "Deploy aborted — checkout is not up to date with $remote_ref (use --allow-stale to override)."
+}
 
 require_env() {
     if [[ ! -f "$ENV_FILE" ]]; then
@@ -177,8 +260,12 @@ _wait_healthy() {
 
 cmd_deploy() {
     require_env
+    parse_freshness_flags "$@"
+    set -- ${FRESHNESS_ARGS[@]+"${FRESHNESS_ARGS[@]}"}
     local sub="${1:-}"
     shift 2>/dev/null || true
+
+    deploy_freshness_guard "$FRESHNESS_ALLOW_STALE" "$FRESHNESS_NO_FETCH"
 
     if [[ -z "$sub" ]]; then
         _prompt_select "Deploy what?" \
@@ -189,7 +276,7 @@ cmd_deploy() {
 
     export APP_VERSION
     APP_VERSION=$(version)
-    header "Deploying → v${APP_VERSION}"
+    header "Deploying → v${APP_VERSION}$(deploy_source_label)"
 
     case "$sub" in
         "full (rebuild everything)"|full)
@@ -225,9 +312,11 @@ cmd_deploy() {
 
 cmd_rolling_deploy() {
     require_env
-    header "Rolling deploy (zero-downtime)"
+    parse_freshness_flags "$@"
+    deploy_freshness_guard "$FRESHNESS_ALLOW_STALE" "$FRESHNESS_NO_FETCH"
     export APP_VERSION
     APP_VERSION=$(version)
+    header "Rolling deploy (zero-downtime) → v${APP_VERSION}$(deploy_source_label)"
 
     info "Tagging current images as :previous…"
     for svc in api worker beat frontend; do
@@ -1042,7 +1131,7 @@ main() {
         status)         cmd_status ;;
         logs)           cmd_logs "$@" ;;
         deploy)         cmd_deploy "$@" ;;
-        rolling-deploy) cmd_rolling_deploy ;;
+        rolling-deploy) cmd_rolling_deploy "$@" ;;
         rollback)       cmd_rollback ;;
         infra)          cmd_infra "$@" ;;
         test)           cmd_test "$@" ;;
@@ -1060,4 +1149,9 @@ main() {
     esac
 }
 
-main "$@"
+# Only run main when executed directly — `source scripts/kri` (used by the
+# unit tests to exercise individual helpers like deploy_freshness_guard) must
+# not trigger the CLI dispatch.
+if [[ "${BASH_SOURCE[0]}" == "${0}" ]]; then
+    main "$@"
+fi
