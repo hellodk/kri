@@ -58,6 +58,8 @@ export const OverviewTab = memo(function OverviewTab({
   const [runningAction, setRunningAction] = useState(false)
   const [deployingMonitoring, setDeployingMonitoring] = useState(false)
   const [rebootConfirm, setRebootConfirm] = useState(false)
+  const [hardenConfirm, setHardenConfirm] = useState(false)
+  const [hardeningAction, setHardeningAction] = useState(false)
   const [quickActionTaskId, setQuickActionTaskId] = useState<string | null>(null)
   const [quickActionPolling, setQuickActionPolling] = useState(false)
   const [quickTaskOutput, setQuickTaskOutput] = useState<{ status: string; stdout?: string; stderr?: string; reason?: string } | null>(null)
@@ -158,6 +160,26 @@ export const OverviewTab = memo(function OverviewTab({
       toast(e instanceof Error ? e.message : 'Deploy failed', 'error')
     } finally {
       setDeployingMonitoring(false)
+    }
+  }
+
+  // Node-wide compute harden / unharden (#675). 'harden' is gated behind email
+  // approval (PendingAction.DESTRUCTIVE); 'unharden' is the immediate reversal.
+  // Params are empty — the backend applies a fixed Salt state whose never-disable
+  // denylist is the safety boundary.
+  async function requestHardenAction(actionType: 'harden' | 'unharden') {
+    if (!nodeId) return
+    setHardeningAction(true)
+    try {
+      const resp = await api.post<{ status: string; message: string }>(`/api/v1/nodes/${nodeId}/actions`, {
+        action_type: actionType,
+        params: {},
+      })
+      toast(resp.message || `${actionType} requested`)
+    } catch (e: unknown) {
+      toast(e instanceof Error ? e.message : 'Action failed', 'error')
+    } finally {
+      setHardeningAction(false)
     }
   }
 
@@ -562,6 +584,22 @@ export const OverviewTab = memo(function OverviewTab({
             Reboot
           </button>
           <button
+            onClick={() => setHardenConfirm(true)}
+            disabled={hardeningAction}
+            className="px-3 py-1.5 text-xs font-medium bg-amber-100 text-amber-800 rounded-md hover:bg-amber-200 disabled:opacity-50 transition-colors"
+            title="Disable a conservative set of unneeded macOS services (Siri, Spotlight, analytics…). Requires email approval; fully reversible via Unharden."
+          >
+            Harden node
+          </button>
+          <button
+            onClick={() => requestHardenAction('unharden')}
+            disabled={hardeningAction}
+            className="px-3 py-1.5 text-xs font-medium bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-200 rounded-md hover:bg-gray-200 dark:hover:bg-gray-600 disabled:opacity-50 transition-colors"
+            title="Re-enable everything Harden disabled and restore Spotlight indexing"
+          >
+            Unharden
+          </button>
+          <button
             onClick={deployNodeExporter}
             disabled={deployingMonitoring}
             className="px-3 py-1.5 text-xs font-medium bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg disabled:opacity-50 transition-colors"
@@ -578,6 +616,17 @@ export const OverviewTab = memo(function OverviewTab({
               className="px-2 py-1 bg-red-600 text-white rounded hover:bg-red-700 disabled:opacity-50 font-medium">Yes, reboot</button>
             {/* autoFocus so keyboard focus lands on Cancel when confirmation strip appears */}
             <button autoFocus onClick={() => setRebootConfirm(false)}
+              className="px-2 py-1 bg-gray-100 text-gray-700 rounded hover:bg-gray-200">Cancel</button>
+          </div>
+        )}
+        {hardenConfirm && (
+          <div role="alertdialog" aria-label="Confirm harden" className="mt-3 flex items-center gap-2 p-2 bg-amber-50 border border-amber-200 rounded text-xs text-amber-800">
+            <span>Harden {node.hostname ?? node.minion_id}? Disables a conservative, reversible set of macOS services. Sends an approval email.</span>
+            <button onClick={() => { requestHardenAction('harden'); setHardenConfirm(false) }}
+              disabled={hardeningAction}
+              className="px-2 py-1 bg-amber-600 text-white rounded hover:bg-amber-700 disabled:opacity-50 font-medium">Request approval</button>
+            {/* autoFocus so keyboard focus lands on Cancel when confirmation strip appears */}
+            <button autoFocus onClick={() => setHardenConfirm(false)}
               className="px-2 py-1 bg-gray-100 text-gray-700 rounded hover:bg-gray-200">Cancel</button>
           </div>
         )}
