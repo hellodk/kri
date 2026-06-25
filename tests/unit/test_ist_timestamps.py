@@ -18,7 +18,16 @@ def test_formatist_is_exported():
 
 
 def test_node_detail_uses_formatist():
-    content = open("frontend/src/pages/NodeDetail.tsx").read()
+    # #787: date formatting moved into the pages/nodeDetail/ tab components.
+    from pathlib import Path
+
+    _pages = Path("frontend/src/pages")
+    content = "\n".join(
+        [
+            (_pages / "NodeDetail.tsx").read_text(),
+            *(p.read_text() for p in sorted((_pages / "nodeDetail").glob("*.tsx"))),
+        ]
+    )
     assert "formatIST" in content or "formatISTDate" in content
     # Should NOT have bare format(new Date()) for absolute dates anymore
     import re

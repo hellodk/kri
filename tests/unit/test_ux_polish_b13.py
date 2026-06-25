@@ -8,7 +8,13 @@ SECURITY = Path("frontend/src/pages/SecurityPage.tsx").read_text()
 SALT_KEYS = Path("frontend/src/pages/SaltKeysPage.tsx").read_text()
 DRIFT = Path("frontend/src/pages/DriftExplorer.tsx").read_text()
 EXEC = Path("frontend/src/pages/ExecutionHistory.tsx").read_text()
-NODE_DETAIL = Path("frontend/src/pages/NodeDetail.tsx").read_text()
+# #787: NodeDetail decomposed into pages/nodeDetail/; read shell + package together.
+NODE_DETAIL = "\n".join(
+    [
+        Path("frontend/src/pages/NodeDetail.tsx").read_text(),
+        *(p.read_text() for p in sorted(Path("frontend/src/pages/nodeDetail").glob("*.tsx"))),
+    ]
+)
 
 
 def test_404_catch_all_route_present():

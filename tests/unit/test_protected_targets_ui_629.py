@@ -17,6 +17,16 @@ ROOT = Path(__file__).resolve().parents[2]
 BACKEND_FILE = ROOT / "fleet_platform" / "models" / "pending_action.py"
 NODE_DETAIL_TSX = ROOT / "frontend" / "src" / "pages" / "NodeDetail.tsx"
 NODE_DETAIL_UTILS = ROOT / "frontend" / "src" / "pages" / "nodeDetail" / "utils.ts"
+_NODE_DETAIL_PKG = ROOT / "frontend" / "src" / "pages" / "nodeDetail"
+
+
+def _node_detail_surface() -> str:
+    # #787: service_enable action + disabled={prot} wiring moved into the
+    # extracted ServicesTab/ProcessesTab; read the shell + package together.
+    parts = [NODE_DETAIL_TSX.read_text()]
+    if _NODE_DETAIL_PKG.is_dir():
+        parts.extend(p.read_text() for p in sorted(_NODE_DETAIL_PKG.glob("*.tsx")))
+    return "\n".join(parts)
 
 
 def _parse_backend_targets() -> set[str]:
@@ -58,23 +68,21 @@ def test_protected_targets_in_sync():
 def test_frontend_has_is_protected_target_helper():
     """The shared utils module must define the isProtectedTarget helper function."""
     src = NODE_DETAIL_UTILS.read_text()
-    assert "isProtectedTarget(" in src, (
-        f"{NODE_DETAIL_UTILS.name} must contain the isProtectedTarget() helper function"
-    )
+    assert "isProtectedTarget(" in src, f"{NODE_DETAIL_UTILS.name} must contain the isProtectedTarget() helper function"
 
 
 def test_frontend_has_service_enable_action():
-    """NodeDetail.tsx must include 'service_enable' action type."""
-    src = NODE_DETAIL_TSX.read_text()
-    assert "'service_enable'" in src, "NodeDetail.tsx must contain 'service_enable' action type for the Enable button"
+    """The NodeDetail surface must include 'service_enable' action type."""
+    src = _node_detail_surface()
+    assert "'service_enable'" in src, "the NodeDetail surface must contain 'service_enable' action type"
 
 
 def test_frontend_has_disabled_prot_attribute():
-    """NodeDetail.tsx must contain disabled={prot} at least twice (services + processes tabs)."""
-    src = NODE_DETAIL_TSX.read_text()
+    """The NodeDetail surface must contain disabled={prot} at least twice (services + processes tabs)."""
+    src = _node_detail_surface()
     occurrences = src.count("disabled={prot}")
     assert occurrences >= 2, (
-        f"Expected at least 2 occurrences of disabled={{prot}} in NodeDetail.tsx, "
+        f"Expected at least 2 occurrences of disabled={{prot}} across the NodeDetail surface, "
         f"found {occurrences}. Both the Services and Processes tabs must disable "
         "protected-target buttons."
     )

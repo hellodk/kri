@@ -21,8 +21,12 @@ def test_dashboard_route_wired():
 
 def test_node_secret_deletion_has_confirm():
     """NodeDetail.tsx must confirm before deleting a secret."""
-    src = (FRONTEND / "pages" / "NodeDetail.tsx").read_text()
-    assert "confirm" in src, "NodeDetail.tsx must use confirm() before deleting secrets"
+    # #787: the Secrets tab (with its delete-confirm) moved into pages/nodeDetail/.
+    pkg = FRONTEND / "pages" / "nodeDetail"
+    src = "\n".join(
+        [(FRONTEND / "pages" / "NodeDetail.tsx").read_text(), *(p.read_text() for p in sorted(pkg.glob("*.tsx")))]
+    )
+    assert "confirm" in src, "the NodeDetail surface must use confirm() before deleting secrets"
 
 
 def test_group_deletion_has_confirm():

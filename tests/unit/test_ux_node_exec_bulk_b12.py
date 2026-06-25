@@ -20,8 +20,12 @@ def test_node_detail_has_quick_actions():
             "frontend/src/**/*NodeDetail*.tsx",
         ]
     )
+    # #787: the Quick Actions block moved into the extracted OverviewTab.
+    pkg = Path("frontend/src/pages/nodeDetail")
+    if pkg.is_dir():
+        src += "\n" + "\n".join(p.read_text() for p in sorted(pkg.glob("*.tsx")))
     assert "Quick Actions" in src or "quickAction" in src or "test.ping" in src.lower(), (
-        "NodeDetail must have a Quick Actions section"
+        "the NodeDetail surface must have a Quick Actions section"
     )
     assert "Reboot" in src, "NodeDetail Quick Actions must include a Reboot button"
 

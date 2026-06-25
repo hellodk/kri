@@ -15,7 +15,16 @@ def test_prometheus_url_setting_exists():
 
 
 def test_resources_tab_in_nodedetal():
-    content = open("frontend/src/pages/NodeDetail.tsx").read()
+    # #787: ResourcesTab content lives in pages/nodeDetail/; read shell + package.
+    from pathlib import Path
+
+    _pages = Path("frontend/src/pages")
+    content = "\n".join(
+        [
+            (_pages / "NodeDetail.tsx").read_text(),
+            *(p.read_text() for p in sorted((_pages / "nodeDetail").glob("*.tsx"))),
+        ]
+    )
     assert "'resources'" in content or '"resources"' in content
     assert "metricsData" in content
     assert "Sparkline" in content

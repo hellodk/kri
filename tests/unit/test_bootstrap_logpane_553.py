@@ -8,11 +8,20 @@ the structural constraints without running a browser or build step.
 
 from pathlib import Path
 
-NODEFILE = Path(__file__).parent.parent.parent / "frontend" / "src" / "pages" / "NodeDetail.tsx"
+_PAGES = Path(__file__).parent.parent.parent / "frontend" / "src" / "pages"
+NODEFILE = _PAGES / "NodeDetail.tsx"
+# #787: NodeDetail was decomposed into the pages/nodeDetail/ package; the bootstrap
+# live-log (OverviewTab) and the history expanded stdout (BootstrapHistoryTab) now
+# live in extracted tab components. Read the shell + the package together so these
+# structural assertions still apply regardless of which file a snippet lives in.
+_NODEDETAIL_PKG = _PAGES / "nodeDetail"
 
 
 def _source() -> str:
-    return NODEFILE.read_text()
+    parts = [NODEFILE.read_text()]
+    if _NODEDETAIL_PKG.is_dir():
+        parts.extend(p.read_text() for p in sorted(_NODEDETAIL_PKG.glob("*.tsx")))
+    return "\n".join(parts)
 
 
 def test_nodefile_exists():
@@ -21,10 +30,17 @@ def test_nodefile_exists():
 
 
 def test_imports_logpane_not_ansitext():
-    """LogPane is imported; AnsiText is no longer imported (it became unused)."""
+    """LogPane is imported; AnsiText is no longer imported (it became unused).
+
+    The import path depends on the file's depth — the shell uses '../lib/LogPane'
+    while extracted nodeDetail/ tabs use '../../lib/LogPane'. Accept either.
+    """
     src = _source()
-    assert "import { LogPane } from '../lib/LogPane'" in src, "NodeDetail.tsx must import LogPane from '../lib/LogPane'"
+    assert "lib/LogPane'" in src and "LogPane }" in src, "the NodeDetail surface must import LogPane from lib/LogPane"
     assert "import { AnsiText } from '../lib/AnsiText'" not in src, (
+        "AnsiText import must be removed — it is no longer used directly"
+    )
+    assert "import { AnsiText } from '../../lib/AnsiText'" not in src, (
         "AnsiText import must be removed — it is no longer used directly"
     )
 
