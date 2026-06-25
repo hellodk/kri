@@ -76,12 +76,21 @@ def test_linux_playbook_uses_become():
 
 
 def test_linux_playbook_does_not_reference_macos_pkg():
-    """The Linux playbook must NOT reference the macOS .pkg installer."""
+    """The Linux playbook must NOT reference macOS-specific Salt artifacts.
+
+    #883 installs the Linux onedir via the official SaltProject distribution at
+    packages.broadcom.com/artifactory/saltproject-generic/onedir/. That host
+    serves *all* platforms — including the Linux tarball
+    (salt-<ver>-onedir-linux-<arch>.tar.gz) the playbook references — so a bare
+    "broadcom" string is NOT a macOS marker. Guard instead against the genuinely
+    macOS-only artifacts: the .pkg installer and any macos/darwin onedir build.
+    """
     path = Path("playbooks/install_salt_master_linux.yml")
-    content = path.read_text()
-    assert ".pkg" not in content, "Linux playbook must not reference macOS .pkg — Linux installs via apt/yum"
+    content = path.read_text().lower()
+    assert ".pkg" not in content, "Linux playbook must not reference macOS .pkg — Linux installs the onedir tarball"
     assert "arm64.pkg" not in content, "Linux playbook must not reference arm64.pkg"
-    assert "broadcom" not in content.lower(), "Linux playbook must not reference Broadcom/SaltProject macOS CDN"
+    assert "onedir-macos" not in content, "Linux playbook must not reference the macOS onedir build"
+    assert "onedir-darwin" not in content, "Linux playbook must not reference the darwin onedir build"
 
 
 def test_linux_playbook_does_not_reference_launchd():

@@ -121,7 +121,8 @@ async def test_group_resolved_correctly_for_node():
         ):
             from fleet_platform.services.llm_context import build_fleet_context
 
-            result = await build_fleet_context(fake_db, "fleet_query", query="x")
+            # #883: build_fleet_context now returns (system_prompt, citations).
+            result, _ = await build_fleet_context(fake_db, "fleet_query", query="x")
 
     # The group "build" must appear in the node row — NOT the dash placeholder.
     assert "| build |" in result, f"Expected '| build |' in context table but got:\n{result}"
@@ -163,7 +164,8 @@ async def test_group_dash_when_no_membership():
         ):
             from fleet_platform.services.llm_context import build_fleet_context
 
-            result = await build_fleet_context(fake_db, "fleet_query", query="x")
+            # #883: build_fleet_context now returns (system_prompt, citations).
+            result, _ = await build_fleet_context(fake_db, "fleet_query", query="x")
 
     # Without membership the dash must appear for the group column
     assert "| — |" in result or "| \\— |" in result or result.count("—") >= 1
