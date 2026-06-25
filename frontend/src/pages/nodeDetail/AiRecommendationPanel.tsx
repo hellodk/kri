@@ -65,6 +65,8 @@ export function AiRecommendationPanel({ text }: { text: string }) {
 
   return (
     <div className="bg-white rounded-lg border border-blue-100 p-4 space-y-0.5">
+      {/* Lines are derived from splitting the `text` prop; no stable identity exists.
+          Index is safe because the whole array is replaced whenever `text` changes. */}
       {lines.map((line, idx) => renderLine(line, idx))}
       <p className="text-xs text-gray-500 mt-3 pt-2 border-t border-gray-100">
         AI-generated — verify before acting. Actions require approval.

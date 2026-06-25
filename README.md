@@ -114,7 +114,7 @@ The [project board](https://github.com/hellodk/kri/issues) tracks work through f
 
 CI gates on every PR to master:
 - `pytest tests/unit/ -v` — zero failures
-- `npm run build` — zero TypeScript errors
+- `pnpm run build` — zero TypeScript errors
 - `mypy`, `ruff`, `bandit` — zero violations
 - 80% line coverage floor on `fleet_platform/services/`
 
@@ -191,7 +191,7 @@ uv sync --extra dev
 source .venv/bin/activate
 
 # Install frontend dependencies
-cd frontend && npm ci && cd ..
+cd frontend && pnpm install --frozen-lockfile && cd ..
 
 # Apply database migrations
 alembic upgrade head
@@ -223,7 +223,7 @@ Run before every commit:
 source .venv/bin/activate
 pytest tests/unit/ -q
 pytest tests/integration/ -q
-cd frontend && npm run build   # TypeScript type check
+cd frontend && pnpm run build   # TypeScript type check
 ```
 
 E2E tests run on staging via CI. See [TESTING.md](TESTING.md) for the full test strategy.

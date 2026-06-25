@@ -10,10 +10,10 @@ interface Props {
 }
 
 export function SaltPillarDialog({ state, minionIds, onClose, onConfirm }: Props) {
-  const [pairs, setPairs] = useState<Array<{ key: string; value: string }>>([])
+  const [pairs, setPairs] = useState<Array<{ _key: string; key: string; value: string }>>([])
   const [testMode, setTestMode] = useState(false)
 
-  const add = () => setPairs((p) => [...p, { key: '', value: '' }])
+  const add = () => setPairs((p) => [...p, { _key: crypto.randomUUID(), key: '', value: '' }])
   const remove = (i: number) => setPairs((p) => p.filter((_, idx) => idx !== i))
   const update = (i: number, field: 'key' | 'value', val: string) =>
     setPairs((p) => p.map((row, idx) => (idx === i ? { ...row, [field]: val } : row)))
@@ -66,7 +66,7 @@ export function SaltPillarDialog({ state, minionIds, onClose, onConfirm }: Props
           </div>
           {pairs.map((row, i) => (
             <div
-              key={i}
+              key={row._key}
               style={{
                 display: 'flex',
                 gap: 8,

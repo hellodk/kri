@@ -18,8 +18,10 @@ const TARGET_LABELS: Record<string, string> = {
 
 // ─── Baseline form types ──────────────────────────────────────────────────────
 
-interface PkgRow { name: string; version: string; enforce: boolean }
-interface SvcRow { name: string; state: 'running' | 'stopped' }
+interface PkgRow { _key: string; name: string; version: string; enforce: boolean }
+interface SvcRow { _key: string; name: string; state: 'running' | 'stopped' }
+
+function newKey() { return crypto.randomUUID() }
 
 function buildStateJson(required: PkgRow[], forbidden: PkgRow[], services: SvcRow[]) {
   return {
@@ -42,17 +44,19 @@ function parseStateJson(stateJson: Record<string, unknown>): { required: PkgRow[
   const pkgs = (stateJson?.packages ?? {}) as Record<string, { name?: string; version?: string }[]>
   const svc = (stateJson?.services ?? {}) as { required_running?: string[]; required_stopped?: string[] }
   const required = (pkgs.required ?? []).map((p: { name?: string; version?: string }) => ({
+    _key: newKey(),
     name: p.name ?? '',
     version: (p.version ?? '').replace('>=', ''),
     enforce: !!(p.version),
   }))
   const forbidden = (pkgs.forbidden ?? []).map((p: { name?: string }) => ({
+    _key: newKey(),
     name: p.name ?? '',
     version: '',
     enforce: false,
   }))
-  const svcRunning = (svc.required_running ?? []).map((s: string) => ({ name: s, state: 'running' as const }))
-  const svcStopped = (svc.required_stopped ?? []).map((s: string) => ({ name: s, state: 'stopped' as const }))
+  const svcRunning = (svc.required_running ?? []).map((s: string) => ({ _key: newKey(), name: s, state: 'running' as const }))
+  const svcStopped = (svc.required_stopped ?? []).map((s: string) => ({ _key: newKey(), name: s, state: 'stopped' as const }))
   return { required, forbidden, services: [...svcRunning, ...svcStopped] }
 }
 
@@ -83,7 +87,7 @@ function CaptureMode({
       const result = await baselinesApi.capture(nodeId)
       setCaptured(result)
       // Pre-populate required packages (all selected, no version enforcement)
-      setRequired(result.packages.map(p => ({ name: p.name, version: p.version ?? '', enforce: false })))
+      setRequired(result.packages.map(p => ({ _key: newKey(), name: p.name, version: p.version ?? '', enforce: false })))
     } catch (e: unknown) {
       setErr(e instanceof Error ? e.message : 'Failed to capture node state')
     } finally {
@@ -228,7 +232,7 @@ function ManualMode({
               : []
             const showDropdown = focusedPkgIdx === i && matches.length > 0
             return (
-              <div key={i} className="relative">
+              <div key={row._key} className="relative">
                 <div className="flex gap-2 items-center">
                   <input
                     value={row.name}
@@ -272,7 +276,7 @@ function ManualMode({
           })}
         </div>
         <button
-          onClick={() => setRequired([...required, { name: '', version: '', enforce: false }])}
+          onClick={() => setRequired([...required, { _key: newKey(), name: '', version: '', enforce: false }])}
           className="mt-2 text-sm text-brand-600 hover:text-brand-700 font-medium"
         >+ Add required package</button>
       </div>
@@ -285,7 +289,7 @@ function ManualMode({
         </div>
         <div className="space-y-2">
           {forbidden.map((row, i) => (
-            <div key={i} className="flex gap-2 items-center">
+            <div key={row._key} className="flex gap-2 items-center">
               <input
                 value={row.name}
                 onChange={e => setForbidden(forbidden.map((r, j) => j === i ? { ...r, name: e.target.value } : r))}
@@ -300,7 +304,7 @@ function ManualMode({
           ))}
         </div>
         <button
-          onClick={() => setForbidden([...forbidden, { name: '', version: '', enforce: false }])}
+          onClick={() => setForbidden([...forbidden, { _key: newKey(), name: '', version: '', enforce: false }])}
           className="mt-2 text-sm text-brand-600 hover:text-brand-700 font-medium"
         >+ Add forbidden package</button>
       </div>
@@ -313,7 +317,7 @@ function ManualMode({
         </div>
         <div className="space-y-2">
           {services.map((row, i) => (
-            <div key={i} className="flex gap-2 items-center">
+            <div key={row._key} className="flex gap-2 items-center">
               <input
                 value={row.name}
                 onChange={e => setServices(services.map((s, j) => j === i ? { ...s, name: e.target.value } : s))}
@@ -338,7 +342,7 @@ function ManualMode({
           ))}
         </div>
         <button
-          onClick={() => setServices([...services, { name: '', state: 'running' }])}
+          onClick={() => setServices([...services, { _key: newKey(), name: '', state: 'running' }])}
           className="mt-2 text-sm text-brand-600 hover:text-brand-700 font-medium"
         >+ Add service</button>
       </div>

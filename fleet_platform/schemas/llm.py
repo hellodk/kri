@@ -106,6 +106,7 @@ class LLMQueryResponse(BaseModel):
     input_tokens: int
     output_tokens: int
     duration_ms: int
+    citations: list[dict] = []
 
 
 class LLMQueryLogEntry(BaseModel):

@@ -159,8 +159,12 @@ def build_static_context(
     return "".join(parts)
 
 
-async def build_fleet_context(db: AsyncSession, intent: str, query: str = "") -> str:
+async def build_fleet_context(db: AsyncSession, intent: str, query: str = "") -> tuple[str, list[dict]]:
     """Fetch live fleet state and build a system prompt.
+
+    Returns ``(system_prompt, citations)`` where *citations* is a list of
+    ``{"source_type": str, "source_id": str}`` dicts for each RAG chunk used.
+    Citations are empty when RAG is skipped or fails.
 
     When query is provided and intent is fleet_query or fleet_command,
     performs hybrid RAG retrieval and injects top-k chunks into the context.
@@ -241,17 +245,26 @@ async def build_fleet_context(db: AsyncSession, intent: str, query: str = "") ->
 
     # RAG retrieval — non-fatal; degrades gracefully if embed_url is not configured
     retrieved_chunks_text: str | None = None
+    rag_citations: list[dict] = []
     if query and embed_url and intent in ("fleet_query", "fleet_command"):
         try:
             from fleet_platform.services.embedding_svc import (
+                assemble_citations,
                 format_retrieved_chunks,
                 retrieve,
             )
 
             chunks = await retrieve(db, query, embed_url, top_k=6)
             retrieved_chunks_text = format_retrieved_chunks(chunks) or None
-        except Exception:
-            pass  # RAG failure is non-fatal
+            rag_citations = assemble_citations(chunks)
+        except Exception as exc:
+            logger.warning(
+                "RAG retrieval failed for intent=%s query=%r: %s",
+                intent,
+                query[:100],
+                exc,
+                exc_info=True,
+            )
 
     addendum = INTENT_ADDENDUM.get(intent, INTENT_ADDENDUM["fleet_query"])
     # Pass the task addendum INTO the builder so the grounding rules stay the
@@ -269,4 +282,4 @@ async def build_fleet_context(db: AsyncSession, intent: str, query: str = "") ->
         nodes_shown=len(node_records),
     )
 
-    return _redact_sensitive_data(context, include_ips=include_ips)
+    return _redact_sensitive_data(context, include_ips=include_ips), rag_citations
