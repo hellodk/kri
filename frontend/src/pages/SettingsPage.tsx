@@ -8,6 +8,7 @@ import { playbookSourcesApi, type PlaybookSource, type PlaybookSourceValidateRes
 import { credentialsApi, type Credential } from '../api/credentials'
 import { llmApi, type LLMEndpoint } from '../api/llm'
 import { LLMEndpointForm } from '../components/LLMEndpointForm'
+import { ToggleSwitch } from '../components/ToggleSwitch'
 import { SecretInput } from '../components/SecretInput'
 import { useToastStore } from '../stores/toastStore'
 import { api } from '../api/client'
@@ -2279,20 +2280,16 @@ function LLMEndpointsSection() {
                           {ep.is_default && <span className="w-2 h-2 rounded-full bg-white block" />}
                         </button>
                       </td>
-                      <td className="px-4 py-3 text-center">
-                        <button
-                          onClick={() => handleToggleEnabled(ep)}
-                          disabled={togglingEnabledId === ep.id}
-                          title={ep.enabled ? 'Click to disable endpoint' : 'Click to enable endpoint'}
-                          className={[
-                            'inline-flex items-center px-2 py-0.5 rounded text-xs font-medium transition-colors disabled:opacity-50',
-                            ep.enabled
-                              ? 'bg-emerald-100 text-emerald-700 hover:bg-emerald-200'
-                              : 'bg-gray-100 text-gray-500 hover:bg-gray-200',
-                          ].join(' ')}
-                        >
-                          {togglingEnabledId === ep.id ? '…' : ep.enabled ? 'On' : 'Off'}
-                        </button>
+                      <td className="px-4 py-3">
+                        <div className="flex justify-center">
+                          <ToggleSwitch
+                            checked={ep.enabled}
+                            onChange={() => handleToggleEnabled(ep)}
+                            loading={togglingEnabledId === ep.id}
+                            ariaLabel={`${ep.enabled ? 'Disable' : 'Enable'} endpoint ${ep.name}`}
+                            title={ep.enabled ? 'Click to disable endpoint' : 'Click to enable endpoint'}
+                          />
+                        </div>
                       </td>
                       <td className="px-4 py-3 text-center">
                         {ep.has_api_key ? (
