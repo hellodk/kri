@@ -9,6 +9,7 @@ from datetime import UTC, datetime
 import redis.asyncio as aioredis
 from fastapi import APIRouter, Depends, Header, HTTPException, Request, status
 from sqlalchemy import select
+from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -22,7 +23,8 @@ from fleet_platform.models.node import Node, Tag
 from fleet_platform.models.process_stat import NodeProcessStat
 from fleet_platform.schemas.ingest import ExecutionIngestPayload, GrainIngestPayload, ProcessStatsIngestPayload
 from fleet_platform.services.node_status import verify_node_token
-from fleet_platform.workers.celery_app import celery_app
+from fleet_platform.workers.drift_tasks import compute_drift
+from fleet_platform.workers.sbom_tasks import index_sbom, index_sbom_from_grains
 
 router = APIRouter(prefix="/api/v1/ingest")
 
@@ -282,15 +284,13 @@ async def ingest_grains(
     await update_node_from_grains(node.id, clean_grains, db)
 
     await db.commit()
-    celery_app.send_task("fleet_platform.workers.drift_tasks.compute_drift", args=[str(node.id)], queue="drift")
+    compute_drift.delay(str(node.id))
 
     # Auto-trigger SBOM indexing when grains contain package data
     grains = payload.grains
     has_packages = bool(grains.get("pkgs") or grains.get("brew_pkgs") or grains.get("pip_pkgs"))
     if has_packages:
-        celery_app.send_task(
-            "fleet_platform.workers.sbom_tasks.index_sbom_from_grains", args=[str(node.id)], queue="sbom"
-        )
+        index_sbom_from_grains.delay(str(node.id))
 
     return {"status": "ok", "node_id": str(node.id)}
 
@@ -409,11 +409,7 @@ async def ingest_sbom(
         raise
 
     try:
-        celery_app.send_task(
-            "fleet_platform.workers.sbom_tasks.index_sbom",
-            kwargs={"node_id": str(node.id), "file_path": tmp.name},
-            queue="sbom",
-        )
+        index_sbom.delay(node_id=str(node.id), file_path=tmp.name)
     except Exception:
         os.unlink(tmp.name)
         raise
@@ -447,14 +443,34 @@ async def ingest_process_stats(
             len(payload.processes),
         )
 
-    rows = []
+    import uuid as _uuid
+
+    value_dicts = []
     for p in procs:
         data = p.model_dump()
         data["cmdline"] = redact_cmdline(data.get("cmdline"))
-        rows.append(NodeProcessStat(node_id=node.id, minion_id=payload.minion_id, collected_at=ts, **data))
-    db.add_all(rows)
+        value_dicts.append(
+            {
+                "id": _uuid.uuid4(),
+                "node_id": node.id,
+                "minion_id": payload.minion_id,
+                "collected_at": ts,
+                **data,
+            }
+        )
+
+    if value_dicts:
+        stmt = (
+            pg_insert(NodeProcessStat)
+            .values(value_dicts)
+            .on_conflict_do_nothing(
+                index_elements=["node_id", "collected_at", "pid"],
+            )
+        )
+        await db.execute(stmt)
+
     await db.commit()
-    process_stats_rows_ingested_total.inc(len(rows))
+    process_stats_rows_ingested_total.inc(len(value_dicts))
     if dropped:
         process_stats_rows_dropped_total.inc(dropped)
-    return {"status": "ok", "rows": len(rows), "dropped": dropped}
+    return {"status": "ok", "rows": len(value_dicts), "dropped": dropped}

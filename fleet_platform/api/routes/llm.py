@@ -291,8 +291,9 @@ async def submit_query(
         resolved_intent = classify_intent(payload.prompt)
     intent = resolved_intent
 
+    rag_citations: list[dict] = []
     try:
-        system_prompt = await build_fleet_context(db, intent, query=payload.prompt)
+        system_prompt, rag_citations = await build_fleet_context(db, intent, query=payload.prompt)
     except Exception:  # noqa: BLE001
         logger.exception("submit_query: build_fleet_context failed; degrading to minimal context")
         system_prompt = (
@@ -438,6 +439,7 @@ async def submit_query(
         input_tokens=input_tokens,
         output_tokens=output_tokens,
         duration_ms=duration_ms,
+        citations=rag_citations,
     )
 
 
@@ -509,7 +511,7 @@ async def submit_query_stream(
     intent = resolved_intent
 
     try:
-        system_prompt = await build_fleet_context(db, intent, query=payload.prompt)
+        system_prompt, _stream_citations = await build_fleet_context(db, intent, query=payload.prompt)
     except Exception:  # noqa: BLE001
         logger.exception("submit_query_stream: build_fleet_context failed; degrading to minimal context")
         system_prompt = (
@@ -517,6 +519,7 @@ async def submit_query_stream(
             "Live fleet context could not be loaded for this query; answer from general knowledge "
             "and tell the operator the fleet context was temporarily unavailable."
         )
+        _stream_citations = []
 
     history_dicts: list[dict] = (
         [{"role": m.role, "content": m.content} for m in payload.history] if payload.history else []
