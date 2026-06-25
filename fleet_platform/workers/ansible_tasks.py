@@ -32,6 +32,7 @@ from fleet_platform.services.ssh_host_key_svc import to_known_hosts_token
 from fleet_platform.services.task_lock import unique_task
 from fleet_platform.workers.ansible_helpers import (
     _detect_os_family,
+    _get_pillar_dir,  # noqa: F401 — re-exported for test patch targets (#509 removed its call site)
     _scrub_token,
     _validate_minion_id,
 )

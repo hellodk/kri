@@ -53,7 +53,9 @@ async def test_run_playbook_rejects_bootstrap_playbook():
     claims = {"sub": str(uuid.uuid4()), "email": "test@kri", "role": "operator"}
 
     with patch(
-        "fleet_platform.api.routes.ansible.discover_all",
+        # #750: run_playbook_endpoint (and its discover_all call) lives in the
+        # playbooks sub-module now; patch it where it is used.
+        "fleet_platform.api.routes.ansible.playbooks.discover_all",
         return_value=[_make_entry("bootstrap_node.yml")],
     ):
         with pytest.raises(HTTPException) as exc_info:
