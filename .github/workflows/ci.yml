@@ -381,6 +381,19 @@ jobs:
           ENVIRONMENT=test
           KRI_API_URL=http://api:8000
           PILLAR_DIR=/srv/salt/pillar
+          # E2E test accounts. seed_local_users() (api lifespan) creates these on
+          # first boot. The Playwright suite logs in as admin@fleet.local /
+          # viewer@fleet.local (see tests/e2e/helpers.ts). Without this the stack
+          # boots with ZERO users, so /auth/login returns 401 for every test and
+          # the whole authenticated suite cascades into selector/timeout failures
+          # (#905). The password MUST be >=12 chars and not a known-weak word, or
+          # seed_local_users sets must_change_password=True and /auth/login then
+          # returns 403 MUST_CHANGE_PASSWORD (still no usable session).
+          SEED_LOCAL_ADMIN_EMAIL=admin@fleet.local
+          SEED_LOCAL_ADMIN_PASSWORD=e2eFleetTestPw2026
+          SEED_LOCAL_USER_1_EMAIL=viewer@fleet.local
+          SEED_LOCAL_USER_1_PASSWORD=e2eFleetTestPw2026
+          SEED_LOCAL_USER_1_ROLE=viewer
           EOF
       - name: Build + start stack
         # Retry the build/start: anonymous docker.io pulls of the base images

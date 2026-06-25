@@ -2,7 +2,7 @@
  * VNC — VNC feature flag and UI journeys
  */
 import { test, expect } from '@playwright/test'
-import { loginViaApi, getToken, ADMIN, API } from './helpers'
+import { loginViaApi, getToken, ADMIN, VIEWER, API } from './helpers'
 
 test.describe('VNC Feature Flag', () => {
 
@@ -41,7 +41,7 @@ test.describe('VNC Feature Flag', () => {
 
   test('VNC-03 viewer cannot change VNC setting', async ({ request }) => {
     // Use getToken (cached) with viewer credentials to avoid rate limiting
-    const viewerToken = await getToken(request, { email: 'viewer@fleet.local', password: 'changeme' })
+    const viewerToken = await getToken(request, VIEWER)
     const res = await request.put(`${API}/api/v1/settings`, {
       headers: { Authorization: `Bearer ${viewerToken}` },
       data: { vnc_enabled: true },

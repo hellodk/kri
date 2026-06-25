@@ -1,13 +1,14 @@
 import { test, expect } from '@playwright/test'
+import { loginViaApi } from './helpers'
 
 test.describe('Monitoring Page', () => {
   test.beforeEach(async ({ page }) => {
-    // Log in as admin
-    await page.goto('/login')
-    await page.fill('input[name="username"]', 'admin@fleet.local')
-    await page.fill('input[name="password"]', 'changeme')
-    await page.click('button[type="submit"]')
-    await page.waitForURL('/fleet')
+    test.setTimeout(90000)
+    // The login form has no name="username"/name="password" inputs (it uses
+    // input[type="email"]/input[type="password"]), so the previous fill() calls
+    // never matched and the page never logged in. Use the shared API-login helper
+    // like every other authenticated spec (#905).
+    await loginViaApi(page)
   })
 
   test('monitoring page renders without errors', async ({ page }) => {
