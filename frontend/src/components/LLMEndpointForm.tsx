@@ -4,6 +4,7 @@ import { llmApi, type LLMEndpoint, type LLMEndpointCreate, type LLMProvider } fr
 import { useToastStore } from '../stores/toastStore'
 import { SecretInput } from './SecretInput'
 import { ModelCombobox, AUTO_VALUE, type DiscoveredModel } from './ModelCombobox'
+import { ToggleSwitch } from './ToggleSwitch'
 
 interface Props {
   endpoint?: LLMEndpoint
@@ -320,15 +321,15 @@ export function LLMEndpointForm({ endpoint, onClose, onSaved }: Props) {
               />
               <span className="text-sm text-gray-700">Set as default endpoint</span>
             </label>
-            <label className="flex items-center gap-2 cursor-pointer select-none">
-              <input
-                type="checkbox"
+            <div className="flex items-center gap-2 select-none">
+              <ToggleSwitch
                 checked={enabled}
-                onChange={(e) => setEnabled(e.target.checked)}
-                className="h-4 w-4 rounded border-gray-300 text-brand-600 focus:ring-brand-600"
+                onChange={() => setEnabled(!enabled)}
+                ariaLabel="Enabled"
+                title={enabled ? 'Click to disable endpoint' : 'Click to enable endpoint'}
               />
               <span className="text-sm text-gray-700">Enabled</span>
-            </label>
+            </div>
           </div>
 
           {/* Inline error */}
