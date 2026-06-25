@@ -201,6 +201,8 @@ export function NodeDetail() {
               sshDetail={node.ssh_detail}
               lastSeenAt={node.last_seen_at}
               maintenanceMode={node.maintenance_mode}
+              isMaster={node.is_master}
+              masterStatus={node.master_status}
               canManage={canManage}
             />
             <DriftBadge score={node.drift_score} />

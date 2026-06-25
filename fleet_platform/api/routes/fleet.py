@@ -24,6 +24,14 @@ from fleet_platform.schemas.node_import import (
     ImportValidateRequest,
     ImportValidateResponse,
 )
+from fleet_platform.services.node_health import (
+    HEALTH_DEGRADED,
+    HEALTH_DOWN,
+    HEALTH_MAINTENANCE,
+    HEALTH_ONLINE,
+    HEALTH_UNKNOWN,
+    compute_health,
+)
 from fleet_platform.services.node_import import (
     dedup_rows,
     parse_csv,
@@ -99,12 +107,33 @@ async def fleet_overview(
     row = rows.one()
     now = datetime.now(UTC)
 
+    # Health rollup counts: pull the per-node signals and fold them through the
+    # same `compute_health` used by the per-node HealthBadge, so the summary tiles
+    # and the cards/table agree on one read (single source of truth). The overview
+    # is cached for _OVERVIEW_TTL, so this extra lightweight scan is amortised.
+    health_rows = await db.execute(select(Node.status, Node.ssh_state, Node.maintenance_mode))
+    health_counts = {
+        HEALTH_ONLINE: 0,
+        HEALTH_DEGRADED: 0,
+        HEALTH_DOWN: 0,
+        HEALTH_UNKNOWN: 0,
+        HEALTH_MAINTENANCE: 0,
+    }
+    for status, ssh_state, maintenance_mode in health_rows.all():
+        health = compute_health(status, ssh_state, bool(maintenance_mode))
+        health_counts[health] = health_counts.get(health, 0) + 1
+
     data = FleetOverviewResponse(
         total_nodes=row.total or 0,
         online=row.online or 0,
         stale=row.stale or 0,
         offline=row.offline or 0,
         unknown=row.unknown or 0,
+        health_online=health_counts[HEALTH_ONLINE],
+        health_degraded=health_counts[HEALTH_DEGRADED],
+        health_down=health_counts[HEALTH_DOWN],
+        health_unknown=health_counts[HEALTH_UNKNOWN],
+        health_maintenance=health_counts[HEALTH_MAINTENANCE],
         avg_drift_score=int(row.avg_drift or 0),
         nodes_clean=row.clean or 0,
         nodes_low=row.low or 0,

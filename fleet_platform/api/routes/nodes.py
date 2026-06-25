@@ -261,7 +261,14 @@ async def list_nodes(
 ):
     from sqlalchemy import or_
 
+    from fleet_platform.models.salt_master import SaltMaster
+
     query = select(Node).options(selectinload(Node.tags))
+
+    # Correlated scalar subquery: this node's salt-master control-plane status, or
+    # NULL when the node doesn't run a master. Feeds the health rollup so filter
+    # and sort stay correct in-DB.
+    master_status_subq = select(SaltMaster.status).where(SaltMaster.node_id == Node.id).limit(1).scalar_subquery()
 
     if status:
         query = query.where(Node.status == status)
@@ -269,7 +276,7 @@ async def list_nodes(
     if health:
         from fleet_platform.services.node_health import health_case
 
-        query = query.where(health_case(Node) == health)
+        query = query.where(health_case(Node, master_status_subq) == health)
 
     if search:
         pattern = f"%{search}%"
@@ -305,7 +312,7 @@ async def list_nodes(
     if sort_field == "health":
         from fleet_platform.services.node_health import health_sort_rank
 
-        sort_col = health_sort_rank(Node)
+        sort_col = health_sort_rank(Node, master_status_subq)
     else:
         if sort_field not in _SORT_FIELDS:
             sort_field = "drift_score"
@@ -330,13 +337,23 @@ async def list_nodes(
             .group_by(_GM.node_id)
         )
         group_count_map = {row.node_id: row.cnt for row in gc_result}
+
+        # Master role + control-plane status for any of these nodes that run a master.
+        master_result = await db.execute(
+            select(SaltMaster.node_id, SaltMaster.status).where(SaltMaster.node_id.in_(node_ids))
+        )
+        master_status_map = {row.node_id: row.status for row in master_result}
     else:
         group_count_map = {}
+        master_status_map = {}
 
     items = []
     for n in nodes:
         item = NodeListItem.model_validate(n)
         item.group_count = group_count_map.get(n.id, 0)
+        if n.id in master_status_map:
+            item.is_master = True
+            item.master_status = master_status_map[n.id]
         items.append(item)
 
     return PaginatedResponse(
@@ -363,8 +380,18 @@ async def get_node(
         inline_password_enc=node.ssh_password_enc,
         inline_key_enc=node.ssh_key_enc,
     )
+    from fleet_platform.models.salt_master import SaltMaster
+
+    master_status = (
+        await db.execute(select(SaltMaster.status).where(SaltMaster.node_id == node.id).limit(1))
+    ).scalar_one_or_none()
     return NodeDetailResponse.model_validate(node).model_copy(
-        update={"has_ssh_password": has_password, "has_ssh_key": has_key}
+        update={
+            "has_ssh_password": has_password,
+            "has_ssh_key": has_key,
+            "is_master": master_status is not None,
+            "master_status": master_status,
+        }
     )
 
 
