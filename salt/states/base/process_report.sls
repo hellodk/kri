@@ -11,19 +11,38 @@
 # The collector caps output at 200 processes (top by RSS); the ingest endpoint
 # accepts up to 250.
 #
+# Cross-platform (#673): on Linux psutil comes from the distro package manager
+# (PEP 668 / externally-managed-environment safe, no runtime pip on a recurring
+# schedule); on macOS it stays an idempotent user-pip install guarded by an
+# import check so it never runs once psutil is importable.
+#
 # Apply manually or via schedule (see process_report_schedule.sls):
 #   salt '*' state.apply base.process_report
 
 {% set ingest_url = pillar.get('fleet_platform', {}).get('ingest_url', '') %}
 {% set node_token = pillar.get('fleet_platform', {}).get('node_token', '') %}
+{% set is_linux = grains['os_family'] in ['Debian', 'RedHat', 'Suse', 'Arch', 'Gentoo', 'Alpine'] %}
 
 {% if ingest_url %}
 
 # Step 1 — ensure psutil is available for system python3
+{% if is_linux %}
+# Linux: use the distro package (python3-psutil) so we never run pip on the
+# 30s schedule — avoids PEP 668 breakage and the supply-chain risk of pulling
+# from PyPI on every tick.
+kri_psutil_install:
+  pkg.installed:
+    - name: python3-psutil
+    - unless: python3 -c "import psutil"
+{% else %}
+# macOS (and any non-Linux): idempotent user-pip install. The unless guard means
+# pip only ever runs when psutil is not importable, so the recurring schedule
+# does not reinstall on every tick.
 kri_psutil_install:
   cmd.run:
     - name: python3 -m pip install --quiet --user psutil
     - unless: python3 -c "import psutil"
+{% endif %}
 
 # Step 2 — push the collector script from the Salt file server
 kri_process_collector_script:
@@ -44,7 +63,11 @@ kri_process_report_run:
         - NODE_TOKEN: {{ node_token | tojson }}
         - MINION_ID: "{{ grains['id'] }}"
     - require:
+{% if is_linux %}
+        - pkg: kri_psutil_install
+{% else %}
         - cmd: kri_psutil_install
+{% endif %}
         - file: kri_process_collector_script
 
 {% endif %}
