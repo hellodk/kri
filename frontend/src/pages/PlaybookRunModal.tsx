@@ -6,6 +6,7 @@ import type { PlaybookEntry } from '../api/playbooks'
 import { fleetApi } from '../api/fleet'
 import { groupsApi } from '../api/groups'
 import { useToastStore } from '../stores/toastStore'
+import { useJobEventStream } from '../hooks/useJobEventStream'
 import { LogPane } from '../lib/LogPane'
 
 // Running job output panel — fills available height, auto-scrolls while live
@@ -207,13 +208,19 @@ export function PlaybookRunModal({ playbook, onClose, initialTargetType, initial
     onError: (e: Error) => toast(e.message, 'error'),
   })
 
+  // Live push: refetch this run on server-pushed ansible-job transitions (#756).
+  // The poll below is now only a slow safety-net for missed/dropped events.
+  useJobEventStream({ enabled: !!jobId })
+
   const { data: jobData } = useQuery({
     queryKey: ['ansible-job', jobId],
     queryFn: () => playbooksApi.getJob(jobId!, acc.current.total),
     enabled: !!jobId,
+    // Safety-net poll while running (push handles the common case); 30s instead
+    // of the old 3s tight loop (#756).
     refetchInterval: (query) => {
       const s = query.state.data?.status
-      return (s === 'pending' || s === 'running') ? 3000 : false
+      return (s === 'pending' || s === 'running') ? 30_000 : false
     },
   })
 
