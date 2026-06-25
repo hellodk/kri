@@ -14,6 +14,34 @@ salt_deb_gpg_url: "https://packages.broadcom.com/artifactory/api/security/keypai
 salt_rpm_repo_baseurl: "https://packages.broadcom.com/artifactory/saltproject-rpm/"
 salt_rpm_gpg_url: "https://packages.broadcom.com/artifactory/api/security/keypair/SaltProjectKey/public"
 
+# ── Linux onedir air-gapped install (#696) ────────────────────────────────────
+#
+# When salt_linux_airgap=true the role skips the apt/yum repo path and instead
+# installs from a self-contained onedir tarball (analogous to the macOS .pkg).
+# Set this to true when the target Linux host has no internet access.
+#
+# LIVE-ENVIRONMENT VALIDATION NEEDED before first production use:
+#   1. Download the tarball from packages.broadcom.com and verify its SHA-512.
+#   2. Confirm /opt/saltstack/salt/bin/ layout matches the version you deploy.
+#   3. Test service startup (salt-master, salt-api) with the generated systemd unit.
+#   4. Verify salt-key, salt-run, and salt-call symlinks work after install.
+#
+salt_linux_airgap: false
+
+# Architecture tag used to construct the tarball filename.
+# Common values: "x86_64" (amd64), "aarch64" (arm64).
+# Override with -e salt_linux_arch=aarch64 for ARM targets.
+salt_linux_arch: "x86_64"
+
+# Tarball filename — assembled from version and arch.
+# Format: salt-<version>-onedir-linux-<arch>.tar.gz
+# Source: https://packages.broadcom.com/artifactory/saltproject-generic/onedir/<version>/
+salt_linux_tarball_name: "salt-{{ salt_version }}-onedir-linux-{{ salt_linux_arch }}.tar.gz"
+
+# Official base URL for Linux onedir tarballs (used as last resort when
+# Artifactory mirror and local bundle are both unavailable).
+salt_linux_onedir_official_base: "https://packages.broadcom.com/artifactory/saltproject-generic/onedir/{{ salt_version }}"
+
 # Directories on the salt-master host.
 # Everything lives under /etc/salt — consistent across macOS and Linux, and
 # avoids /srv which is read-only on macOS (Catalina+ root volume).

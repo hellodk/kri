@@ -52,6 +52,36 @@
           Or:   kri saltmaster install
       when: target_host is not defined or target_host == ''
 
+    - name: Check if Linux onedir bundle is present (air-gapped mode only)
+      stat:
+        path: "{{ playbook_dir }}/files/salt-{{ salt_version | default('3007.14') }}-onedir-linux-{{ salt_linux_arch | default('x86_64') }}.tar.gz"
+      register: linux_bundle_check
+      when: salt_linux_airgap | default(false) | bool
+
+    - name: Warn if air-gapped mode requested but onedir bundle is missing
+      debug:
+        msg: |
+          WARNING: salt_linux_airgap=true but the Linux onedir tarball was not found at:
+            {{ playbook_dir }}/files/salt-{{ salt_version | default('3007.14') }}-onedir-linux-{{ salt_linux_arch | default('x86_64') }}.tar.gz
+
+          The playbook will attempt Artifactory first, then fall back to downloading from:
+            https://packages.broadcom.com/artifactory/saltproject-generic/onedir/{{ salt_version | default('3007.14') }}/
+
+          For a true air-gapped install, place the tarball (and optional .sha512 file) at the
+          path above on the kri controller before running the playbook.
+
+          To download the bundle on a connected machine:
+            ARCH=x86_64  # or aarch64 for ARM
+            VER=3007.14
+            curl -LO https://packages.broadcom.com/artifactory/saltproject-generic/onedir/${VER}/salt-${VER}-onedir-linux-${ARCH}.tar.gz
+            curl -LO https://packages.broadcom.com/artifactory/saltproject-generic/onedir/${VER}/salt-${VER}-onedir-linux-${ARCH}.tar.gz.sha512
+          Then copy both files to:
+            playbooks/files/
+      when:
+        - salt_linux_airgap | default(false) | bool
+        - linux_bundle_check is defined
+        - not linux_bundle_check.stat.exists
+
 
 - name: Install and configure salt-master on Linux
   hosts: "{{ target_host }}"

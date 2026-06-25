@@ -153,13 +153,9 @@ async def request_node_action(
     if not PendingAction.is_destructive(payload.action_type):
         # Non-destructive (start/restart/enable/resume): execute immediately, no approval.
         function, args = _build_salt_invocation(payload.action_type, payload.params)
-        from fleet_platform.workers.celery_app import celery_app
+        from fleet_platform.workers.salt_tasks import run_salt_cmd
 
-        celery_app.send_task(
-            "fleet_platform.workers.salt_tasks.run_salt_cmd",
-            kwargs={"function": function, "target_minions": [node.minion_id], "args": args},
-            queue="maintenance",
-        )
+        run_salt_cmd.delay(function=function, target_minions=[node.minion_id], args=args)
         node_action_total.labels(action_type=payload.action_type, status="requested").inc()
         node_action_total.labels(action_type=payload.action_type, status="executed").inc()
         await audit(
@@ -231,12 +227,12 @@ async def list_services(
     node = node_result.scalar_one_or_none()
     if not node:
         raise HTTPException(status_code=404, detail="Node not found")
-    from fleet_platform.workers.celery_app import celery_app
+    from fleet_platform.workers.salt_tasks import run_salt_cmd
 
-    task = celery_app.send_task(
-        "fleet_platform.workers.salt_tasks.run_salt_cmd",
-        kwargs={"function": "service.get_all", "target_minions": [node.minion_id], "args": []},
-        queue="maintenance",
+    task = run_salt_cmd.delay(
+        function="service.get_all",
+        target_minions=[node.minion_id],
+        args=[],
     )
     return {"task_id": task.id, "minion_id": node.minion_id}
 
@@ -351,7 +347,7 @@ async def ask_ai_about_node(
 
     node_context = "\n".join(lines)
 
-    system_prompt = await build_fleet_context(db, "fleet_query")
+    system_prompt, _ = await build_fleet_context(db, "fleet_query")
     api_key = get_decrypted_api_key(endpoint)
     model_caps = (
         [c.strip() for c in endpoint.model_capabilities.split(",") if c.strip()] if endpoint.model_capabilities else []
@@ -645,8 +641,6 @@ async def approve_action(request: Request, token: str, db: AsyncSession = Depend
         await db.commit()
         raise HTTPException(status_code=404, detail="Node not found")
     function, args = _build_salt_invocation(action.action_type, params)
-    # Lazy local import (not send_task-by-name): this dispatch chains a callback via
-    # finalize_node_action.s(), and building that link signature needs the task object.
     from fleet_platform.workers.salt_tasks import finalize_node_action, run_salt_cmd
 
     run_salt_cmd.apply_async(
