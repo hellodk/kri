@@ -2,10 +2,7 @@
 """Celery tasks for Ansible-based node bootstrap."""
 
 import logging
-import os
-import re
 import secrets
-import subprocess
 import tempfile
 import threading as _threading
 import time
@@ -24,160 +21,32 @@ from fleet_platform.models.master_provision_run import MasterProvisionRun
 from fleet_platform.models.node import Node
 from fleet_platform.models.platform_setting import PlatformSetting
 from fleet_platform.models.salt_master import SaltMaster
+from fleet_platform.services.grains_collector import _grains_via_salt_api, _grains_via_ssh
+from fleet_platform.services.node_credentials import (
+    _get_bootstrap_settings,
+    _get_group_credentials,
+    _get_node_credentials,
+    _resolve_node_master_creds,
+)
 from fleet_platform.services.ssh_host_key_svc import to_known_hosts_token
-from fleet_platform.services.ssh_keypair import get_controller_pubkey
 from fleet_platform.services.task_lock import unique_task
+from fleet_platform.workers.ansible_helpers import (
+    _detect_os_family,
+    _scrub_token,
+    _validate_minion_id,
+)
 from fleet_platform.workers.celery_app import celery_app
 from fleet_platform.workers.playbook_tasks import _append_capped
 
 logger = logging.getLogger(__name__)
 
 _PLAYBOOKS_DIR = Path(__file__).parent.parent.parent / "playbooks"
-_DEFAULT_PILLAR_DIR = Path("/srv/salt/pillar")
 _DEFAULT_KRI_DIR = Path.home() / ".kri"
 _BOOTSTRAP_TIMEOUT_SECONDS = 600  # 10 minutes
 _LOG_BATCH_INTERVAL = 5  # match run_playbook for live bootstrap logs (#544)
 # Cap stored bootstrap stdout at 2 MB — same limit as playbook_tasks (#369).
 _MAX_STDOUT_BYTES = 2 * 1024 * 1024
 _TRUNCATION_SENTINEL = "\n\n[output truncated at 2 MB — full log not retained]"
-
-_MINION_ID_RE = re.compile(r"^[a-zA-Z0-9._-]{1,128}$")
-
-
-def _scrub_token(text: str, token: str) -> str:
-    """Replace raw node token with *** in stdout to prevent accidental log exposure."""
-    if not token or not text:
-        return text
-    return text.replace(token, "***")
-
-
-def _validate_minion_id(minion_id: str) -> str:
-    """Validate minion ID to prevent path traversal and YAML injection."""
-    if not _MINION_ID_RE.match(minion_id):
-        raise ValueError(f"Invalid minion ID '{minion_id}': must match [a-zA-Z0-9._-]{{1,128}}")
-    return minion_id
-
-
-def _get_bootstrap_settings(db) -> tuple[str, str, str]:
-    """Returns (ssh_user, ssh_password, controller_pubkey).
-
-    The legacy salt_master address has been removed from this tuple (#562).
-    Master addresses are resolved exclusively from SaltMaster rows.
-    The SALT_MASTER platform setting key is still defined (migration 041 references it)
-    but is no longer read at runtime.
-    """
-    from fleet_platform.services.platform_settings_svc import (
-        CONTROLLER_PUBKEY_PATH,
-        SSH_PASSWORD,
-        SSH_USERNAME,
-        _fernet,
-    )
-
-    def _get(key: str) -> str:
-        row = db.execute(select(PlatformSetting).where(PlatformSetting.key == key)).scalar_one_or_none()
-        if row is None:
-            return ""
-        if row.is_encrypted and row.value:
-            try:
-                return _fernet().decrypt(row.value.encode()).decode()
-            except Exception:
-                logger.warning(
-                    "_get_bootstrap_settings: cannot decrypt setting '%s' — "
-                    "JWT_SECRET may have changed. Re-enter credentials in Settings → Bootstrap.",
-                    key,
-                )
-                return ""
-        return row.value or ""
-
-    ssh_user = _get(SSH_USERNAME) or "admin"
-    ssh_password = _get(SSH_PASSWORD)
-    pub_path = _get(CONTROLLER_PUBKEY_PATH) or str(_DEFAULT_KRI_DIR / "id_rsa.pub")
-    pubkey = get_controller_pubkey(pub_path) or ""
-    return ssh_user, ssh_password, pubkey
-
-
-def _get_node_credentials(node) -> tuple[str, str, str]:
-    """Returns (ssh_user, ssh_password, ssh_auth_mode) from per-node stored credentials."""
-    from fleet_platform.services.platform_settings_svc import decrypt_secret
-
-    user = node.ssh_username or ""
-    password = ""
-    auth_mode = node.ssh_auth_mode or "password"
-    if node.ssh_password_enc:
-        try:
-            password = decrypt_secret(node.ssh_password_enc)
-        except Exception as e:
-            logger.warning(
-                "_get_node_credentials: failed to decrypt ssh_password_enc"
-                " for node_id=%s — using empty password. Cause: %s",
-                node.id,
-                e,
-            )
-    return user, password, auth_mode
-
-
-def _get_group_credentials(node, db) -> tuple[str, str, str, str]:
-    """Return (ssh_user, ssh_password, ssh_key, auth_mode) from node's primary group.
-
-    Primary group = alphabetically-first group the node belongs to that has credentials.
-    Returns empty strings for all fields if no group credentials exist.
-    """
-    from fleet_platform.models.group import Group, GroupMember
-    from fleet_platform.services.platform_settings_svc import decrypt_secret
-
-    result = db.execute(
-        select(Group)
-        .join(GroupMember, GroupMember.group_id == Group.id)
-        .where(GroupMember.node_id == node.id)
-        .where(Group.ssh_username.isnot(None))
-        .order_by(Group.name.asc())
-        .limit(1)
-    )
-    group = result.scalar_one_or_none()
-    if not group:
-        return "", "", "", ""
-
-    password = ""
-    if group.ssh_password_enc:
-        try:
-            password = decrypt_secret(group.ssh_password_enc)
-        except Exception:
-            logger.warning(
-                "_get_group_credentials: cannot decrypt ssh_password for group %s node %s",
-                group.name,
-                node.id,
-            )
-
-    ssh_key = ""
-    if group.ssh_key_enc:
-        try:
-            ssh_key = decrypt_secret(group.ssh_key_enc)
-        except Exception:
-            logger.warning(
-                "_get_group_credentials: cannot decrypt ssh_key for group %s node %s",
-                group.name,
-                node.id,
-            )
-
-    logger.info(
-        "bootstrap_node: using group '%s' credentials for node %s (auth_mode=%s)",
-        group.name,
-        node.id,
-        group.ssh_auth_mode,
-    )
-    return group.ssh_username or "", password, ssh_key, group.ssh_auth_mode or "password"
-
-
-def _get_pillar_dir(db) -> Path:
-    """Return the configured pillar directory, falling back to /srv/salt/pillar."""
-    from sqlalchemy import select as _select
-
-    from fleet_platform.models.platform_setting import PlatformSetting
-
-    row = db.execute(_select(PlatformSetting).where(PlatformSetting.key == "pillar_dir")).scalar_one_or_none()
-    if row and row.value:
-        return Path(row.value)
-    return _DEFAULT_PILLAR_DIR
 
 
 @celery_app.task(
@@ -676,166 +545,6 @@ def bootstrap_node(
     return {"status": runner.status if runner is not None else "error", "rc": rc_display, "node_id": node_id}
 
 
-def _resolve_node_master_creds(db, node) -> dict | None:
-    """Resolve salt-api creds for the node's master (or the default master).
-
-    Returns {api_url, api_user, api_password, api_eauth, tls_verify} or None
-    when no enabled master is configured. Used by collect_node_grains to fetch
-    grains over salt-api instead of SSH (#708).
-    """
-    from fleet_platform.services.platform_settings_svc import decrypt_secret
-
-    master = None
-    if node.salt_master_id is not None:
-        master = db.execute(
-            select(SaltMaster).where(SaltMaster.id == node.salt_master_id).where(SaltMaster.enabled.is_(True))
-        ).scalar_one_or_none()
-    if master is None:
-        master = db.execute(
-            select(SaltMaster).where(SaltMaster.is_default.is_(True)).where(SaltMaster.enabled.is_(True)).limit(1)
-        ).scalar_one_or_none()
-    if master is None:
-        master = db.execute(select(SaltMaster).where(SaltMaster.enabled.is_(True)).limit(1)).scalar_one_or_none()
-    if master is None:
-        return None
-
-    api_password = ""
-    if master.api_password_enc:
-        try:
-            api_password = decrypt_secret(master.api_password_enc)
-        except Exception as exc:  # noqa: BLE001
-            logger.warning("collect_node_grains: cannot decrypt api_password for master %s: %s", master.name, exc)
-    return {
-        "api_url": (master.api_url or "").rstrip("/"),
-        "api_user": master.api_user or "",
-        "api_password": api_password,
-        "api_eauth": master.api_eauth or "pam",
-        "tls_verify": bool(getattr(master, "tls_verify", False)),
-    }
-
-
-def _grains_via_salt_api(creds: dict, minion_id: str, timeout: int = 30) -> tuple[dict | None, str | None]:
-    """Fetch grains.items for one minion via the salt-api local client (#708).
-
-    The master already manages the minion, so no SSH and no controller key are
-    needed. Returns (grains, None) on success, or (None, reason) when the call
-    fails or the minion is not currently connected to its master.
-    """
-    import requests
-
-    api_url = creds.get("api_url") or ""
-    if not api_url or not creds.get("api_user"):
-        return None, "master api_url/api_user not configured"
-    try:
-        resp = requests.post(
-            f"{api_url}/run",
-            json={
-                "client": "local",
-                "tgt": minion_id,
-                "tgt_type": "glob",
-                "fun": "grains.items",
-                "username": creds["api_user"],
-                "password": creds.get("api_password", ""),
-                "eauth": creds.get("api_eauth", "pam"),
-            },
-            timeout=timeout,
-            verify=creds.get("tls_verify", False),
-        )
-        resp.raise_for_status()
-        ret = resp.json().get("return", [{}])
-        inner = ret[0] if isinstance(ret, list) and ret else {}
-        if not isinstance(inner, dict):
-            return None, "unexpected salt-api response shape"
-        grains = inner.get(minion_id)
-        if isinstance(grains, dict) and grains:
-            return grains, None
-        # Empty return = minion offline / key not accepted / not on this master.
-        return None, "minion not connected to master (empty grains.items)"
-    except Exception as exc:  # noqa: BLE001
-        logger.warning("collect_node_grains: salt-api grains.items failed for %s: %s", minion_id, exc)
-        return None, str(exc)[:200]
-
-
-def _grains_via_ssh(target_ip, ssh_user, minion_id, ssh_host_key) -> tuple[dict | None, str | None]:
-    """Legacy fallback: SSH in via the controller key and run salt-call --local.
-
-    Only used when the minion can't be reached through its master (e.g. key not
-    yet accepted). Requires ~/.kri/id_rsa to be readable by the worker process.
-    """
-    import json as _json
-    import os as _os2
-
-    controller_priv = Path.home() / ".kri" / "id_rsa"
-    with tempfile.TemporaryDirectory(prefix="kri-grains-") as tmpdir:
-        if not controller_priv.exists():
-            return None, "no controller key present (~/.kri/id_rsa)"
-        tmp_key = Path(tmpdir) / "id_ctrl"
-        try:
-            tmp_key.write_bytes(controller_priv.read_bytes())
-        except OSError as exc:
-            return None, f"controller key unreadable by worker: {exc}"
-        tmp_key.chmod(0o600)
-        key_file_path = str(tmp_key)
-
-        # TOFU: use node's stored host key for strict verification if available.
-        grains_known_hosts_file: str | None = None
-        if ssh_host_key:
-            _grains_kh_token = to_known_hosts_token(ssh_host_key)
-            if _grains_kh_token:
-                tmp_kh2 = tempfile.NamedTemporaryFile(mode="w", suffix=".known_hosts", delete=False)
-                tmp_kh2.write(f"{target_ip} {_grains_kh_token}\n")
-                tmp_kh2.close()
-                grains_known_hosts_file = tmp_kh2.name
-                grains_strict_opts = [
-                    "-o",
-                    "StrictHostKeyChecking=yes",
-                    "-o",
-                    f"UserKnownHostsFile={grains_known_hosts_file}",
-                ]
-            else:
-                # Stored key unparseable; fall back to accept-new (#840).
-                grains_strict_opts = ["-o", "StrictHostKeyChecking=accept-new"]
-        else:
-            grains_strict_opts = ["-o", "StrictHostKeyChecking=accept-new"]
-
-        ssh_cmd = [
-            "ssh",
-            "-F",
-            "/dev/null",  # skip mounted ~/.ssh/config (UID mismatch in container)
-            *grains_strict_opts,
-            "-o",
-            "ConnectTimeout=15",
-            "-o",
-            "BatchMode=yes",
-            "-i",
-            key_file_path,
-            f"{ssh_user}@{target_ip}",
-            (
-                "sudo /opt/homebrew/bin/salt-call --local grains.items --out=json --log-level=warning 2>/dev/null"
-                " || sudo /usr/local/bin/salt-call --local grains.items --out=json --log-level=warning 2>/dev/null"
-            ),
-        ]
-        try:
-            proc = subprocess.run(ssh_cmd, capture_output=True, text=True, timeout=30)
-            if proc.returncode != 0:
-                return None, f"ssh failed: {proc.stderr[:200]}"
-            parsed = _json.loads(proc.stdout.strip())
-            grains = parsed.get("local", parsed)
-            if isinstance(grains, dict) and grains:
-                return grains, None
-            return None, "empty grains from salt-call"
-        except subprocess.TimeoutExpired:
-            return None, "ssh timeout"
-        except Exception as e:  # noqa: BLE001
-            return None, str(e)[:200]
-        finally:
-            if grains_known_hosts_file:
-                try:
-                    _os2.unlink(grains_known_hosts_file)
-                except OSError:
-                    pass
-
-
 @celery_app.task(
     name="fleet_platform.workers.ansible_tasks.collect_node_grains",
     bind=True,
@@ -963,7 +672,6 @@ def refresh_all_node_grains() -> dict:
 # ---------------------------------------------------------------------------
 
 _PROVISION_TIMEOUT_SECONDS = 1200  # 1200 s (twice the bootstrap) — salt-master install is heavier
-_SSH_OS_DETECT_TIMEOUT = 15  # seconds — quick uname check before playbook run
 
 # Playbook filenames; keys are canonical os_family values
 _MASTER_PLAYBOOKS: dict[str, str] = {
@@ -971,70 +679,6 @@ _MASTER_PLAYBOOKS: dict[str, str] = {
     "Linux": "install_salt_master_linux.yml",
 }
 _DEFAULT_OS_FAMILY = "Linux"
-
-
-def _detect_os_family(
-    ssh_host: str, ssh_user: str, ssh_args_extra: list[str], ssh_password: str | None = None
-) -> str | None:
-    """Return 'Darwin' or 'Linux' by running `uname -s` over SSH.
-
-    Returns None when the host is unreachable or the command fails.
-    ``ssh_args_extra`` is a flat list of extra SSH option tokens (e.g.
-    ['-i', '/path/key', '-o', 'StrictHostKeyChecking=accept-new']).
-    When ``ssh_password`` is provided and no key is in ssh_args_extra, uses
-    sshpass so password auth works without an interactive prompt.
-    """
-    using_password = ssh_password and not any(a == "-i" for a in ssh_args_extra)
-
-    if using_password:
-        # sshpass + ssh without BatchMode so password auth is allowed
-        cmd = [
-            "sshpass",
-            "-e",
-            "ssh",
-            "-F",
-            "/dev/null",
-            "-o",
-            f"ConnectTimeout={_SSH_OS_DETECT_TIMEOUT}",
-            "-o",
-            "NumberOfPasswordPrompts=1",
-            *ssh_args_extra,
-            f"{ssh_user}@{ssh_host}",
-            "uname -s",
-        ]
-        env: dict[str, str] | None = {**os.environ, "SSHPASS": ssh_password or ""}
-    else:
-        cmd = [
-            "ssh",
-            "-F",
-            "/dev/null",
-            "-o",
-            f"ConnectTimeout={_SSH_OS_DETECT_TIMEOUT}",
-            "-o",
-            "BatchMode=yes",
-            *ssh_args_extra,
-            f"{ssh_user}@{ssh_host}",
-            "uname -s",
-        ]
-        env = None
-
-    try:
-        result = subprocess.run(cmd, capture_output=True, text=True, timeout=_SSH_OS_DETECT_TIMEOUT + 5, env=env)
-        if result.returncode == 0:
-            return result.stdout.strip()
-        logger.warning(
-            "_detect_os_family: uname failed rc=%s ssh_host=%s stderr=%r",
-            result.returncode,
-            ssh_host,
-            result.stderr[:200],
-        )
-        return None
-    except subprocess.TimeoutExpired:
-        logger.warning("_detect_os_family: SSH timed out to %s", ssh_host)
-        return None
-    except Exception as _exc:  # noqa: BLE001
-        logger.warning("_detect_os_family: unexpected error for %s: %s", ssh_host, _exc)
-        return None
 
 
 @celery_app.task(

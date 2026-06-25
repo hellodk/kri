@@ -73,7 +73,7 @@ async def test_bootstrap_guard_403_actually_called():
     db.execute = AsyncMock(return_value=mock_sources_result)
 
     with patch(
-        "fleet_platform.api.routes.ansible.discover_all",
+        "fleet_platform.api.routes.ansible.playbooks.discover_all",
         return_value=[_make_entry("bootstrap_node.yml")],
     ):
         with pytest.raises(HTTPException) as exc_info:
@@ -198,18 +198,18 @@ async def test_run_playbook_accepts_external_source_playbook():
 
     with (
         patch(
-            "fleet_platform.api.routes.ansible.get_all_playbook_dirs",
+            "fleet_platform.api.routes.ansible.playbooks.get_all_playbook_dirs",
             return_value=[external_dir],
         ),
         patch(
-            "fleet_platform.api.routes.ansible.discover_all",
+            "fleet_platform.api.routes.ansible.playbooks.discover_all",
             side_effect=_discover_side_effect,
         ),
-        patch("fleet_platform.api.routes.ansible.audit", new=AsyncMock()),
+        patch("fleet_platform.api.routes.ansible.playbooks.audit", new=AsyncMock()),
         # #749: the endpoint enqueues via celery_app.send_task(...) (by task name)
         # rather than importing run_playbook and calling .delay().
         patch(
-            "fleet_platform.api.routes.ansible.celery_app.send_task",
+            "fleet_platform.api.routes.ansible.playbooks.celery_app.send_task",
             new=MagicMock(return_value=MagicMock(id="task-id")),
         ),
     ):
