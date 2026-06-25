@@ -60,10 +60,14 @@ def test_prompt_input_cap_is_bounded():
 
 
 def test_run_route_rate_limited_six_per_minute():
-    from pathlib import Path
-
+    from fleet_platform.api.limiter import limiter
     from fleet_platform.api.routes import agent
 
-    src = Path(agent.__file__).read_text()
-    # The streaming run route must be rate-limited at 6/minute (#715).
-    assert '@limiter.limit("6/minute")' in src
+    # Behavioral: assert the SlowAPI limiter actually registered a 6/minute limit
+    # for the streaming run route (#715), instead of grepping the source for the
+    # decorator text. _route_limits is keyed by "<module>.<func>" and is populated
+    # only when the @limiter.limit decorator executes at import time, so this fails
+    # if the decorator is removed or the rate is changed.
+    key = f"{agent.run_agent_stream.__module__}.{agent.run_agent_stream.__name__}"
+    windows = {(lim.limit.amount, lim.limit.GRANULARITY.seconds) for lim in limiter._route_limits.get(key, [])}
+    assert (6, 60) in windows, f"run_agent_stream must register a 6/minute rate limit; got {windows}"
