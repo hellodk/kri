@@ -39,6 +39,11 @@ OIDC_CLIENT_SECRET = "oidc_client_secret"
 OIDC_ROLE_PREFIX = "oidc_role_prefix"
 OIDC_ENABLED = "oidc_enabled"
 
+# Master kill-switch for the whole agent surface (#879). Default disabled — the
+# agent endpoints are off unless an admin explicitly turns this on (or an
+# AGENT_ENABLED env override is set).
+AGENT_ENABLED = "agent_enabled"  # "true" | "false", default "false"
+
 # Email digest + Jenkins settings
 SMTP_HOST = "smtp_host"
 SMTP_PORT = "smtp_port"
@@ -298,6 +303,34 @@ def get_setting_sync(db: Session, key: str) -> str | None:
     if row.is_encrypted and row.value:
         return _fernet().decrypt(row.value.encode()).decode()
     return row.value
+
+
+def _parse_bool(value: str | None) -> bool | None:
+    """Parse a stored/env boolean string. Returns None when unrecognised/unset."""
+    if value is None:
+        return None
+    v = value.strip().lower()
+    if v in ("1", "true", "yes", "on"):
+        return True
+    if v in ("0", "false", "no", "off", ""):
+        return False
+    return None
+
+
+async def is_agent_enabled(db: AsyncSession) -> bool:
+    """Return whether the agent surface is enabled (master kill-switch, #879).
+
+    Resolution order:
+      1. ``AGENT_ENABLED`` env var when explicitly set (1/true/yes/on or 0/false/no/off).
+      2. the ``agent_enabled`` platform setting row.
+      3. default **disabled** (False) — the agent surface stays off unless turned on.
+    """
+    import os
+
+    env_override = _parse_bool(os.environ.get("AGENT_ENABLED"))
+    if env_override is not None:
+        return env_override
+    return _parse_bool(await get_setting(db, AGENT_ENABLED)) is True
 
 
 async def get_playbooks_dir(db: AsyncSession) -> Path:

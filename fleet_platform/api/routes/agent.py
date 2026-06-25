@@ -40,10 +40,23 @@ from fleet_platform.core.auth import require_role
 from fleet_platform.models.agent_session import AgentSession
 from fleet_platform.models.llm_query_log import LLMQueryLog
 from fleet_platform.services import agent_apply_svc, llm_svc, tier_router
+from fleet_platform.services.platform_settings_svc import is_agent_enabled
 
 router = APIRouter(prefix="/api/v1/agent", tags=["agent"])
 
 logger = logging.getLogger(__name__)
+
+
+async def require_agent_enabled(db: AsyncSession = Depends(get_db)) -> None:
+    """Master kill-switch guard for the agent surface (#879).
+
+    Raises ``403`` when ``AGENT_ENABLED`` is off. Applied to every *mutating*
+    agent endpoint (run, approve, reject, promote) so the whole surface can be
+    disabled centrally. Read-only GETs stay available so the UI can still render
+    existing state (sessions/artifacts/etc.) and gate its own controls.
+    """
+    if not await is_agent_enabled(db):
+        raise HTTPException(status_code=403, detail="The agent surface is disabled (AGENT_ENABLED is off).")
 
 
 class AgentRunRequest(BaseModel):
@@ -62,6 +75,7 @@ async def run_agent_stream(
     payload: AgentRunRequest,
     db: AsyncSession = Depends(get_db),
     claims: dict = Depends(require_role("operator", "admin")),
+    _agent_gate: None = Depends(require_agent_enabled),
 ):
     routed_via: str | None = None
     if payload.endpoint_id:
@@ -244,6 +258,18 @@ async def run_agent_stream(
     )
 
 
+@router.get("/status")
+async def agent_status(
+    db: AsyncSession = Depends(get_db),
+    claims: dict = Depends(require_role("operator", "admin")),
+):
+    """Whether the agent surface is enabled (master kill-switch, #879).
+
+    The frontend reads this on mount to gate its agent-mode UI. This GET stays
+    available regardless of the switch so the UI can always learn the state."""
+    return {"enabled": await is_agent_enabled(db)}
+
+
 @router.get("/artifacts")
 async def list_artifacts(
     db: AsyncSession = Depends(get_db),
@@ -397,6 +423,7 @@ async def approve_agent_action(
     action_id: str,
     db: AsyncSession = Depends(get_db),
     claims: dict = Depends(require_role("operator", "admin")),
+    _agent_gate: None = Depends(require_agent_enabled),
 ):
     """Approve (and, when fully signed, execute) an agent-proposed live action.
 
@@ -417,6 +444,7 @@ async def reject_agent_action(
     action_id: str,
     db: AsyncSession = Depends(get_db),
     claims: dict = Depends(require_role("operator", "admin")),
+    _agent_gate: None = Depends(require_agent_enabled),
 ):
     action = await _get_agent_action(db, action_id)
     try:
@@ -434,6 +462,7 @@ async def promote_artifact(
     target: str,
     db: AsyncSession = Depends(get_db),
     claims: dict = Depends(require_role("admin")),
+    _agent_gate: None = Depends(require_agent_enabled),
 ):
     """Promote a quarantined artifact into the live playbook tree. **Admin only.**
 
