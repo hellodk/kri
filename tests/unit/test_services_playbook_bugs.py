@@ -1,21 +1,29 @@
 """Tests for playbook service-layer bug fixes (#446, #448, #461) — with behavioural additions (#505)."""
 
+import asyncio
+import uuid
 from pathlib import Path
+from unittest.mock import AsyncMock, MagicMock, patch
+
+from sqlalchemy.dialects import postgresql
 
 _WORKTREE = Path(__file__).resolve().parents[2]
-_CATALOG_SRC = (_WORKTREE / "fleet_platform/services/playbook_catalog_svc.py").read_text()
 _LIB_SRC = (_WORKTREE / "fleet_platform/api/routes/playbook_library.py").read_text()
 
 
-def _extract_fn(src: str, fn_name: str) -> str:
-    """Extract a function body from source text."""
-    start = src.find(f"async def {fn_name}")
-    if start == -1:
-        start = src.find(f"def {fn_name}")
-    end = src.find("\nasync def ", start + 1)
-    if end == -1:
-        end = src.find("\ndef ", start + 1)
-    return src[start : end if end != -1 else start + 3000]
+def _make_db() -> AsyncMock:
+    """Return an AsyncMock db session with a wired execute().scalar_one_or_none() chain."""
+    db = AsyncMock()
+    result = MagicMock()
+    result.scalar_one_or_none.return_value = None
+    result.scalar_one.return_value = MagicMock()
+    result.scalars.return_value.all.return_value = []
+    db.execute.return_value = result
+    return db
+
+
+def _compiled(stmt) -> str:
+    return str(stmt.compile(dialect=postgresql.dialect()))
 
 
 # ---------------------------------------------------------------------------
@@ -25,33 +33,75 @@ def _extract_fn(src: str, fn_name: str) -> str:
 
 def test_no_db_commit_in_enable_playbook():
     """Service must NOT commit — only callers commit."""
-    segment = _extract_fn(_CATALOG_SRC, "enable_playbook")
-    assert "await db.commit()" not in segment, "enable_playbook must not call db.commit()"
+    from fleet_platform.services.playbook_catalog_svc import enable_playbook
+
+    db = _make_db()
+    db.execute.return_value.scalar_one.return_value = MagicMock()
+    asyncio.run(
+        enable_playbook(
+            db,
+            source_key="git@example.com",
+            source_label="test",
+            filename="site.yml",
+            entry_type="playbook",
+            actor="user@test",
+        )
+    )
+    db.commit.assert_not_awaited()
 
 
 def test_no_db_commit_in_disable_playbook():
-    segment = _extract_fn(_CATALOG_SRC, "disable_playbook")
-    assert "await db.commit()" not in segment, "disable_playbook must not call db.commit()"
+    from fleet_platform.services.playbook_catalog_svc import disable_playbook
+
+    db = _make_db()
+    asyncio.run(disable_playbook(db, catalog_id=uuid.uuid4(), actor="user@test"))
+    db.commit.assert_not_awaited()
 
 
 def test_no_db_commit_in_enable_source():
-    segment = _extract_fn(_CATALOG_SRC, "enable_source")
-    assert "await db.commit()" not in segment, "enable_source must not call db.commit()"
+    from fleet_platform.services.playbook_catalog_svc import enable_source
+
+    db = _make_db()
+    asyncio.run(
+        enable_source(
+            db,
+            source_key="git@example.com",
+            source_label="test",
+            discovered=[],
+            actor="user@test",
+        )
+    )
+    db.commit.assert_not_awaited()
 
 
 def test_no_db_commit_in_auto_disable_missing():
-    segment = _extract_fn(_CATALOG_SRC, "auto_disable_missing")
-    assert "await db.commit()" not in segment, "auto_disable_missing must not call db.commit()"
+    from fleet_platform.services.playbook_catalog_svc import auto_disable_missing
+
+    db = _make_db()
+    asyncio.run(
+        auto_disable_missing(
+            db,
+            source_key="git@example.com",
+            discovered_filenames=set(),
+        )
+    )
+    db.commit.assert_not_awaited()
 
 
 def test_no_db_commit_in_add_favorite():
-    segment = _extract_fn(_CATALOG_SRC, "add_favorite")
-    assert "await db.commit()" not in segment, "add_favorite must not call db.commit()"
+    from fleet_platform.services.playbook_catalog_svc import add_favorite
+
+    db = _make_db()
+    asyncio.run(add_favorite(db, user_id=uuid.uuid4(), catalog_id=uuid.uuid4()))
+    db.commit.assert_not_awaited()
 
 
 def test_no_db_commit_in_remove_favorite():
-    segment = _extract_fn(_CATALOG_SRC, "remove_favorite")
-    assert "await db.commit()" not in segment, "remove_favorite must not call db.commit()"
+    from fleet_platform.services.playbook_catalog_svc import remove_favorite
+
+    db = _make_db()
+    asyncio.run(remove_favorite(db, user_id=uuid.uuid4(), catalog_id=uuid.uuid4()))
+    db.commit.assert_not_awaited()
 
 
 # ---------------------------------------------------------------------------
@@ -60,7 +110,34 @@ def test_no_db_commit_in_remove_favorite():
 
 
 def test_enable_playbook_uses_on_conflict():
-    assert "on_conflict_do_update" in _CATALOG_SRC, "enable_playbook must use INSERT ON CONFLICT to prevent TOCTOU race"
+    """enable_playbook must issue an INSERT … ON CONFLICT DO UPDATE statement (#461)."""
+    from fleet_platform.services.playbook_catalog_svc import enable_playbook
+
+    db = AsyncMock()
+    captured: list = []
+
+    async def capture_execute(stmt, *a, **kw):
+        captured.append(stmt)
+        result = MagicMock()
+        result.scalar_one.return_value = MagicMock()
+        return result
+
+    db.execute.side_effect = capture_execute
+
+    asyncio.run(
+        enable_playbook(
+            db,
+            source_key="git@example.com",
+            source_label="test",
+            filename="site.yml",
+            entry_type="playbook",
+            actor="user@test",
+        )
+    )
+
+    assert captured, "enable_playbook must call db.execute"
+    sql = _compiled(captured[0]).lower()
+    assert "conflict" in sql, "enable_playbook must use INSERT … ON CONFLICT DO UPDATE to prevent TOCTOU race (#461)"
 
 
 # ---------------------------------------------------------------------------
@@ -68,18 +145,43 @@ def test_enable_playbook_uses_on_conflict():
 # ---------------------------------------------------------------------------
 
 
+def _make_disable_db(row):
+    """Return an AsyncMock db whose execute() resolves with a plain MagicMock result."""
+    db = AsyncMock()
+    result = MagicMock()
+    result.scalar_one_or_none.return_value = row
+    db.execute.return_value = result
+    return db
+
+
 def test_disable_clears_enabled_by():
-    segment = _extract_fn(_CATALOG_SRC, "disable_playbook")
-    assert "enabled_by = None" in segment, "disable_playbook must clear enabled_by"
+    from fleet_platform.services.playbook_catalog_svc import disable_playbook
+
+    row = MagicMock(spec=["enabled", "enabled_by", "enabled_at"])
+    row.enabled_by = "some-user"
+    row.enabled_at = "2024-01-01"
+
+    db = _make_disable_db(row)
+    asyncio.run(disable_playbook(db, catalog_id=uuid.uuid4(), actor="user@test"))
+    assert row.enabled_by is None, "disable_playbook must clear enabled_by"
 
 
 def test_disable_clears_enabled_at():
-    segment = _extract_fn(_CATALOG_SRC, "disable_playbook")
-    assert "enabled_at = None" in segment, "disable_playbook must clear enabled_at"
+    from fleet_platform.services.playbook_catalog_svc import disable_playbook
+
+    row = MagicMock(spec=["enabled", "enabled_by", "enabled_at"])
+    row.enabled_by = "some-user"
+    row.enabled_at = "2024-01-01"
+
+    db = _make_disable_db(row)
+    asyncio.run(disable_playbook(db, catalog_id=uuid.uuid4(), actor="user@test"))
+    assert row.enabled_at is None, "disable_playbook must clear enabled_at"
 
 
 # ---------------------------------------------------------------------------
 # Fix #446: No sources[i-1] index arithmetic in playbook_library.py
+# Absence regression invariant — kept as text guard since the next test is the
+# behavioral proof of the same bug; this text check is a cheap second signal.
 # ---------------------------------------------------------------------------
 
 
@@ -103,7 +205,7 @@ def test_dir_source_pairs_source_key_correct_when_first_source_absent():
     would be assigned index 0's key instead of its own.
     """
     import json
-    from unittest.mock import patch
+    from pathlib import Path
 
     git_url = "https://git.example.com/pulse.git"
     fake_clone_path = "/tmp/kri-test-clone-pulse"

@@ -253,16 +253,13 @@ def test_metrics_endpoint_refreshes_ssh_gauge():
     Updated (#576): refresh_ssh_reachability_gauge is now called internally by
     refresh_all_gauges, which is the single entry point used by the /metrics handler.
     """
-    import pathlib
+    import fleet_platform.api.main as main_module
+    from fleet_platform.api.metrics_collectors import refresh_ssh_reachability_gauge
 
-    src = (pathlib.Path(__file__).parent.parent.parent / "fleet_platform/api/main.py").read_text()
-    # refresh_all_gauges delegates to refresh_ssh_reachability_gauge — verify the wrapper is called
-    assert "refresh_all_gauges" in src, (
-        "main.py /metrics handler must call refresh_all_gauges() which includes SSH gauge refresh (#576)"
+    # Behavioral: refresh_all_gauges must be imported into main's namespace (i.e., it IS the call-site)
+    assert hasattr(main_module, "refresh_all_gauges") and callable(main_module.refresh_all_gauges), (
+        "main.py must import and expose refresh_all_gauges from metrics_collectors (#576)"
     )
-    # The SSH helper itself must still exist in metrics_collectors
-    from fleet_platform.api.metrics_collectors import refresh_ssh_reachability_gauge  # noqa: F401
-
     assert callable(refresh_ssh_reachability_gauge)
 
 
