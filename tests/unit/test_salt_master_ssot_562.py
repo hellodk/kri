@@ -11,13 +11,8 @@ Tests cover:
    ansible_tasks._get_bootstrap_settings.
 """
 
-import ast
-import inspect
 import uuid
-from pathlib import Path
 from unittest.mock import MagicMock, patch
-
-import pytest
 
 from fleet_platform.api.routes.salt_masters import _derive_api_url
 from fleet_platform.schemas.salt_master import SaltMasterCreate, SaltMasterResponse, SaltMasterUpdate
@@ -284,63 +279,104 @@ class TestSaltTasksDbResolution:
 
 
 # ---------------------------------------------------------------------------
-# 4. Grep-guard: no SALT_API_* env reads in salt_tasks (runtime code, not comments)
+# 4. Behavioral: salt_tasks reads credentials from DB, ignores env vars (#562)
 # ---------------------------------------------------------------------------
 
 
-def _extract_code_strings(source: str) -> list[str]:
-    """Extract all string literals from source code using AST (skips comments/docstrings)."""
-    tree = ast.parse(source)
-    strings: list[str] = []
-    for node in ast.walk(tree):
-        if isinstance(node, ast.Constant) and isinstance(node.s, str):
-            strings.append(node.s)
-    return strings
-
-
-def _extract_runtime_code(source: str) -> str:
-    """Return source lines that are not pure comments (for grep that needs to catch imports)."""
-    lines = []
-    for line in source.splitlines():
-        stripped = line.strip()
-        if not stripped.startswith("#"):
-            lines.append(line)
-    return "\n".join(lines)
-
-
 class TestGrepGuardSaltTasks:
-    _SALT_TASKS_PATH = Path(salt_tasks.__file__)
+    """Verify salt_tasks resolves salt-api credentials from DB, not SALT_API_* env vars (#562)."""
 
-    def _runtime_strings(self) -> list[str]:
-        source = self._SALT_TASKS_PATH.read_text()
-        return _extract_code_strings(source)
+    def _make_master_creds(self, api_url="https://db-master:8080", api_user="db-admin"):
+        return {
+            "api_url": api_url,
+            "api_user": api_user,
+            "api_password": "",
+            "api_eauth": "pam",
+            "tls_verify": False,
+        }
 
-    def test_no_salt_api_url_env_read(self):
-        """salt_tasks must not read SALT_API_URL from os.environ (#562)."""
-        code_strings = self._runtime_strings()
-        assert "SALT_API_URL" not in code_strings, (
-            "salt_tasks still has 'SALT_API_URL' as a string literal in code — must use DB instead (#562)"
+    def test_no_salt_api_url_env_read(self, monkeypatch):
+        """salt_tasks must use DB api_url, not SALT_API_URL env var (#562)."""
+        monkeypatch.setenv("SALT_API_URL", "http://env-url-must-not-be-used:9999")
+        creds = self._make_master_creds(api_url="https://db-master:8080")
+
+        mock_response = MagicMock()
+        mock_response.raise_for_status = MagicMock()
+        mock_response.json.return_value = {"return": [{"minion1": True}]}
+
+        with (
+            patch.object(salt_tasks, "_get_default_master", return_value=creds),
+            patch("fleet_platform.workers.salt_tasks.requests.post", return_value=mock_response) as mock_post,
+        ):
+            salt_tasks._run_salt_api(function="test.ping", target="minion1")
+
+        called_url = mock_post.call_args[0][0]
+        assert "db-master" in called_url, (
+            f"salt_tasks must use DB api_url, not SALT_API_URL env var. Called: {called_url!r}"
+        )
+        assert "env-url-must-not-be-used" not in called_url
+
+    def test_no_salt_api_user_env_read(self, monkeypatch):
+        """salt_tasks must use DB api_user, not SALT_API_USER env var (#562)."""
+        monkeypatch.setenv("SALT_API_USER", "env-user-must-not-be-used")
+        creds = self._make_master_creds(api_user="db-admin-user")
+
+        mock_response = MagicMock()
+        mock_response.raise_for_status = MagicMock()
+        mock_response.json.return_value = {"return": [{"minion1": True}]}
+
+        with (
+            patch.object(salt_tasks, "_get_default_master", return_value=creds),
+            patch("fleet_platform.workers.salt_tasks.requests.post", return_value=mock_response) as mock_post,
+        ):
+            salt_tasks._run_salt_api(function="test.ping", target="minion1")
+
+        # Verify the post body uses the DB user, not the env var
+        call_kwargs = mock_post.call_args
+        post_body = call_kwargs[1].get("json", call_kwargs[1].get("data", {}))
+        username_used = post_body.get("username", "") if isinstance(post_body, dict) else ""
+        assert username_used != "env-user-must-not-be-used", (
+            "salt_tasks must use DB api_user, not SALT_API_USER env var (#562)"
+        )
+        assert username_used == "db-admin-user"
+
+    def test_no_salt_api_password_env_read(self, monkeypatch):
+        """salt_tasks must NOT read api credentials from SALT_API_PASSWORD env var (#562)."""
+        monkeypatch.setenv("SALT_API_PASSWORD", "env-password-must-not-be-used")
+        creds = self._make_master_creds()
+
+        mock_response = MagicMock()
+        mock_response.raise_for_status = MagicMock()
+        mock_response.json.return_value = {"return": [{"minion1": True}]}
+
+        with (
+            patch.object(salt_tasks, "_get_default_master", return_value=creds),
+            patch("fleet_platform.workers.salt_tasks.requests.post", return_value=mock_response) as mock_post,
+        ):
+            result = salt_tasks._run_salt_api(function="test.ping", target="minion1")
+
+        # The call must succeed using DB creds; env var must have no effect
+        assert result["status"] == "ok", f"Expected ok, got {result!r}"
+        call_kwargs = mock_post.call_args
+        post_body = call_kwargs[1].get("json", call_kwargs[1].get("data", {}))
+        password_used = post_body.get("password", "") if isinstance(post_body, dict) else ""
+        assert password_used != "env-password-must-not-be-used", (
+            "salt_tasks must not use SALT_API_PASSWORD env var (#562)"
         )
 
-    def test_no_salt_api_user_env_read(self):
-        code_strings = self._runtime_strings()
-        assert "SALT_API_USER" not in code_strings, (
-            "salt_tasks still has 'SALT_API_USER' as a string literal in code (#562)"
-        )
+    def test_no_os_environ_get_salt_api(self, monkeypatch):
+        """When all SALT_API_* env vars are set, salt_tasks still uses DB credentials (#562)."""
+        monkeypatch.setenv("SALT_API_URL", "http://env-trap:9999")
+        monkeypatch.setenv("SALT_API_USER", "env-trap-user")
+        monkeypatch.setenv("SALT_API_PASSWORD", "env-trap-pass")
 
-    def test_no_salt_api_password_env_read(self):
-        code_strings = self._runtime_strings()
-        assert "SALT_API_PASSWORD" not in code_strings, (
-            "salt_tasks still has 'SALT_API_PASSWORD' as a string literal in code (#562)"
-        )
+        # Return None → "not configured" path; if env vars are read, the error message would differ
+        with patch.object(salt_tasks, "_get_default_master", return_value=None):
+            result = salt_tasks._run_salt_api(function="test.ping", target="*")
 
-    def test_no_os_environ_get_salt_api(self):
-        """No os.environ.get('SALT_API_*') pattern must exist in salt_tasks."""
-        source = self._SALT_TASKS_PATH.read_text()
-        # Check non-comment lines
-        runtime_code = _extract_runtime_code(source)
-        assert "os.environ" not in runtime_code, (
-            "salt_tasks still uses os.environ — all config must come from DB (#562)"
+        assert result["status"] == "error"
+        assert "Settings → Salt Masters" in result["reason"], (
+            "When no DB master exists, error must reference Settings (not env vars) (#562)"
         )
 
 
@@ -350,32 +386,38 @@ class TestGrepGuardSaltTasks:
 
 
 class TestGrepGuardAnsibleTasks:
-    def test_get_bootstrap_settings_does_not_import_salt_master_const(self):
-        """_get_bootstrap_settings must not import/use SALT_MASTER constant at runtime (#562)."""
-        source = inspect.getsource(ansible_tasks._get_bootstrap_settings)
-        # SALT_MASTER should not appear as a NAME node (import/use) in the function code
-        # Parse the function source and check for any Name/Constant referencing SALT_MASTER
-        code_strings = _extract_code_strings(source)
-        assert "SALT_MASTER" not in code_strings, (
-            "ansible_tasks._get_bootstrap_settings still has 'SALT_MASTER' as a string literal — "
+    def test_get_bootstrap_settings_does_not_query_salt_master_setting(self):
+        """_get_bootstrap_settings must not query the 'SALT_MASTER' platform setting (#562).
+
+        After #562 the master address is resolved from SaltMaster DB rows, not from a
+        platform setting called 'SALT_MASTER'.  Drive the function with an instrumented DB
+        and assert the key "SALT_MASTER" was never queried.
+        """
+        queried_keys: list[str] = []
+
+        mock_db = MagicMock()
+
+        def _tracking_execute(stmt):
+            stmt_str = str(stmt)
+            # Extract the key value from the WHERE clause string representation
+            if "SALT_MASTER" in stmt_str:
+                queried_keys.append("SALT_MASTER")
+            r = MagicMock()
+            r.scalar_one_or_none.return_value = None
+            return r
+
+        mock_db.execute.side_effect = _tracking_execute
+
+        with (
+            patch("fleet_platform.services.platform_settings_svc._fernet", MagicMock()),
+            patch("fleet_platform.services.node_credentials.get_controller_pubkey", return_value="ssh-rsa AAAA"),
+        ):
+            ansible_tasks._get_bootstrap_settings(mock_db)
+
+        assert "SALT_MASTER" not in queried_keys, (
+            "_get_bootstrap_settings must not query the SALT_MASTER platform setting — "
             "the address must come from SaltMaster rows only (#562)"
         )
-        # Also check as a name binding (import SALT_MASTER)
-        # Dedent to fix indentation for ast.parse
-        import textwrap as _textwrap
-
-        dedented = _textwrap.dedent(source)
-        try:
-            tree = ast.parse(dedented)
-            for node in ast.walk(tree):
-                if isinstance(node, ast.Name) and node.id == "SALT_MASTER":
-                    pytest.fail(
-                        "ansible_tasks._get_bootstrap_settings references SALT_MASTER as a variable — "
-                        "address must come from SaltMaster rows only (#562)"
-                    )
-        except SyntaxError:
-            # Can't parse dedented — fall back to string check
-            assert "SALT_MASTER" not in source
 
     def test_get_bootstrap_settings_returns_three_values(self):
         """Signature must return (ssh_user, ssh_password, controller_pubkey) — no salt_master address (#562)."""

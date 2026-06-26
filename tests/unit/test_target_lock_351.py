@@ -67,14 +67,44 @@ def test_target_lock_prefix_constant_present():
     )
 
 
-def test_target_lock_uses_blocking_false_in_source():
-    """The lock acquire call must use blocking=False so it never blocks the worker queue."""
-    import inspect
+def test_target_lock_acquire_called_with_blocking_false():
+    """The lock acquire call must pass blocking=False so it never blocks the worker queue.
 
-    import fleet_platform.workers.playbook_tasks as pt
+    We verify by running the lock-unavailable path and confirming acquire was called
+    with blocking=False (not blocking=True or without the kwarg, both of which would
+    potentially block the Celery worker thread).
+    """
+    job_id = str(uuid.uuid4())
+    target_id = str(uuid.uuid4())
+    job = _make_pending_job(target_type="node", target_id=target_id)
+    mock_db = _make_mock_db(job)
 
-    source = inspect.getsource(pt)
-    assert "blocking=False" in source, "run_playbook must use blocking=False when acquiring the per-target lock (#351)"
+    mock_lock = MagicMock()
+    mock_lock.acquire.return_value = False  # simulate lock already held
+
+    mock_redis_instance = MagicMock()
+    mock_redis_instance.lock.return_value = mock_lock
+
+    with (
+        patch("fleet_platform.workers.playbook_tasks.get_sync_db", return_value=mock_db),
+        patch("fleet_platform.workers.playbook_tasks.sync_redis") as mock_sync_redis,
+        patch("fleet_platform.workers.playbook_tasks.ansible_runner"),
+    ):
+        mock_sync_redis.Redis.from_url.return_value = mock_redis_instance
+        mock_sync_redis.RedisError = Exception
+
+        from fleet_platform.workers.playbook_tasks import run_playbook
+
+        run_playbook(job_id)
+
+    assert mock_lock.acquire.called, "lock.acquire() must have been called"
+    call_kwargs = mock_lock.acquire.call_args
+    # acquire must be called with blocking=False — either as kwarg or positional False
+    kwarg_blocking = call_kwargs.kwargs.get("blocking") if call_kwargs.kwargs else None
+    pos_blocking = call_kwargs.args[0] if call_kwargs.args else None
+    assert kwarg_blocking is False or pos_blocking is False, (
+        f"lock.acquire must be called with blocking=False, got args={call_kwargs.args!r} kwargs={call_kwargs.kwargs!r}"
+    )
 
 
 # ---------------------------------------------------------------------------
