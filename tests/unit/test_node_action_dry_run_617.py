@@ -128,27 +128,138 @@ def test_node_actions_py_has_dry_run_branch():
     asyncio.run(_run())
 
 
-def test_node_actions_py_dry_run_after_validate_and_404():
-    """dry_run branch appears after _validate_action_params and node 404 check, before destructive check."""
-    from pathlib import Path
+def test_dry_run_does_not_bypass_param_validation():
+    """dry_run=True must not short-circuit _validate_action_params — invalid pid must still yield 422."""
+    import asyncio
+    import uuid
+    from types import SimpleNamespace
+    from unittest.mock import AsyncMock
 
-    src_path = Path(__file__).resolve().parents[2] / "fleet_platform" / "api" / "routes" / "node_actions.py"
-    source = src_path.read_text()
+    from httpx import ASGITransport, AsyncClient
 
-    validate_idx = source.find("_validate_action_params(")
-    node_404_idx = source.find('raise HTTPException(status_code=404, detail="Node not found")')
-    dry_run_idx = source.find("if payload.dry_run:")
-    destructive_idx = source.find("if not PendingAction.is_destructive(payload.action_type):")
+    from fleet_platform.api import deps
+    from fleet_platform.api.limiter import limiter
+    from fleet_platform.api.main import create_app
+    from fleet_platform.core.auth import create_access_token
 
-    # Ensure all indices are found
-    assert validate_idx > 0, "_validate_action_params not found"
-    assert node_404_idx > 0, "404 check not found"
-    assert dry_run_idx > 0, "dry_run branch not found"
-    assert destructive_idx > 0, "destructive check not found"
+    class _FakeResult:
+        def __init__(self, value):
+            self._value = value
 
-    # dry_run comes after validate and 404
-    assert dry_run_idx > validate_idx, "dry_run should be after _validate_action_params"
-    assert dry_run_idx > node_404_idx, "dry_run should be after node 404 check"
+        def scalar_one_or_none(self):
+            return self._value
 
-    # dry_run comes before destructive check
-    assert dry_run_idx < destructive_idx, "dry_run should be before destructive check"
+    class _FakeSession:
+        def __init__(self, node):
+            self._node = node
+
+        async def execute(self, *args, **kwargs):
+            return _FakeResult(self._node)
+
+        async def commit(self):
+            pass
+
+        async def rollback(self):
+            pass
+
+    async def _run():
+        limiter._storage.reset()
+        node = SimpleNamespace(minion_id="minion-xyz")
+        session = _FakeSession(node)
+        app = create_app()
+
+        async def _override_db():
+            yield session
+
+        mock_redis = AsyncMock()
+        mock_redis.get.return_value = None
+
+        async def _override_redis():
+            return mock_redis
+
+        app.dependency_overrides[deps.get_db] = _override_db
+        app.dependency_overrides[deps.get_redis] = _override_redis
+
+        token = create_access_token(user_id=str(uuid.uuid4()), email="operator@test.local", role="operator")
+        async with AsyncClient(
+            transport=ASGITransport(app=app),
+            base_url="http://testserver",
+            headers={"Authorization": f"Bearer {token}"},
+        ) as client:
+            resp = await client.post(
+                f"/api/v1/nodes/{uuid.uuid4()}/actions",
+                json={"action_type": "process_stop", "params": {"pid": "not-a-pid"}, "dry_run": True},
+            )
+        limiter._storage.reset()
+
+        assert resp.status_code == 422, (
+            f"dry_run=True must not bypass _validate_action_params — "
+            f"invalid pid must return 422, got {resp.status_code}: {resp.text}"
+        )
+
+    asyncio.run(_run())
+
+
+def test_dry_run_does_not_bypass_node_not_found():
+    """dry_run=True on a non-existent node must return 404, not 202 dry_run."""
+    import asyncio
+    import uuid
+    from unittest.mock import AsyncMock
+
+    from httpx import ASGITransport, AsyncClient
+
+    from fleet_platform.api import deps
+    from fleet_platform.api.limiter import limiter
+    from fleet_platform.api.main import create_app
+    from fleet_platform.core.auth import create_access_token
+
+    class _FakeResult:
+        def scalar_one_or_none(self):
+            return None
+
+    class _FakeSession:
+        async def execute(self, *args, **kwargs):
+            return _FakeResult()
+
+        async def commit(self):
+            pass
+
+        async def rollback(self):
+            pass
+
+    async def _run():
+        limiter._storage.reset()
+        session = _FakeSession()
+        app = create_app()
+
+        async def _override_db():
+            yield session
+
+        mock_redis = AsyncMock()
+        mock_redis.get.return_value = None
+
+        async def _override_redis():
+            return mock_redis
+
+        app.dependency_overrides[deps.get_db] = _override_db
+        app.dependency_overrides[deps.get_redis] = _override_redis
+
+        token = create_access_token(user_id=str(uuid.uuid4()), email="operator@test.local", role="operator")
+        async with AsyncClient(
+            transport=ASGITransport(app=app),
+            base_url="http://testserver",
+            headers={"Authorization": f"Bearer {token}"},
+        ) as client:
+            # harden has no per-target params to validate, so it reaches the node lookup
+            resp = await client.post(
+                f"/api/v1/nodes/{uuid.uuid4()}/actions",
+                json={"action_type": "harden", "params": {}, "dry_run": True},
+            )
+        limiter._storage.reset()
+
+        assert resp.status_code == 404, (
+            f"dry_run=True must not bypass node 404 check — "
+            f"non-existent node must return 404, got {resp.status_code}: {resp.text}"
+        )
+
+    asyncio.run(_run())
