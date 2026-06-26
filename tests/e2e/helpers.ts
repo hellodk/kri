@@ -13,6 +13,23 @@ export const E2E_PW = ['e2eFleet', 'TestPw', '2026'].join('')
 export const ADMIN  = { email: 'admin@fleet.local',  password: E2E_PW }
 export const VIEWER = { email: 'viewer@fleet.local', password: E2E_PW }
 
+/** ── Seeded fixtures (created once by global-setup.ts) ─────────────────────────
+ * The bootstrap flow requires (a) an enabled salt-master and (b) the target node
+ * to belong to a group with SSH credentials. A pristine E2E database has none of
+ * these, which disables the "+ Bootstrap Node" button and makes the bootstrap API
+ * return 400 (#905). global-setup seeds a stable, idempotent baseline so specs can
+ * rely on it by name without each one re-creating the world.
+ */
+export const SEED = {
+  /** Enabled salt-master — satisfies the FleetDashboard bootstrap-button guard (#538). */
+  masterName: 'e2e-master',
+  /** Static group with SSH creds — nodes added here are bootstrap-eligible. */
+  groupName: 'E2E Bootstrap Group',
+  groupSsh: { ssh_username: 'e2eops', ssh_password: 'e2eSeedPassword123' },
+  /** Deterministic seeded node minion_ids (status "unknown") for fleet table/filter tests. */
+  nodeMinionIds: ['e2e-seed-node-1', 'e2e-seed-node-2', 'e2e-seed-node-3'],
+} as const
+
 /** ── Token cache ─────────────────────────────────────────────────────────────
  * The API enforces 10 logins/min per IP. The test suite calls loginViaApi and
  * getToken many times per minute. We cache credentials for 12 minutes (JWT

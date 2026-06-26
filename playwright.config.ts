@@ -2,6 +2,9 @@ import { defineConfig, devices } from '@playwright/test'
 
 export default defineConfig({
   testDir: './tests/e2e',
+  // Seeds an enabled salt-master + a group-with-creds + baseline nodes so the
+  // bootstrap flow and fleet table/filter specs have the state they assume (#905).
+  globalSetup: './tests/e2e/global-setup.ts',
   fullyParallel: false,
   forbidOnly: !!process.env.CI,
   // One retry on CI (not two): the suite runs serially with a 25-min job cap, and
