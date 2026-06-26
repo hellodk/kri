@@ -86,3 +86,28 @@ def publish_job_event(kind: str, id: str, status: str, **extra: Any) -> int:
             exc_info=True,
         )
         return 0
+
+
+async def async_publish_job_event(kind: str, id: str, status: str, **extra: Any) -> int:
+    """Async variant of :func:`publish_job_event` for use inside FastAPI route handlers.
+
+    Uses the shared async Redis client (``core.redis``) so it does not block
+    the event loop. Same best-effort semantics — never raises.
+    """
+    import json
+
+    from fleet_platform.core.redis import get_redis
+
+    try:
+        payload = json.dumps(build_event(kind, id, status, **extra), default=str)
+        redis = await get_redis()
+        return cast(int, await redis.publish(JOB_EVENTS_CHANNEL, payload))
+    except Exception:  # noqa: BLE001 — telemetry must never break the caller
+        logger.warning(
+            "async_publish_job_event failed (kind=%s id=%s status=%s)",
+            kind,
+            id,
+            status,
+            exc_info=True,
+        )
+        return 0
