@@ -1,0 +1,1480 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>kri Fleet Platform — External Audit</title>
+<style>
+  :root {
+    --bg:#0d1117; --panel:#161b22; --panel2:#1c2230; --border:#30363d;
+    --txt:#e6edf3; --muted:#9198a1; --acc:#58a6ff;
+    --crit:#f85149; --high:#fb8500; --med:#d29922; --low:#3fb950;
+  }
+  * { box-sizing:border-box; }
+  body { margin:0; background:var(--bg); color:var(--txt);
+    font:15px/1.55 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif; }
+  header.top { padding:24px 28px 8px; border-bottom:1px solid var(--border); background:var(--panel); }
+  header.top h1 { margin:0; font-size:22px; letter-spacing:.3px; }
+  header.top p { margin:6px 0 0; color:var(--muted); font-size:13.5px; }
+  nav.tabs { position:sticky; top:0; z-index:10; display:flex; flex-wrap:wrap; gap:6px;
+    padding:12px 20px; background:var(--panel); border-bottom:1px solid var(--border); }
+  .tb { background:var(--panel2); color:var(--txt); border:1px solid var(--border);
+    padding:7px 12px; border-radius:8px; cursor:pointer; font-size:13px; transition:.15s; }
+  .tb:hover { border-color:var(--acc); }
+  .tb.active { background:var(--acc); color:#04101f; border-color:var(--acc); font-weight:600; }
+  .tb .b { display:inline-block; background:rgba(255,255,255,.15); border-radius:10px;
+    padding:0 6px; margin-left:4px; font-size:11px; }
+  .tb.active .b { background:rgba(0,0,0,.2); }
+  main { max-width:1080px; margin:0 auto; padding:22px 20px 80px; }
+  .tab { display:none; } .tab.active { display:block; }
+  .tab-head h2 { margin:6px 0 2px; font-size:20px; }
+  .blurb { color:var(--muted); margin:2px 0 12px; font-size:13.5px; }
+  .chips, .chip { display:inline-flex; } .chips { gap:8px; flex-wrap:wrap; margin-bottom:14px; }
+  .chip { align-items:center; gap:6px; padding:3px 10px; border-radius:20px; font-size:12px;
+    border:1px solid var(--border); background:var(--panel2); }
+  .chip.crit{color:var(--crit);} .chip.high{color:var(--high);}
+  .chip.med{color:var(--med);} .chip.low{color:var(--low);}
+  .card { background:var(--panel); border:1px solid var(--border); border-left:4px solid var(--border);
+    border-radius:10px; padding:14px 16px; margin:12px 0; }
+  .card.crit { border-left-color:var(--crit); } .card.high { border-left-color:var(--high); }
+  .card.med { border-left-color:var(--med); } .card.low { border-left-color:var(--low); }
+  .card-h { display:flex; align-items:center; gap:10px; flex-wrap:wrap; }
+  .card-h h3 { margin:0; font-size:15.5px; flex:1 1 320px; }
+  .sev { font-size:11px; font-weight:700; padding:2px 8px; border-radius:6px; text-transform:uppercase; letter-spacing:.4px; }
+  .sev.crit { background:rgba(248,81,73,.15); color:var(--crit); }
+  .sev.high { background:rgba(251,133,0,.15); color:var(--high); }
+  .sev.med { background:rgba(210,153,34,.15); color:var(--med); }
+  .sev.low { background:rgba(63,185,80,.15); color:var(--low); }
+  .fid { font:600 11.5px ui-monospace,SFMono-Regular,Menlo,monospace; color:var(--muted); }
+  .issue { margin-left:auto; }
+  .ilink { color:var(--acc); text-decoration:none; font:600 13px ui-monospace,monospace;
+    border:1px solid var(--border); border-radius:6px; padding:2px 8px; }
+  .ilink:hover { border-color:var(--acc); }
+  .noissue { color:var(--muted); font-size:12px; }
+  .loc { margin:8px 0 6px; }
+  .loc code { color:var(--acc); font:12px ui-monospace,monospace; word-break:break-all; }
+  pre.ev { background:#0b0f14; border:1px solid var(--border); border-radius:8px;
+    padding:10px 12px; overflow-x:auto; font:12.5px ui-monospace,monospace; color:#c9d1d9; margin:6px 0 10px; }
+  .row { display:flex; gap:10px; margin:6px 0; }
+  .row .k { flex:0 0 54px; color:var(--muted); font-size:12px; font-weight:600; text-transform:uppercase;
+    letter-spacing:.4px; padding-top:2px; }
+  .row p { margin:0; }
+  .labels { margin-top:10px; display:flex; gap:6px; flex-wrap:wrap; }
+  .lbl { font-size:11px; color:var(--muted); border:1px solid var(--border); border-radius:12px; padding:1px 8px; }
+  table.summary { border-collapse:collapse; width:100%; margin:8px 0 22px; }
+  table.summary th, table.summary td { border:1px solid var(--border); padding:8px 10px; text-align:left; }
+  table.summary th { background:var(--panel2); font-size:12px; text-transform:uppercase; letter-spacing:.4px; color:var(--muted); }
+  table.summary td.num { text-align:center; font-variant-numeric:tabular-nums; }
+  .crit-t { color:var(--crit); font-weight:700; } .high-t { color:var(--high); font-weight:700; }
+  .med-t { color:var(--med); } .low-t { color:var(--low); }
+  table.summary a { color:var(--acc); text-decoration:none; }
+  .crit-head { margin-top:6px; }
+  ul.critlist { list-style:none; padding:0; }
+  ul.critlist li { padding:7px 0; border-bottom:1px solid var(--border); }
+  ul.critlist code { color:var(--muted); font-size:12px; }
+  footer { text-align:center; color:var(--muted); font-size:12px; padding:20px; }
+</style>
+</head>
+<body>
+<header class="top">
+  <h1>kri Fleet Platform — External Audit</h1>
+  <p>Seven reviewers: Principal Developer, Architect, SRE, AI/LLM Expert, UI/UX Engineer, Tester, and a Common User.
+     92 findings &middot; one GitHub issue each &middot; <b>none fixed</b> (review first).</p>
+</header>
+<nav class="tabs">
+<button class="tb active" data-tab="OVERVIEW">Overview</button>
+<button class="tb" data-tab="DEV">Principal Developer <span class="b">12</span></button>
+<button class="tb" data-tab="ARC">Principal Architect <span class="b">12</span></button>
+<button class="tb" data-tab="SRE">Principal SRE <span class="b">13</span></button>
+<button class="tb" data-tab="AI">Principal AI/LLM Expert <span class="b">13</span></button>
+<button class="tb" data-tab="UX">Principal UI/UX Engineer <span class="b">14</span></button>
+<button class="tb" data-tab="TST">Principal Tester <span class="b">15</span></button>
+<button class="tb" data-tab="USR">Common User <span class="b">13</span></button>
+</nav>
+<main>
+
+  <section class="tab active" id="tab-OVERVIEW">
+    <div class="tab-head">
+      <h2>Audit Overview</h2>
+      <p class="blurb">External multi-persona audit of the <b>kri</b> Fleet Platform &middot;
+      92 findings &middot; filed as GitHub issues
+      <a href="https://github.com/hellodk/kri/issues?q=is%3Aissue+label%3Aaudit" target="_blank" rel="noopener">label:audit</a>.
+      Nothing has been fixed — these are for review.</p>
+      <div class="chips">
+        <span class="chip crit">10 Critical</span>
+        <span class="chip high">32 High</span>
+        <span class="chip med">43 Medium</span>
+        <span class="chip low">7 Low</span>
+      </div>
+    </div>
+    <table class="summary">
+      <thead><tr><th>Auditor</th><th>Total</th><th>Crit</th><th>High</th><th>Med</th><th>Low</th></tr></thead>
+      <tbody><tr><td><a href="#" data-go="DEV">Principal Developer</a></td><td class="num">12</td><td class="num crit-t">1</td><td class="num high-t">4</td><td class="num med-t">6</td><td class="num low-t">1</td></tr><tr><td><a href="#" data-go="ARC">Principal Architect</a></td><td class="num">12</td><td class="num crit-t">1</td><td class="num high-t">4</td><td class="num med-t">6</td><td class="num low-t">1</td></tr><tr><td><a href="#" data-go="SRE">Principal SRE</a></td><td class="num">13</td><td class="num crit-t">1</td><td class="num high-t">3</td><td class="num med-t">8</td><td class="num low-t">1</td></tr><tr><td><a href="#" data-go="AI">Principal AI/LLM Expert</a></td><td class="num">13</td><td class="num crit-t"></td><td class="num high-t">5</td><td class="num med-t">7</td><td class="num low-t">1</td></tr><tr><td><a href="#" data-go="UX">Principal UI/UX Engineer</a></td><td class="num">14</td><td class="num crit-t">3</td><td class="num high-t">5</td><td class="num med-t">5</td><td class="num low-t">1</td></tr><tr><td><a href="#" data-go="TST">Principal Tester</a></td><td class="num">15</td><td class="num crit-t">2</td><td class="num high-t">4</td><td class="num med-t">8</td><td class="num low-t">1</td></tr><tr><td><a href="#" data-go="USR">Common User</a></td><td class="num">13</td><td class="num crit-t">2</td><td class="num high-t">7</td><td class="num med-t">3</td><td class="num low-t">1</td></tr></tbody>
+    </table>
+    <h3 class="crit-head">All Critical findings</h3>
+    <ul class="critlist"><li><span class="sev crit">Critical</span> <code>DEV-1</code> SSH connection cache bypasses authentication for shared (host, port, username) keys <a class="ilink" href="https://github.com/hellodk/kri/issues/733" target="_blank" rel="noopener">#733</a></li>
+<li><span class="sev crit">Critical</span> <code>ARC-1</code> Blocking Celery .get() inside an ASGI request handler <a class="ilink" href="https://github.com/hellodk/kri/issues/745" target="_blank" rel="noopener">#745</a></li>
+<li><span class="sev crit">Critical</span> <code>SRE-1</code> Default admin/admin credential documented, not enforced to change <a class="ilink" href="https://github.com/hellodk/kri/issues/757" target="_blank" rel="noopener">#757</a></li>
+<li><span class="sev crit">Critical</span> <code>UX-1</code> JWT token exposed as a WebSocket URL query parameter <a class="ilink" href="https://github.com/hellodk/kri/issues/783" target="_blank" rel="noopener">#783</a></li>
+<li><span class="sev crit">Critical</span> <code>UX-2</code> WebSocket hardcodes ws:// and silently breaks on HTTPS <a class="ilink" href="https://github.com/hellodk/kri/issues/784" target="_blank" rel="noopener">#784</a></li>
+<li><span class="sev crit">Critical</span> <code>UX-3</code> No React ErrorBoundary anywhere in the application <a class="ilink" href="https://github.com/hellodk/kri/issues/785" target="_blank" rel="noopener">#785</a></li>
+<li><span class="sev crit">Critical</span> <code>TST-1</code> Agent run endpoint has zero integration or E2E coverage <a class="ilink" href="https://github.com/hellodk/kri/issues/795" target="_blank" rel="noopener">#795</a></li>
+<li><span class="sev crit">Critical</span> <code>TST-2</code> Coverage gate excludes fleet_platform/agent/ entirely <a class="ilink" href="https://github.com/hellodk/kri/issues/799" target="_blank" rel="noopener">#799</a></li>
+<li><span class="sev crit">Critical</span> <code>USR-1</code> Salt-master silently absent from the Docker Compose stack <a class="ilink" href="https://github.com/hellodk/kri/issues/812" target="_blank" rel="noopener">#812</a></li>
+<li><span class="sev crit">Critical</span> <code>USR-2</code> LICENSE file is missing (badge and link 404) <a class="ilink" href="https://github.com/hellodk/kri/issues/813" target="_blank" rel="noopener">#813</a></li></ul>
+  </section>
+
+  <section class="tab" id="tab-DEV">
+    <div class="tab-head">
+      <h2>Principal Developer</h2>
+      <p class="blurb">Code quality, bugs, logic &amp; concurrency &middot; 12 findings</p>
+      <div class="chips"><span class="chip crit">1 Critical</span> <span class="chip high">4 High</span> <span class="chip med">6 Medium</span> <span class="chip low">1 Low</span></div>
+    </div>
+
+    <article class="card crit" data-sev="Critical">
+      <header class="card-h">
+        <span class="sev crit">Critical</span>
+        <span class="fid">DEV-1</span>
+        <h3>SSH connection cache bypasses authentication for shared (host, port, username) keys</h3>
+        <span class="issue"><a class="ilink" href="https://github.com/hellodk/kri/issues/733" target="_blank" rel="noopener">#733</a></span>
+      </header>
+      <div class="loc"><code>fleet_platform/services/ssh_connection_cache.py:61-80; fleet_platform/api/routes/webssh.py:339-356</code></div>
+      <pre class="ev">key = (host, port, username); if key in _cache: return cached.conn  # returned without any credential check</pre>
+      <div class="row"><span class="k">Impact</span><p>Cache key omits credentials. If user A opens a key-auth session to node1:22:admin, user B requesting the same (host, port, username) — even with a wrong key/password — receives A&#x27;s live connection. Authentication is fully bypassed on every cache hit, enabling lateral access to any node another user recently connected to using only the correct username.</p></div>
+      <div class="row"><span class="k">Fix</span><p>Include a credential fingerprint in the cache key (HMAC of the public key bytes / KDF of the password) or scope the key to (host, port, username, user_id) so connections are never shared across credentials/users.</p></div>
+      <div class="labels"><span class="lbl">bug</span> <span class="lbl">security</span></div>
+    </article>
+
+    <article class="card high" data-sev="High">
+      <header class="card-h">
+        <span class="sev high">High</span>
+        <span class="fid">DEV-2</span>
+        <h3>collect_node_grains reads node token from a pillar file that is never populated (broken since #509)</h3>
+        <span class="issue"><a class="ilink" href="https://github.com/hellodk/kri/issues/739" target="_blank" rel="noopener">#739</a></span>
+      </header>
+      <div class="loc"><code>fleet_platform/workers/ansible_tasks.py:882-892</code></div>
+      <pre class="ev">pillar_file = pillar_dir / f&#x27;{minion_id}.sls&#x27;; ... if not node_token: return {&#x27;status&#x27;:&#x27;error&#x27;,&#x27;reason&#x27;:&#x27;no node_token found in pillar&#x27;}</pre>
+      <div class="row"><span class="k">Impact</span><p>Comment at L334 says the local salt-pillar write was removed in #509. The token now lives only in node.node_token_hash, so collect_node_grains (and refresh_all_node_grains) ALWAYS returns an error. Periodic grain refresh is completely broken for every node bootstrapped after #509.</p></div>
+      <div class="row"><span class="k">Fix</span><p>Drop the pillar-file lookup; mint a fresh short-lived token per collection (store in node_token_hash) or query the existing node_token_hash and pass it in the ingest request.</p></div>
+      <div class="labels"><span class="lbl">bug</span></div>
+    </article>
+
+    <article class="card high" data-sev="High">
+      <header class="card-h">
+        <span class="sev high">High</span>
+        <span class="fid">DEV-3</span>
+        <h3>approve_proposal has no row-level lock; concurrent approvals can double-execute a live tool</h3>
+        <span class="issue"><a class="ilink" href="https://github.com/hellodk/kri/issues/735" target="_blank" rel="noopener">#735</a></span>
+      </header>
+      <div class="loc"><code>fleet_platform/services/agent_apply_svc.py:100-128</code></div>
+      <pre class="ev">if action.status in (...): raise ...; if action.status == &#x27;pending&#x27;: ... action.status=&#x27;approved&#x27;; await db.commit(); return await _execute(...)  # no SELECT ... FOR UPDATE</pre>
+      <div class="row"><span class="k">Impact</span><p>Two simultaneous requests with the same approval token both read status==&#x27;pending&#x27; before either writes; both commit &#x27;approved&#x27; and both call _execute, so the tool (e.g. apply_salt_state) runs twice on the fleet. No optimistic/locking guard exists in the approval chain.</p></div>
+      <div class="row"><span class="k">Fix</span><p>Use select(PendingAction).where(...).with_for_update() before reading status, or add a version column and catch stale-update conflicts.</p></div>
+      <div class="labels"><span class="lbl">bug</span></div>
+    </article>
+
+    <article class="card high" data-sev="High">
+      <header class="card-h">
+        <span class="sev high">High</span>
+        <span class="fid">DEV-4</span>
+        <h3>poll_salt_masters runs asyncio.run() per master in a serial loop</h3>
+        <span class="issue"><a class="ilink" href="https://github.com/hellodk/kri/issues/734" target="_blank" rel="noopener">#734</a></span>
+      </header>
+      <div class="loc"><code>fleet_platform/workers/maintenance.py:294-316</code></div>
+      <pre class="ev">for master in masters: ... result = asyncio.run(run_probe(master))  # new event loop each iteration</pre>
+      <div class="row"><span class="k">Impact</span><p>Each asyncio.run() builds and tears down an event loop + threadpool; probes run serially. A single hanging probe blocks the whole beat task for its full TCP timeout per master, starving other 30s beat tasks. The sync DB session is also held across all probes.</p></div>
+      <div class="row"><span class="k">Fix</span><p>Use a single asyncio.run(asyncio.gather(*[run_probe(m) for m in to_probe])) to probe concurrently, and close the DB session before the async work.</p></div>
+      <div class="labels"><span class="lbl">bug</span> <span class="lbl">refactor</span></div>
+    </article>
+
+    <article class="card high" data-sev="High">
+      <header class="card-h">
+        <span class="sev high">High</span>
+        <span class="fid">DEV-5</span>
+        <h3>Sync DB session held open during asyncio.run(run_probe()) network I/O in provision_master</h3>
+        <span class="issue"><a class="ilink" href="https://github.com/hellodk/kri/issues/738" target="_blank" rel="noopener">#738</a></span>
+      </header>
+      <div class="loc"><code>fleet_platform/workers/ansible_tasks.py:1288-1293</code></div>
+      <pre class="ev">with get_sync_db() as _pdb: ... probe_result = dict(asyncio.run(run_probe(_fresh_master)))  # HTTPS calls inside the DB context</pre>
+      <div class="row"><span class="k">Impact</span><p>A sync connection-pool slot is held while run_probe makes salt-api HTTPS calls (5-30s timeouts). With pool_size=5, a few simultaneous provision completions exhaust the pool and cause 30s timeouts for all other Celery tasks.</p></div>
+      <div class="row"><span class="k">Fix</span><p>Read master attributes inside the with-block, exit it, then call asyncio.run(run_probe(...)) outside the DB context.</p></div>
+      <div class="labels"><span class="lbl">bug</span> <span class="lbl">refactor</span></div>
+    </article>
+
+    <article class="card med" data-sev="Medium">
+      <header class="card-h">
+        <span class="sev med">Medium</span>
+        <span class="fid">DEV-10</span>
+        <h3>create_proposal uses nil UUID as sentinel node_id for multi-target actions</h3>
+        <span class="issue"><a class="ilink" href="https://github.com/hellodk/kri/issues/742" target="_blank" rel="noopener">#742</a></span>
+      </header>
+      <div class="loc"><code>fleet_platform/services/agent_apply_svc.py:58-65</code></div>
+      <pre class="ev">node_id = node.id if node else uuid.UUID(int=0)  # 00000000-0000-0000-0000-000000000000</pre>
+      <div class="row"><span class="k">Impact</span><p>All multi-target proposals and failed node lookups share the same phantom node_id. Joins to nodes drop or cross-join these rows; a future FK constraint on pending_actions.node_id would reject all existing multi-target rows.</p></div>
+      <div class="row"><span class="k">Fix</span><p>Make node_id nullable and use NULL for the no-specific-node case.</p></div>
+      <div class="labels"><span class="lbl">bug</span></div>
+    </article>
+
+    <article class="card med" data-sev="Medium">
+      <header class="card-h">
+        <span class="sev med">Medium</span>
+        <span class="fid">DEV-11</span>
+        <h3>SSH probe writes private key to a temp file without chmod 0600, so OpenSSH rejects it</h3>
+        <span class="issue"><a class="ilink" href="https://github.com/hellodk/kri/issues/743" target="_blank" rel="noopener">#743</a></span>
+      </header>
+      <div class="loc"><code>fleet_platform/workers/connectivity_tasks.py:71-88</code></div>
+      <pre class="ev">with tempfile.NamedTemporaryFile(...) as tmp: tmp.write(ssh_key); tmp.flush(); subprocess.run([&#x27;ssh&#x27;, ..., &#x27;-i&#x27;, tmp.name, ...])  # no chmod</pre>
+      <div class="row"><span class="k">Impact</span><p>NamedTemporaryFile applies the process umask (often 0644/0640). OpenSSH rejects group/other-readable key files (rc=1), so every key-auth probe falsely classifies the node as unreachable, making reachability data unreliable.</p></div>
+      <div class="row"><span class="k">Fix</span><p>Add os.chmod(tmp.name, 0o600) immediately after tmp.flush() and before subprocess.run.</p></div>
+      <div class="labels"><span class="lbl">bug</span></div>
+    </article>
+
+    <article class="card med" data-sev="Medium">
+      <header class="card-h">
+        <span class="sev med">Medium</span>
+        <span class="fid">DEV-6</span>
+        <h3>_check_ingest_rate_limit opens a new Redis client per request and never closes it</h3>
+        <span class="issue"><a class="ilink" href="https://github.com/hellodk/kri/issues/736" target="_blank" rel="noopener">#736</a></span>
+      </header>
+      <div class="loc"><code>fleet_platform/api/routes/ingest.py:51-59</code></div>
+      <pre class="ev">r = sync_redis.Redis.from_url(settings.redis_url, decode_responses=True)  # new pool every call, no close()</pre>
+      <div class="row"><span class="k">Impact</span><p>Redis.from_url() creates a new connection pool each call on the hot ingest path (up to 60/min per node). At hundreds of nodes this leaks hundreds of pool objects/min, each holding TCP connections to Redis.</p></div>
+      <div class="row"><span class="k">Fix</span><p>Use a module-level singleton Redis client, or wrap in `with` + r.close().</p></div>
+      <div class="labels"><span class="lbl">bug</span></div>
+    </article>
+
+    <article class="card med" data-sev="Medium">
+      <header class="card-h">
+        <span class="sev med">Medium</span>
+        <span class="fid">DEV-7</span>
+        <h3>Rate-limiter INCR/EXPIRE are not atomic; TTL can be lost on crash</h3>
+        <span class="issue"><a class="ilink" href="https://github.com/hellodk/kri/issues/737" target="_blank" rel="noopener">#737</a></span>
+      </header>
+      <div class="loc"><code>fleet_platform/api/routes/ingest.py:54-56</code></div>
+      <pre class="ev">count = int(r.incr(key)); if count == 1: r.expire(key, _INGEST_RATE_WINDOW)</pre>
+      <div class="row"><span class="k">Impact</span><p>If the process dies between INCR and EXPIRE, the key persists without a TTL and the node is permanently rate-limited until manual Redis deletion — a silent operational failure.</p></div>
+      <div class="row"><span class="k">Fix</span><p>Use a pipeline (INCR + EXPIRE together) or SET key 0 ex=window nx=True before INCR so the TTL is always set atomically.</p></div>
+      <div class="labels"><span class="lbl">bug</span></div>
+    </article>
+
+    <article class="card med" data-sev="Medium">
+      <header class="card-h">
+        <span class="sev med">Medium</span>
+        <span class="fid">DEV-8</span>
+        <h3>Deprecated asyncio.get_event_loop() used inside coroutines (5 sites)</h3>
+        <span class="issue"><a class="ilink" href="https://github.com/hellodk/kri/issues/740" target="_blank" rel="noopener">#740</a></span>
+      </header>
+      <div class="loc"><code>fleet_platform/api/routes/webssh.py:396; api/routes/nodes.py:668; services/alert_svc.py:314; api/routes/platform_settings.py:137; services/monitoring_svc.py:72</code></div>
+      <pre class="ev">loop = asyncio.get_event_loop()  # deprecated in 3.10+ inside a running coroutine</pre>
+      <div class="row"><span class="k">Impact</span><p>Emits DeprecationWarning and has subtly different semantics than get_running_loop() in 3.12+; future Python upgrades risk breakage.</p></div>
+      <div class="row"><span class="k">Fix</span><p>Replace with asyncio.get_running_loop(), or prefer asyncio.to_thread(...) which is already used correctly elsewhere.</p></div>
+      <div class="labels"><span class="lbl">refactor</span></div>
+    </article>
+
+    <article class="card med" data-sev="Medium">
+      <header class="card-h">
+        <span class="sev med">Medium</span>
+        <span class="fid">DEV-9</span>
+        <h3>SMTP email send failure swallowed silently with no log</h3>
+        <span class="issue"><a class="ilink" href="https://github.com/hellodk/kri/issues/741" target="_blank" rel="noopener">#741</a></span>
+      </header>
+      <div class="loc"><code>fleet_platform/services/pending_action_svc.py:156-165 (also node_actions.py:184-187)</code></div>
+      <pre class="ev">try: ... s.sendmail(...) except Exception: pass</pre>
+      <div class="row"><span class="k">Impact</span><p>Any SMTP failure (host/TLS/auth/bounce) is discarded with no log line, metric, or Sentry event. Approvers silently never receive approval emails while the action stays pending.</p></div>
+      <div class="row"><span class="k">Fix</span><p>Log a warning with exc_info and increment an approval_email_send_failures_total counter.</p></div>
+      <div class="labels"><span class="lbl">bug</span></div>
+    </article>
+
+    <article class="card low" data-sev="Low">
+      <header class="card-h">
+        <span class="sev low">Low</span>
+        <span class="fid">DEV-12</span>
+        <h3>embedding_tasks loads all nodes into memory with an unbounded SELECT</h3>
+        <span class="issue"><a class="ilink" href="https://github.com/hellodk/kri/issues/744" target="_blank" rel="noopener">#744</a></span>
+      </header>
+      <div class="loc"><code>fleet_platform/workers/embedding_tasks.py:47</code></div>
+      <pre class="ev">nodes = (await db.execute(select(Node))).scalars().all()  # no WHERE/LIMIT/streaming</pre>
+      <div class="row"><span class="k">Impact</span><p>Materializes the entire nodes table (JSONB grains, logs) into a list and keeps all ORM objects in the identity map for the whole loop. At scale this risks OOM-killing the worker and silently cancelling embeddings mid-run.</p></div>
+      <div class="row"><span class="k">Fix</span><p>Stream in batches via yield_per() or paginate with LIMIT/OFFSET, flushing each batch.</p></div>
+      <div class="labels"><span class="lbl">refactor</span></div>
+    </article>
+  </section>
+  <section class="tab" id="tab-ARC">
+    <div class="tab-head">
+      <h2>Principal Architect</h2>
+      <p class="blurb">Structure, coupling, scalability &middot; 12 findings</p>
+      <div class="chips"><span class="chip crit">1 Critical</span> <span class="chip high">4 High</span> <span class="chip med">6 Medium</span> <span class="chip low">1 Low</span></div>
+    </div>
+
+    <article class="card crit" data-sev="Critical">
+      <header class="card-h">
+        <span class="sev crit">Critical</span>
+        <span class="fid">ARC-1</span>
+        <h3>Blocking Celery .get() inside an ASGI request handler</h3>
+        <span class="issue"><a class="ilink" href="https://github.com/hellodk/kri/issues/745" target="_blank" rel="noopener">#745</a></span>
+      </header>
+      <div class="loc"><code>fleet_platform/api/routes/nodes.py:668-689</code></div>
+      <pre class="ev">await loop.run_in_executor(None, lambda: salt_run_cmd.delay(...).get(timeout=15))</pre>
+      <div class="row"><span class="k">Impact</span><p>delay().get() blocks a threadpool thread up to 15s waiting on a Salt round-trip. A handful of concurrent /vms calls starve the uvicorn threadpool and can deadlock if the Celery worker needs a threadpool slot from the same process — the canonical Celery anti-pattern in async services.</p></div>
+      <div class="row"><span class="k">Fix</span><p>Return 202 + task_id and poll for status (like POST /salt/cmd), or call the existing sync salt_api_client via asyncio.to_thread instead of round-tripping through Celery.</p></div>
+      <div class="labels"><span class="lbl">bug</span> <span class="lbl">refactor</span></div>
+    </article>
+
+    <article class="card high" data-sev="High">
+      <header class="card-h">
+        <span class="sev high">High</span>
+        <span class="fid">ARC-2</span>
+        <h3>Layering violation: service layer imports from the API layer</h3>
+        <span class="issue"><a class="ilink" href="https://github.com/hellodk/kri/issues/746" target="_blank" rel="noopener">#746</a></span>
+      </header>
+      <div class="loc"><code>fleet_platform/services/monitoring_svc.py:13</code></div>
+      <pre class="ev">from fleet_platform.api.deps import get_redis</pre>
+      <div class="row"><span class="k">Impact</span><p>services/ is below api/ in the intended dependency order. This upward import means the service only works after API lifespan init, can&#x27;t run from a Celery worker/CLI, and is untestable in isolation.</p></div>
+      <div class="row"><span class="k">Fix</span><p>Move Redis client init to fleet_platform/core/redis.py or inject the client as a parameter. Services should depend on core, not on api.</p></div>
+      <div class="labels"><span class="lbl">refactor</span></div>
+    </article>
+
+    <article class="card high" data-sev="High">
+      <header class="card-h">
+        <span class="sev high">High</span>
+        <span class="fid">ARC-3</span>
+        <h3>Sync Redis connection created per request on the async ingest hot path</h3>
+        <span class="issue"><a class="ilink" href="https://github.com/hellodk/kri/issues/747" target="_blank" rel="noopener">#747</a></span>
+      </header>
+      <div class="loc"><code>fleet_platform/api/routes/ingest.py:49-59</code></div>
+      <pre class="ev">r = sync_redis.Redis.from_url(settings.redis_url, ...)  # inside async ingest handler; async get_redis() singleton ignored</pre>
+      <div class="row"><span class="k">Impact</span><p>Each grain push opens a new unpooled TCP connection to Redis with no reuse and no close. A 100-node fleet generates ~100 new connections/min. The async Redis singleton already exists in api/deps.py but is not used here.</p></div>
+      <div class="row"><span class="k">Fix</span><p>Use the injected async Redis dependency (await redis.incr/expire) or move the sync call into asyncio.to_thread.</p></div>
+      <div class="labels"><span class="lbl">refactor</span> <span class="lbl">bug</span></div>
+    </article>
+
+    <article class="card high" data-sev="High">
+      <header class="card-h">
+        <span class="sev high">High</span>
+        <span class="fid">ARC-4</span>
+        <h3>Deprecated inline SSH credential columns still live and read as fallback (dual secret paths)</h3>
+        <span class="issue"><a class="ilink" href="https://github.com/hellodk/kri/issues/748" target="_blank" rel="noopener">#748</a></span>
+      </header>
+      <div class="loc"><code>fleet_platform/models/node.py:51-56; fleet_platform/models/group.py:28-31</code></div>
+      <pre class="ev">ssh_username/ssh_password_enc/ssh_auth_mode/ssh_key_enc marked DEPRECATED (#704/#697) but still read via services/ssh_credential_link.py; migration 055 exists</pre>
+      <div class="row"><span class="k">Impact</span><p>Two Fernet-encrypted storage paths run simultaneously for the same secret, so migration 055 can&#x27;t be verified complete by inspection and a fallback bug can keep decrypting from the deprecated columns even after migration.</p></div>
+      <div class="row"><span class="k">Fix</span><p>Finish migration 055, add migration 056 to drop the columns, and remove the fallback read path after the migration window.</p></div>
+      <div class="labels"><span class="lbl">refactor</span> <span class="lbl">security</span></div>
+    </article>
+
+    <article class="card high" data-sev="High">
+      <header class="card-h">
+        <span class="sev high">High</span>
+        <span class="fid">ARC-5</span>
+        <h3>Routes import worker modules directly, coupling API and worker import graphs</h3>
+        <span class="issue"><a class="ilink" href="https://github.com/hellodk/kri/issues/749" target="_blank" rel="noopener">#749</a></span>
+      </header>
+      <div class="loc"><code>fleet_platform/api/routes/ingest.py:26-27; api/routes/drift.py:18; api/routes/nodes.py:665 (+9 more)</code></div>
+      <pre class="ev">from fleet_platform.workers.drift_tasks import compute_drift; from fleet_platform.workers.sbom_tasks import index_sbom</pre>
+      <div class="row"><span class="k">Impact</span><p>Importing worker callables pulls celery_app init, sync DB engines, and HTTP clients into every uvicorn worker. Worker import-time side effects can crash API startup, and the shared import graph blocks independent deploy/scale.</p></div>
+      <div class="row"><span class="k">Fix</span><p>Dispatch by string name via celery_app.send_task(...) or behind a service layer; apply deferred local imports consistently.</p></div>
+      <div class="labels"><span class="lbl">refactor</span></div>
+    </article>
+
+    <article class="card med" data-sev="Medium">
+      <header class="card-h">
+        <span class="sev med">Medium</span>
+        <span class="fid">ARC-10</span>
+        <h3>Single Celery Beat is a silent SPOF for all 15 scheduled tasks</h3>
+        <span class="issue"><a class="ilink" href="https://github.com/hellodk/kri/issues/754" target="_blank" rel="noopener">#754</a></span>
+      </header>
+      <div class="loc"><code>fleet_platform/workers/celery_app.py:94-188</code></div>
+      <pre class="ev">15 beats configured on one celery beat process; redbeat_redis_url set but RedBeatScheduler not configured as beat_scheduler</pre>
+      <div class="row"><span class="k">Impact</span><p>A beat crash silently stops grain refresh, stale-node marking, alert evaluation, and reapers — the system degrades with no alert; /monitoring/summary does not check beat liveness.</p></div>
+      <div class="row"><span class="k">Fix</span><p>Enable redbeat as the scheduler for HA, or add a beat heartbeat key + alert when it goes stale.</p></div>
+      <div class="labels"><span class="lbl">infra</span></div>
+    </article>
+
+    <article class="card med" data-sev="Medium">
+      <header class="card-h">
+        <span class="sev med">Medium</span>
+        <span class="fid">ARC-11</span>
+        <h3>Pervasive frontend polling with no push mechanism for live job state</h3>
+        <span class="issue"><a class="ilink" href="https://github.com/hellodk/kri/issues/756" target="_blank" rel="noopener">#756</a></span>
+      </header>
+      <div class="loc"><code>frontend/src/pages/PlaybookJobDetail.tsx; pages/BootstrapModal.tsx; lib/bootstrapRefetchInterval.ts (+21 files)</code></div>
+      <pre class="ev">24 files use refetchInterval/setInterval; SSE infra already exists (POST /api/v1/agent/run/stream, WebSocket in webssh.py) but is unused for jobs</pre>
+      <div class="row"><span class="k">Impact</span><p>Each open tab issues full authenticated HTTP+DB requests every interval; with N operators watching jobs this becomes the dominant read load and scales linearly with users.</p></div>
+      <div class="row"><span class="k">Fix</span><p>Reuse the SSE pattern from agent.py for an /ansible/jobs/{id}/stream endpoint; subscribe once per tab.</p></div>
+      <div class="labels"><span class="lbl">refactor</span> <span class="lbl">frontend</span></div>
+    </article>
+
+    <article class="card med" data-sev="Medium">
+      <header class="card-h">
+        <span class="sev med">Medium</span>
+        <span class="fid">ARC-6</span>
+        <h3>God files: ansible.py (~1,660 lines) and ansible_tasks.py (~1,375 lines)</h3>
+        <span class="issue"><a class="ilink" href="https://github.com/hellodk/kri/issues/750" target="_blank" rel="noopener">#750</a></span>
+      </header>
+      <div class="loc"><code>fleet_platform/api/routes/ansible.py; fleet_platform/workers/ansible_tasks.py</code></div>
+      <pre class="ev">ansible.py mixes git source mgmt, playbook discovery, YAML parsing, subprocess, file browsing, bootstrap, git clone, extravars scrub, audit logging in one router</pre>
+      <div class="row"><span class="k">Impact</span><p>Untestable in isolation, change-risky, and violates SRP. Pure business logic (_scrub_extravars, _validate_minion_id, _git_clone_and_list) lives in a router file.</p></div>
+      <div class="row"><span class="k">Fix</span><p>Split ansible.py into a thin router + services (playbook_source_mgr, bootstrap_svc); split ansible_tasks.py into bootstrap_tasks and grain_tasks.</p></div>
+      <div class="labels"><span class="lbl">refactor</span></div>
+    </article>
+
+    <article class="card med" data-sev="Medium">
+      <header class="card-h">
+        <span class="sev med">Medium</span>
+        <span class="fid">ARC-7</span>
+        <h3>Fernet cipher re-instantiated on every encrypt/decrypt call</h3>
+        <span class="issue"><a class="ilink" href="https://github.com/hellodk/kri/issues/751" target="_blank" rel="noopener">#751</a></span>
+      </header>
+      <div class="loc"><code>fleet_platform/services/platform_settings_svc.py:228-234</code></div>
+      <pre class="ev">def _fernet(): return Fernet(_fernet_key())  # re-derives key + rebuilds Fernet each call</pre>
+      <div class="row"><span class="k">Impact</span><p>Every node credential read, Salt API password decrypt, and SMTP/LLM secret access re-hashes/decodes the key and rebuilds Fernet. Redundant CPU work under load; the key never changes at runtime.</p></div>
+      <div class="row"><span class="k">Fix</span><p>Cache the Fernet instance as a module-level singleton initialized once.</p></div>
+      <div class="labels"><span class="lbl">refactor</span></div>
+    </article>
+
+    <article class="card med" data-sev="Medium">
+      <header class="card-h">
+        <span class="sev med">Medium</span>
+        <span class="fid">ARC-8</span>
+        <h3>Minion-ID validation regex duplicated across 5 files with inconsistent bounds</h3>
+        <span class="issue"><a class="ilink" href="https://github.com/hellodk/kri/issues/752" target="_blank" rel="noopener">#752</a></span>
+      </header>
+      <div class="loc"><code>api/routes/fleet.py:40; api/routes/ansible.py:44; api/routes/salt_ops.py:27; api/routes/salt_keys.py:20; workers/ansible_tasks.py:43</code></div>
+      <pre class="ev">fleet.py/salt_ops.py/salt_keys.py use ^[a-zA-Z0-9._-]+ (no length bound); ansible.py uses ^[a-zA-Z0-9._-]{1,128}$</pre>
+      <div class="row"><span class="k">Impact</span><p>fleet.py and salt_ops/keys accept arbitrarily long minion IDs; an adversary can submit a 10KB ID that passes one validator but is rejected later — inconsistent validation surfaces.</p></div>
+      <div class="row"><span class="k">Fix</span><p>Centralize MINION_ID_RE = re.compile(r&#x27;^[a-zA-Z0-9._-]{1,128}$&#x27;) in core/validators.py and import everywhere.</p></div>
+      <div class="labels"><span class="lbl">refactor</span> <span class="lbl">security</span></div>
+    </article>
+
+    <article class="card med" data-sev="Medium">
+      <header class="card-h">
+        <span class="sev med">Medium</span>
+        <span class="fid">ARC-9</span>
+        <h3>node_facts hypertable has retention but no compression policy</h3>
+        <span class="issue"><a class="ilink" href="https://github.com/hellodk/kri/issues/753" target="_blank" rel="noopener">#753</a></span>
+      </header>
+      <div class="loc"><code>fleet_platform/db/migrations/versions/001_initial_schema.py:117</code></div>
+      <pre class="ev">create_hypertable(&#x27;node_facts&#x27;, ...); add_retention_policy(&#x27;node_facts&#x27;, INTERVAL &#x27;90 days&#x27;)  # no add_compression_policy, unlike node_health_snapshots</pre>
+      <div class="row"><span class="k">Impact</span><p>node_facts stores 5-20KB JSONB grain blobs. At ~300 nodes every 5 min that is ~500MB/day uncompressed → ~45GB over 90 days vs ~3-5GB compressed.</p></div>
+      <div class="row"><span class="k">Fix</span><p>Add add_compression_policy(&#x27;node_facts&#x27;, INTERVAL &#x27;7 days&#x27;) with segmentby=&#x27;node_id&#x27; in a new migration.</p></div>
+      <div class="labels"><span class="lbl">infra</span></div>
+    </article>
+
+    <article class="card low" data-sev="Low">
+      <header class="card-h">
+        <span class="sev low">Low</span>
+        <span class="fid">ARC-12</span>
+        <h3>All-deprecated X-XSS-Protection header and no API-versioning strategy beyond /api/v1 prefix</h3>
+        <span class="issue"><a class="ilink" href="https://github.com/hellodk/kri/issues/755" target="_blank" rel="noopener">#755</a></span>
+      </header>
+      <div class="loc"><code>deploy/nginx.conf.template; fleet_platform/api (route prefixes)</code></div>
+      <pre class="ev">Routes hardcode /api/v1 prefixes throughout; no documented deprecation/versioning policy for breaking schema changes</pre>
+      <div class="row"><span class="k">Impact</span><p>Without a versioning/deprecation policy, breaking changes to response schemas affect the SPA and any external consumers with no migration window.</p></div>
+      <div class="row"><span class="k">Fix</span><p>Document an API versioning + deprecation policy and add contract tests (see Tester findings) to detect schema drift.</p></div>
+      <div class="labels"><span class="lbl">docs</span> <span class="lbl">refactor</span></div>
+    </article>
+  </section>
+  <section class="tab" id="tab-SRE">
+    <div class="tab-head">
+      <h2>Principal SRE</h2>
+      <p class="blurb">Deploy, reliability, observability, sec-ops &middot; 13 findings</p>
+      <div class="chips"><span class="chip crit">1 Critical</span> <span class="chip high">3 High</span> <span class="chip med">8 Medium</span> <span class="chip low">1 Low</span></div>
+    </div>
+
+    <article class="card crit" data-sev="Critical">
+      <header class="card-h">
+        <span class="sev crit">Critical</span>
+        <span class="fid">SRE-1</span>
+        <h3>Default admin/admin credential documented, not enforced to change</h3>
+        <span class="issue"><a class="ilink" href="https://github.com/hellodk/kri/issues/757" target="_blank" rel="noopener">#757</a></span>
+      </header>
+      <div class="loc"><code>README.md:141</code></div>
+      <pre class="ev">log in with `admin` / `admin` — change this immediately under Settings.</pre>
+      <div class="row"><span class="k">Impact</span><p>Any operator who follows quick start and forgets to change it exposes full admin control of the fleet plane (SSH keys, node secrets, playbook execution). The advisory text provides no enforcement, and it diverges from the env-var seeding path in user_seeding.py.</p></div>
+      <div class="row"><span class="k">Fix</span><p>Eliminate the admin/admin default (require explicit seed env vars) or force a one-time password change on first login; audit deployed instances for the default hash.</p></div>
+      <div class="labels"><span class="lbl">security</span></div>
+    </article>
+
+    <article class="card high" data-sev="High">
+      <header class="card-h">
+        <span class="sev high">High</span>
+        <span class="fid">SRE-2</span>
+        <h3>cmd.run in Salt API allowlist grants operator-level RCE on any fleet node</h3>
+        <span class="issue"><a class="ilink" href="https://github.com/hellodk/kri/issues/758" target="_blank" rel="noopener">#758</a></span>
+      </header>
+      <div class="loc"><code>deploy/salt-master.conf:83; fleet_platform/services/platform_settings_svc.py:98</code></div>
+      <pre class="ev">external_auth allowlist includes &#x27;cmd.run&#x27;; _DEFAULT_SALT_FUNCTIONS includes it; _FORBIDDEN_SALT_FUNCTIONS only applies to AI-generated artifacts</pre>
+      <div class="row"><span class="k">Impact</span><p>Any operator-role user can POST /api/v1/salt/cmd {function:&#x27;cmd.run&#x27;, args:[&#x27;&lt;shell&gt;&#x27;]} for remote shell on every node. The agent forbidden-function set does not cover direct operator API calls.</p></div>
+      <div class="row"><span class="k">Fix</span><p>Remove cmd.run from the Salt external_auth allowlist and _DEFAULT_SALT_FUNCTIONS; if needed, restrict to admin role behind a separate approval + audit workflow.</p></div>
+      <div class="labels"><span class="lbl">security</span></div>
+    </article>
+
+    <article class="card high" data-sev="High">
+      <header class="card-h">
+        <span class="sev high">High</span>
+        <span class="fid">SRE-3</span>
+        <h3>Login rate limiter keyed on spoofable X-Forwarded-For</h3>
+        <span class="issue"><a class="ilink" href="https://github.com/hellodk/kri/issues/759" target="_blank" rel="noopener">#759</a></span>
+      </header>
+      <div class="loc"><code>fleet_platform/api/limiter.py:13; deploy/nginx.conf.template:49</code></div>
+      <pre class="ev">Limiter(key_func=get_remote_address); nginx uses proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for (appends)</pre>
+      <div class="row"><span class="k">Impact</span><p>SlowAPI reads the first XFF IP; nginx appends rather than overwrites, so an attacker sending X-Forwarded-For: 1.2.3.4 controls the limiter key and can rotate fake IPs to fully bypass the 10/min login limit — enabling credential brute force.</p></div>
+      <div class="row"><span class="k">Fix</span><p>Set proxy_set_header X-Forwarded-For $remote_addr at the nginx boundary and configure SlowAPI with an explicit trusted-proxy list.</p></div>
+      <div class="labels"><span class="lbl">security</span></div>
+    </article>
+
+    <article class="card high" data-sev="High">
+      <header class="card-h">
+        <span class="sev high">High</span>
+        <span class="fid">SRE-4</span>
+        <h3>No securityContext in any Kubernetes deployment</h3>
+        <span class="issue"><a class="ilink" href="https://github.com/hellodk/kri/issues/760" target="_blank" rel="noopener">#760</a></span>
+      </header>
+      <div class="loc"><code>deploy/k8s/api-deployment.yaml; worker-deployment.yaml; beat-deployment.yaml; worker-ansible-deployment.yaml</code></div>
+      <pre class="ev">Zero matches for securityContext/runAsNonRoot/allowPrivilegeEscalation/readOnlyRootFilesystem/capabilities across all four manifests</pre>
+      <div class="row"><span class="k">Impact</span><p>Without runAsNonRoot/allowPrivilegeEscalation:false/drop ALL capabilities, a container exploit can escalate to root; pods would be rejected by Pod Security Admission &#x27;restricted&#x27;.</p></div>
+      <div class="row"><span class="k">Fix</span><p>Add a hardened pod/container securityContext (runAsNonRoot, runAsUser 1001, allowPrivilegeEscalation:false, readOnlyRootFilesystem, capabilities drop ALL).</p></div>
+      <div class="labels"><span class="lbl">security</span> <span class="lbl">infra</span></div>
+    </article>
+
+    <article class="card med" data-sev="Medium">
+      <header class="card-h">
+        <span class="sev med">Medium</span>
+        <span class="fid">SRE-10</span>
+        <h3>No Content-Security-Policy header; deprecated X-XSS-Protection still set</h3>
+        <span class="issue"><a class="ilink" href="https://github.com/hellodk/kri/issues/764" target="_blank" rel="noopener">#764</a></span>
+      </header>
+      <div class="loc"><code>deploy/nginx.conf.template:19-24; deploy/nginx-tls.conf.template:21-26</code></div>
+      <pre class="ev">Sets X-Content-Type-Options/X-Frame-Options/X-XSS-Protection/Referrer-Policy/Permissions-Policy but no Content-Security-Policy</pre>
+      <div class="row"><span class="k">Impact</span><p>Without CSP, any reflected/stored XSS in the SPA can exfiltrate JWTs from localStorage and drive fleet-wide API calls.</p></div>
+      <div class="row"><span class="k">Fix</span><p>Add a strict CSP (default-src &#x27;self&#x27;; script-src &#x27;self&#x27;; object-src &#x27;none&#x27;; frame-ancestors &#x27;none&#x27;) and remove the deprecated X-XSS-Protection header.</p></div>
+      <div class="labels"><span class="lbl">security</span></div>
+    </article>
+
+    <article class="card med" data-sev="Medium">
+      <header class="card-h">
+        <span class="sev med">Medium</span>
+        <span class="fid">SRE-11</span>
+        <h3>Ingest rate limiter fails open when Redis is unavailable</h3>
+        <span class="issue"><a class="ilink" href="https://github.com/hellodk/kri/issues/768" target="_blank" rel="noopener">#768</a></span>
+      </header>
+      <div class="loc"><code>fleet_platform/api/routes/ingest.py:57-59</code></div>
+      <pre class="ev">except Exception: return True  # fail open</pre>
+      <div class="row"><span class="k">Impact</span><p>If Redis is down, the per-node 10/min ingest limit is silently bypassed for all nodes; a compromised/malfunctioning node can flood the API and fill PostgreSQL with process-stat rows.</p></div>
+      <div class="row"><span class="k">Fix</span><p>Fail closed (or at minimum emit a kri_ingest_ratelimit_redis_errors_total metric/log) so the outage is visible before it becomes a flood.</p></div>
+      <div class="labels"><span class="lbl">security</span> <span class="lbl">bug</span></div>
+    </article>
+
+    <article class="card med" data-sev="Medium">
+      <header class="card-h">
+        <span class="sev med">Medium</span>
+        <span class="fid">SRE-12</span>
+        <h3>No K8s NetworkPolicy, PodDisruptionBudget, or HPA; all deployments replicas: 1</h3>
+        <span class="issue"><a class="ilink" href="https://github.com/hellodk/kri/issues/769" target="_blank" rel="noopener">#769</a></span>
+      </header>
+      <div class="loc"><code>deploy/k8s/ (absent files)</code></div>
+      <pre class="ev">No networkpolicy.yaml/poddisruptionbudget.yaml/hpa.yaml; all deployments run replicas: 1</pre>
+      <div class="row"><span class="k">Impact</span><p>Any pod can reach any other (compromised frontend → API internal port); a node drain causes full API outage; no autoscaling under load.</p></div>
+      <div class="row"><span class="k">Fix</span><p>Add NetworkPolicy (restrict API ingress to nginx/monitoring), PDBs (minAvailable:1), and HPA for the API.</p></div>
+      <div class="labels"><span class="lbl">infra</span> <span class="lbl">security</span></div>
+    </article>
+
+    <article class="card med" data-sev="Medium">
+      <header class="card-h">
+        <span class="sev med">Medium</span>
+        <span class="fid">SRE-5</span>
+        <h3>pg_backup container runs as root and has no healthcheck</h3>
+        <span class="issue"><a class="ilink" href="https://github.com/hellodk/kri/issues/762" target="_blank" rel="noopener">#762</a></span>
+      </header>
+      <div class="loc"><code>deploy/docker-compose.yml:59-106</code></div>
+      <pre class="ev">writes creds to /root/.config/rclone/rclone.conf (root); no healthcheck stanza unlike all other services</pre>
+      <div class="row"><span class="k">Impact</span><p>Root process holds cloud-storage credentials (container breakout = host compromise). Failed backups are silent — restart policy retries but never alerts, so an operator may believe backups run while they have failed for days.</p></div>
+      <div class="row"><span class="k">Fix</span><p>Run the backup service non-root, add a healthcheck verifying a recent dump file, and add a dead-man&#x27;s-switch alert.</p></div>
+      <div class="labels"><span class="lbl">infra</span> <span class="lbl">security</span></div>
+    </article>
+
+    <article class="card med" data-sev="Medium">
+      <header class="card-h">
+        <span class="sev med">Medium</span>
+        <span class="fid">SRE-6</span>
+        <h3>Backups unencrypted and local-only by default</h3>
+        <span class="issue"><a class="ilink" href="https://github.com/hellodk/kri/issues/761" target="_blank" rel="noopener">#761</a></span>
+      </header>
+      <div class="loc"><code>deploy/.env.docker.example:60-82; deploy/docker-compose.yml:42,63</code></div>
+      <pre class="ev">BACKUP_AGE_RECIPIENT defaults empty; &#x27;WARN: age encryption failed, keeping plain dump&#x27;; BACKUP_REMOTE also defaults empty</pre>
+      <div class="row"><span class="k">Impact</span><p>By default a full PostgreSQL dump (hashed passwords, encrypted node/group secrets, audit logs, topology) sits unencrypted on the host volume with no offsite copy. Volume/host theft yields the whole DB.</p></div>
+      <div class="row"><span class="k">Fix</span><p>Make BACKUP_AGE_RECIPIENT required in production (${VAR:?}), strongly recommend BACKUP_REMOTE, and warn at startup when neither is set.</p></div>
+      <div class="labels"><span class="lbl">security</span> <span class="lbl">infra</span></div>
+    </article>
+
+    <article class="card med" data-sev="Medium">
+      <header class="card-h">
+        <span class="sev med">Medium</span>
+        <span class="fid">SRE-7</span>
+        <h3>/metrics endpoint unauthenticated at the application layer</h3>
+        <span class="issue"><a class="ilink" href="https://github.com/hellodk/kri/issues/763" target="_blank" rel="noopener">#763</a></span>
+      </header>
+      <div class="loc"><code>fleet_platform/api/main.py:194-204</code></div>
+      <pre class="ev">@app.get(&#x27;/metrics&#x27;) ... no Depends(get_current_user); protection delegated entirely to nginx IP ACLs</pre>
+      <div class="row"><span class="k">Impact</span><p>If the API becomes directly reachable (port-forward, LB misconfig, same Docker network), all metrics — including kri_node_ssh_reachable{minion_id} — are readable without auth.</p></div>
+      <div class="row"><span class="k">Fix</span><p>Add a bearer/shared-secret (METRICS_TOKEN) check on the /metrics handler as defense in depth.</p></div>
+      <div class="labels"><span class="lbl">security</span></div>
+    </article>
+
+    <article class="card med" data-sev="Medium">
+      <header class="card-h">
+        <span class="sev med">Medium</span>
+        <span class="fid">SRE-8</span>
+        <h3>auth/refresh endpoint has no rate limit</h3>
+        <span class="issue"><a class="ilink" href="https://github.com/hellodk/kri/issues/766" target="_blank" rel="noopener">#766</a></span>
+      </header>
+      <div class="loc"><code>fleet_platform/api/routes/auth.py:73-116</code></div>
+      <pre class="ev">@router.post(&#x27;/refresh&#x27;) has no @limiter.limit(...) unlike /auth/login (10/minute)</pre>
+      <div class="row"><span class="k">Impact</span><p>An attacker holding a stolen refresh token can mint unlimited access tokens with no throttling.</p></div>
+      <div class="row"><span class="k">Fix</span><p>Apply @limiter.limit(&#x27;20/minute&#x27;) (or stricter) to /auth/refresh.</p></div>
+      <div class="labels"><span class="lbl">security</span></div>
+    </article>
+
+    <article class="card med" data-sev="Medium">
+      <header class="card-h">
+        <span class="sev med">Medium</span>
+        <span class="fid">SRE-9</span>
+        <h3>FERNET_SECRET_KEY missing from .env.docker.example; CI uses a different name</h3>
+        <span class="issue"><a class="ilink" href="https://github.com/hellodk/kri/issues/765" target="_blank" rel="noopener">#765</a></span>
+      </header>
+      <div class="loc"><code>deploy/.env.docker.example (absent); fleet_platform/services/platform_settings_svc.py:210-214</code></div>
+      <pre class="ev">Non-dev raises RuntimeError if FERNET_SECRET_KEY unset; example file omits it; CI workflow sets FERNET_KEY (different name)</pre>
+      <div class="row"><span class="k">Impact</span><p>Operators copying the example hit a RuntimeError the first time a secret is read in production. CI&#x27;s wrong variable name leaves fernet_secret_key=None, masking the issue until prod.</p></div>
+      <div class="row"><span class="k">Fix</span><p>Add FERNET_SECRET_KEY to .env.docker.example with generation instructions and fix the CI workflow to use FERNET_SECRET_KEY.</p></div>
+      <div class="labels"><span class="lbl">bug</span> <span class="lbl">docs</span> <span class="lbl">infra</span></div>
+    </article>
+
+    <article class="card low" data-sev="Low">
+      <header class="card-h">
+        <span class="sev low">Low</span>
+        <span class="fid">SRE-13</span>
+        <h3>pg_backup installs age + rclone at runtime (supply-chain + cold-start risk)</h3>
+        <span class="issue"><a class="ilink" href="https://github.com/hellodk/kri/issues/767" target="_blank" rel="noopener">#767</a></span>
+      </header>
+      <div class="loc"><code>deploy/docker-compose.yml:62-66</code></div>
+      <pre class="ev">if ! command -v age ...: apt-get update &amp;&amp; apt-get install -y age rclone  # unpinned, every start</pre>
+      <div class="row"><span class="k">Impact</span><p>Every (re)start fetches unpinned packages from apt mirrors — a compromised mirror or breaking bump silently alters backups; adds ~30s start latency; breaks air-gapped deploys.</p></div>
+      <div class="row"><span class="k">Fix</span><p>Build a Dockerfile.backup with pinned age/rclone, run non-root, and scan it with Trivy in CI.</p></div>
+      <div class="labels"><span class="lbl">infra</span> <span class="lbl">security</span></div>
+    </article>
+  </section>
+  <section class="tab" id="tab-AI">
+    <div class="tab-head">
+      <h2>Principal AI/LLM Expert</h2>
+      <p class="blurb">Agent, prompts, RAG, injection, cost &middot; 13 findings</p>
+      <div class="chips"><span class="chip high">5 High</span> <span class="chip med">7 Medium</span> <span class="chip low">1 Low</span></div>
+    </div>
+
+    <article class="card high" data-sev="High">
+      <header class="card-h">
+        <span class="sev high">High</span>
+        <span class="fid">AI-1</span>
+        <h3>Indirect prompt injection via unsanitized tool-result observations</h3>
+        <span class="issue"><a class="ilink" href="https://github.com/hellodk/kri/issues/770" target="_blank" rel="noopener">#770</a></span>
+      </header>
+      <div class="loc"><code>fleet_platform/agent/planner.py:42-56, 79-87</code></div>
+      <pre class="ev">_summarize_result serializes raw tool result into observations; _user_prompt concatenates them into the next-iteration prompt without sanitization</pre>
+      <div class="row"><span class="k">Impact</span><p>Tool results include raw DB data (hostnames, minion IDs, playbook/RAG text). Unlike the system prompt (which runs sanitize_untrusted), these observations are injected raw, so a hostile node hostname can steer the model — info exfiltration for read tools and approval-gate social engineering for write tools.</p></div>
+      <div class="row"><span class="k">Fix</span><p>Apply sanitize_untrusted (or is_suspicious flagging) to all string values inside tool results before serializing, mirroring llm_context._sanitize_cell.</p></div>
+      <div class="labels"><span class="lbl">security</span></div>
+    </article>
+
+    <article class="card high" data-sev="High">
+      <header class="card-h">
+        <span class="sev high">High</span>
+        <span class="fid">AI-2</span>
+        <h3>Operator can self-approve their own agent-proposed actions (single-target)</h3>
+        <span class="issue"><a class="ilink" href="https://github.com/hellodk/kri/issues/772" target="_blank" rel="noopener">#772</a></span>
+      </header>
+      <div class="loc"><code>fleet_platform/services/agent_apply_svc.py:107-116</code></div>
+      <pre class="ev">On the pending→approved path there is no approver_email != action.requested_by check (only the co-sign path enforces a different person); co-sign triggers only above 8 targets</pre>
+      <div class="row"><span class="k">Impact</span><p>For every single-target live action (restart_service, apply_salt_state, set_pillar, bootstrap_node, enable_node) the human-in-the-loop gate is a rubber stamp the requester can click. A compromised/malicious operator can propose and self-approve destructive actions.</p></div>
+      <div class="row"><span class="k">Fix</span><p>Reject approval when approver_email == requested_by on the single-approval path.</p></div>
+      <div class="labels"><span class="lbl">security</span></div>
+    </article>
+
+    <article class="card high" data-sev="High">
+      <header class="card-h">
+        <span class="sev high">High</span>
+        <span class="fid">AI-3</span>
+        <h3>set_pillar tool silently ignores its value argument</h3>
+        <span class="issue"><a class="ilink" href="https://github.com/hellodk/kri/issues/771" target="_blank" rel="noopener">#771</a></span>
+      </header>
+      <div class="loc"><code>fleet_platform/agent/tools.py:382-392</code></div>
+      <pre class="ev">_set_pillar only calls saltutil.refresh_pillar(minion_id) then returns {&#x27;pillar_key&#x27;:..., &#x27;value&#x27;:..., &#x27;refreshed&#x27;:...} — key/value never applied</pre>
+      <div class="row"><span class="k">Impact</span><p>Operator/LLM believes a pillar value was set and sees it confirmed in the audit log, but only a refresh ran. Breaks operational intent silently; a secret rotation leaves the old secret active while the audit trail says otherwise.</p></div>
+      <div class="row"><span class="k">Fix</span><p>Either remove pillar_key/value from the schema (since unused) or implement actual pillar-value setting and document preconditions.</p></div>
+      <div class="labels"><span class="lbl">bug</span> <span class="lbl">security</span></div>
+    </article>
+
+    <article class="card high" data-sev="High">
+      <header class="card-h">
+        <span class="sev high">High</span>
+        <span class="fid">AI-4</span>
+        <h3>RAG chunk content injected raw into the system prompt (stored prompt injection)</h3>
+        <span class="issue"><a class="ilink" href="https://github.com/hellodk/kri/issues/773" target="_blank" rel="noopener">#773</a></span>
+      </header>
+      <div class="loc"><code>fleet_platform/services/embedding_svc.py:510-518 (chunking 91-118)</code></div>
+      <pre class="ev">format_retrieved_chunks appends c[&#x27;chunk_text&#x27;] verbatim; chunk_playbook indexes raw YAML names/hosts/tasks without sanitization</pre>
+      <div class="row"><span class="k">Impact</span><p>Playbook/Salt content reaches the system prompt unsanitized. A crafted chunk (e.g. starting with &#x27;## Rules&#x27;) can displace the grounding-rules tail used by _truncate_system_prompt, achieving stored injection on any later fleet query.</p></div>
+      <div class="row"><span class="k">Fix</span><p>Apply sanitize_untrusted before embedding and before format_retrieved_chunks; neutralize code fences, &#x27;## Rules&#x27; headers, and model-control tokens in indexed content.</p></div>
+      <div class="labels"><span class="lbl">security</span></div>
+    </article>
+
+    <article class="card high" data-sev="High">
+      <header class="card-h">
+        <span class="sev high">High</span>
+        <span class="fid">AI-5</span>
+        <h3>Cloud cost cap is in-process only, not shared across workers</h3>
+        <span class="issue"><a class="ilink" href="https://github.com/hellodk/kri/issues/774" target="_blank" rel="noopener">#774</a></span>
+      </header>
+      <div class="loc"><code>fleet_platform/services/cost_tracker.py:60-62</code></div>
+      <pre class="ev">STATE = _CostState() module-level singleton; no Redis/DB, no lock; _spend_usd += cost</pre>
+      <div class="row"><span class="k">Impact</span><p>With N worker processes the effective daily cap is N × DAILY_CAP_USD ($5 cap × 4 workers = $20/day). The += is also a data race under threading.</p></div>
+      <div class="row"><span class="k">Fix</span><p>Move cost state to a shared atomic store (Redis INCRBYFLOAT or a DB row); until then document the cap as per-worker and size accordingly.</p></div>
+      <div class="labels"><span class="lbl">bug</span></div>
+    </article>
+
+    <article class="card med" data-sev="Medium">
+      <header class="card-h">
+        <span class="sev med">Medium</span>
+        <span class="fid">AI-10</span>
+        <h3>Cost tracked only when routed_via ends with &#x27;cloud&#x27;; direct-endpoint runs untracked</h3>
+        <span class="issue"><a class="ilink" href="https://github.com/hellodk/kri/issues/780" target="_blank" rel="noopener">#780</a></span>
+      </header>
+      <div class="loc"><code>fleet_platform/api/routes/agent.py:183-186</code></div>
+      <pre class="ev">if routed_via and routed_via.endswith(&#x27;cloud&#x27;): cost_tracker.record_tokens(...); routed_via is None for direct endpoint_id selection</pre>
+      <div class="row"><span class="k">Impact</span><p>Selecting a paid cloud endpoint directly by UUID records no spend and bypasses the daily cap; a different routing tag convention would also miss tracking.</p></div>
+      <div class="row"><span class="k">Fix</span><p>Track cost based on endpoint.provider membership in a cloud-provider set, decoupled from routing-tag strings.</p></div>
+      <div class="labels"><span class="lbl">bug</span></div>
+    </article>
+
+    <article class="card med" data-sev="Medium">
+      <header class="card-h">
+        <span class="sev med">Medium</span>
+        <span class="fid">AI-11</span>
+        <h3>Read-only Salt tools accept comma lists and silently broadcast to many minions</h3>
+        <span class="issue"><a class="ilink" href="https://github.com/hellodk/kri/issues/779" target="_blank" rel="noopener">#779</a></span>
+      </header>
+      <div class="loc"><code>fleet_platform/workers/salt_tasks.py:104-114; agent/tools.py (run_salt_cmd, apply_salt_state_dry_run)</code></div>
+      <pre class="ev">payload tgt_type=&#x27;list&#x27; with target from minion_id (free string maxLength 255); _target_count comma check only applies to live approval-gated tools</pre>
+      <div class="row"><span class="k">Impact</span><p>run_salt_cmd / dry-run can be broadcast to many minions with no user indication (e.g. grains.items × 100 nodes), a large Salt-master load spike logged as a single tool call.</p></div>
+      <div class="row"><span class="k">Fix</span><p>Reject commas in minion_id for read tools (single minion only) or use tgt_type=&#x27;glob&#x27; with an exact match.</p></div>
+      <div class="labels"><span class="lbl">security</span> <span class="lbl">bug</span></div>
+    </article>
+
+    <article class="card med" data-sev="Medium">
+      <header class="card-h">
+        <span class="sev med">Medium</span>
+        <span class="fid">AI-12</span>
+        <h3>Audit _redact is length-only; secret tool arguments logged in plaintext</h3>
+        <span class="issue"><a class="ilink" href="https://github.com/hellodk/kri/issues/781" target="_blank" rel="noopener">#781</a></span>
+      </header>
+      <div class="loc"><code>fleet_platform/agent/audit.py:51-58</code></div>
+      <pre class="ev">_redact only truncates strings &gt;500 chars; set_pillar &#x27;value&#x27; (maxLength 2000) and YAML &#x27;content&#x27; pass through into audit_events</pre>
+      <div class="row"><span class="k">Impact</span><p>Plaintext secrets (e.g. set_pillar value=&#x27;db_password_new123&#x27;) land in the audit table; anyone with DB/log access can read them.</p></div>
+      <div class="row"><span class="k">Fix</span><p>Add a field-name blocklist ({value, content, password, secret, token, api_key} → [REDACTED]) or mark sensitive ToolSpec params for unconditional redaction.</p></div>
+      <div class="labels"><span class="lbl">security</span></div>
+    </article>
+
+    <article class="card med" data-sev="Medium">
+      <header class="card-h">
+        <span class="sev med">Medium</span>
+        <span class="fid">AI-6</span>
+        <h3>Salt state name argument is LLM-controlled with no allowlist</h3>
+        <span class="issue"><a class="ilink" href="https://github.com/hellodk/kri/issues/775" target="_blank" rel="noopener">#775</a></span>
+      </header>
+      <div class="loc"><code>fleet_platform/agent/tools.py:282-287, 369-373</code></div>
+      <pre class="ev">state.apply &lt;state&gt; with `state` a free string (maxLength 200), no allowlist; run_salt_cmd allowlists function but apply_salt_state* does not constrain state names</pre>
+      <div class="row"><span class="k">Impact</span><p>The LLM (or an injection) can invoke arbitrary state names on minions; path-traversal-style names may be accepted depending on Salt file_roots.</p></div>
+      <div class="row"><span class="k">Fix</span><p>Allowlist permitted state names (from platform settings) or validate against ^[a-zA-Z0-9_][a-zA-Z0-9_./-]{0,199}$.</p></div>
+      <div class="labels"><span class="lbl">security</span></div>
+    </article>
+
+    <article class="card med" data-sev="Medium">
+      <header class="card-h">
+        <span class="sev med">Medium</span>
+        <span class="fid">AI-7</span>
+        <h3>run_salt_cmd passes LLM-controlled args list to Salt with no constraints</h3>
+        <span class="issue"><a class="ilink" href="https://github.com/hellodk/kri/issues/776" target="_blank" rel="noopener">#776</a></span>
+      </header>
+      <div class="loc"><code>fleet_platform/agent/tools.py:253-279</code></div>
+      <pre class="ev">args schema = {type: array} with no maxItems / item type / length; passed as-is to _run_salt_api</pre>
+      <div class="row"><span class="k">Impact</span><p>Information disclosure via Salt grain/pillar probes (e.g. grains.get with sensitive keys) directed by the LLM, surfacing in tool-result observations.</p></div>
+      <div class="row"><span class="k">Fix</span><p>Add maxItems and per-item maxLength; allowlist safe grain keys; block pillar-accessing argument patterns.</p></div>
+      <div class="labels"><span class="lbl">security</span></div>
+    </article>
+
+    <article class="card med" data-sev="Medium">
+      <header class="card-h">
+        <span class="sev med">Medium</span>
+        <span class="fid">AI-8</span>
+        <h3>Guard list references unregistered tool and omits a registered write-live tool</h3>
+        <span class="issue"><a class="ilink" href="https://github.com/hellodk/kri/issues/777" target="_blank" rel="noopener">#777</a></span>
+      </header>
+      <div class="loc"><code>fleet_platform/agent/guards.py:18-24</code></div>
+      <pre class="ev">_DEPLANING_TOOLS includes &#x27;disable_node&#x27; (no ToolSpec) but omits &#x27;enable_node&#x27; (registered as write_live)</pre>
+      <div class="row"><span class="k">Impact</span><p>The protected-node guard never fires for disable_node (no such tool) and does NOT protect enable_node — a deferred security hazard that looks covered but isn&#x27;t.</p></div>
+      <div class="row"><span class="k">Fix</span><p>Add enable_node to _DEPLANING_TOOLS now; add disable_node only when registered; add a test asserting every approval-required write_live tool is in _DEPLANING_TOOLS.</p></div>
+      <div class="labels"><span class="lbl">security</span> <span class="lbl">test</span></div>
+    </article>
+
+    <article class="card med" data-sev="Medium">
+      <header class="card-h">
+        <span class="sev med">Medium</span>
+        <span class="fid">AI-9</span>
+        <h3>Intent classifier is order-sensitive and has cross-intent false positives</h3>
+        <span class="issue"><a class="ilink" href="https://github.com/hellodk/kri/issues/778" target="_blank" rel="noopener">#778</a></span>
+      </header>
+      <div class="loc"><code>fleet_platform/services/llm_intent.py:58-69</code></div>
+      <pre class="ev">Rules ordered salt_state→ansible_playbook→...; bare word &#x27;ansible&#x27; triggers ansible_playbook so &#x27;explain my ansible playbook&#x27; misroutes; generation addendums say &#x27;generate production-ready&#x27; vs fleet_query &#x27;do not speculate&#x27;</pre>
+      <div class="row"><span class="k">Impact</span><p>Wrong task addendum is silently delivered, changing model behavior — generating executable content when a query was intended, or vice versa. No confidence/ambiguity handling.</p></div>
+      <div class="row"><span class="k">Fix</span><p>Anchor patterns to avoid cross-intent matches, reorder so explain wins over generation when both match, and add confidence thresholding with fleet_query default.</p></div>
+      <div class="labels"><span class="lbl">bug</span></div>
+    </article>
+
+    <article class="card low" data-sev="Low">
+      <header class="card-h">
+        <span class="sev low">Low</span>
+        <span class="fid">AI-13</span>
+        <h3>LLM final answer streamed to the browser without output sanitization</h3>
+        <span class="issue"><a class="ilink" href="https://github.com/hellodk/kri/issues/782" target="_blank" rel="noopener">#782</a></span>
+      </header>
+      <div class="loc"><code>fleet_platform/api/routes/agent.py:170</code></div>
+      <pre class="ev">yield _sse({&#x27;type&#x27;: event.type, **event.data}); for &#x27;final&#x27;, event.data[&#x27;text&#x27;] is raw LLM output</pre>
+      <div class="row"><span class="k">Impact</span><p>If the frontend renders final.text as Markdown/HTML unsafely, an LLM-generated (or injection-induced) script payload could execute in the operator&#x27;s session.</p></div>
+      <div class="row"><span class="k">Fix</span><p>Sanitize HTML at the API boundary before emitting final, enforce CSP, and audit the frontend renderer for unsafe HTML.</p></div>
+      <div class="labels"><span class="lbl">security</span> <span class="lbl">frontend</span></div>
+    </article>
+  </section>
+  <section class="tab" id="tab-UX">
+    <div class="tab-head">
+      <h2>Principal UI/UX Engineer</h2>
+      <p class="blurb">Frontend, accessibility, performance &middot; 14 findings</p>
+      <div class="chips"><span class="chip crit">3 Critical</span> <span class="chip high">5 High</span> <span class="chip med">5 Medium</span> <span class="chip low">1 Low</span></div>
+    </div>
+
+    <article class="card crit" data-sev="Critical">
+      <header class="card-h">
+        <span class="sev crit">Critical</span>
+        <span class="fid">UX-1</span>
+        <h3>JWT token exposed as a WebSocket URL query parameter</h3>
+        <span class="issue"><a class="ilink" href="https://github.com/hellodk/kri/issues/783" target="_blank" rel="noopener">#783</a></span>
+      </header>
+      <div class="loc"><code>frontend/src/components/WebSSHTerminal.tsx:52; components/VNCViewer.tsx:34; components/ssh/MultiSessionTerminal.tsx:76</code></div>
+      <pre class="ev">const wsUrl = `ws://${window.location.host}/api/v1/ssh/session/${nodeId}?token=${encodeURIComponent(token)}`</pre>
+      <div class="row"><span class="k">Impact</span><p>The full JWT appears in the URL, which is logged by nginx/proxies, browser history, the address bar, and Referer headers. Anyone with log access can harvest valid session tokens.</p></div>
+      <div class="row"><span class="k">Fix</span><p>Send the token as the first WS message after connect, or use a short-lived ticket from a pre-auth REST call. Fix all three components together.</p></div>
+      <div class="labels"><span class="lbl">security</span> <span class="lbl">frontend</span></div>
+    </article>
+
+    <article class="card crit" data-sev="Critical">
+      <header class="card-h">
+        <span class="sev crit">Critical</span>
+        <span class="fid">UX-2</span>
+        <h3>WebSocket hardcodes ws:// and silently breaks on HTTPS</h3>
+        <span class="issue"><a class="ilink" href="https://github.com/hellodk/kri/issues/784" target="_blank" rel="noopener">#784</a></span>
+      </header>
+      <div class="loc"><code>frontend/src/components/WebSSHTerminal.tsx:52; components/VNCViewer.tsx:34; components/ssh/MultiSessionTerminal.tsx:76</code></div>
+      <pre class="ev">const wsUrl = `ws://${window.location.host}/...`</pre>
+      <div class="row"><span class="k">Impact</span><p>On HTTPS deployments, mixed-content policy blocks ws:// silently; SSH and VNC are non-functional over HTTPS with no user-visible error.</p></div>
+      <div class="row"><span class="k">Fix</span><p>Derive scheme: `${location.protocol === &#x27;https:&#x27; ? &#x27;wss&#x27; : &#x27;ws&#x27;}://${location.host}/...`</p></div>
+      <div class="labels"><span class="lbl">bug</span> <span class="lbl">frontend</span></div>
+    </article>
+
+    <article class="card crit" data-sev="Critical">
+      <header class="card-h">
+        <span class="sev crit">Critical</span>
+        <span class="fid">UX-3</span>
+        <h3>No React ErrorBoundary anywhere in the application</h3>
+        <span class="issue"><a class="ilink" href="https://github.com/hellodk/kri/issues/785" target="_blank" rel="noopener">#785</a></span>
+      </header>
+      <div class="loc"><code>frontend/src/App.tsx:132-186; components/Layout/Layout.tsx:93-95</code></div>
+      <pre class="ev">Suspense wraps &lt;Outlet/&gt; but ErrorBoundary has 0 results across src/</pre>
+      <div class="row"><span class="k">Impact</span><p>Any uncaught render error (null-deref on API data, bad cast, library exception) unmounts the whole app to a blank white screen with no recovery path, across all 20+ lazy routes.</p></div>
+      <div class="row"><span class="k">Fix</span><p>Wrap &lt;Outlet/&gt; in an ErrorBoundary with a user-facing error card + Reload, and add a root-level catch-all boundary.</p></div>
+      <div class="labels"><span class="lbl">bug</span> <span class="lbl">frontend</span></div>
+    </article>
+
+    <article class="card high" data-sev="High">
+      <header class="card-h">
+        <span class="sev high">High</span>
+        <span class="fid">UX-4</span>
+        <h3>Auth tokens stored in localStorage (XSS token theft)</h3>
+        <span class="issue"><a class="ilink" href="https://github.com/hellodk/kri/issues/786" target="_blank" rel="noopener">#786</a></span>
+      </header>
+      <div class="loc"><code>frontend/src/api/client.ts:34,51-52; stores/authStore.ts:30-32</code></div>
+      <pre class="ev">localStorage.getItem(&#x27;access_token&#x27;); localStorage.removeItem(&#x27;access_token&#x27;/&#x27;refresh_token&#x27;)</pre>
+      <div class="row"><span class="k">Impact</span><p>Any XSS gives an attacker both tokens — access for immediate calls and refresh for indefinite persistence — since localStorage is readable by any JS on the origin.</p></div>
+      <div class="row"><span class="k">Fix</span><p>Move to httpOnly; Secure; SameSite=Strict cookies managed by the backend; at minimum keep only an in-memory access token and the refresh token in an httpOnly cookie.</p></div>
+      <div class="labels"><span class="lbl">security</span> <span class="lbl">frontend</span></div>
+    </article>
+
+    <article class="card high" data-sev="High">
+      <header class="card-h">
+        <span class="sev high">High</span>
+        <span class="fid">UX-5</span>
+        <h3>NodeDetail.tsx is a 2,454-line god component with 50+ useState and zero memoization</h3>
+        <span class="issue"><a class="ilink" href="https://github.com/hellodk/kri/issues/787" target="_blank" rel="noopener">#787</a></span>
+      </header>
+      <div class="loc"><code>frontend/src/pages/NodeDetail.tsx (entire file)</code></div>
+      <pre class="ev">50+ useState (157-210), 15+ useQuery, 10+ useMutation; useMemo=0, useCallback=0; derived sorts/filters recompute every render (1652, 2270, 262)</pre>
+      <div class="row"><span class="k">Impact</span><p>Every state change re-runs all derived computations and reconciles the entire tree, causing measurable jank on the process (250 rows) and SBOM (200 rows) tables. The component is untestable in isolation.</p></div>
+      <div class="row"><span class="k">Fix</span><p>Split each tab into its own file (follow nodeDetail/IOSTabPanel.tsx) and wrap expensive derivations in useMemo.</p></div>
+      <div class="labels"><span class="lbl">refactor</span> <span class="lbl">frontend</span></div>
+    </article>
+
+    <article class="card high" data-sev="High">
+      <header class="card-h">
+        <span class="sev high">High</span>
+        <span class="fid">UX-6</span>
+        <h3>@tanstack/react-virtual installed but unused; large lists render full DOM</h3>
+        <span class="issue"><a class="ilink" href="https://github.com/hellodk/kri/issues/789" target="_blank" rel="noopener">#789</a></span>
+      </header>
+      <div class="loc"><code>frontend/package.json:17; pages/NodeDetail.tsx:248-253,295-302</code></div>
+      <pre class="ev">SBOM components per_page:200, processStats limit:250; grep useVirtualizer → no results</pre>
+      <div class="row"><span class="k">Impact</span><p>Up to 200 SBOM rows and 250 process rows mount as real DOM; the SBOM table alone is ~1,000 &lt;td&gt; nodes, causing slow render and scroll jank.</p></div>
+      <div class="row"><span class="k">Fix</span><p>Apply the already-available useVirtualizer to both tables and move the SBOM text filter server-side (?name=).</p></div>
+      <div class="labels"><span class="lbl">frontend</span> <span class="lbl">refactor</span></div>
+    </article>
+
+    <article class="card high" data-sev="High">
+      <header class="card-h">
+        <span class="sev high">High</span>
+        <span class="fid">UX-7</span>
+        <h3>dangerouslySetInnerHTML with an unescaped fallback HTML literal for Ansible logs</h3>
+        <span class="issue"><a class="ilink" href="https://github.com/hellodk/kri/issues/788" target="_blank" rel="noopener">#788</a></span>
+      </header>
+      <div class="loc"><code>frontend/src/pages/BootstrapModal.tsx:707-715</code></div>
+      <pre class="ev">dangerouslySetInnerHTML={{__html: colorizeAnsibleLog(...) }} with an inline unescaped fallback &#x27;&lt;span ...&gt;(no output...)&lt;/span&gt;&#x27;</pre>
+      <div class="row"><span class="k">Impact</span><p>colorizeAnsibleLog escapes today (mitigating XSS), but the pattern is fragile — a future change that forgets escaping reintroduces XSS. A safe &lt;AnsiText&gt; component already exists.</p></div>
+      <div class="row"><span class="k">Fix</span><p>Replace with &lt;AnsiText lines={...}/&gt; and use a conditional JSX element for the fallback instead of an HTML literal.</p></div>
+      <div class="labels"><span class="lbl">security</span> <span class="lbl">frontend</span></div>
+    </article>
+
+    <article class="card high" data-sev="High">
+      <header class="card-h">
+        <span class="sev high">High</span>
+        <span class="fid">UX-8</span>
+        <h3>Modals lack a focus trap; Tab escapes to background content</h3>
+        <span class="issue"><a class="ilink" href="https://github.com/hellodk/kri/issues/790" target="_blank" rel="noopener">#790</a></span>
+      </header>
+      <div class="loc"><code>frontend/src/components/ConfirmDialog.tsx:22-26; pages/FleetDashboard.tsx (AddNodeModal); pages/NodeDetail.tsx (inline modals)</code></div>
+      <pre class="ev">ConfirmDialog has role=&#x27;dialog&#x27; aria-modal=&#x27;true&#x27; + Escape handler but no focus trap</pre>
+      <div class="row"><span class="k">Impact</span><p>Keyboard and screen-reader users can Tab into and trigger background controls while a modal is open; aria-modal declares but does not enforce the trap.</p></div>
+      <div class="row"><span class="k">Fix</span><p>Use a focus-trapping hook or the native &lt;dialog&gt; element with built-in focus management.</p></div>
+      <div class="labels"><span class="lbl">frontend</span> <span class="lbl">ux</span></div>
+    </article>
+
+    <article class="card med" data-sev="Medium">
+      <header class="card-h">
+        <span class="sev med">Medium</span>
+        <span class="fid">UX-10</span>
+        <h3>SecurityPage polls active SSH sessions every 10s (most aggressive interval)</h3>
+        <span class="issue"><a class="ilink" href="https://github.com/hellodk/kri/issues/792" target="_blank" rel="noopener">#792</a></span>
+      </header>
+      <div class="loc"><code>frontend/src/pages/SecurityPage.tsx:316-320</code></div>
+      <pre class="ev">useQuery([&#x27;ssh-sessions-active&#x27;], ... , { refetchInterval: 10_000 })</pre>
+      <div class="row"><span class="k">Impact</span><p>6 round-trips/min/tab; with many operators keeping the page open this is substantial sustained load.</p></div>
+      <div class="row"><span class="k">Fix</span><p>Use a WebSocket subscription (consistent with WebSSH) or raise to 30s with refetchOnWindowFocus.</p></div>
+      <div class="labels"><span class="lbl">frontend</span> <span class="lbl">refactor</span></div>
+    </article>
+
+    <article class="card med" data-sev="Medium">
+      <header class="card-h">
+        <span class="sev med">Medium</span>
+        <span class="fid">UX-11</span>
+        <h3>All table headers missing scope=&quot;col&quot; (screen-reader inaccessibility)</h3>
+        <span class="issue"><a class="ilink" href="https://github.com/hellodk/kri/issues/793" target="_blank" rel="noopener">#793</a></span>
+      </header>
+      <div class="loc"><code>frontend/src/pages/NodeDetail.tsx (60+ &lt;th&gt;); FleetDashboard.tsx; SBOMExplorer.tsx; SaltMastersTab.tsx (codebase-wide)</code></div>
+      <pre class="ev">grep scope= → no results across src/</pre>
+      <div class="row"><span class="k">Impact</span><p>Screen readers cannot associate &lt;th&gt; with data cells in complex tables — WCAG 2.1 SC 1.3.1 (Level A) failure.</p></div>
+      <div class="row"><span class="k">Fix</span><p>Add scope=&#x27;col&#x27;/&#x27;row&#x27; to headers; extract a &lt;DataTable&gt; that enforces it by default.</p></div>
+      <div class="labels"><span class="lbl">frontend</span> <span class="lbl">ux</span></div>
+    </article>
+
+    <article class="card med" data-sev="Medium">
+      <header class="card-h">
+        <span class="sev med">Medium</span>
+        <span class="fid">UX-12</span>
+        <h3>Array index used as React key in multiple lists (incl. streaming chat)</h3>
+        <span class="issue"><a class="ilink" href="https://github.com/hellodk/kri/issues/797" target="_blank" rel="noopener">#797</a></span>
+      </header>
+      <div class="loc"><code>frontend/src/pages/NodeDetail.tsx:1413,1445,1477,1504,1533; components/LLMAssistant.tsx:505; SBOMExplorer.tsx:91; SettingsPage.tsx:1654,1837</code></div>
+      <pre class="ev">&lt;tr key={i} ...&gt;; &lt;div key={i} ...&gt; for streaming chat messages</pre>
+      <div class="row"><span class="k">Impact</span><p>On reorder/insert/delete React reuses DOM incorrectly — stale animations, wrong input state, visual glitches; the streaming chat list is especially vulnerable.</p></div>
+      <div class="row"><span class="k">Fix</span><p>Use stable unique IDs (key={svc.service}, key={msg.id}); add an id to the chat message type.</p></div>
+      <div class="labels"><span class="lbl">frontend</span></div>
+    </article>
+
+    <article class="card med" data-sev="Medium">
+      <header class="card-h">
+        <span class="sev med">Medium</span>
+        <span class="fid">UX-13</span>
+        <h3>Hardcoded Asia/Kolkata timezone for all users</h3>
+        <span class="issue"><a class="ilink" href="https://github.com/hellodk/kri/issues/796" target="_blank" rel="noopener">#796</a></span>
+      </header>
+      <div class="loc"><code>frontend/src/utils/time.ts:9; pages/DashboardPage.tsx:178; pages/NodeDetail.tsx:2221-2226</code></div>
+      <pre class="ev">timeZone: &#x27;Asia/Kolkata&#x27; constants; NodeDetail duplicates inline toLocaleString instead of formatIST</pre>
+      <div class="row"><span class="k">Impact</span><p>All timestamps display in IST regardless of operator locale, impeding incident correlation; the inline duplication is a maintenance divergence.</p></div>
+      <div class="row"><span class="k">Fix</span><p>Add a timezone preference in Settings (default Asia/Kolkata) and replace inline formatting with formatIST.</p></div>
+      <div class="labels"><span class="lbl">frontend</span> <span class="lbl">ux</span></div>
+    </article>
+
+    <article class="card med" data-sev="Medium">
+      <header class="card-h">
+        <span class="sev med">Medium</span>
+        <span class="fid">UX-9</span>
+        <h3>Five concurrent 30s polling queries on the Dashboard page</h3>
+        <span class="issue"><a class="ilink" href="https://github.com/hellodk/kri/issues/791" target="_blank" rel="noopener">#791</a></span>
+      </header>
+      <div class="loc"><code>frontend/src/pages/DashboardPage.tsx:137-174</code></div>
+      <pre class="ev">fleet-overview, dashboard-nodes, security-dashboard, dashboard-drift + a live clock all at refetchInterval: 30_000</pre>
+      <div class="row"><span class="k">Impact</span><p>The most-visited page issues 5×N requests/30s across tabs with no cross-tab dedup, creating high DB query load.</p></div>
+      <div class="row"><span class="k">Fix</span><p>Consolidate into a single /dashboard/summary endpoint, raise staleTime/refetchInterval to 60s, keep refetchOnWindowFocus:false.</p></div>
+      <div class="labels"><span class="lbl">frontend</span> <span class="lbl">refactor</span></div>
+    </article>
+
+    <article class="card low" data-sev="Low">
+      <header class="card-h">
+        <span class="sev low">Low</span>
+        <span class="fid">UX-14</span>
+        <h3>Suspense has no error fallback for lazy route chunks (silent load failures)</h3>
+        <span class="issue"><a class="ilink" href="https://github.com/hellodk/kri/issues/794" target="_blank" rel="noopener">#794</a></span>
+      </header>
+      <div class="loc"><code>frontend/src/components/Layout/Layout.tsx:93-95</code></div>
+      <pre class="ev">&lt;Suspense fallback={&lt;RouteSpinner/&gt;}&gt;&lt;Outlet/&gt;&lt;/Suspense&gt; with no ErrorBoundary</pre>
+      <div class="row"><span class="k">Impact</span><p>A failed lazy-chunk fetch (network/CDN miss, rolling deploy with new hashes) re-throws and, with no boundary, blanks the app.</p></div>
+      <div class="row"><span class="k">Fix</span><p>Wrap Suspense in an ErrorBoundary with a &#x27;Failed to load page — refresh&#x27; fallback (e.g. react-error-boundary).</p></div>
+      <div class="labels"><span class="lbl">frontend</span></div>
+    </article>
+  </section>
+  <section class="tab" id="tab-TST">
+    <div class="tab-head">
+      <h2>Principal Tester</h2>
+      <p class="blurb">Coverage gaps, flakiness, test quality &middot; 15 findings</p>
+      <div class="chips"><span class="chip crit">2 Critical</span> <span class="chip high">4 High</span> <span class="chip med">8 Medium</span> <span class="chip low">1 Low</span></div>
+    </div>
+
+    <article class="card crit" data-sev="Critical">
+      <header class="card-h">
+        <span class="sev crit">Critical</span>
+        <span class="fid">TST-1</span>
+        <h3>Agent run endpoint has zero integration or E2E coverage</h3>
+        <span class="issue"><a class="ilink" href="https://github.com/hellodk/kri/issues/795" target="_blank" rel="noopener">#795</a></span>
+      </header>
+      <div class="loc"><code>fleet_platform/api/routes/agent.py (no matching test)</code></div>
+      <pre class="ev">grep -r &#x27;/agent/run&#x27; tests/ → no matches; the SSE streaming endpoint wires AgentLoop/Executor/LLMPlanner/audit/session/tier_router with no end-to-end test</pre>
+      <div class="row"><span class="k">Impact</span><p>Any regression in session lifecycle, SSE encoding, or LLM endpoint wiring reaches production undetected.</p></div>
+      <div class="row"><span class="k">Fix</span><p>Add an integration test using a mocked call_openai_compat: call POST /agent/run/stream via AsyncClient, assert SSE event shapes and that agent_sessions + llm_query_log rows are written.</p></div>
+      <div class="labels"><span class="lbl">test</span></div>
+    </article>
+
+    <article class="card crit" data-sev="Critical">
+      <header class="card-h">
+        <span class="sev crit">Critical</span>
+        <span class="fid">TST-2</span>
+        <h3>Coverage gate excludes fleet_platform/agent/ entirely</h3>
+        <span class="issue"><a class="ilink" href="https://github.com/hellodk/kri/issues/799" target="_blank" rel="noopener">#799</a></span>
+      </header>
+      <div class="loc"><code>.github/workflows/ci.yml:205-211</code></div>
+      <pre class="ev">pytest --cov=fleet_platform/services --cov-fail-under=80; agent/ (loop, planner, executor, guards, tools, registry, audit) not measured; mutmut also only targets services/</pre>
+      <div class="row"><span class="k">Impact</span><p>The highest-risk logic (approval gates, co-sign threshold, guard hooks, loop limits) has no measured or enforced coverage floor.</p></div>
+      <div class="row"><span class="k">Fix</span><p>Add --cov=fleet_platform/agent to the CI coverage command with its own fail-under (≈80%).</p></div>
+      <div class="labels"><span class="lbl">test</span> <span class="lbl">infra</span></div>
+    </article>
+
+    <article class="card high" data-sev="High">
+      <header class="card-h">
+        <span class="sev high">High</span>
+        <span class="fid">TST-3</span>
+        <h3>E2E suite has only 1 spec on master; 18+ live only in worktrees</h3>
+        <span class="issue"><a class="ilink" href="https://github.com/hellodk/kri/issues/798" target="_blank" rel="noopener">#798</a></span>
+      </header>
+      <div class="loc"><code>tests/e2e/ (only playbooks.spec.ts); playwright.config.ts:3</code></div>
+      <pre class="ev">tests/e2e/** = playbooks.spec.ts only; auth/nodes/drift/groups/fleet/bootstrap/audit/... specs exist unmerged in worktrees</pre>
+      <div class="row"><span class="k">Impact</span><p>Login/auth, node management, drift, groups, and audit trail have no E2E coverage on master; CI e2e runs effectively one spec.</p></div>
+      <div class="row"><span class="k">Fix</span><p>Merge the worktree e2e specs after verifying they pass; prioritize auth.spec.ts and nodes.spec.ts.</p></div>
+      <div class="labels"><span class="lbl">test</span></div>
+    </article>
+
+    <article class="card high" data-sev="High">
+      <header class="card-h">
+        <span class="sev high">High</span>
+        <span class="fid">TST-4</span>
+        <h3>Large fraction of unit tests scrape source strings instead of asserting behavior</h3>
+        <span class="issue"><a class="ilink" href="https://github.com/hellodk/kri/issues/800" target="_blank" rel="noopener">#800</a></span>
+      </header>
+      <div class="loc"><code>60+ files incl. tests/unit/test_toast_dismiss_timing.py; test_tasks_maintenance_fixes.py; test_rate_quota_715.py:68</code></div>
+      <pre class="ev">assert &#x27;&quot;error: 8000&quot;&#x27; in SRC; assert &#x27;maintenance_mode&#x27; in segment; assert &#x27;@limiter.limit(&quot;6/minute&quot;)&#x27; in src</pre>
+      <div class="row"><span class="k">Impact</span><p>Behavior-preserving refactors break these tests (false negatives), and broken behavior passes as long as the string remains (false confidence).</p></div>
+      <div class="row"><span class="k">Fix</span><p>Replace source-scraping with behavioral tests (exercise endpoints/functions, inspect app.routes); keep AST tests only where AST is the sole reasonable option.</p></div>
+      <div class="labels"><span class="lbl">test</span> <span class="lbl">refactor</span></div>
+    </article>
+
+    <article class="card high" data-sev="High">
+      <header class="card-h">
+        <span class="sev high">High</span>
+        <span class="fid">TST-5</span>
+        <h3>Module-scoped integration DB session with no per-test rollback creates ordering dependencies</h3>
+        <span class="issue"><a class="ilink" href="https://github.com/hellodk/kri/issues/805" target="_blank" rel="noopener">#805</a></span>
+      </header>
+      <div class="loc"><code>tests/integration/conftest.py:39-44</code></div>
+      <pre class="ev">scope=&#x27;module&#x27; db_session; await session.rollback() only at module teardown</pre>
+      <div class="row"><span class="k">Impact</span><p>Tests sharing a minion_id collide on unique constraints depending on order; --randomly-seed or partial runs cause false failures.</p></div>
+      <div class="row"><span class="k">Fix</span><p>Wrap each test in begin_nested()/rollback (savepoint) or use function-scoped sessions.</p></div>
+      <div class="labels"><span class="lbl">test</span></div>
+    </article>
+
+    <article class="card high" data-sev="High">
+      <header class="card-h">
+        <span class="sev high">High</span>
+        <span class="fid">TST-6</span>
+        <h3>Rate-limit tests assert structure, not behavior (limit could be disabled and pass)</h3>
+        <span class="issue"><a class="ilink" href="https://github.com/hellodk/kri/issues/801" target="_blank" rel="noopener">#801</a></span>
+      </header>
+      <div class="loc"><code>tests/unit/test_llm_rate_limit.py:6-27; test_rate_quota_715.py:62-69</code></div>
+      <pre class="ev">asserts limiter is imported and first param is request: Request; never checks the decorator is applied or that 429 is returned</pre>
+      <div class="row"><span class="k">Impact</span><p>Rate-limit bypass on the highest-cost LLM/agent endpoints would go undetected.</p></div>
+      <div class="row"><span class="k">Fix</span><p>Add a burst integration test asserting 429, or inspect app.routes for the limit dependency.</p></div>
+      <div class="labels"><span class="lbl">test</span></div>
+    </article>
+
+    <article class="card med" data-sev="Medium">
+      <header class="card-h">
+        <span class="sev med">Medium</span>
+        <span class="fid">TST-10</span>
+        <h3>pytest asyncio_default_fixture_loop_scope=function conflicts with module-scoped integration fixtures</h3>
+        <span class="issue"><a class="ilink" href="https://github.com/hellodk/kri/issues/806" target="_blank" rel="noopener">#806</a></span>
+      </header>
+      <div class="loc"><code>pytest.ini:3; tests/integration/conftest.py:12</code></div>
+      <pre class="ev">default loop scope = function, but all integration fixtures are scope=&#x27;module&#x27;, loop_scope=&#x27;module&#x27;</pre>
+      <div class="row"><span class="k">Impact</span><p>New integration fixtures that forget loop_scope=&#x27;module&#x27; silently get a per-test loop, causing &#x27;attached to a different event loop&#x27; failures.</p></div>
+      <div class="row"><span class="k">Fix</span><p>Set asyncio_default_fixture_loop_scope=module (or document the constraint prominently).</p></div>
+      <div class="labels"><span class="lbl">test</span></div>
+    </article>
+
+    <article class="card med" data-sev="Medium">
+      <header class="card-h">
+        <span class="sev med">Medium</span>
+        <span class="fid">TST-11</span>
+        <h3>E2E PLAY-16 silently skips field assertions when API returns an empty array</h3>
+        <span class="issue"><a class="ilink" href="https://github.com/hellodk/kri/issues/807" target="_blank" rel="noopener">#807</a></span>
+      </header>
+      <div class="loc"><code>tests/e2e/playbooks.spec.ts:51-56</code></div>
+      <pre class="ev">if (body.length &gt; 0) { expect(entry).toHaveProperty(&#x27;filename&#x27;/&#x27;name&#x27;/&#x27;entry_type&#x27;) }</pre>
+      <div class="row"><span class="k">Impact</span><p>If the playbooks dir is empty in the test env, all assertions are skipped and the test passes — the API contract is unenforced.</p></div>
+      <div class="row"><span class="k">Fix</span><p>Seed a known playbook, drop the conditional, and assert body.length &gt; 0 as a precondition.</p></div>
+      <div class="labels"><span class="lbl">test</span></div>
+    </article>
+
+    <article class="card med" data-sev="Medium">
+      <header class="card-h">
+        <span class="sev med">Medium</span>
+        <span class="fid">TST-12</span>
+        <h3>Property tests limited to one file despite Hypothesis being installed and used historically</h3>
+        <span class="issue"><a class="ilink" href="https://github.com/hellodk/kri/issues/808" target="_blank" rel="noopener">#808</a></span>
+      </header>
+      <div class="loc"><code>pyproject.toml:63; tests/unit/test_playbook_discovery_hypothesis.py</code></div>
+      <pre class="ev">.hypothesis/constants/ has 100+ cached examples but only playbook discovery uses @given; sanitize_untrusted/validate_args/parse_nc_reachability have none</pre>
+      <div class="row"><span class="k">Impact</span><p>Fixed fuzz corpora go stale; prompt-injection sanitization in particular warrants property tests.</p></div>
+      <div class="row"><span class="k">Fix</span><p>Add @given(st.text()) property tests for sanitize_untrusted and validate_args.</p></div>
+      <div class="labels"><span class="lbl">test</span></div>
+    </article>
+
+    <article class="card med" data-sev="Medium">
+      <header class="card-h">
+        <span class="sev med">Medium</span>
+        <span class="fid">TST-13</span>
+        <h3>Worker maintenance/celery tasks tested only via source-scraping, not behavior</h3>
+        <span class="issue"><a class="ilink" href="https://github.com/hellodk/kri/issues/809" target="_blank" rel="noopener">#809</a></span>
+      </header>
+      <div class="loc"><code>tests/unit/test_tasks_maintenance_fixes.py:6-29; test_celery_app.py</code></div>
+      <pre class="ev">reads maintenance.py as a string and asserts substrings; never invokes mark_stale_nodes/reap_pending_actions/rotate_llm_query_logs</pre>
+      <div class="row"><span class="k">Impact</span><p>Logic errors (wrong SQL filter/threshold/status) in maintenance tasks are not caught by CI.</p></div>
+      <div class="row"><span class="k">Fix</span><p>Call the tasks with a mocked db and assert the correct UPDATE parameters/behavior.</p></div>
+      <div class="labels"><span class="lbl">test</span></div>
+    </article>
+
+    <article class="card med" data-sev="Medium">
+      <header class="card-h">
+        <span class="sev med">Medium</span>
+        <span class="fid">TST-14</span>
+        <h3>Only 7 integration test files on master vs 40+ unmerged in worktrees</h3>
+        <span class="issue"><a class="ilink" href="https://github.com/hellodk/kri/issues/810" target="_blank" rel="noopener">#810</a></span>
+      </header>
+      <div class="loc"><code>tests/integration/ (7 files); .claude/worktrees/*/tests/integration/ (40+)</code></div>
+      <pre class="ev">master lacks test_auth_endpoints/test_rbac_matrix/test_nodes_api/test_drift_api/test_llm_api/... which exist in worktrees</pre>
+      <div class="row"><span class="k">Impact</span><p>RBAC matrix, auth endpoints, node lifecycle, and the LLM API route have no integration coverage on master; the CI integration job runs a near-empty set.</p></div>
+      <div class="row"><span class="k">Fix</span><p>Cherry-pick and merge the worktree integration tests that pass on current master.</p></div>
+      <div class="labels"><span class="lbl">test</span></div>
+    </article>
+
+    <article class="card med" data-sev="Medium">
+      <header class="card-h">
+        <span class="sev med">Medium</span>
+        <span class="fid">TST-7</span>
+        <h3>time.sleep(0.01) for mtime ordering — flaky on low-resolution filesystems</h3>
+        <span class="issue"><a class="ilink" href="https://github.com/hellodk/kri/issues/802" target="_blank" rel="noopener">#802</a></span>
+      </header>
+      <div class="loc"><code>tests/unit/test_quarantine_write_713.py:63</code></div>
+      <pre class="ev">write_artifact(...); time.sleep(0.01); write_artifact(...); assert items[0][&#x27;filename&#x27;]==&#x27;b.yml&#x27;</pre>
+      <div class="row"><span class="k">Impact</span><p>10ms is below ext4/HFS+ mtime resolution under load, so the &#x27;newest first&#x27; assertion can flip intermittently in CI.</p></div>
+      <div class="row"><span class="k">Fix</span><p>Backdate the first artifact with os.utime (as a sibling test already does) instead of relying on wall-clock progression.</p></div>
+      <div class="labels"><span class="lbl">test</span></div>
+    </article>
+
+    <article class="card med" data-sev="Medium">
+      <header class="card-h">
+        <span class="sev med">Medium</span>
+        <span class="fid">TST-8</span>
+        <h3>Agent approval flow not tested over HTTP</h3>
+        <span class="issue"><a class="ilink" href="https://github.com/hellodk/kri/issues/803" target="_blank" rel="noopener">#803</a></span>
+      </header>
+      <div class="loc"><code>fleet_platform/services/agent_apply_svc.py; api/routes/agent.py</code></div>
+      <pre class="ev">Only test_agent_apply_svc_714.py (helpers); no test of POST /agent/apply/{id}/approve roundtrip, APPROVAL_TTL, co-sign bypass, or audit write</pre>
+      <div class="row"><span class="k">Impact</span><p>The primary safety gate for destructive agent actions has no end-to-end test.</p></div>
+      <div class="row"><span class="k">Fix</span><p>Add an integration test: create a pending action, approve as admin, assert transition to approved and correct Celery dispatch.</p></div>
+      <div class="labels"><span class="lbl">test</span></div>
+    </article>
+
+    <article class="card med" data-sev="Medium">
+      <header class="card-h">
+        <span class="sev med">Medium</span>
+        <span class="fid">TST-9</span>
+        <h3>Mutation testing has no CI enforcement and no workflow file</h3>
+        <span class="issue"><a class="ilink" href="https://github.com/hellodk/kri/issues/804" target="_blank" rel="noopener">#804</a></span>
+      </header>
+      <div class="loc"><code>docs/MUTATION_TESTING.md:53; .github/workflows/ (no mutation-tests.yml)</code></div>
+      <pre class="ev">Doc says mutation testing is intentionally not in CI and provides a workflow snippet that does not exist; mutmut configured but never enforced</pre>
+      <div class="row"><span class="k">Impact</span><p>Mutants can survive indefinitely; the coverage floor can be met by always-passing tests with no mechanism to catch it.</p></div>
+      <div class="row"><span class="k">Fix</span><p>Add mutation-tests.yml (workflow_dispatch + weekly schedule), starting with cost_tracker.py and guards.py, reporting killed-rate.</p></div>
+      <div class="labels"><span class="lbl">test</span> <span class="lbl">infra</span></div>
+    </article>
+
+    <article class="card low" data-sev="Low">
+      <header class="card-h">
+        <span class="sev low">Low</span>
+        <span class="fid">TST-15</span>
+        <h3>No contract/schema tests for OpenAPI response shapes</h3>
+        <span class="issue"><a class="ilink" href="https://github.com/hellodk/kri/issues/811" target="_blank" rel="noopener">#811</a></span>
+      </header>
+      <div class="loc"><code>fleet_platform/api/main.py; tests/integration/ (no schemathesis/openapi validator)</code></div>
+      <pre class="ev">No schemathesis/openapi-schema-validator; integration tests check ad-hoc field names but not full schema/spec conformance</pre>
+      <div class="row"><span class="k">Impact</span><p>Response drift from the declared Pydantic/OpenAPI schema can reach consumers (frontend, integrations) with no CI gate.</p></div>
+      <div class="row"><span class="k">Fix</span><p>Validate /openapi.json with jsonschema, or add schemathesis (st.from_app(app)) over a subset of routes.</p></div>
+      <div class="labels"><span class="lbl">test</span></div>
+    </article>
+  </section>
+  <section class="tab" id="tab-USR">
+    <div class="tab-head">
+      <h2>Common User</h2>
+      <p class="blurb">Onboarding, docs, first-run experience &middot; 13 findings</p>
+      <div class="chips"><span class="chip crit">2 Critical</span> <span class="chip high">7 High</span> <span class="chip med">3 Medium</span> <span class="chip low">1 Low</span></div>
+    </div>
+
+    <article class="card crit" data-sev="Critical">
+      <header class="card-h">
+        <span class="sev crit">Critical</span>
+        <span class="fid">USR-1</span>
+        <h3>Salt-master silently absent from the Docker Compose stack</h3>
+        <span class="issue"><a class="ilink" href="https://github.com/hellodk/kri/issues/812" target="_blank" rel="noopener">#812</a></span>
+      </header>
+      <div class="loc"><code>deploy/docker-compose.yml:263-266; README.md:137,143</code></div>
+      <pre class="ev">compose comment: &#x27;# salt-master removed from Docker — runs natively on mm1&#x27;; README says &#x27;Start the full stack (... salt-master ...)&#x27; and &#x27;can run inside Docker&#x27;</pre>
+      <div class="row"><span class="k">Impact</span><p>A new user runs docker compose up expecting a working salt-master and gets none. Key acceptance, state runs, and drift all fail; the stack appears healthy but core fleet features are dead on arrival.</p></div>
+      <div class="row"><span class="k">Fix</span><p>Remove salt-master from the Quick Start comment and the &#x27;inside Docker&#x27; note; add a prerequisite explaining SALT_API_URL must point to an external master and link the setup playbook.</p></div>
+      <div class="labels"><span class="lbl">docs</span> <span class="lbl">bug</span></div>
+    </article>
+
+    <article class="card crit" data-sev="Critical">
+      <header class="card-h">
+        <span class="sev crit">Critical</span>
+        <span class="fid">USR-2</span>
+        <h3>LICENSE file is missing (badge and link 404)</h3>
+        <span class="issue"><a class="ilink" href="https://github.com/hellodk/kri/issues/813" target="_blank" rel="noopener">#813</a></span>
+      </header>
+      <div class="loc"><code>README.md:8,270</code></div>
+      <pre class="ev">License badge → LICENSE and &#x27;MIT — see LICENSE&#x27;; the LICENSE file does not exist in the repo</pre>
+      <div class="row"><span class="k">Impact</span><p>Legal/compliance evaluation hits a 404; downstream packages have no authoritative license; GitHub shows no license on the repo card.</p></div>
+      <div class="row"><span class="k">Fix</span><p>Add an MIT LICENSE file at the repo root.</p></div>
+      <div class="labels"><span class="lbl">docs</span></div>
+    </article>
+
+    <article class="card high" data-sev="High">
+      <header class="card-h">
+        <span class="sev high">High</span>
+        <span class="fid">USR-3</span>
+        <h3>npm ci fails — frontend is managed with pnpm</h3>
+        <span class="issue"><a class="ilink" href="https://github.com/hellodk/kri/issues/814" target="_blank" rel="noopener">#814</a></span>
+      </header>
+      <div class="loc"><code>README.md:192; CONTRIBUTING.md:38</code></div>
+      <pre class="ev">Docs say &#x27;cd frontend &amp;&amp; npm ci&#x27;; package.json declares packageManager pnpm@10.29.3 and only pnpm-lock.yaml exists</pre>
+      <div class="row"><span class="k">Impact</span><p>Every new contributor and any CI step following the docs fails at install with &#x27;npm ci requires an existing package-lock.json&#x27; before writing any code.</p></div>
+      <div class="row"><span class="k">Fix</span><p>Replace npm ci with pnpm install --frozen-lockfile and add pnpm to prerequisites.</p></div>
+      <div class="labels"><span class="lbl">docs</span></div>
+    </article>
+
+    <article class="card high" data-sev="High">
+      <header class="card-h">
+        <span class="sev high">High</span>
+        <span class="fid">USR-4</span>
+        <h3>Hardcoded developer home paths as docker-compose volume defaults</h3>
+        <span class="issue"><a class="ilink" href="https://github.com/hellodk/kri/issues/816" target="_blank" rel="noopener">#816</a></span>
+      </header>
+      <div class="loc"><code>deploy/docker-compose.yml:150,194,197,244,247</code></div>
+      <pre class="ev">${PULSE_REPOS_DIR:-/home/dk/Documents/git/pulse}; ${PLAYBOOKS_FILES_DIR:-/home/dk/Documents/git/kri/playbooks/files}</pre>
+      <div class="row"><span class="k">Impact</span><p>On any other machine Docker creates empty dirs or workers crash on permissions; Ansible runs silently find no playbooks, with no indication the user must set these vars.</p></div>
+      <div class="row"><span class="k">Fix</span><p>Move both vars into .env.docker.example with documented required values; remove developer-path defaults from compose.</p></div>
+      <div class="labels"><span class="lbl">docs</span> <span class="lbl">infra</span></div>
+    </article>
+
+    <article class="card high" data-sev="High">
+      <header class="card-h">
+        <span class="sev high">High</span>
+        <span class="fid">USR-5</span>
+        <h3>CONTRIBUTING.md references scripts/kri.sh which does not exist</h3>
+        <span class="issue"><a class="ilink" href="https://github.com/hellodk/kri/issues/815" target="_blank" rel="noopener">#815</a></span>
+      </header>
+      <div class="loc"><code>CONTRIBUTING.md:58,61,64,67,152</code></div>
+      <pre class="ev">./scripts/kri.sh start/stop/status/logs; actual file is scripts/kri (no .sh)</pre>
+      <div class="row"><span class="k">Impact</span><p>A new contributor following local-stack setup immediately hits &#x27;No such file or directory&#x27;.</p></div>
+      <div class="row"><span class="k">Fix</span><p>Replace all ./scripts/kri.sh with ./scripts/kri.</p></div>
+      <div class="labels"><span class="lbl">docs</span></div>
+    </article>
+
+    <article class="card high" data-sev="High">
+      <header class="card-h">
+        <span class="sev high">High</span>
+        <span class="fid">USR-6</span>
+        <h3>CONTRIBUTING.md references a non-existent env file</h3>
+        <span class="issue"><a class="ilink" href="https://github.com/hellodk/kri/issues/817" target="_blank" rel="noopener">#817</a></span>
+      </header>
+      <div class="loc"><code>CONTRIBUTING.md:41</code></div>
+      <pre class="ev">cp deploy/.env.example deploy/.env; that file does not exist (template is .env.docker.example at repo root)</pre>
+      <div class="row"><span class="k">Impact</span><p>New contributors fail at env setup with &#x27;cannot stat deploy/.env.example&#x27; before starting the stack.</p></div>
+      <div class="row"><span class="k">Fix</span><p>Correct to cp .env.docker.example .env.docker and update later references.</p></div>
+      <div class="labels"><span class="lbl">docs</span></div>
+    </article>
+
+    <article class="card high" data-sev="High">
+      <header class="card-h">
+        <span class="sev high">High</span>
+        <span class="fid">USR-7</span>
+        <h3>Salt HTTP API required for all Salt ops but its setup is undocumented</h3>
+        <span class="issue"><a class="ilink" href="https://github.com/hellodk/kri/issues/818" target="_blank" rel="noopener">#818</a></span>
+      </header>
+      <div class="loc"><code>.env.docker.example:44-51; docs/salt-onboarding.md</code></div>
+      <pre class="ev">env comments say workers dispatch via salt-api and to add rest_cherrypy; the 14-step onboarding guide never mentions configuring it; SALT_API_USER/PASSWORD are CHANGE_ME placeholders</pre>
+      <div class="row"><span class="k">Impact</span><p>Even users who follow the full onboarding guide get workers that cannot dispatch any Salt command — drift/state/key ops silently fail, hinted at only by an env-file comment.</p></div>
+      <div class="row"><span class="k">Fix</span><p>Add an onboarding step for Salt HTTP API setup (rest_cherrypy, API user, the three SALT_API_* vars).</p></div>
+      <div class="labels"><span class="lbl">docs</span></div>
+    </article>
+
+    <article class="card high" data-sev="High">
+      <header class="card-h">
+        <span class="sev high">High</span>
+        <span class="fid">USR-8</span>
+        <h3>Admin credentials inconsistent across docs</h3>
+        <span class="issue"><a class="ilink" href="https://github.com/hellodk/kri/issues/819" target="_blank" rel="noopener">#819</a></span>
+      </header>
+      <div class="loc"><code>README.md:141 vs docs/salt-onboarding.md:194</code></div>
+      <pre class="ev">README: admin/admin; onboarding curl: admin@fleet.local / changeme123</pre>
+      <div class="row"><span class="k">Impact</span><p>A user following onboarding to get a token uses changeme123 against an install seeded with admin and gets 401, with no way to know which doc is right.</p></div>
+      <div class="row"><span class="k">Fix</span><p>Standardize on one set of defaults (or a placeholder) and make both docs match what the seed creates.</p></div>
+      <div class="labels"><span class="lbl">docs</span></div>
+    </article>
+
+    <article class="card high" data-sev="High">
+      <header class="card-h">
+        <span class="sev high">High</span>
+        <span class="fid">USR-9</span>
+        <h3>No forced password change for the admin/admin default</h3>
+        <span class="issue"><a class="ilink" href="https://github.com/hellodk/kri/issues/820" target="_blank" rel="noopener">#820</a></span>
+      </header>
+      <div class="loc"><code>README.md:141</code></div>
+      <pre class="ev">&#x27;change this immediately under Settings&#x27; is advisory only; no first-login enforcement</pre>
+      <div class="row"><span class="k">Impact</span><p>A distracted operator leaves the control plane (SSH keys, node secrets, playbook execution) behind a universal default with zero UX friction preventing it.</p></div>
+      <div class="row"><span class="k">Fix</span><p>Force a password change on first login, or show a persistent banner until the default is changed.</p></div>
+      <div class="labels"><span class="lbl">security</span> <span class="lbl">ux</span></div>
+    </article>
+
+    <article class="card med" data-sev="Medium">
+      <header class="card-h">
+        <span class="sev med">Medium</span>
+        <span class="fid">USR-10</span>
+        <h3>Onboarding Step 14 (manual Celery start) conflicts with Docker Compose path</h3>
+        <span class="issue"><a class="ilink" href="https://github.com/hellodk/kri/issues/822" target="_blank" rel="noopener">#822</a></span>
+      </header>
+      <div class="loc"><code>docs/salt-onboarding.md:449-488</code></div>
+      <pre class="ev">Step 14 manually launches four Celery processes; compose already defines worker/worker-ansible/beat; no guidance on which to follow</pre>
+      <div class="row"><span class="k">Impact</span><p>A Compose user runs redundant competing Celery processes (risking double execution) or is confused about whether Compose already handles it.</p></div>
+      <div class="row"><span class="k">Fix</span><p>Split the guide into Docker-Compose and bare-metal paths; mark Step 14 bare-metal only.</p></div>
+      <div class="labels"><span class="lbl">docs</span></div>
+    </article>
+
+    <article class="card med" data-sev="Medium">
+      <header class="card-h">
+        <span class="sev med">Medium</span>
+        <span class="fid">USR-11</span>
+        <h3>Hardcoded developer personal path inside documentation</h3>
+        <span class="issue"><a class="ilink" href="https://github.com/hellodk/kri/issues/821" target="_blank" rel="noopener">#821</a></span>
+      </header>
+      <div class="loc"><code>docs/salt-onboarding.md:454</code></div>
+      <pre class="ev">cd /home/dk/Documents/git/kri inside a Step 14 code block</pre>
+      <div class="row"><span class="k">Impact</span><p>A reader copy-pasting hits &#x27;No such file or directory&#x27;, eroding trust in the docs.</p></div>
+      <div class="row"><span class="k">Fix</span><p>Replace with cd /path/to/kri or a $KRI_ROOT variable.</p></div>
+      <div class="labels"><span class="lbl">docs</span></div>
+    </article>
+
+    <article class="card med" data-sev="Medium">
+      <header class="card-h">
+        <span class="sev med">Medium</span>
+        <span class="fid">USR-12</span>
+        <h3>Coverage floor contradicts itself across three documents</h3>
+        <span class="issue"><a class="ilink" href="https://github.com/hellodk/kri/issues/823" target="_blank" rel="noopener">#823</a></span>
+      </header>
+      <div class="loc"><code>README.md:119; CONTRIBUTING.md:163; TESTING.md:46</code></div>
+      <pre class="ev">README says 80%; CONTRIBUTING.md and TESTING.md say 75%</pre>
+      <div class="row"><span class="k">Impact</span><p>Contributors can&#x27;t tell which number CI enforces, leading to confusion or wasted effort.</p></div>
+      <div class="row"><span class="k">Fix</span><p>Pick one number, verify what ci.yml enforces, and align all three docs.</p></div>
+      <div class="labels"><span class="lbl">docs</span></div>
+    </article>
+
+    <article class="card low" data-sev="Low">
+      <header class="card-h">
+        <span class="sev low">Low</span>
+        <span class="fid">USR-13</span>
+        <h3>Python version requirement contradicts itself</h3>
+        <span class="issue"><a class="ilink" href="https://github.com/hellodk/kri/issues/824" target="_blank" rel="noopener">#824</a></span>
+      </header>
+      <div class="loc"><code>README.md:9 (badge) vs CONTRIBUTING.md:22</code></div>
+      <pre class="ev">Badge: Python 3.13; CONTRIBUTING prerequisites: Python 3.11+</pre>
+      <div class="row"><span class="k">Impact</span><p>A contributor installs 3.11 then may hit 3.13-only syntax at import time, or installs 3.13 unnecessarily.</p></div>
+      <div class="row"><span class="k">Fix</span><p>Align to a single minimum version across the badge and CONTRIBUTING.</p></div>
+      <div class="labels"><span class="lbl">docs</span></div>
+    </article>
+  </section>
+</main>
+<footer>Generated from <code>audit/findings_data.py</code> &middot; issues labelled
+  <a href="https://github.com/hellodk/kri/issues?q=is%3Aissue+label%3Aaudit" target="_blank" rel="noopener" style="color:var(--acc)">audit</a>.</footer>
+<script>
+  const tabs = document.querySelectorAll('.tab');
+  const btns = document.querySelectorAll('.tb');
+  function show(id) {
+    tabs.forEach(t => t.classList.toggle('active', t.id === 'tab-' + id));
+    btns.forEach(b => b.classList.toggle('active', b.dataset.tab === id));
+    window.scrollTo({top:0, behavior:'instant'});
+  }
+  btns.forEach(b => b.addEventListener('click', () => show(b.dataset.tab)));
+  document.querySelectorAll('[data-go]').forEach(a =>
+    a.addEventListener('click', e => { e.preventDefault(); show(a.dataset.go); }));
+</script>
+</body>
+</html>
