@@ -15,8 +15,8 @@ test.describe('Settings', () => {
 
   test('SETTINGS-01 settings page loads with tabs', async ({ page }) => {
     await expect(page.locator('h1')).toBeVisible()
-    // Tab layout: General, Bootstrap, Remote Access, Integrations, Advanced
-    const tabs = ['General', 'Bootstrap', 'Remote Access', 'Integrations', 'Advanced']
+    // Tab layout: General, Automation (consolidated Bootstrap+Advanced #391), Remote Access, Integrations
+    const tabs = ['General', 'Automation', 'Remote Access', 'Integrations']
     for (const tab of tabs) {
       await expect(
         page.locator(`button:has-text("${tab}")`).first()
@@ -62,7 +62,7 @@ test.describe('Settings', () => {
   })
 
   test('SETTINGS-06 Bootstrap tab shows controller pubkey section', async ({ page }) => {
-    await page.click('button:has-text("Bootstrap")')
+    await page.click('button:has-text("Automation")')
     // Controller pubkey section or message about generating it
     await expect(
       page.locator('text=Controller SSH Public Key').or(
