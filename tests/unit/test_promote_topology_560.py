@@ -494,40 +494,50 @@ class TestAuthContracts:
         """The from-node route must use require_role('admin'), not get_current_user."""
         import inspect
 
+        import pytest
+        from fastapi import params as fa_params
+
         from fleet_platform.api.routes.salt_masters import promote_node_to_master
 
         sig = inspect.signature(promote_node_to_master)
-        # Walk the parameters and check that 'require_role' appears in any default Depends
-        from fastapi import params as fa_params
-
         for param in sig.parameters.values():
             if isinstance(param.default, fa_params.Depends):
                 dep = param.default.dependency
-                # require_role returns a closure; check the source
-                src = inspect.getsource(dep) if callable(dep) else ""
-                if "require_role" in src or getattr(dep, "__name__", "") == "require_role":
-                    return  # found admin dep
-                # Alternatively the dep might be the result of require_role("admin")
+                # require_role returns a closure whose __qualname__ is
+                # 'require_role.<locals>.dependency'. Verify it captures "admin"
+                # in its permitted-roles set.
+                if getattr(dep, "__qualname__", "").endswith("require_role.<locals>.dependency"):
+                    if hasattr(dep, "__closure__") and dep.__closure__:
+                        for cell in dep.__closure__:
+                            try:
+                                val = cell.cell_contents
+                                if isinstance(val, set) and "admin" in val:
+                                    return
+                            except ValueError:
+                                pass
+        pytest.fail("promote_node_to_master must use require_role('admin') — no require_role dep with 'admin' found")
+
+    def test_minions_route_accessible_to_viewer(self):
+        """The minions route must use get_current_user (viewer+), not require_role('admin')."""
+        import inspect
+
+        import pytest
+        from fastapi import params as fa_params
+
+        from fleet_platform.api.routes.salt_masters import list_master_minions
+        from fleet_platform.core.auth import get_current_user
+
+        sig = inspect.signature(list_master_minions)
+        deps = [p.default.dependency for p in sig.parameters.values() if isinstance(p.default, fa_params.Depends)]
+        assert get_current_user in deps, "list_master_minions must use get_current_user (viewer+)"
+        # Must NOT gate on admin-only — verify no require_role dep with "admin" only
+        for dep in deps:
+            if getattr(dep, "__qualname__", "").endswith("require_role.<locals>.dependency"):
                 if hasattr(dep, "__closure__") and dep.__closure__:
                     for cell in dep.__closure__:
                         try:
-                            if cell.cell_contents == "admin":
-                                return
+                            val = cell.cell_contents
+                            if isinstance(val, set) and val == {"admin"}:
+                                pytest.fail("list_master_minions must NOT use require_role('admin')")
                         except ValueError:
                             pass
-        # Fallback: inspect source of the route module for the string
-        import fleet_platform.api.routes.salt_masters as route_mod
-
-        src = inspect.getsource(route_mod.promote_node_to_master)
-        assert "require_role" in src, "promote_node_to_master must use require_role (admin)"
-
-    def test_minions_route_accessible_to_viewer(self):
-        """The minions route must use get_current_user (viewer+), not require_role."""
-        import inspect
-
-        import fleet_platform.api.routes.salt_masters as route_mod
-
-        src = inspect.getsource(route_mod.list_master_minions)
-        # Should use get_current_user (or at worst require_role viewer), NOT require_role admin
-        # The simplest check: get_current_user appears in the source
-        assert "get_current_user" in src, "list_master_minions must use get_current_user (viewer+)"
