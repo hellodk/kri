@@ -187,13 +187,31 @@ def test_migration_039_file_exists():
 
 
 def test_migration_has_add_column_timeout_seconds():
-    """The timeout migration must add a timeout_seconds column to ansible_jobs."""
+    """The timeout migration must add a timeout_seconds column to ansible_jobs.
+
+    Behavioral testing of Alembic migrations requires a live DB transaction; we use
+    ast.parse to structurally verify the upgrade() function contains the right call.
+    """
+    import ast
+
     migrations_dir = Path(__file__).parent.parent.parent / "fleet_platform" / "db" / "migrations" / "versions"
     candidates = list(migrations_dir.glob("*_ansible_job_timeout.py"))
     assert candidates, "Migration file missing"
-    content = candidates[0].read_text()
-    assert "timeout_seconds" in content, "Migration must add timeout_seconds column"
-    assert "add_column" in content, "Migration must use op.add_column"
+
+    tree = ast.parse(candidates[0].read_text())
+
+    add_column_calls = [
+        node
+        for node in ast.walk(tree)
+        if isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute) and node.func.attr == "add_column"
+    ]
+    assert add_column_calls, "Migration must call op.add_column(...)"
+
+    timeout_col_found = any(
+        any(isinstance(n, ast.Constant) and n.value == "timeout_seconds" for n in ast.walk(call))
+        for call in add_column_calls
+    )
+    assert timeout_col_found, "Migration must add a column named 'timeout_seconds'"
 
 
 def test_duplicate_guard_and_lock_ttl_updated():
@@ -335,7 +353,11 @@ def test_ansible_job_response_default_timeout():
 
 
 def test_frontend_playbooks_ts_has_timeout_seconds():
-    """frontend/src/api/playbooks.ts must contain 'timeout_seconds' for contract sync."""
+    """frontend/src/api/playbooks.ts must contain 'timeout_seconds' for contract sync.
+
+    TypeScript cannot be parsed with Python's ast module; content search is the only
+    available mechanism for this cross-language API-contract guard.
+    """
     ts_file = Path(__file__).parent.parent.parent / "frontend" / "src" / "api" / "playbooks.ts"
     assert ts_file.exists(), f"TypeScript file not found: {ts_file}"
     content = ts_file.read_text()
