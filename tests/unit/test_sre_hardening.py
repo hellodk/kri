@@ -201,37 +201,50 @@ def test_trusted_ip_fallback_when_xff_missing():
 # ---------------------------------------------------------------------------
 
 
-def test_login_route_checks_must_change_password_flag():
-    """The login route body raises 403 when user.must_change_password is True (#757/#820).
+@pytest.mark.asyncio
+async def test_login_route_returns_token_for_valid_credentials():
+    """login() returns a TokenResponse (access_token + refresh_token) on the happy path (#757/#820).
 
-    Tests the guard logic by inspecting the route source or by calling the check
-    inline — avoids slowapi's Request type check in unit context.
+    Drives the unwrapped handler with a user that has must_change_password=False and
+    correct credentials, asserting that token fields are returned — not source text.
     """
     import uuid
+    from unittest.mock import AsyncMock, MagicMock, patch
 
-    from fastapi import HTTPException
-
+    import fleet_platform.api.routes.auth as auth_mod
     from fleet_platform.core.auth import hash_password
     from fleet_platform.models.user import User
+    from fleet_platform.schemas.auth import LoginRequest
 
     user = User(
         id=uuid.uuid4(),
-        email="admin@example.com",
-        password_hash=hash_password("admin"),
-        role="admin",
+        email="ok@example.com",
+        password_hash=hash_password("secret123"),
+        role="viewer",
         is_active=True,
         auth_provider="local",
-        must_change_password=True,
+        must_change_password=False,
     )
 
-    # Reproduce the guard that the login route applies after auth succeeds.
-    if user.must_change_password:
-        with pytest.raises(HTTPException) as exc_info:
-            raise HTTPException(status_code=403, detail="MUST_CHANGE_PASSWORD")
-        assert exc_info.value.status_code == 403
-        assert exc_info.value.detail == "MUST_CHANGE_PASSWORD"
-    else:
-        pytest.fail("User should have must_change_password=True")
+    db = AsyncMock()
+    result_mock = MagicMock()
+    result_mock.scalar_one_or_none.return_value = user
+    db.execute = AsyncMock(return_value=result_mock)
+    db.commit = AsyncMock()
+
+    fake_request = MagicMock()
+    fake_request.client = MagicMock()
+    fake_request.client.host = "127.0.0.1"
+
+    payload = LoginRequest(email="ok@example.com", password="secret123")
+    handler = getattr(auth_mod.login, "__wrapped__", auth_mod.login)
+
+    with patch("fleet_platform.core.audit.audit", new_callable=AsyncMock):
+        response = await handler(request=fake_request, payload=payload, db=db)
+
+    assert hasattr(response, "access_token"), "login() must return an access_token on success"
+    assert hasattr(response, "refresh_token"), "login() must return a refresh_token on success"
+    assert response.access_token, "access_token must be non-empty"
 
 
 @pytest.mark.asyncio
