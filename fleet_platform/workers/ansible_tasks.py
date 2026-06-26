@@ -21,11 +21,11 @@ from fleet_platform.models.master_provision_run import MasterProvisionRun
 from fleet_platform.models.node import Node
 from fleet_platform.models.platform_setting import PlatformSetting
 from fleet_platform.models.salt_master import SaltMaster
+from fleet_platform.services.credential_resolver import resolve_node_credentials_sync
 from fleet_platform.services.grains_collector import _grains_via_salt_api, _grains_via_ssh
 from fleet_platform.services.job_events import publish_job_event
 from fleet_platform.services.node_credentials import (
     _get_bootstrap_settings,
-    _get_group_credentials,
     _get_node_credentials,
     _resolve_node_master_creds,
 )
@@ -97,7 +97,7 @@ def bootstrap_node(
         db.commit()
         publish_job_event("bootstrap", node_id, "running")
 
-        _settings_ssh_user, _settings_ssh_password, controller_pubkey = _get_bootstrap_settings(db)
+        *_, controller_pubkey = _get_bootstrap_settings(db)
 
         # A) Resolve the multi-master list (#534, epic #537).
         # If salt_master_ids given → load exactly those rows.
@@ -125,34 +125,13 @@ def bootstrap_node(
             {"master": m, "auto_accept": getattr(m, "auto_accept", True), "name": m.name} for m in master_objs
         ]
 
-        # Per-node stored credentials
-        node_user, node_password, node_auth_mode = _get_node_credentials(node)
-
-        # Group credentials: if no node-level creds, check primary group
-        group_user, group_password, group_key, group_auth_mode = _get_group_credentials(node, db)
-
-        # Priority: per-run args > node-stored > group-stored > global settings
-        ssh_user = ssh_username or node_user or group_user or _settings_ssh_user or "admin"
-        ssh_password = node_password or group_password or _settings_ssh_password
-
-        # Resolve auth mode: per-run password/key arg takes priority,
-        # then node-stored mode, then group mode
-        if ssh_password:
-            resolved_auth_mode = "password"
-        elif node_user:
-            resolved_auth_mode = node_auth_mode
-        else:
-            resolved_auth_mode = group_auth_mode or node_auth_mode
-
-        # Load node's SSH key if key-auth mode is active and no per-run password provided
-        node_ssh_key: str | None = group_key or None
-        if resolved_auth_mode == "key" and node.ssh_key_enc:
-            from fleet_platform.services.platform_settings_svc import decrypt_secret
-
-            try:
-                node_ssh_key = decrypt_secret(node.ssh_key_enc)
-            except Exception:
-                logger.warning("bootstrap_node: failed to decrypt ssh_key_enc for node_id=%s", node_id)
+        # Resolve SSH credentials via the FK-aware credential resolver (#913).
+        # Chain: node.credential_id → group.credential_id → controller key → global settings.
+        # Per-run ssh_username argument still takes priority over the resolved user.
+        resolved_creds = resolve_node_credentials_sync(node, db)
+        ssh_user = ssh_username or resolved_creds["ssh_user"] or "admin"
+        ssh_password = resolved_creds["ssh_password"]
+        node_ssh_key: str | None = resolved_creds["ssh_key"] or None
 
         if not ssh_password and not node_ssh_key:
             msg = (
