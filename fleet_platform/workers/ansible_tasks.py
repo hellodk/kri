@@ -26,7 +26,6 @@ from fleet_platform.services.grains_collector import _grains_via_salt_api, _grai
 from fleet_platform.services.job_events import publish_job_event
 from fleet_platform.services.node_credentials import (
     _get_bootstrap_settings,
-    _get_node_credentials,
     _resolve_node_master_creds,
 )
 from fleet_platform.services.ssh_host_key_svc import to_known_hosts_token
@@ -549,8 +548,8 @@ def collect_node_grains(self, node_id: str) -> dict:
             return {"status": "error", "reason": "node_not_found"}
 
         target_ip = node.bootstrap_ip
-        node_user, _node_password, _node_auth_mode = _get_node_credentials(node)
-        ssh_user = node_user or "admin"
+        resolved_creds = resolve_node_credentials_sync(node, db)
+        ssh_user = resolved_creds["ssh_user"] or "admin"
         minion_id = node.minion_id
         ssh_host_key = node.ssh_host_key
         master_creds = _resolve_node_master_creds(db, node)

@@ -108,7 +108,16 @@ def test_collect_node_grains_uses_salt_api(tmp_path: Path):
 
     with (
         patch("fleet_platform.workers.ansible_tasks.get_sync_db", return_value=ctx),
-        patch("fleet_platform.workers.ansible_tasks._get_node_credentials", return_value=("admin", None, "password")),
+        patch(
+            "fleet_platform.workers.ansible_tasks.resolve_node_credentials_sync",
+            return_value={
+                "ssh_user": "admin",
+                "ssh_password": "",
+                "ssh_key": "",
+                "auth_mode": "password",
+                "credential_source": "global",
+            },
+        ),
         patch("fleet_platform.workers.ansible_tasks._get_pillar_dir", return_value=tmp_path),
         patch("fleet_platform.workers.ansible_tasks._resolve_node_master_creds", return_value=CREDS),
         patch("fleet_platform.workers.ansible_tasks._grains_via_salt_api", return_value=({"os": "MacOS"}, None)),
@@ -143,7 +152,16 @@ def test_collect_node_grains_falls_back_to_ssh(tmp_path: Path):
 
     with (
         patch("fleet_platform.workers.ansible_tasks.get_sync_db", return_value=ctx),
-        patch("fleet_platform.workers.ansible_tasks._get_node_credentials", return_value=("admin", None, "password")),
+        patch(
+            "fleet_platform.workers.ansible_tasks.resolve_node_credentials_sync",
+            return_value={
+                "ssh_user": "admin",
+                "ssh_password": "",
+                "ssh_key": "",
+                "auth_mode": "password",
+                "credential_source": "global",
+            },
+        ),
         patch("fleet_platform.workers.ansible_tasks._get_pillar_dir", return_value=tmp_path),
         patch("fleet_platform.workers.ansible_tasks._resolve_node_master_creds", return_value=CREDS),
         patch("fleet_platform.workers.ansible_tasks._grains_via_salt_api", return_value=(None, "minion not connected")),
@@ -169,7 +187,16 @@ def test_collect_node_grains_reports_both_failures(tmp_path: Path):
 
     with (
         patch("fleet_platform.workers.ansible_tasks.get_sync_db", return_value=ctx),
-        patch("fleet_platform.workers.ansible_tasks._get_node_credentials", return_value=("admin", None, "password")),
+        patch(
+            "fleet_platform.workers.ansible_tasks.resolve_node_credentials_sync",
+            return_value={
+                "ssh_user": "admin",
+                "ssh_password": "",
+                "ssh_key": "",
+                "auth_mode": "password",
+                "credential_source": "global",
+            },
+        ),
         patch("fleet_platform.workers.ansible_tasks._get_pillar_dir", return_value=tmp_path),
         patch("fleet_platform.workers.ansible_tasks._resolve_node_master_creds", return_value=CREDS),
         patch("fleet_platform.workers.ansible_tasks._grains_via_salt_api", return_value=(None, "minion not connected")),
