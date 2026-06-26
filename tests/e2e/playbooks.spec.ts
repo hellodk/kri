@@ -18,19 +18,20 @@ test.describe('Playbooks', () => {
   })
 
   test('PLAY-02 bootstrap playbook card shown', async ({ page }) => {
-    await expect(page.locator('text=Bootstrap Mac Mini').first()).toBeVisible({ timeout: 8000 })
+    // The card shows the play's `- name:` from bootstrap_node.yml, not the file name.
+    await expect(page.locator('text=Bootstrap fleet node').first()).toBeVisible({ timeout: 8000 })
   })
 
   test('PLAY-05 run button opens confirmation dialog', async ({ page }) => {
-    const runBtn = page.locator('button:has-text("Run")').first()
+    const runBtn = page.locator('button').filter({ hasText: /▷ Run|Run/ }).first()
     await expect(runBtn).toBeVisible({ timeout: 5000 })
-    await runBtn.click()
+    await runBtn.click({ force: true })
     await expect(page.locator('text=Run playbook?').or(page.locator('text=will run against')).first()).toBeVisible({ timeout: 3000 })
   })
 
   test('PLAY-06 cancel confirmation closes dialog without running', async ({ page }) => {
-    const runBtn = page.locator('button:has-text("Run")').first()
-    await runBtn.click()
+    const runBtn = page.locator('button').filter({ hasText: /▷ Run|Run/ }).first()
+    await runBtn.click({ force: true })
     await page.click('button:has-text("Cancel")')
     await expect(page.locator('text=Run playbook?')).not.toBeVisible()
   })

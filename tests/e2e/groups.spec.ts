@@ -151,21 +151,26 @@ test.describe('Groups', () => {
     expect([200, 201]).toContain(nodeRes.status())
     const { minion_id: existingMinionId } = await nodeRes.json()
 
-    // Navigate to fleet and open the Add Node modal
+    // Navigate to fleet and open the Import modal (replaced "Add Node" button)
     await page.goto('/fleet')
     await page.waitForSelector('h1', { timeout: 8000 })
-    await page.click('button:has-text("Add Node")')
-    await page.waitForSelector('input[placeholder="mac-mini-01"]', { timeout: 5000 })
+    await page.click('button:has-text("+ Import")')
+    await page.waitForSelector('[role="dialog"]', { timeout: 5000 })
 
-    // Type the existing minion_id into the input — triggers the debounced check
-    await page.fill('input[placeholder="mac-mini-01"]', existingMinionId)
+    // Paste a full "minion_id,hostname,ip" line (Paste List tab is active by default).
+    // A bare token is parsed as an IP for all three fields, so the validator rejects it as
+    // an invalid IP *before* the duplicate check ever runs — supply a real IP so the row
+    // reaches the "minion_id already exists" branch and renders the Duplicate badge (#905).
+    await page.fill('textarea', `${existingMinionId},duphost,10.250.250.250`)
 
-    // Wait for the "Already in use" feedback to appear (up to 3 s to account for debounce + network)
-    await expect(page.locator('text=Already in use')).toBeVisible({ timeout: 3000 })
+    // Wait for the "⚠ Duplicate" badge to appear (400 ms debounce + network; allow 3 s).
+    // Scope to the dialog (and the ⚠ badge specifically): a bare text=Duplicate also matches
+    // "e2e-duplicate-*" node links behind the modal and the summary line, tripping strict mode.
+    await expect(page.locator('[role="dialog"]').getByText('⚠ Duplicate')).toBeVisible({ timeout: 3000 })
 
-    // The Add Node button must be disabled
-    const addBtn = page.locator('button:has-text("Add Node")').last()
-    await expect(addBtn).toBeDisabled()
+    // The Import button must be disabled when there are zero new nodes
+    const importBtn = page.locator('button:has-text("Import")').last()
+    await expect(importBtn).toBeDisabled()
   })
 
   test('GRP-ADD-02 add node modal warns when group has no SSH credentials', async ({ page, request }) => {
@@ -179,20 +184,24 @@ test.describe('Groups', () => {
     expect([200, 201]).toContain(grpRes.status())
     const { name: groupName } = await grpRes.json()
 
-    // Navigate to fleet and open the Add Node modal
+    // Navigate to fleet and open the Import modal (replaced "Add Node" button)
     await page.goto('/fleet')
     await page.waitForSelector('h1', { timeout: 8000 })
-    await page.click('button:has-text("Add Node")')
+    await page.click('button:has-text("+ Import")')
     await page.waitForSelector('select', { timeout: 5000 })
 
-    // Select the newly created group from the dropdown (reload groups list if needed)
-    // The modal fetches groups on mount, so wait for the option to be available
-    await expect(page.locator(`option:has-text("${groupName}")`)).toBeAttached({ timeout: 5000 })
-    await page.selectOption('select', { label: groupName })
+    // Select the newly created group from the dropdown. Scope to the dialog: the fleet
+    // page renders its own health/status filter <select>s, and a bare 'select' locator
+    // picks the first one (the health filter), which has no group options (#905).
+    const groupSelect = page.locator('[role="dialog"] select')
+    await expect(groupSelect.locator(`option:has-text("${groupName}")`)).toBeAttached({ timeout: 5000 })
+    await groupSelect.selectOption({ label: groupName })
 
-    // Wait for the credential check to complete and amber warning to appear
+    // The per-group "No SSH credentials" blocking warning no longer exists in
+    // ImportNodesModal.  Instead the modal always exposes inline SSH credential
+    // fields and shows this hint, which covers the no-saved-creds case.
     await expect(
-      page.locator('text=No SSH credentials on this group'),
+      page.locator('text=Leave blank to reuse the group\'s saved SSH credentials.'),
     ).toBeVisible({ timeout: 3000 })
   })
 })

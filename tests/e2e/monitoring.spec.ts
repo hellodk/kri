@@ -21,9 +21,10 @@ test.describe('Monitoring Page', () => {
 
   test('monitoring page shows at least one metric card', async ({ page }) => {
     await page.goto('/monitoring')
-    // At least one of the four cards should be visible
+    // At least one of the four SectionCard h2 titles should be visible
+    // Titles: "Node Status", "Celery Queue Depth", "Alert Events (24h)", "HTTP Requests (since startup)"
     await expect(
-      page.locator('text=Node Status, text=Celery Queues, text=Alert Events, text=HTTP Requests').first()
+      page.locator('h2').filter({ hasText: /Node Status|Celery Queue|Alert Events|HTTP Requests/i }).first()
     ).toBeVisible({ timeout: 15000 })
   })
 })
