@@ -50,12 +50,14 @@ export function ExecutionHistory() {
     },
   })
 
-  // Salt execution history (ExecutionJob — from minion ingest)
+  // Salt execution history (ExecutionJob — from minion ingest). Salt jobs have
+  // no SSE push event so this keeps a polling fallback; relaxed to 30s to match
+  // the ansible safety-net (#756).
   const { data: saltData, isLoading: saltLoading, isError: saltError, refetch: saltRefetch } = useQuery({
     queryKey: ['executions', executionStatus, page],
     queryFn: () => executionsApi.list({ status: executionStatus || undefined, page, per_page: 25 }),
     staleTime: 10_000,
-    refetchInterval: 15_000,
+    refetchInterval: 30_000,
     enabled: typeFilter === 'all' || typeFilter === 'salt',
   })
 
