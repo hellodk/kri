@@ -44,13 +44,17 @@ def test_ollama_remove_exists():
     assert Path("salt/states/ml/ollama/remove.sls").exists()
 
 
-def test_mlx_cluster_coordinator_vs_worker():
-    src = Path("salt/states/ml/mlx_cluster/init.sls").read_text()
-    assert "coordinator" in src and "worker" in src
+def test_mlx_cluster_primitive_retired():
+    # #882: the legacy `ml.mlx_cluster` primitive (bare pip install + conf file,
+    # no launchd/health/model-download) was retired in favour of `ml.mlx_serve`.
+    # Guard against it being resurrected.
+    assert not Path("salt/states/ml/mlx_cluster").exists()
+    assert not Path("salt/pillar/ml/mlx_cluster.sls.example").exists()
 
 
-def test_mlx_cluster_remove_exists():
-    assert Path("salt/states/ml/mlx_cluster/remove.sls").exists()
+def test_mlx_serve_is_canonical_serving_state():
+    # The canonical kri Salt serving state is `ml.mlx_serve` (#882).
+    assert Path("salt/states/ml/mlx_serve/init.sls").exists()
 
 
 def test_mlx_updated_to_use_artifactory():
@@ -70,4 +74,3 @@ def test_artifactory_pillar_example_exists():
 def test_pillar_examples_exist():
     assert Path("salt/pillar/ml/vllm.sls.example").exists()
     assert Path("salt/pillar/ml/ollama.sls.example").exists()
-    assert Path("salt/pillar/ml/mlx_cluster.sls.example").exists()
