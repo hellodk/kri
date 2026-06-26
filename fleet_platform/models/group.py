@@ -22,18 +22,7 @@ class Group(Base, TimestampMixin):
         nullable=True,
     )
 
-    # SSH credentials (inherited by all group member nodes unless overridden at node level).
-    # DEPRECATED (#704/#697): superseded by ``credential_id`` -> ``credentials``.
-    # As of #748 (ARC-4) NOTHING in the service layer reads these columns — the
-    # inline read-fallback was removed from ``credential_resolver`` and
-    # ``ssh_credential_link``. They are retained on the model only until the
-    # remaining inline readers (``workers/ansible_tasks`` and ``api/routes``,
-    # owned by sibling PRs) are updated; the physical DROP is deferred to a
-    # follow-up migration (see the #748 PR description).
-    ssh_username: Mapped[str | None] = mapped_column(String(255), nullable=True)
-    ssh_password_enc: Mapped[str | None] = mapped_column(Text, nullable=True)
-    ssh_auth_mode: Mapped[str] = mapped_column(String(10), default="password")
-    ssh_key_enc: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # First-class Credential store reference (#703).
     session_max_mins: Mapped[int] = mapped_column(Integer, default=60)
     session_retention_days: Mapped[int] = mapped_column(Integer, default=30)
 

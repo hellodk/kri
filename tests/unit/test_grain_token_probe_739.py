@@ -76,7 +76,16 @@ def test_collect_grains_succeeds_without_pillar_file(tmp_path):
 
     with (
         patch("fleet_platform.workers.ansible_tasks.get_sync_db", return_value=ctx),
-        patch("fleet_platform.workers.ansible_tasks._get_node_credentials", return_value=("admin", None, "password")),
+        patch(
+            "fleet_platform.workers.ansible_tasks.resolve_node_credentials_sync",
+            return_value={
+                "ssh_user": "admin",
+                "ssh_password": "",
+                "ssh_key": "",
+                "auth_mode": "password",
+                "credential_source": "global",
+            },
+        ),
         patch("fleet_platform.workers.ansible_tasks._get_pillar_dir", return_value=tmp_path),
         patch("fleet_platform.workers.ansible_tasks._resolve_node_master_creds", return_value=MASTER_CREDS),
         patch("fleet_platform.workers.ansible_tasks._grains_via_salt_api", return_value=({"os": "Linux"}, None)),
@@ -104,7 +113,16 @@ def test_collect_grains_mints_fresh_token_and_persists_hash(tmp_path):
 
     with (
         patch("fleet_platform.workers.ansible_tasks.get_sync_db", return_value=ctx),
-        patch("fleet_platform.workers.ansible_tasks._get_node_credentials", return_value=("admin", None, "password")),
+        patch(
+            "fleet_platform.workers.ansible_tasks.resolve_node_credentials_sync",
+            return_value={
+                "ssh_user": "admin",
+                "ssh_password": "",
+                "ssh_key": "",
+                "auth_mode": "password",
+                "credential_source": "global",
+            },
+        ),
         patch("fleet_platform.workers.ansible_tasks._get_pillar_dir", return_value=tmp_path),
         patch("fleet_platform.workers.ansible_tasks._resolve_node_master_creds", return_value=MASTER_CREDS),
         patch("fleet_platform.workers.ansible_tasks._grains_via_salt_api", return_value=({"os": "Linux"}, None)),
@@ -148,7 +166,16 @@ def test_collect_grains_no_pillar_error_branch_is_gone(tmp_path):
 
     with (
         patch("fleet_platform.workers.ansible_tasks.get_sync_db", return_value=ctx),
-        patch("fleet_platform.workers.ansible_tasks._get_node_credentials", return_value=("admin", None, "password")),
+        patch(
+            "fleet_platform.workers.ansible_tasks.resolve_node_credentials_sync",
+            return_value={
+                "ssh_user": "admin",
+                "ssh_password": "",
+                "ssh_key": "",
+                "auth_mode": "password",
+                "credential_source": "global",
+            },
+        ),
         patch("fleet_platform.workers.ansible_tasks._get_pillar_dir", return_value=tmp_path),
         patch("fleet_platform.workers.ansible_tasks._resolve_node_master_creds", return_value=MASTER_CREDS),
         patch("fleet_platform.workers.ansible_tasks._grains_via_salt_api", return_value=({"os": "Linux"}, None)),
@@ -180,7 +207,16 @@ def test_collect_grains_no_pillar_file_read(tmp_path):
     # a missing file as an error, the result would not be "ok".
     with (
         patch("fleet_platform.workers.ansible_tasks.get_sync_db", return_value=ctx),
-        patch("fleet_platform.workers.ansible_tasks._get_node_credentials", return_value=("admin", None, "password")),
+        patch(
+            "fleet_platform.workers.ansible_tasks.resolve_node_credentials_sync",
+            return_value={
+                "ssh_user": "admin",
+                "ssh_password": "",
+                "ssh_key": "",
+                "auth_mode": "password",
+                "credential_source": "global",
+            },
+        ),
         patch("fleet_platform.workers.ansible_tasks._get_pillar_dir", return_value=tmp_path),
         patch("fleet_platform.workers.ansible_tasks._resolve_node_master_creds", return_value=MASTER_CREDS),
         patch("fleet_platform.workers.ansible_tasks._grains_via_salt_api", return_value=({"os": "Linux"}, None)),
