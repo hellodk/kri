@@ -8,13 +8,17 @@ import { formatLocalDateTime, formatLocalTime } from '../utils/time'
 export function JobDetail() {
   const { jobId } = useParams<{ jobId: string }>()
 
+  // Salt ExecutionJobs are ingested from minions, not published on the SSE
+  // channel (only ansible_job and bootstrap kinds are pushed). The fast 5s poll
+  // is relaxed to a 30s safety-net — push migration is not possible here without
+  // backend changes outside this scope (#756).
   const { data: job, isLoading: jLoading, isError: jError } = useQuery({
     queryKey: ['job', jobId],
     queryFn: () => executionsApi.get(jobId!),
     enabled: !!jobId,
     staleTime: 10_000,
     refetchInterval: (query) =>
-      query.state.data?.status === 'running' ? 5_000 : false,
+      query.state.data?.status === 'running' ? 30_000 : false,
   })
 
   const { data: results, isLoading: rLoading } = useQuery({
