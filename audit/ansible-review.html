@@ -1,0 +1,250 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>kri — Principal Ansible Expert Review</title>
+<style>
+  :root {
+    --bg: #0f1115; --surface: #171a21; --surface-2: #1d212b; --border: #2a2f3a;
+    --text: #e7eaf0; --muted: #9aa3b2; --accent: #6366f1; --accent-2: #22d3ee;
+    --ok: #34d399; --warn: #fbbf24; --crit: #f87171; --mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+    --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text); font-family: var(--sans); line-height: 1.55; }
+  header { position: sticky; top: 0; z-index: 10; background: linear-gradient(180deg, #14171e, #0f1115);
+    border-bottom: 1px solid var(--border); padding: 18px 28px; }
+  header h1 { margin: 0; font-size: 18px; letter-spacing: .3px; }
+  header p { margin: 4px 0 0; color: var(--muted); font-size: 13px; }
+  .layout { display: grid; grid-template-columns: 260px 1fr; min-height: calc(100vh - 64px); }
+  nav { border-right: 1px solid var(--border); padding: 16px 10px; background: var(--surface); }
+  nav button { display: block; width: 100%; text-align: left; background: none; border: none; color: var(--muted);
+    padding: 9px 14px; border-radius: 9px; font-size: 13.5px; cursor: pointer; font-family: inherit; }
+  nav button:hover { background: var(--surface-2); color: var(--text); }
+  nav button.active { background: rgba(99,102,241,.15); color: #c7d2fe; font-weight: 600; }
+  main { padding: 28px 36px; max-width: 1000px; }
+  .panel { display: none; animation: fade .2s ease; }
+  .panel.active { display: block; }
+  @keyframes fade { from { opacity: 0; transform: translateY(4px);} to {opacity:1; transform:none;} }
+  h2 { font-size: 22px; margin: 0 0 6px; }
+  h3 { font-size: 15px; margin: 26px 0 10px; color: #c7d2fe; }
+  .sub { color: var(--muted); font-size: 14px; margin: 0 0 20px; }
+  .card { background: var(--surface); border: 1px solid var(--border); border-radius: 14px; padding: 18px 20px; margin: 14px 0; }
+  .finding { border-left: 3px solid var(--border); padding: 12px 16px; margin: 12px 0; background: var(--surface-2); border-radius: 0 10px 10px 0; }
+  .finding.crit { border-left-color: var(--crit); }
+  .finding.warn { border-left-color: var(--warn); }
+  .finding.info { border-left-color: var(--accent-2); }
+  .finding h4 { margin: 0 0 6px; font-size: 14.5px; }
+  .badge { display: inline-block; font-size: 10.5px; font-weight: 700; letter-spacing: .5px; text-transform: uppercase;
+    padding: 2px 8px; border-radius: 999px; margin-right: 8px; vertical-align: middle; }
+  .badge.crit { background: rgba(248,113,113,.16); color: var(--crit); }
+  .badge.warn { background: rgba(251,191,36,.16); color: var(--warn); }
+  .badge.info { background: rgba(34,211,238,.16); color: var(--accent-2); }
+  .badge.ok { background: rgba(52,211,153,.16); color: var(--ok); }
+  code { font-family: var(--mono); font-size: 12.5px; background: rgba(255,255,255,.06); padding: 1px 6px; border-radius: 5px; }
+  pre { background: #0b0d12; border: 1px solid var(--border); border-radius: 10px; padding: 14px 16px; overflow: auto;
+    font-family: var(--mono); font-size: 12.5px; line-height: 1.5; }
+  pre .add { color: var(--ok); } pre .del { color: var(--crit); } pre .cmt { color: var(--muted); }
+  ul { margin: 8px 0; padding-left: 22px; } li { margin: 4px 0; }
+  .meta { color: var(--muted); font-size: 12.5px; }
+  table { width: 100%; border-collapse: collapse; margin: 12px 0; font-size: 13px; }
+  th, td { text-align: left; padding: 9px 12px; border-bottom: 1px solid var(--border); vertical-align: top; }
+  th { color: var(--muted); font-weight: 600; font-size: 11.5px; text-transform: uppercase; letter-spacing: .4px; }
+  .pill { font-size: 11px; padding: 2px 7px; border-radius: 999px; background: var(--surface-2); color: var(--muted); }
+  .kpi-row { display: flex; gap: 14px; flex-wrap: wrap; margin: 16px 0; }
+  .kpi { flex: 1; min-width: 130px; background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 14px 16px; }
+  .kpi .n { font-size: 26px; font-weight: 700; }
+  .kpi .l { color: var(--muted); font-size: 12px; }
+</style>
+</head>
+<body>
+<header>
+  <h1>kri — Principal Ansible Expert Review</h1>
+  <p>Playbooks &amp; roles audit · bootstrap redesign proposal · prepared overnight for morning review</p>
+</header>
+<div class="layout">
+  <nav id="nav"></nav>
+  <main id="main"></main>
+</div>
+<script>
+const SECTIONS = [
+  { id: "overview", label: "Overview" },
+  { id: "bootstrap", label: "Bootstrap redesign" },
+  { id: "node-exporter", label: "node_exporter role" },
+  { id: "salt-master", label: "salt_master role" },
+  { id: "security", label: "Security & secrets" },
+  { id: "idempotency", label: "Idempotency & lint" },
+  { id: "diff", label: "Proposed bootstrap diff" },
+];
+
+const CONTENT = {
+overview: `
+<h2>Overview</h2>
+<p class="sub">Scope: <code>playbooks/</code> — <code>bootstrap_node.yml</code>, <code>tasks/bootstrap/*</code>, roles <code>node_exporter</code> &amp; <code>salt_master</code>, <code>group_vars/all.yml</code>, <code>ansible.cfg</code>, and the operational playbooks (<code>setup_salt_master.yml</code>, <code>install_salt_master.yml</code>, <code>redeploy_kri.yml</code>, <code>deploy_node_exporter.yml</code>).</p>
+<div class="kpi-row">
+  <div class="kpi"><div class="n" style="color:var(--crit)">3</div><div class="l">High-severity</div></div>
+  <div class="kpi"><div class="n" style="color:var(--warn)">9</div><div class="l">Medium</div></div>
+  <div class="kpi"><div class="n" style="color:var(--accent-2)">7</div><div class="l">Low / polish</div></div>
+  <div class="kpi"><div class="n" style="color:var(--ok)">2</div><div class="l">Strengths kept</div></div>
+</div>
+<h3>Headline issues</h3>
+<div class="finding crit"><h4><span class="badge crit">High</span>Two divergent node_exporter installers — the role version is broken on arm64</h4>
+<p><code>roles/node_exporter/tasks/linux.yml</code> hardcodes <code>linux-amd64</code> and downloads straight from GitHub with no checksum, while the more capable <code>tasks/bootstrap/node_exporter_linux.yml</code> handles arch + Artifactory + version pinning. The two will drift. Consolidate onto one hardened role.</p></div>
+<div class="finding crit"><h4><span class="badge crit">High</span>No supply-chain verification for node_exporter binaries</h4>
+<p>The salt <code>.pkg</code> is SHA512-verified on macOS and Linux salt comes via GPG-signed apt/dnf repos — good. But every <code>node_exporter</code> download (bootstrap + role, macOS + Linux) skips checksum verification. Prometheus publishes <code>sha256sums.txt</code> per release; verify it.</p></div>
+<div class="finding crit"><h4><span class="badge crit">High</span><code>meta: end_play</code> in the node_exporter role ends the whole play</h4>
+<p>The "Skip if already running" guard uses <code>meta: end_play</code>, which terminates the entire play for that host — not just the role. If this role is ever composed with others (it already co-exists with salt tasks during bootstrap-style runs), everything after it silently stops. Use a per-task <code>when:</code> guard instead.</p></div>
+<h3>Strengths worth preserving</h3>
+<ul>
+<li>SHA512 checksum gate on the macOS salt onedir <code>.pkg</code>, with version-aware skip — exemplary.</li>
+<li>Multi-master HA failover config + minion/master reachability gate (<code>nc</code> on 4505/4506) before writing minion config.</li>
+<li>Credentials are passed via ansible-runner extravars (never written to disk) and scrubbed from logs.</li>
+</ul>
+`,
+bootstrap: `
+<h2>Bootstrap redesign</h2>
+<p class="sub">Your request: <em>bootstrap should install <strong>salt-minion + node_exporter only</strong>, and node_exporter / salt-minion variables should be prompted from the user at runtime.</em> Implementation is in flight on branch <code>feat/830-minimal-bootstrap-runtime-vars</code> (issue #830).</p>
+<h3>Current state</h3>
+<p><code>bootstrap_node.yml</code> is a 527-line monolith that also: enables macOS Screen Sharing/VNC, harvests the full Homebrew package list, and applies Salt <code>base.heartbeat</code> + <code>base.process_report_schedule</code> via <code>salt-call</code>. That is well beyond "minion + node_exporter".</p>
+<h3>Recommended shape</h3>
+<div class="card">
+<ul>
+<li><span class="badge info">arch</span><strong>Decompose into roles.</strong> The Linux path already uses <code>include_tasks</code>; the macOS salt install is 90 lines inlined in the playbook. Extract a <code>salt_minion</code> role (macOS + Linux task files, mirroring <code>salt_master</code>) and reuse the hardened <code>node_exporter</code> role. The playbook becomes a thin <code>roles:</code> list.</li>
+<li><span class="badge ok">done in #830</span><strong>Default to minimal.</strong> Gate VNC, brew harvest, and salt-applied schedules behind <code>bootstrap_full | default(false)</code>. Keep the initial grain POST (registration) — removing it would stop nodes appearing in kri.</li>
+<li><span class="badge ok">done in #830</span><strong>Runtime variables.</strong> Surface <code>node_exporter_version</code>, <code>node_exporter_listen_address</code> (default <code>:9100</code>), <code>node_exporter_url_override</code>, and the <code>bootstrap_full</code> toggle in the Bootstrap modal → API → worker extravars. Salt master IPs, minion id, ingest URL and the per-node token stay server-derived (the token is a secret; users should not type it).</li>
+<li><span class="badge warn">med</span><strong>Replace <code>nc</code> reachability checks with the <code>wait_for</code> module.</strong> <code>nc</code> is not guaranteed present on minimal images; <code>wait_for</code> (port + timeout) is module-native and reports cleanly.</li>
+<li><span class="badge warn">med</span><strong>Stop swallowing the grains POST result.</strong> The registration <code>uri</code> task uses <code>failed_when: false</code>, so a 4xx/5xx is invisible. At minimum <code>register</code> + <code>debug</code> a warning on non-2xx.</li>
+<li><span class="badge info">low</span><strong>Process detection.</strong> <code>ps aux | grep -v grep | grep salt-minion</code> is fragile; use <code>pgrep -x salt-minion</code> or the service status from <code>systemd</code>/<code>launchctl</code>.</li>
+</ul>
+</div>
+<h3>node_exporter listen address — the runtime variable</h3>
+<p>Today the port is hardcoded as <code>--web.listen-address=:9100</code> in both the systemd unit and the launchd plist. #830 parameterizes it as <code>{{ node_exporter_listen_address | default(':9100') }}</code> so an operator can bind to a specific interface (e.g. the Tailscale IP) at bootstrap time. Note the variable-name inconsistency to fix: the role uses <code>node_exporter_port</code> (int) while bootstrap will use <code>node_exporter_listen_address</code> (string). Standardize on the string form.</p>
+`,
+"node-exporter": `
+<h2>node_exporter role</h2>
+<p class="sub"><code>playbooks/roles/node_exporter/</code> — used by <code>deploy_node_exporter.yml</code>. Diverges sharply from the inline bootstrap tasks.</p>
+<div class="finding crit"><h4><span class="badge crit">High</span>arm64 Linux is unsupported</h4>
+<p><code>linux.yml</code> hardcodes <code>node_exporter-{{ version }}.linux-amd64.tar.gz</code> and the extracted path. On arm64 Linux hosts this 404s / installs nothing. The bootstrap task computes <code>ne_arch</code> (amd64/arm64) correctly — port that here.</p></div>
+<div class="finding crit"><h4><span class="badge crit">High</span><code>meta: end_play</code> aborts the whole play</h4>
+<pre><span class="del">- name: Skip if already running
+  meta: end_play
+  when: svc_check.stdout == "active"</span></pre>
+<p>Replace with a registered fact and guard the install/download/service tasks with <code>when: svc_check.stdout != "active"</code>, or better, make the role fully idempotent and let Ansible's change detection no-op.</p></div>
+<div class="finding warn"><h4><span class="badge warn">Med</span>No checksum on the download</h4>
+<p><code>get_url</code> has no <code>checksum:</code>. Fetch <code>sha256sums.txt</code> from the release and pass <code>checksum: "sha256:{{ ... }}"</code>.</p></div>
+<div class="finding warn"><h4><span class="badge warn">Med</span>Service runs as root with no hardening</h4>
+<p>The role's systemd unit has no <code>User=</code>/<code>Group=</code> (runs as root), unlike the bootstrap unit which creates a dedicated <code>node_exporter</code> system user. Add the dedicated user and systemd hardening: <code>NoNewPrivileges=yes</code>, <code>ProtectSystem=strict</code>, <code>ProtectHome=yes</code>, <code>ProtectKernelTunables=yes</code>, <code>RestrictAddressFamilies=AF_INET AF_INET6</code>.</p></div>
+<div class="finding info"><h4><span class="badge info">Low</span>No handler / no restart on binary change</h4>
+<p>macOS has a <code>restart node_exporter macos</code> handler but it is never notified, and Linux has none. Wire <code>notify</code> from the binary-copy and unit-copy tasks so an upgrade actually restarts the service.</p></div>
+<div class="finding info"><h4><span class="badge info">Low</span>Predictable <code>/tmp</code> download path</h4>
+<p>Downloading to a fixed <code>/tmp/node_exporter.tar.gz</code> (mode 0644) on a multi-user host is a mild TOCTOU/symlink risk. Use a per-run temp dir or <code>ansible_managed</code> dest under <code>/var/cache</code>.</p></div>
+<h3>Recommendation</h3>
+<p>Make the hardened role the single source of truth (arch-aware, checksum-verified, dedicated user, parameterized <code>node_exporter_listen_address</code>, handlers) and have <code>bootstrap_node.yml</code> call the role instead of inline task files. This removes the duplication that caused the divergence.</p>
+`,
+"salt-master": `
+<h2>salt_master role</h2>
+<p class="sub"><code>playbooks/roles/salt_master/</code> — well structured: clean OS dispatch, separate <code>configure/pki/pillar/states/api_user/api_tls/verify</code> task files, and a co-located minion (#707).</p>
+<div class="finding ok"><h4><span class="badge ok">Good</span>This role is the model to follow</h4>
+<p>OS detection with a clear unsupported-OS failure, per-OS install includes, import_tasks decomposition, and a final verify step. The bootstrap playbook should be refactored to look like this.</p></div>
+<div class="finding warn"><h4><span class="badge warn">Med</span>Insecure default API password</h4>
+<p><code>install_salt_master.yml</code> documents <code>kri_salt_api_password</code> default <code>changeme</code>. Defaults that are valid secrets are dangerous — make it <strong>required</strong> (fail fast with <code>assert</code> when unset) rather than defaulting to a known value.</p></div>
+<div class="finding info"><h4><span class="badge info">Low</span>Hardcoded environment specifics</h4>
+<p><code>group_vars/all.yml</code> pins <code>salt_master_address: "100.102.68.75"</code> and <code>redeploy_kri.yml</code> defaults <code>kri_deploy_path: /home/dk/Documents/git/kri</code>. These leak one operator's environment into shared defaults. Move host-specific values to <code>host_vars/</code> or require them at runtime.</p></div>
+<div class="finding info"><h4><span class="badge info">Low</span>Idempotent <code>configure.yml</code> verification</h4>
+<p>Confirm the master <code>configure/pki</code> steps use handlers to restart <code>salt-master</code>/<code>salt-api</code> only on real config change, to avoid disconnecting minions on every run.</p></div>
+`,
+security: `
+<h2>Security &amp; secrets</h2>
+<table>
+<tr><th>Area</th><th>Finding</th><th>Recommendation</th></tr>
+<tr><td>Host keys</td><td><code>host_key_checking = False</code> + <code>StrictHostKeyChecking=no</code> + <code>UserKnownHostsFile=/dev/null</code> everywhere</td><td>Acceptable trade-off for first-touch bootstrap, but consider TOFU: record the host key on first connect and pin it for subsequent runs (kri already stores <code>ssh_host_key</code> per node).</td></tr>
+<tr><td>Binaries</td><td>node_exporter downloaded without checksum (both paths)</td><td>Verify <code>sha256sums.txt</code>. Salt pkg already SHA512-verified — mirror that pattern.</td></tr>
+<tr><td>Service user</td><td>Role installs node_exporter as root</td><td>Run as dedicated <code>node_exporter</code> system user + systemd hardening (see role tab).</td></tr>
+<tr><td>Secrets in defaults</td><td><code>kri_salt_api_password: changeme</code></td><td>Make required; <code>assert</code> non-empty &amp; not the literal default.</td></tr>
+<tr><td>Crypto</td><td>Minion config pins <code>encryption_algorithm: OAEP-SHA1</code></td><td>SHA1 OAEP is for cross-version Salt compatibility; document the reason inline and revisit when the whole fleet is on a SHA256-capable Salt.</td></tr>
+<tr><td>Logging</td><td>Grain POST uses <code>no_log: true</code> (good) and token via extravars (good)</td><td>Keep. Extend <code>no_log</code> to any future task that templates the token or pubkey.</td></tr>
+<tr><td>Tmp files</td><td>World-readable predictable <code>/tmp</code> artifacts (mode 0644)</td><td>Per-run temp dir; remove artifacts in an <code>always</code> block.</td></tr>
+</table>
+`,
+idempotency: `
+<h2>Idempotency &amp; lint</h2>
+<div class="finding warn"><h4><span class="badge warn">Med</span>Add <code>ansible-lint</code> + <code>yamllint</code> to CI</h4>
+<p>There is no evidence of linting in the pipeline. A pre-merge <code>ansible-lint playbooks/</code> would catch the <code>meta: end_play</code> footgun, missing <code>changed_when</code>, hardcoded archs, and <code>command</code>/<code>shell</code> that should be modules.</p></div>
+<div class="finding warn"><h4><span class="badge warn">Med</span><code>shell</code>/<code>command</code> overuse</h4>
+<p>Many tasks shell out where a module exists: <code>launchctl load/start</code> (no native module — acceptable), <code>nc</code> reachability (use <code>wait_for</code>), <code>ps aux | grep</code> (use <code>pgrep</code> or service facts), brew listing (acceptable). Each <code>shell</code> with <code>changed_when: false</code> + <code>failed_when: false</code> hides real failures — audit each for whether silence is intended.</p></div>
+<div class="finding info"><h4><span class="badge info">Low</span>Duplicate variable definitions</h4>
+<p><code>node_exporter_version</code> lives in both <code>group_vars/all.yml</code> ("1.8.2") and <code>roles/node_exporter/defaults/main.yml</code> ("1.8.2"). Keep one canonical definition (group_vars) and delete the role default, or have the role default reference it. Same for the port/listen-address naming split.</p></div>
+<div class="finding info"><h4><span class="badge info">Low</span>Collections pinned loosely</h4>
+<p><code>requirements.yml</code> pins <code>ansible.posix >= 2.0.0</code> (unbounded upper). For reproducible bootstraps, pin a tested range, e.g. <code>>=2.0.0,&lt;3.0.0</code>, and commit the resolved version.</p></div>
+<div class="finding info"><h4><span class="badge info">Low</span>FQCN consistency</h4>
+<p>Mix of short module names (<code>copy</code>, <code>file</code>, <code>systemd</code>) and FQCN (<code>ansible.posix.authorized_key</code>). <code>ansible-lint</code> will push toward FQCN everywhere (<code>ansible.builtin.copy</code> …) — low priority but improves portability.</p></div>
+`,
+diff: `
+<h2>Proposed bootstrap diff (illustrative)</h2>
+<p class="sub">These are the concrete edits the #830 implementation applies. Shown here so you can sanity-check the direction before reviewing the PR.</p>
+<h3>1. Parameterize the node_exporter listen address</h3>
+<pre><span class="cmt"># tasks/bootstrap/node_exporter_linux.yml (systemd unit)</span>
+<span class="del">- ExecStart=/usr/local/bin/node_exporter --web.listen-address=:9100</span>
+<span class="add">+ ExecStart=/usr/local/bin/node_exporter --web.listen-address={{ node_exporter_listen_address | default(':9100') }}</span>
+
+<span class="cmt"># tasks/bootstrap/node_exporter_macos.yml (launchd plist ProgramArguments)</span>
+<span class="del">-   &lt;string&gt;--web.listen-address=:9100&lt;/string&gt;</span>
+<span class="add">+   &lt;string&gt;--web.listen-address={{ node_exporter_listen_address | default(':9100') }}&lt;/string&gt;</span></pre>
+<h3>2. Gate non-essential steps behind <code>bootstrap_full</code></h3>
+<pre><span class="cmt"># bootstrap_node.yml — VNC, brew harvest, salt schedules</span>
+  - name: Enable macOS Screen Sharing (VNC on port 5900)
+    ...
+<span class="add">+   when: ansible_os_family == 'Darwin' and (bootstrap_full | default(false) | bool)</span>
+
+  - name: Apply kri heartbeat schedule via salt-call
+    ...
+<span class="del">-   when: salt_ping.rc == 0</span>
+<span class="add">+   when: salt_ping.rc == 0 and (bootstrap_full | default(false) | bool)</span></pre>
+<h3>3. Forward runtime overrides from the worker</h3>
+<pre><span class="cmt"># fleet_platform/workers/ansible_tasks.py — extravars</span>
+  extravars={
+      "salt_masters": master_addresses,
+      "minion_id": node_minion_id,
+      "ingest_url": ingest_url,
+      "node_token": raw_token,
+<span class="add">+     **({"node_exporter_version": node_exporter_version} if node_exporter_version else {}),</span>
+<span class="add">+     **({"node_exporter_listen_address": node_exporter_listen_address} if node_exporter_listen_address else {}),</span>
+<span class="add">+     **({"node_exporter_url_override": node_exporter_url_override} if node_exporter_url_override else {}),</span>
+<span class="add">+     "bootstrap_full": bool(bootstrap_full),</span>
+      **password_extravars,
+  }</pre>
+<h3>4. Bootstrap modal — Advanced section (React)</h3>
+<pre><span class="cmt">// frontend/src/pages/BootstrapModal.tsx (SingleMode)</span>
+<span class="add">+ &lt;details&gt;&lt;summary&gt;Advanced — node_exporter &amp; minion options&lt;/summary&gt;</span>
+<span class="add">+   node_exporter version  [ 1.8.2 ]</span>
+<span class="add">+   listen address         [ :9100 ]</span>
+<span class="add">+   download URL override  [ (blank = default) ]</span>
+<span class="add">+   [ ] Full bootstrap (VNC, brew inventory, salt schedules)</span>
+<span class="add">+ &lt;/details&gt;</span></pre>
+<p class="meta">Final diff may differ slightly — review the PR (<code>Closes #830</code>) once the implementation agent reports.</p>
+`,
+};
+
+const nav = document.getElementById("nav");
+const main = document.getElementById("main");
+SECTIONS.forEach((s, i) => {
+  const b = document.createElement("button");
+  b.textContent = s.label; b.dataset.id = s.id;
+  if (i === 0) b.classList.add("active");
+  b.onclick = () => select(s.id);
+  nav.appendChild(b);
+  const p = document.createElement("div");
+  p.className = "panel" + (i === 0 ? " active" : "");
+  p.id = "panel-" + s.id;
+  p.innerHTML = CONTENT[s.id] || "";
+  main.appendChild(p);
+});
+function select(id) {
+  document.querySelectorAll("nav button").forEach(b => b.classList.toggle("active", b.dataset.id === id));
+  document.querySelectorAll(".panel").forEach(p => p.classList.toggle("active", p.id === "panel-" + id));
+  window.scrollTo(0, 0);
+}
+</script>
+</body>
+</html>

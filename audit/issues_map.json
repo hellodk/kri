@@ -1,0 +1,462 @@
+{
+  "DEV-1": {
+    "number": 733,
+    "url": "https://github.com/hellodk/kri/issues/733",
+    "title": "[Audit] SSH connection cache bypasses authentication for shared (host, port, username) keys (DEV-1)"
+  },
+  "DEV-4": {
+    "number": 734,
+    "url": "https://github.com/hellodk/kri/issues/734",
+    "title": "[Audit] poll_salt_masters runs asyncio.run() per master in a serial loop (DEV-4)"
+  },
+  "DEV-3": {
+    "number": 735,
+    "url": "https://github.com/hellodk/kri/issues/735",
+    "title": "[Audit] approve_proposal has no row-level lock; concurrent approvals can double-execute a live tool (DEV-3)"
+  },
+  "DEV-6": {
+    "number": 736,
+    "url": "https://github.com/hellodk/kri/issues/736",
+    "title": "[Audit] _check_ingest_rate_limit opens a new Redis client per request and never closes it (DEV-6)"
+  },
+  "DEV-7": {
+    "number": 737,
+    "url": "https://github.com/hellodk/kri/issues/737",
+    "title": "[Audit] Rate-limiter INCR/EXPIRE are not atomic; TTL can be lost on crash (DEV-7)"
+  },
+  "DEV-5": {
+    "number": 738,
+    "url": "https://github.com/hellodk/kri/issues/738",
+    "title": "[Audit] Sync DB session held open during asyncio.run(run_probe()) network I/O in provision_master (DEV-5)"
+  },
+  "DEV-2": {
+    "number": 739,
+    "url": "https://github.com/hellodk/kri/issues/739",
+    "title": "[Audit] collect_node_grains reads node token from a pillar file that is never populated (broken since #509) (DEV-2)"
+  },
+  "DEV-8": {
+    "number": 740,
+    "url": "https://github.com/hellodk/kri/issues/740",
+    "title": "[Audit] Deprecated asyncio.get_event_loop() used inside coroutines (5 sites) (DEV-8)"
+  },
+  "DEV-9": {
+    "number": 741,
+    "url": "https://github.com/hellodk/kri/issues/741",
+    "title": "[Audit] SMTP email send failure swallowed silently with no log (DEV-9)"
+  },
+  "DEV-10": {
+    "number": 742,
+    "url": "https://github.com/hellodk/kri/issues/742",
+    "title": "[Audit] create_proposal uses nil UUID as sentinel node_id for multi-target actions (DEV-10)"
+  },
+  "DEV-11": {
+    "number": 743,
+    "url": "https://github.com/hellodk/kri/issues/743",
+    "title": "[Audit] SSH probe writes private key to a temp file without chmod 0600, so OpenSSH rejects it (DEV-11)"
+  },
+  "DEV-12": {
+    "number": 744,
+    "url": "https://github.com/hellodk/kri/issues/744",
+    "title": "[Audit] embedding_tasks loads all nodes into memory with an unbounded SELECT (DEV-12)"
+  },
+  "ARC-1": {
+    "number": 745,
+    "url": "https://github.com/hellodk/kri/issues/745",
+    "title": "[Audit] Blocking Celery .get() inside an ASGI request handler (ARC-1)"
+  },
+  "ARC-2": {
+    "number": 746,
+    "url": "https://github.com/hellodk/kri/issues/746",
+    "title": "[Audit] Layering violation: service layer imports from the API layer (ARC-2)"
+  },
+  "ARC-3": {
+    "number": 747,
+    "url": "https://github.com/hellodk/kri/issues/747",
+    "title": "[Audit] Sync Redis connection created per request on the async ingest hot path (ARC-3)"
+  },
+  "ARC-4": {
+    "number": 748,
+    "url": "https://github.com/hellodk/kri/issues/748",
+    "title": "[Audit] Deprecated inline SSH credential columns still live and read as fallback (dual secret paths) (ARC-4)"
+  },
+  "ARC-6": {
+    "number": 750,
+    "url": "https://github.com/hellodk/kri/issues/750",
+    "title": "[Audit] God files: ansible.py (~1,660 lines) and ansible_tasks.py (~1,375 lines) (ARC-6)"
+  },
+  "ARC-5": {
+    "number": 749,
+    "url": "https://github.com/hellodk/kri/issues/749",
+    "title": "[Audit] Routes import worker modules directly, coupling API and worker import graphs (ARC-5)"
+  },
+  "ARC-7": {
+    "number": 751,
+    "url": "https://github.com/hellodk/kri/issues/751",
+    "title": "[Audit] Fernet cipher re-instantiated on every encrypt/decrypt call (ARC-7)"
+  },
+  "ARC-8": {
+    "number": 752,
+    "url": "https://github.com/hellodk/kri/issues/752",
+    "title": "[Audit] Minion-ID validation regex duplicated across 5 files with inconsistent bounds (ARC-8)"
+  },
+  "ARC-10": {
+    "number": 754,
+    "url": "https://github.com/hellodk/kri/issues/754",
+    "title": "[Audit] Single Celery Beat is a silent SPOF for all 15 scheduled tasks (ARC-10)"
+  },
+  "ARC-9": {
+    "number": 753,
+    "url": "https://github.com/hellodk/kri/issues/753",
+    "title": "[Audit] node_facts hypertable has retention but no compression policy (ARC-9)"
+  },
+  "ARC-12": {
+    "number": 755,
+    "url": "https://github.com/hellodk/kri/issues/755",
+    "title": "[Audit] All-deprecated X-XSS-Protection header and no API-versioning strategy beyond /api/v1 prefix (ARC-12)"
+  },
+  "ARC-11": {
+    "number": 756,
+    "url": "https://github.com/hellodk/kri/issues/756",
+    "title": "[Audit] Pervasive frontend polling with no push mechanism for live job state (ARC-11)"
+  },
+  "SRE-1": {
+    "number": 757,
+    "url": "https://github.com/hellodk/kri/issues/757",
+    "title": "[Audit] Default admin/admin credential documented, not enforced to change (SRE-1)"
+  },
+  "SRE-2": {
+    "number": 758,
+    "url": "https://github.com/hellodk/kri/issues/758",
+    "title": "[Audit] cmd.run in Salt API allowlist grants operator-level RCE on any fleet node (SRE-2)"
+  },
+  "SRE-3": {
+    "number": 759,
+    "url": "https://github.com/hellodk/kri/issues/759",
+    "title": "[Audit] Login rate limiter keyed on spoofable X-Forwarded-For (SRE-3)"
+  },
+  "SRE-4": {
+    "number": 760,
+    "url": "https://github.com/hellodk/kri/issues/760",
+    "title": "[Audit] No securityContext in any Kubernetes deployment (SRE-4)"
+  },
+  "SRE-6": {
+    "number": 761,
+    "url": "https://github.com/hellodk/kri/issues/761",
+    "title": "[Audit] Backups unencrypted and local-only by default (SRE-6)"
+  },
+  "SRE-5": {
+    "number": 762,
+    "url": "https://github.com/hellodk/kri/issues/762",
+    "title": "[Audit] pg_backup container runs as root and has no healthcheck (SRE-5)"
+  },
+  "SRE-7": {
+    "number": 763,
+    "url": "https://github.com/hellodk/kri/issues/763",
+    "title": "[Audit] /metrics endpoint unauthenticated at the application layer (SRE-7)"
+  },
+  "SRE-10": {
+    "number": 764,
+    "url": "https://github.com/hellodk/kri/issues/764",
+    "title": "[Audit] No Content-Security-Policy header; deprecated X-XSS-Protection still set (SRE-10)"
+  },
+  "SRE-9": {
+    "number": 765,
+    "url": "https://github.com/hellodk/kri/issues/765",
+    "title": "[Audit] FERNET_SECRET_KEY missing from .env.docker.example; CI uses a different name (SRE-9)"
+  },
+  "SRE-8": {
+    "number": 766,
+    "url": "https://github.com/hellodk/kri/issues/766",
+    "title": "[Audit] auth/refresh endpoint has no rate limit (SRE-8)"
+  },
+  "SRE-13": {
+    "number": 767,
+    "url": "https://github.com/hellodk/kri/issues/767",
+    "title": "[Audit] pg_backup installs age + rclone at runtime (supply-chain + cold-start risk) (SRE-13)"
+  },
+  "SRE-11": {
+    "number": 768,
+    "url": "https://github.com/hellodk/kri/issues/768",
+    "title": "[Audit] Ingest rate limiter fails open when Redis is unavailable (SRE-11)"
+  },
+  "SRE-12": {
+    "number": 769,
+    "url": "https://github.com/hellodk/kri/issues/769",
+    "title": "[Audit] No K8s NetworkPolicy, PodDisruptionBudget, or HPA; all deployments replicas: 1 (SRE-12)"
+  },
+  "AI-1": {
+    "number": 770,
+    "url": "https://github.com/hellodk/kri/issues/770",
+    "title": "[Audit] Indirect prompt injection via unsanitized tool-result observations (AI-1)"
+  },
+  "AI-2": {
+    "number": 772,
+    "url": "https://github.com/hellodk/kri/issues/772",
+    "title": "[Audit] Operator can self-approve their own agent-proposed actions (single-target) (AI-2)"
+  },
+  "AI-3": {
+    "number": 771,
+    "url": "https://github.com/hellodk/kri/issues/771",
+    "title": "[Audit] set_pillar tool silently ignores its value argument (AI-3)"
+  },
+  "AI-4": {
+    "number": 773,
+    "url": "https://github.com/hellodk/kri/issues/773",
+    "title": "[Audit] RAG chunk content injected raw into the system prompt (stored prompt injection) (AI-4)"
+  },
+  "AI-5": {
+    "number": 774,
+    "url": "https://github.com/hellodk/kri/issues/774",
+    "title": "[Audit] Cloud cost cap is in-process only, not shared across workers (AI-5)"
+  },
+  "AI-6": {
+    "number": 775,
+    "url": "https://github.com/hellodk/kri/issues/775",
+    "title": "[Audit] Salt state name argument is LLM-controlled with no allowlist (AI-6)"
+  },
+  "AI-7": {
+    "number": 776,
+    "url": "https://github.com/hellodk/kri/issues/776",
+    "title": "[Audit] run_salt_cmd passes LLM-controlled args list to Salt with no constraints (AI-7)"
+  },
+  "AI-8": {
+    "number": 777,
+    "url": "https://github.com/hellodk/kri/issues/777",
+    "title": "[Audit] Guard list references unregistered tool and omits a registered write-live tool (AI-8)"
+  },
+  "AI-9": {
+    "number": 778,
+    "url": "https://github.com/hellodk/kri/issues/778",
+    "title": "[Audit] Intent classifier is order-sensitive and has cross-intent false positives (AI-9)"
+  },
+  "AI-11": {
+    "number": 779,
+    "url": "https://github.com/hellodk/kri/issues/779",
+    "title": "[Audit] Read-only Salt tools accept comma lists and silently broadcast to many minions (AI-11)"
+  },
+  "AI-10": {
+    "number": 780,
+    "url": "https://github.com/hellodk/kri/issues/780",
+    "title": "[Audit] Cost tracked only when routed_via ends with 'cloud'; direct-endpoint runs untracked (AI-10)"
+  },
+  "AI-12": {
+    "number": 781,
+    "url": "https://github.com/hellodk/kri/issues/781",
+    "title": "[Audit] Audit _redact is length-only; secret tool arguments logged in plaintext (AI-12)"
+  },
+  "AI-13": {
+    "number": 782,
+    "url": "https://github.com/hellodk/kri/issues/782",
+    "title": "[Audit] LLM final answer streamed to the browser without output sanitization (AI-13)"
+  },
+  "UX-1": {
+    "number": 783,
+    "url": "https://github.com/hellodk/kri/issues/783",
+    "title": "[Audit] JWT token exposed as a WebSocket URL query parameter (UX-1)"
+  },
+  "UX-2": {
+    "number": 784,
+    "url": "https://github.com/hellodk/kri/issues/784",
+    "title": "[Audit] WebSocket hardcodes ws:// and silently breaks on HTTPS (UX-2)"
+  },
+  "UX-3": {
+    "number": 785,
+    "url": "https://github.com/hellodk/kri/issues/785",
+    "title": "[Audit] No React ErrorBoundary anywhere in the application (UX-3)"
+  },
+  "UX-4": {
+    "number": 786,
+    "url": "https://github.com/hellodk/kri/issues/786",
+    "title": "[Audit] Auth tokens stored in localStorage (XSS token theft) (UX-4)"
+  },
+  "UX-5": {
+    "number": 787,
+    "url": "https://github.com/hellodk/kri/issues/787",
+    "title": "[Audit] NodeDetail.tsx is a 2,454-line god component with 50+ useState and zero memoization (UX-5)"
+  },
+  "UX-7": {
+    "number": 788,
+    "url": "https://github.com/hellodk/kri/issues/788",
+    "title": "[Audit] dangerouslySetInnerHTML with an unescaped fallback HTML literal for Ansible logs (UX-7)"
+  },
+  "UX-6": {
+    "number": 789,
+    "url": "https://github.com/hellodk/kri/issues/789",
+    "title": "[Audit] @tanstack/react-virtual installed but unused; large lists render full DOM (UX-6)"
+  },
+  "UX-8": {
+    "number": 790,
+    "url": "https://github.com/hellodk/kri/issues/790",
+    "title": "[Audit] Modals lack a focus trap; Tab escapes to background content (UX-8)"
+  },
+  "UX-9": {
+    "number": 791,
+    "url": "https://github.com/hellodk/kri/issues/791",
+    "title": "[Audit] Five concurrent 30s polling queries on the Dashboard page (UX-9)"
+  },
+  "UX-10": {
+    "number": 792,
+    "url": "https://github.com/hellodk/kri/issues/792",
+    "title": "[Audit] SecurityPage polls active SSH sessions every 10s (most aggressive interval) (UX-10)"
+  },
+  "UX-11": {
+    "number": 793,
+    "url": "https://github.com/hellodk/kri/issues/793",
+    "title": "[Audit] All table headers missing scope=\"col\" (screen-reader inaccessibility) (UX-11)"
+  },
+  "UX-14": {
+    "number": 794,
+    "url": "https://github.com/hellodk/kri/issues/794",
+    "title": "[Audit] Suspense has no error fallback for lazy route chunks (silent load failures) (UX-14)"
+  },
+  "UX-13": {
+    "number": 796,
+    "url": "https://github.com/hellodk/kri/issues/796",
+    "title": "[Audit] Hardcoded Asia/Kolkata timezone for all users (UX-13)"
+  },
+  "TST-1": {
+    "number": 795,
+    "url": "https://github.com/hellodk/kri/issues/795",
+    "title": "[Audit] Agent run endpoint has zero integration or E2E coverage (TST-1)"
+  },
+  "UX-12": {
+    "number": 797,
+    "url": "https://github.com/hellodk/kri/issues/797",
+    "title": "[Audit] Array index used as React key in multiple lists (incl. streaming chat) (UX-12)"
+  },
+  "TST-3": {
+    "number": 798,
+    "url": "https://github.com/hellodk/kri/issues/798",
+    "title": "[Audit] E2E suite has only 1 spec on master; 18+ live only in worktrees (TST-3)"
+  },
+  "TST-2": {
+    "number": 799,
+    "url": "https://github.com/hellodk/kri/issues/799",
+    "title": "[Audit] Coverage gate excludes fleet_platform/agent/ entirely (TST-2)"
+  },
+  "TST-4": {
+    "number": 800,
+    "url": "https://github.com/hellodk/kri/issues/800",
+    "title": "[Audit] Large fraction of unit tests scrape source strings instead of asserting behavior (TST-4)"
+  },
+  "TST-6": {
+    "number": 801,
+    "url": "https://github.com/hellodk/kri/issues/801",
+    "title": "[Audit] Rate-limit tests assert structure, not behavior (limit could be disabled and pass) (TST-6)"
+  },
+  "TST-7": {
+    "number": 802,
+    "url": "https://github.com/hellodk/kri/issues/802",
+    "title": "[Audit] time.sleep(0.01) for mtime ordering \u2014 flaky on low-resolution filesystems (TST-7)"
+  },
+  "TST-8": {
+    "number": 803,
+    "url": "https://github.com/hellodk/kri/issues/803",
+    "title": "[Audit] Agent approval flow not tested over HTTP (TST-8)"
+  },
+  "TST-9": {
+    "number": 804,
+    "url": "https://github.com/hellodk/kri/issues/804",
+    "title": "[Audit] Mutation testing has no CI enforcement and no workflow file (TST-9)"
+  },
+  "TST-5": {
+    "number": 805,
+    "url": "https://github.com/hellodk/kri/issues/805",
+    "title": "[Audit] Module-scoped integration DB session with no per-test rollback creates ordering dependencies (TST-5)"
+  },
+  "TST-10": {
+    "number": 806,
+    "url": "https://github.com/hellodk/kri/issues/806",
+    "title": "[Audit] pytest asyncio_default_fixture_loop_scope=function conflicts with module-scoped integration fixtures (TST-10)"
+  },
+  "TST-11": {
+    "number": 807,
+    "url": "https://github.com/hellodk/kri/issues/807",
+    "title": "[Audit] E2E PLAY-16 silently skips field assertions when API returns an empty array (TST-11)"
+  },
+  "TST-12": {
+    "number": 808,
+    "url": "https://github.com/hellodk/kri/issues/808",
+    "title": "[Audit] Property tests limited to one file despite Hypothesis being installed and used historically (TST-12)"
+  },
+  "TST-13": {
+    "number": 809,
+    "url": "https://github.com/hellodk/kri/issues/809",
+    "title": "[Audit] Worker maintenance/celery tasks tested only via source-scraping, not behavior (TST-13)"
+  },
+  "TST-14": {
+    "number": 810,
+    "url": "https://github.com/hellodk/kri/issues/810",
+    "title": "[Audit] Only 7 integration test files on master vs 40+ unmerged in worktrees (TST-14)"
+  },
+  "TST-15": {
+    "number": 811,
+    "url": "https://github.com/hellodk/kri/issues/811",
+    "title": "[Audit] No contract/schema tests for OpenAPI response shapes (TST-15)"
+  },
+  "USR-1": {
+    "number": 812,
+    "url": "https://github.com/hellodk/kri/issues/812",
+    "title": "[Audit] Salt-master silently absent from the Docker Compose stack (USR-1)"
+  },
+  "USR-2": {
+    "number": 813,
+    "url": "https://github.com/hellodk/kri/issues/813",
+    "title": "[Audit] LICENSE file is missing (badge and link 404) (USR-2)"
+  },
+  "USR-5": {
+    "number": 815,
+    "url": "https://github.com/hellodk/kri/issues/815",
+    "title": "[Audit] CONTRIBUTING.md references scripts/kri.sh which does not exist (USR-5)"
+  },
+  "USR-3": {
+    "number": 814,
+    "url": "https://github.com/hellodk/kri/issues/814",
+    "title": "[Audit] npm ci fails \u2014 frontend is managed with pnpm (USR-3)"
+  },
+  "USR-4": {
+    "number": 816,
+    "url": "https://github.com/hellodk/kri/issues/816",
+    "title": "[Audit] Hardcoded developer home paths as docker-compose volume defaults (USR-4)"
+  },
+  "USR-6": {
+    "number": 817,
+    "url": "https://github.com/hellodk/kri/issues/817",
+    "title": "[Audit] CONTRIBUTING.md references a non-existent env file (USR-6)"
+  },
+  "USR-8": {
+    "number": 819,
+    "url": "https://github.com/hellodk/kri/issues/819",
+    "title": "[Audit] Admin credentials inconsistent across docs (USR-8)"
+  },
+  "USR-7": {
+    "number": 818,
+    "url": "https://github.com/hellodk/kri/issues/818",
+    "title": "[Audit] Salt HTTP API required for all Salt ops but its setup is undocumented (USR-7)"
+  },
+  "USR-9": {
+    "number": 820,
+    "url": "https://github.com/hellodk/kri/issues/820",
+    "title": "[Audit] No forced password change for the admin/admin default (USR-9)"
+  },
+  "USR-11": {
+    "number": 821,
+    "url": "https://github.com/hellodk/kri/issues/821",
+    "title": "[Audit] Hardcoded developer personal path inside documentation (USR-11)"
+  },
+  "USR-10": {
+    "number": 822,
+    "url": "https://github.com/hellodk/kri/issues/822",
+    "title": "[Audit] Onboarding Step 14 (manual Celery start) conflicts with Docker Compose path (USR-10)"
+  },
+  "USR-12": {
+    "number": 823,
+    "url": "https://github.com/hellodk/kri/issues/823",
+    "title": "[Audit] Coverage floor contradicts itself across three documents (USR-12)"
+  },
+  "USR-13": {
+    "number": 824,
+    "url": "https://github.com/hellodk/kri/issues/824",
+    "title": "[Audit] Python version requirement contradicts itself (USR-13)"
+  }
+}
