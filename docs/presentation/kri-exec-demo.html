@@ -344,6 +344,19 @@
     }
 
     #overview { position: relative; }
+
+    .impress-enabled .step { opacity: 0.3; transition: opacity 0.8s; }
+    .impress-enabled .step.present { opacity: 1; }
+
+    .product-intro h3 { font-size: 1.4rem; font-weight: 800; margin-bottom: 6px; }
+    .product-intro p { font-size: 0.95rem; color: var(--text-muted); }
+    .slide-footer-note {
+      margin-top: 22px;
+      text-align: center;
+      font-size: 0.9rem;
+      font-weight: 600;
+      color: var(--text-muted);
+    }
   </style>
 </head>
 <body class="impress-not-supported">
@@ -365,56 +378,56 @@
   <!-- SLIDE 1: Title -->
   <div id="title" class="step" data-x="0" data-y="0" data-scale="1">
     <span class="slide-num">1 / 17</span>
-    <div class="hero-logo">kri + hydra</div>
-    <p class="hero-tagline">One unified project — fleet control plane meets on-prem LLM inference. <strong style="color:#C4785A">pulse</strong> is a separate CI/CD project (Jenkins, iOS/Android).</p>
-    <div class="stat-row">
-      <div class="stat" style="background:var(--purple-light);border-color:#D9C8F5"><div class="stat-num" style="color:#7E5BBE">2→1</div><div class="stat-label">kri + hydra complement</div></div>
-      <div class="stat" style="background:var(--peach-light);border-color:#F5D0BC"><div class="stat-num" style="color:#C4785A">pulse</div><div class="stat-label">Separate CI/CD project</div></div>
-      <div class="stat"><div class="stat-num">28× M4</div><div class="stat-label">Hydra cluster · air-gapped</div></div>
+    <div class="hero-logo" style="font-size:3rem;margin-bottom:16px">Platform Engineering Overview</div>
+    <p class="step-subtitle" style="max-width:800px;margin-bottom:28px">Three complementary products under one engineering org — built to run together on shared Apple Silicon infrastructure.</p>
+    <div class="grid-3">
+      <div class="feature-card product-intro" style="background:var(--accent-light);border-color:#C5D9FA;padding:26px 24px">
+        <h3 style="color:#3B6FD9">kri</h3>
+        <p>Fleet Management</p>
+      </div>
+      <div class="feature-card product-intro" style="background:var(--purple-light);border-color:#D9C8F5;padding:26px 24px">
+        <h3 style="color:#7E5BBE">hydra</h3>
+        <p>Local LLM Inferencing</p>
+      </div>
+      <div class="feature-card product-intro" style="background:var(--peach-light);border-color:#F5D0BC;padding:26px 24px">
+        <h3 style="color:#C4785A">pulse</h3>
+        <p>Mobile Platform Engineering</p>
+      </div>
     </div>
-    <p class="hero-meta">Project A: kri + hydra &nbsp;·&nbsp; Project B: pulse &nbsp;·&nbsp; hellodk</p>
+    <p class="hero-meta">kri &nbsp;·&nbsp; hydra &nbsp;·&nbsp; pulse — three complementary products, one engineering org</p>
   </div>
 
   <!-- SLIDE 2: Problem / Why kri -->
   <div id="problem" class="step" data-x="1400" data-y="0" data-rotate-y="-8">
     <span class="slide-num">2 / 17</span>
-    <div class="badge badge-amber">Two Projects</div>
-    <h1 class="step-title">One platform story, two deliverables</h1>
-    <p class="step-subtitle"><strong>kri + hydra</strong> complement each other — fleet ops and LLM inference on the same Mac Minis. <strong>pulse</strong> is independent CI/CD on its own timeline.</p>
-    <div class="diagram-wrap two-project-diagram">
-      <div class="diagram-label">Two-project model — pastel overview</div>
-      <svg viewBox="0 0 1080 280" xmlns="http://www.w3.org/2000/svg">
-        <rect width="1080" height="280" fill="#FAFBFE"/>
-        <!-- Project A: kri + hydra unified -->
-        <rect x="40" y="30" width="480" height="220" rx="16" fill="#F3EDFC" stroke="#D9C8F5" stroke-width="2"/>
-        <text x="280" y="62" text-anchor="middle" font-size="16" font-weight="800" fill="#6B4FA0">Project A — kri + hydra</text>
-        <text x="280" y="84" text-anchor="middle" font-size="13" fill="#8B7AAB">Fleet platform + LLM inference · one story</text>
-        <rect x="70" y="100" width="190" height="56" rx="10" fill="#E8F0FE" stroke="#C5D9FA" stroke-width="1.5"/>
-        <text x="165" y="124" text-anchor="middle" font-size="13" font-weight="700" fill="#3B6FD9">kri</text>
-        <text x="165" y="144" text-anchor="middle" font-size="11" fill="#64748B">Bootstrap · Drift · RAG · SSH</text>
-        <rect x="300" y="100" width="190" height="56" rx="10" fill="#EDE9FE" stroke="#D9C8F5" stroke-width="1.5"/>
-        <text x="395" y="124" text-anchor="middle" font-size="13" font-weight="700" fill="#7E5BBE">hydra</text>
-        <text x="395" y="144" text-anchor="middle" font-size="11" fill="#64748B">28× M4 · vLLM-MLX · OTEL</text>
-        <line x1="260" y1="128" x2="300" y2="128" stroke="#9B7EDE" stroke-width="2"/>
-        <polygon points="300,124 292,128 300,132" fill="#9B7EDE"/>
-        <rect x="120" y="175" width="320" height="52" rx="10" fill="#E6F7EF" stroke="#B8E6CF" stroke-width="1.5"/>
-        <text x="280" y="198" text-anchor="middle" font-size="12" font-weight="600" fill="#2D8A58">Shared: Mac Minis · Salt · Grafana · AI assistant</text>
-        <text x="280" y="216" text-anchor="middle" font-size="11" fill="#64748B">kri runs nodes · hydra serves tokens · same hardware</text>
-        <!-- Project B: pulse -->
-        <rect x="560" y="30" width="480" height="220" rx="16" fill="#FEF3EC" stroke="#F5D0BC" stroke-width="2"/>
-        <text x="800" y="62" text-anchor="middle" font-size="16" font-weight="800" fill="#C4785A">Project B — pulse</text>
-        <text x="800" y="84" text-anchor="middle" font-size="13" fill="#A65E42">CI/CD · separate scope · own Jenkins stack</text>
-        <rect x="610" y="110" width="380" height="56" rx="10" fill="#FDEEF2" stroke="#F4C4D0" stroke-width="1.5"/>
-        <text x="800" y="134" text-anchor="middle" font-size="13" font-weight="700" fill="#C4785A">Jenkins on k0s (cylon)</text>
-        <text x="800" y="154" text-anchor="middle" font-size="11" fill="#64748B">Android + iOS · Semgrep · SonarQube · LLM failure analysis</text>
-        <rect x="610" y="180" width="380" height="44" rx="10" fill="#FEF6E4" stroke="#F5DFA8" stroke-width="1.5"/>
-        <text x="800" y="207" text-anchor="middle" font-size="12" font-weight="600" fill="#B8860B">optimize_build_mac.sh · iOS agent provisioning</text>
-        <!-- Dotted link -->
-        <line x1="520" y1="140" x2="560" y2="140" stroke="#CBD5E1" stroke-width="2" stroke-dasharray="8 5"/>
-        <text x="540" y="130" text-anchor="middle" font-size="10" fill="#94A3B8">future</text>
-        <text x="540" y="260" text-anchor="middle" font-size="12" font-weight="600" fill="#64748B">kri provisions Mac agents for pulse (ARCH-001 step 3) — not merged into one repo</text>
-      </svg>
+    <div class="badge badge-amber">Three Products</div>
+    <h1 class="step-title">One platform story, three complementary products</h1>
+    <p class="step-subtitle"><strong>kri</strong>, <strong>hydra</strong>, and <strong>pulse</strong> complement each other. kri + hydra share the same Mac Minis; pulse adds Mobile Platform Engineering on its own Automation stack.</p>
+    <div class="grid-3" style="margin-top:8px">
+      <div class="feature-card" style="background:var(--accent-light);border-color:#C5D9FA">
+        <h3 style="color:#3B6FD9">kri</h3>
+        <p>Fleet Management — bootstrap, drift, Salt/Ansible, SSH/VNC, observability.</p>
+      </div>
+      <div class="feature-card" style="background:var(--purple-light);border-color:#D9C8F5">
+        <h3 style="color:#7E5BBE">hydra</h3>
+        <p>Local LLM Inferencing — 28× M4, vLLM-MLX, model registry, air-gapped.</p>
+      </div>
+      <div class="feature-card" style="background:var(--peach-light);border-color:#F5D0BC">
+        <h3 style="color:#C4785A">pulse</h3>
+        <p>Mobile Platform Engineering — iOS/Android CI on its own Automation stack.</p>
+      </div>
     </div>
+    <div class="grid-2" style="margin-top:16px">
+      <div class="feature-card">
+        <h3>Shared hardware</h3>
+        <p>Mac Minis run fleet ops and LLM inference — kri operates the nodes, hydra serves tokens on the same machines.</p>
+      </div>
+      <div class="feature-card">
+        <h3>Complementary by design</h3>
+        <p>pulse runs Mobile Platform Engineering on its own Automation stack, and kri bootstraps the Mac machines it builds on.</p>
+      </div>
+    </div>
+    <p class="slide-footer-note">kri bootstraps Mac machines for hydra and pulse</p>
   </div>
 
   <!-- SLIDE 3: Architecture (3 planes) -->
@@ -424,58 +437,62 @@
     <h1 class="step-title">kri + hydra — unified stack</h1>
     <p class="step-subtitle">kri provisions and operates the Mac Minis; hydra serves LLM inference on the same nodes. Three planes, one complementary project.</p>
     <div class="diagram-wrap">
-      <div class="diagram-label">Platform Architecture — Data Flow Animated</div>
-      <svg viewBox="0 0 1080 320" xmlns="http://www.w3.org/2000/svg">
-        <rect width="1080" height="320" fill="var(--bg)"/>
-        <rect x="30" y="30" width="320" height="120" rx="12" fill="#EFF6FF" stroke="#2563EB" stroke-width="2"/>
-        <text x="190" y="58" text-anchor="middle" font-size="13" font-weight="700" fill="#1D4ED8">Control Plane</text>
-        <rect x="50" y="72" width="85" height="32" rx="6" fill="#fff" stroke="#BFDBFE"/>
-        <text x="92" y="92" text-anchor="middle" font-size="12" font-weight="600" fill="#1E40AF">FastAPI</text>
-        <rect x="148" y="72" width="85" height="32" rx="6" fill="#fff" stroke="#BFDBFE"/>
-        <text x="190" y="92" text-anchor="middle" font-size="12" font-weight="600" fill="#1E40AF">Celery</text>
-        <rect x="246" y="72" width="85" height="32" rx="6" fill="#fff" stroke="#BFDBFE"/>
-        <text x="288" y="92" text-anchor="middle" font-size="12" font-weight="600" fill="#1E40AF">Salt Master</text>
-        <text x="190" y="134" text-anchor="middle" font-size="12" fill="var(--text-muted)">Bootstrap · States · Playbooks · Drift Scans</text>
-        <rect x="380" y="30" width="320" height="120" rx="12" fill="#F0FDF4" stroke="#059669" stroke-width="2"/>
-        <text x="540" y="58" text-anchor="middle" font-size="13" font-weight="700" fill="#065F46">Data Plane</text>
-        <rect x="400" y="72" width="130" height="32" rx="6" fill="#fff" stroke="#BBF7D0"/>
-        <text x="465" y="92" text-anchor="middle" font-size="12" font-weight="600" fill="#166534">TimescaleDB</text>
-        <rect x="545" y="72" width="130" height="32" rx="6" fill="#fff" stroke="#BBF7D0"/>
-        <text x="610" y="92" text-anchor="middle" font-size="12" font-weight="600" fill="#166534">Event-Sourced</text>
-        <text x="540" y="134" text-anchor="middle" font-size="12" fill="var(--text-muted)">Drift Scores · Metrics · Audit · Job History</text>
-        <rect x="730" y="30" width="320" height="120" rx="12" fill="#EDE9FE" stroke="#7C3AED" stroke-width="2"/>
-        <text x="890" y="58" text-anchor="middle" font-size="13" font-weight="700" fill="#5B21B6">AI Plane</text>
-        <rect x="750" y="72" width="130" height="32" rx="6" fill="#fff" stroke="#DDD6FE"/>
-        <text x="815" y="92" text-anchor="middle" font-size="12" font-weight="600" fill="#6D28D9">pgvector RAG</text>
-        <rect x="895" y="72" width="130" height="32" rx="6" fill="#fff" stroke="#DDD6FE"/>
-        <text x="960" y="92" text-anchor="middle" font-size="12" font-weight="600" fill="#6D28D9">BYO LLM</text>
-        <text x="890" y="134" text-anchor="middle" font-size="12" fill="var(--text-muted)">SGLang · llmd · vLLM · MLX · Anthropic</text>
-        <rect x="180" y="210" width="720" height="80" rx="12" fill="#fff" stroke="var(--border)" stroke-width="2"/>
-        <text x="540" y="238" text-anchor="middle" font-size="13" font-weight="700" fill="var(--text)">Fleet Nodes (macOS / Linux)</text>
-        <rect x="220" y="252" width="100" height="28" rx="6" fill="#D1FAE5"/><text x="270" y="270" text-anchor="middle" font-size="12" font-weight="600" fill="#065F46">Salt-Minion</text>
-        <rect x="340" y="252" width="100" height="28" rx="6" fill="#D1FAE5"/><text x="390" y="270" text-anchor="middle" font-size="12" font-weight="600" fill="#065F46">Salt-Minion</text>
-        <rect x="460" y="252" width="100" height="28" rx="6" fill="#CCFBF1"/><text x="510" y="270" text-anchor="middle" font-size="12" font-weight="600" fill="#134E4A">Salt-Minion</text>
-        <rect x="580" y="252" width="100" height="28" rx="6" fill="#CCFBF1"/><text x="630" y="270" text-anchor="middle" font-size="12" font-weight="600" fill="#134E4A">Salt-Minion</text>
-        <rect x="700" y="252" width="100" height="28" rx="6" fill="#CCFBF1"/><text x="750" y="270" text-anchor="middle" font-size="12" font-weight="600" fill="#134E4A">Salt-Minion</text>
-        <path d="M 190 150 V 180 H 270 V 210" fill="none" stroke="#2563EB" stroke-width="2"/>
-        <path d="M 540 150 V 210" fill="none" stroke="#059669" stroke-width="2"/>
-        <path d="M 890 150 V 180 H 810 V 210" fill="none" stroke="#7C3AED" stroke-width="2"/>
+      <div class="diagram-label">Platform Architecture</div>
+      <svg viewBox="0 0 1080 285" xmlns="http://www.w3.org/2000/svg">
+        <rect width="1080" height="285" fill="var(--bg)"/>
+        <rect x="30" y="18" width="320" height="104" rx="12" fill="#EFF6FF" stroke="#2563EB" stroke-width="2"/>
+        <text x="190" y="42" text-anchor="middle" font-size="13" font-weight="700" fill="#1D4ED8">Control Plane</text>
+        <rect x="50" y="54" width="85" height="30" rx="6" fill="#fff" stroke="#BFDBFE"/>
+        <text x="92" y="74" text-anchor="middle" font-size="12" font-weight="600" fill="#1E40AF">FastAPI</text>
+        <rect x="148" y="54" width="85" height="30" rx="6" fill="#fff" stroke="#BFDBFE"/>
+        <text x="190" y="74" text-anchor="middle" font-size="12" font-weight="600" fill="#1E40AF">Celery</text>
+        <rect x="246" y="54" width="85" height="30" rx="6" fill="#fff" stroke="#BFDBFE"/>
+        <text x="288" y="74" text-anchor="middle" font-size="12" font-weight="600" fill="#1E40AF">Salt Master</text>
+        <text x="190" y="98" text-anchor="middle" font-size="9" fill="#94A3B8">Celery offloads drift, playbooks &amp; SBOM</text>
+        <text x="190" y="114" text-anchor="middle" font-size="11" fill="var(--text-muted)">Bootstrap · States · Playbooks · Drift</text>
+        <rect x="380" y="18" width="320" height="104" rx="12" fill="#F0FDF4" stroke="#059669" stroke-width="2"/>
+        <text x="540" y="42" text-anchor="middle" font-size="13" font-weight="700" fill="#065F46">Data Plane</text>
+        <rect x="400" y="54" width="130" height="30" rx="6" fill="#fff" stroke="#BBF7D0"/>
+        <text x="465" y="74" text-anchor="middle" font-size="12" font-weight="600" fill="#166534">TimescaleDB</text>
+        <rect x="545" y="54" width="130" height="30" rx="6" fill="#fff" stroke="#BBF7D0"/>
+        <text x="610" y="74" text-anchor="middle" font-size="12" font-weight="600" fill="#166534">Event-Sourced</text>
+        <text x="540" y="98" text-anchor="middle" font-size="9" fill="#94A3B8">TimescaleDB hypertables for drift score history</text>
+        <text x="540" y="114" text-anchor="middle" font-size="11" fill="var(--text-muted)">Drift Scores · Metrics · Audit · Jobs</text>
+        <rect x="730" y="18" width="320" height="104" rx="12" fill="#EDE9FE" stroke="#7C3AED" stroke-width="2" stroke-dasharray="6 3" opacity="0.9"/>
+        <text x="845" y="42" text-anchor="middle" font-size="13" font-weight="700" fill="#5B21B6">AI Plane</text>
+        <rect x="952" y="30" width="68" height="18" rx="9" fill="#FEF6E4" stroke="#F5DFA8"/>
+        <text x="986" y="43" text-anchor="middle" font-size="9" font-weight="700" fill="#B8860B">PLANNED</text>
+        <rect x="750" y="54" width="130" height="30" rx="6" fill="#fff" stroke="#DDD6FE" stroke-dasharray="4 2"/>
+        <text x="815" y="74" text-anchor="middle" font-size="12" font-weight="600" fill="#6D28D9">pgvector RAG</text>
+        <rect x="895" y="54" width="130" height="30" rx="6" fill="#fff" stroke="#DDD6FE" stroke-dasharray="4 2"/>
+        <text x="960" y="74" text-anchor="middle" font-size="12" font-weight="600" fill="#6D28D9">BYO LLM</text>
+        <text x="890" y="110" text-anchor="middle" font-size="11" fill="var(--text-muted)">SGLang · llmd · vLLM · MLX</text>
+        <rect x="180" y="165" width="720" height="72" rx="12" fill="#fff" stroke="var(--border)" stroke-width="2"/>
+        <text x="540" y="190" text-anchor="middle" font-size="13" font-weight="700" fill="var(--text)">Fleet Nodes (macOS / Linux)</text>
+        <rect x="220" y="204" width="100" height="26" rx="6" fill="#D1FAE5"/><text x="270" y="221" text-anchor="middle" font-size="12" font-weight="600" fill="#065F46">Salt-Minion</text>
+        <rect x="340" y="204" width="100" height="26" rx="6" fill="#D1FAE5"/><text x="390" y="221" text-anchor="middle" font-size="12" font-weight="600" fill="#065F46">Salt-Minion</text>
+        <rect x="460" y="204" width="100" height="26" rx="6" fill="#CCFBF1"/><text x="510" y="221" text-anchor="middle" font-size="12" font-weight="600" fill="#134E4A">Salt-Minion</text>
+        <rect x="580" y="204" width="100" height="26" rx="6" fill="#CCFBF1"/><text x="630" y="221" text-anchor="middle" font-size="12" font-weight="600" fill="#134E4A">Salt-Minion</text>
+        <rect x="700" y="204" width="100" height="26" rx="6" fill="#CCFBF1"/><text x="750" y="221" text-anchor="middle" font-size="12" font-weight="600" fill="#134E4A">Salt-Minion</text>
         <defs>
-          <path id="arch1" d="M 190 150 V 180 H 270 V 210"/>
-          <path id="arch2" d="M 540 150 V 210"/>
-          <path id="arch3" d="M 890 150 V 180 H 810 V 210"/>
+          <path id="arch1" d="M 190 122 V 144 H 270 V 165"/>
+          <path id="arch2" d="M 540 122 V 165"/>
+          <path id="arch3" d="M 890 122 V 144 H 810 V 165"/>
         </defs>
+        <path d="M 190 122 V 144 H 270 V 165" fill="none" stroke="#2563EB" stroke-width="2"/>
+        <path d="M 540 122 V 165" fill="none" stroke="#059669" stroke-width="2"/>
+        <path d="M 890 122 V 144 H 810 V 165" fill="none" stroke="#7C3AED" stroke-width="2"/>
         <circle r="4" fill="#2563EB"><animateMotion dur="1.8s" repeatCount="indefinite"><mpath href="#arch1"/></animateMotion></circle>
         <circle r="4" fill="#059669"><animateMotion dur="1.8s" repeatCount="indefinite" begin="0.3s"><mpath href="#arch2"/></animateMotion></circle>
         <circle r="4" fill="#7C3AED"><animateMotion dur="1.8s" repeatCount="indefinite" begin="0.6s"><mpath href="#arch3"/></animateMotion></circle>
-        <text x="540" y="305" text-anchor="middle" font-size="12" fill="var(--text-muted)">React Frontend → Nginx → REST API · TanStack Query Polling</text>
+        <text x="540" y="256" text-anchor="middle" font-size="12" fill="var(--text-muted)">React Frontend → Nginx → REST API · TanStack Query</text>
+        <text x="540" y="271" text-anchor="middle" font-size="9" fill="#94A3B8">TanStack Query polls the API on interval — no WebSockets</text>
       </svg>
     </div>
     <div class="grid-2" style="margin-top:14px">
-      <div class="feature-card" style="background:var(--accent-light);border-color:#C5D9FA"><h3 style="color:#3B6FD9">kri layer</h3><p>Control + Data + AI planes · bootstrap · drift · RAG · SSH/VNC · Salt+Ansible runner</p></div>
+      <div class="feature-card" style="background:var(--accent-light);border-color:#C5D9FA"><h3 style="color:#3B6FD9">kri layer</h3><p>Control + Data planes · bootstrap · drift · SSH/VNC · Salt+Ansible runner · AI plane (planned)</p></div>
       <div class="feature-card" style="background:var(--purple-light);border-color:#D9C8F5"><h3 style="color:#7E5BBE">hydra layer</h3><p>28× M4 · 10GbE+RDMA · zero-internet · model registry · vLLM-MLX · otel-mac-agent · Opik traces</p></div>
     </div>
-    <a class="ref-link" href="../ARCHITECTURE-3-repo-split.md" target="_blank">📖 ARCH-001: Three-repo split — kri / pulse / hydra</a>
   </div>
 
   <!-- SLIDE 4: Deployment -->
@@ -513,8 +530,8 @@
             <line x1="260" y1="64" x2="95" y2="90" stroke="#2563EB" stroke-width="1.5"/>
             <line x1="260" y1="64" x2="225" y2="90" stroke="#2563EB" stroke-width="1.5"/>
             <line x1="260" y1="64" x2="355" y2="90" stroke="#2563EB" stroke-width="1.5"/>
-            <line x1="355" y1="134" x2="260" y2="240" stroke="#059669" stroke-width="1.5" stroke-dasharray="4 3"/>
-            <defs><path id="dep1" d="M355,134 L260,240"/></defs>
+            <path d="M 355 134 V 152 H 385 V 226 H 260 V 240" fill="none" stroke="#059669" stroke-width="1.5" stroke-dasharray="4 3"/>
+            <defs><path id="dep1" d="M 355 134 V 152 H 385 V 226 H 260 V 240"/></defs>
             <circle r="4" fill="#059669"><animateMotion dur="2s" repeatCount="indefinite"><mpath href="#dep1"/></animateMotion></circle>
           </svg>
         </div>
@@ -522,7 +539,7 @@
       <div>
         <div class="feature-card" style="margin-bottom:12px">
           <h3>Tenant content mounts</h3>
-          <p><code>PULSE_REPOS_DIR</code> → <code>/mnt/pulse:ro</code> in Compose — kri discovers pulse playbooks at runtime. Hydra roles migrate to kri's registry (ARCH-001 step 4).</p>
+          <p><code>PULSE_REPOS_DIR</code> → <code>/mnt/pulse:ro</code> in Compose — kri discovers pulse playbooks at runtime. Hydra roles migrate to kri's registry over time.</p>
         </div>
         <div class="feature-card" style="margin-bottom:12px">
           <h3>salt-master: Docker vs native</h3>
@@ -530,7 +547,7 @@
         </div>
         <div class="feature-card">
           <h3>Related deployments</h3>
-          <p><strong>pulse</strong> — Jenkins on k0s cluster <em>cylon</em> (utilities namespace). <strong>hydra</strong> — 28-node Mac Mini cluster, air-gapped, JFrog Artifactory for deps.</p>
+          <p><strong>pulse</strong> — mobile CI/CD on its own Automation stack. <strong>hydra</strong> — 28-node Mac Mini cluster, air-gapped, JFrog Artifactory for deps.</p>
         </div>
         <div class="mono-snippet">docker compose -f deploy/docker-compose.yml up -d</div>
       </div>
@@ -699,7 +716,7 @@
     <span class="slide-num">8 / 17</span>
     <div class="badge badge-green">Observability &amp; Security</div>
     <h1 class="step-title">See everything. Trust the audit trail.</h1>
-    <p class="step-subtitle">Production-grade observability — kri runs one stack per cluster; pulse and hydra publish dashboards and scrape configs (ARCH-001 step 2).</p>
+    <p class="step-subtitle">Production-grade observability — kri runs one stack per cluster; pulse and hydra publish dashboards and scrape configs.</p>
     <div class="grid-2">
       <div class="grid-2" style="gap:12px">
         <div class="feature-card"><div class="feature-icon" style="background:#DBEAFE"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--accent-dark)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink: 0"><path d="M3 3v18h18"/><path d="M18.7 8l-5.1 5.2-2.8-2.7L7 14.3"/></svg></div><h3>Prometheus + Grafana</h3><p>Per-node and fleet-wide metrics. OTEL throughout.</p></div>
@@ -899,11 +916,11 @@
     <div class="grid-2" style="margin-top:14px">
       <div class="feature-card">
         <h3>LLM RCA (kri + hydra)</h3>
-        <p>RAG over nodes, playbooks, salt states, drift records, and job history. Hydra Opik traces inference latency; kri cites fleet provenance.</p>
+        <p>RAG over nodes, playbooks, Salt states, drift records, and job history. Hydra Opik traces inference latency; kri cites fleet provenance.</p>
       </div>
       <div class="feature-card">
-        <h3>LLM RCA (pulse — separate project)</h3>
-        <p>Jenkins <code>llm-analysis.sh</code> on build failure — queries SGLang / llmd endpoints, ranks models, embeds analysis in failure email. Independent of kri+hydra stack.</p>
+        <h3>LLM RCA (pulse)</h3>
+        <p><code>llm-analysis.sh</code> on build failure — queries SGLang / llmd endpoints, ranks models, embeds analysis in failure email. Complements the kri + hydra stack.</p>
       </div>
       <div class="feature-card" style="grid-column: span 2">
         <h3>Agentic Open Code</h3>
@@ -918,11 +935,11 @@
     <span class="slide-num">12 / 17</span>
     <div class="badge badge-purple">Accomplished</div>
     <h1 class="step-title">What we've shipped — kri + hydra</h1>
-    <p class="step-subtitle">Project A milestones — fleet platform and LLM inference moving together.</p>
+    <p class="step-subtitle">kri + hydra milestones — fleet platform and LLM inference moving together.</p>
     <div class="accomplish-grid">
       <div class="accomplish-item accomplish-kri">
         <h4>RAG pipeline live</h4>
-        <p>pgvector hybrid retrieval (BM25 + vector + RRF) over nodes, playbooks, salt states, and drift records.</p>
+        <p>pgvector hybrid retrieval (BM25 + vector + RRF) over nodes, playbooks, Salt states, and drift records.</p>
       </div>
       <div class="accomplish-item accomplish-kri">
         <h4>Drift + compliance stack</h4>
@@ -960,7 +977,7 @@
     <span class="slide-num">13 / 17</span>
     <div class="badge badge-teal">Accomplished</div>
     <h1 class="step-title">What we've shipped — pulse</h1>
-    <p class="step-subtitle">Project B — independent CI/CD on k0s cluster <em>cylon</em>.</p>
+    <p class="step-subtitle">pulse milestones — Mobile Platform Engineering, complementary to kri + hydra.</p>
     <div class="accomplish-grid">
       <div class="accomplish-item accomplish-pulse">
         <h4>Jenkins on Kubernetes</h4>
@@ -1008,7 +1025,7 @@
         <h3>Now</h3>
         <ul>
           <li><span class="project-tag tag-unified">kri+hydra</span> RAG + agentic docs live</li>
-          <li><span class="project-tag tag-unified">kri+hydra</span> ARCH-001 step 1: exporter → kri</li>
+          <li><span class="project-tag tag-unified">kri+hydra</span> Exporter consolidation → kri</li>
           <li><span class="project-tag tag-unified">kri+hydra</span> otel-mac-agent deployed</li>
           <li><span class="project-tag tag-pulse">pulse</span> iOS agent + optimize_build_mac.sh</li>
           <li><span class="project-tag tag-pulse">pulse</span> LLM analysis in failure emails</li>
@@ -1036,7 +1053,7 @@
       </div>
     </div>
     <div class="diagram-wrap" style="margin-top:16px">
-      <div class="diagram-label">ARCH-001 migration path — smallest blast radius first</div>
+      <div class="diagram-label">Platform consolidation path — smallest blast radius first</div>
       <svg viewBox="0 0 1080 100" xmlns="http://www.w3.org/2000/svg">
         <rect width="1080" height="100" fill="#FAFBFE"/>
         <rect x="30" y="30" width="180" height="44" rx="10" fill="#E6F7EF" stroke="#B8E6CF" stroke-width="1.5"/>
@@ -1053,7 +1070,7 @@
         <line x1="420" y1="52" x2="450" y2="52" stroke="#CBD5E1" stroke-width="2"/>
         <line x1="650" y1="52" x2="680" y2="52" stroke="#CBD5E1" stroke-width="2"/>
         <line x1="860" y1="52" x2="890" y2="52" stroke="#CBD5E1" stroke-width="2"/>
-        <circle r="4" fill="#5B8DEF"><animateMotion dur="3s" repeatCount="indefinite" path="M210,52 L970,52"/></animateMotion></circle>
+        <circle r="4" fill="#5B8DEF"><animateMotion dur="3s" repeatCount="indefinite" path="M210,52 L970,52"/></circle>
       </svg>
     </div>
   </div>
@@ -1076,7 +1093,7 @@
         </div>
         <div class="blocker-card">
           <h4>Platform code duplication</h4>
-          <p>Parallel bootstrap, monitoring, and secrets in kri/hydra/pulse until ARCH-001 migration completes. Drift risk across repos.</p>
+          <p>Parallel bootstrap, monitoring, and secrets in kri/hydra/pulse until platform consolidation completes. Drift risk across repos.</p>
         </div>
       </div>
       <div>
@@ -1131,7 +1148,7 @@
     <span class="slide-num">17 / 17</span>
     <div class="badge badge-blue">Next Steps</div>
     <h1 class="step-title" style="font-size:2.8rem">Ready to see it live?</h1>
-    <p class="step-subtitle" style="font-size:1.2rem">Project A: one Docker Compose stack for kri+hydra. Project B: pulse Jenkins on cylon. Your infrastructure, your data.</p>
+    <p class="step-subtitle" style="font-size:1.2rem">kri + hydra ship as one Docker Compose stack; pulse runs Mobile Platform Engineering on its own Automation stack. Your infrastructure, your data.</p>
     <div class="grid-2" style="margin-top:24px">
       <div class="feature-card" style="padding:28px">
         <h3 style="font-size:1.1rem;margin-bottom:12px">Quick Start</h3>
@@ -1159,7 +1176,7 @@
   <div id="overview" class="step" data-x="10500" data-y="1400" data-scale="9" data-transition-duration="1000">
     <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:6px;width:100%;font-size:0.45rem">
       <div style="background:#E8F0FE;padding:6px;border-radius:5px;text-align:center;color:#3B6FD9">1 Title</div>
-      <div style="background:#FEF3EC;padding:6px;border-radius:5px;text-align:center;color:#C4785A">2 Projects</div>
+      <div style="background:#FEF3EC;padding:6px;border-radius:5px;text-align:center;color:#C4785A">2 Products</div>
       <div style="background:#F3EDFC;padding:6px;border-radius:5px;text-align:center;color:#7E5BBE">3 kri+hydra</div>
       <div style="background:#E4F5F3;padding:6px;border-radius:5px;text-align:center;color:#4DB6AC">4 Deploy</div>
       <div style="background:#E8F0FE;padding:6px;border-radius:5px;text-align:center;color:#3B6FD9">5 Salt</div>
@@ -1182,7 +1199,7 @@
 
 <script src="https://cdn.jsdelivr.net/gh/impress/impress.js@2.0.0/js/impress.js"></script>
 <script>
-  if (document.getElementById('impress')) {
+  if (document.getElementById('impress') && typeof impress !== 'undefined' && impress.supported) {
     impress().init();
     document.body.classList.remove('impress-not-supported');
     document.body.classList.add('impress-supported');
