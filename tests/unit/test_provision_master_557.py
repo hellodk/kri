@@ -539,27 +539,57 @@ class TestProvisionRoute:
         """The provision route must use require_role('admin')."""
         import inspect
 
+        import pytest
+        from fastapi import params as fa_params
+
         from fleet_platform.api.routes.salt_masters import trigger_provision_master
 
-        src = inspect.getsource(trigger_provision_master)
-        assert "require_role" in src, "trigger_provision_master must use require_role"
-        assert "admin" in src, "trigger_provision_master must require 'admin' role"
+        sig = inspect.signature(trigger_provision_master)
+        for param in sig.parameters.values():
+            if isinstance(param.default, fa_params.Depends):
+                dep = param.default.dependency
+                if getattr(dep, "__qualname__", "").endswith("require_role.<locals>.dependency"):
+                    if hasattr(dep, "__closure__") and dep.__closure__:
+                        for cell in dep.__closure__:
+                            try:
+                                val = cell.cell_contents
+                                if isinstance(val, set) and "admin" in val:
+                                    return
+                            except ValueError:
+                                pass
+        pytest.fail("trigger_provision_master must use require_role('admin')")
 
     def test_provision_route_calls_delay(self):
-        """The route must enqueue provision_master — not call the task directly.
+        """The route must enqueue provision_master via celery_app.send_task (not .delay()).
 
         #749: routes dispatch by task name via celery_app.send_task rather than
         importing the worker and calling .delay(), to keep the api->worker import
         coupling broken.
         """
-        import inspect
+        import asyncio
+        from unittest.mock import AsyncMock, MagicMock, patch
 
         from fleet_platform.api.routes.salt_masters import trigger_provision_master
 
-        src = inspect.getsource(trigger_provision_master)
-        assert "send_task" in src and "provision_master" in src, (
-            "Route must enqueue provision_master via celery_app.send_task(...)"
-        )
+        master_id = uuid.uuid4()
+        mock_db = AsyncMock()
+        mock_result = MagicMock()
+        mock_result.scalar_one_or_none.return_value = MagicMock(id=master_id)
+        mock_db.execute = AsyncMock(return_value=mock_result)
+
+        mock_task = MagicMock()
+        mock_task.id = "task-abc-123"
+        mock_celery = MagicMock()
+        mock_celery.send_task.return_value = mock_task
+
+        with patch("fleet_platform.workers.celery_app.celery_app", mock_celery):
+            result = asyncio.run(trigger_provision_master(master_id=master_id, db=mock_db))
+
+        mock_celery.send_task.assert_called_once()
+        call_args = mock_celery.send_task.call_args
+        task_name = call_args[0][0] if call_args[0] else ""
+        assert "provision_master" in task_name, f"Route must enqueue provision_master via send_task, got: {task_name!r}"
+        assert result["status"] == "queued"
 
     def test_provision_route_returns_202_status(self):
         """The endpoint decorator must declare status_code=202."""

@@ -234,17 +234,48 @@ def test_login_route_checks_must_change_password_flag():
         pytest.fail("User should have must_change_password=True")
 
 
-def test_login_route_source_contains_must_change_password_gate():
-    """Verify the login route source code contains the must_change_password guard (#757/#820)."""
-    import inspect
+@pytest.mark.asyncio
+async def test_login_route_raises_403_for_must_change_password():
+    """The login route must raise HTTP 403 MUST_CHANGE_PASSWORD when the flag is True (#757/#820)."""
+    import uuid
+    from unittest.mock import AsyncMock, MagicMock
 
-    from fleet_platform.api.routes.auth import login
+    from fastapi import HTTPException
 
-    source = inspect.getsource(login)
-    assert "must_change_password" in source, (
-        "login() must check user.must_change_password and return 403 when it is True (#757/#820)"
+    import fleet_platform.api.routes.auth as auth_mod
+    from fleet_platform.core.auth import hash_password
+    from fleet_platform.models.user import User
+    from fleet_platform.schemas.auth import LoginRequest
+
+    user = User(
+        id=uuid.uuid4(),
+        email="forced@example.com",
+        password_hash=hash_password("secret123"),
+        role="admin",
+        is_active=True,
+        auth_provider="local",
+        must_change_password=True,
     )
-    assert "403" in source or "HTTP_403_FORBIDDEN" in source, "login() must raise 403 when must_change_password is True"
+
+    db = AsyncMock()
+    result_mock = MagicMock()
+    result_mock.scalar_one_or_none.return_value = user
+    db.execute = AsyncMock(return_value=result_mock)
+
+    fake_request = MagicMock()
+    fake_request.client = MagicMock()
+    fake_request.client.host = "127.0.0.1"
+
+    payload = LoginRequest(email="forced@example.com", password="secret123")
+
+    # Use the unwrapped login handler (bypasses the rate-limiter decorator)
+    handler = getattr(auth_mod.login, "__wrapped__", auth_mod.login)
+
+    with pytest.raises(HTTPException) as exc_info:
+        await handler(request=fake_request, payload=payload, db=db)
+
+    assert exc_info.value.status_code == 403
+    assert exc_info.value.detail == "MUST_CHANGE_PASSWORD"
 
 
 # ---------------------------------------------------------------------------

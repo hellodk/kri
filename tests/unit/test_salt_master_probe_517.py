@@ -593,11 +593,24 @@ class TestSaltMastersRoute:
         """The route handler must declare require_role('admin') in its signature."""
         import inspect
 
+        from fastapi import params as fa_params
+
         from fleet_platform.api.routes.salt_masters import test_salt_master
 
-        src = inspect.getsource(test_salt_master)
-        assert "require_role" in src, "test_salt_master must use require_role"
-        assert "admin" in src, "test_salt_master must require admin role"
+        sig = inspect.signature(test_salt_master)
+        for param in sig.parameters.values():
+            if isinstance(param.default, fa_params.Depends):
+                dep = param.default.dependency
+                if getattr(dep, "__qualname__", "").endswith("require_role.<locals>.dependency"):
+                    if hasattr(dep, "__closure__") and dep.__closure__:
+                        for cell in dep.__closure__:
+                            try:
+                                val = cell.cell_contents
+                                if isinstance(val, set) and "admin" in val:
+                                    return
+                            except ValueError:
+                                pass
+        pytest.fail("test_salt_master must use require_role('admin') — no require_role dep with 'admin' found")
 
     @pytest.mark.asyncio
     async def test_route_404_for_unknown_id(self):
