@@ -73,9 +73,11 @@ def test_key_fn_produces_per_node_key():
 
 
 def test_drift_tasks_uses_unique_task():
-    with open("fleet_platform/workers/drift_tasks.py") as f:
-        src = f.read()
-    assert "unique_task" in src, "drift_tasks must use @unique_task for compute_drift"
+    from fleet_platform.workers import drift_tasks
+
+    assert hasattr(drift_tasks, "unique_task"), (
+        "drift_tasks must import @unique_task — required for compute_drift deduplication (#153)"
+    )
 
 
 def test_get_sync_redis_uses_settings_url():
@@ -93,6 +95,8 @@ def test_get_sync_redis_uses_settings_url():
 
 
 def test_health_tasks_uses_unique_task():
-    with open("fleet_platform/workers/ansible_tasks.py") as f:
-        src = f.read()
-    assert "unique_task" in src, "ansible_tasks must use @unique_task for refresh_all_node_grains"
+    from fleet_platform.workers import ansible_tasks
+
+    assert hasattr(ansible_tasks, "unique_task"), (
+        "ansible_tasks must import @unique_task — required for refresh_all_node_grains deduplication (#153)"
+    )

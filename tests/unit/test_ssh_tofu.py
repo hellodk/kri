@@ -53,25 +53,45 @@ def test_migration_023_exists():
 
     migration = Path("fleet_platform/db/migrations/versions/023_ssh_host_key.py")
     assert migration.exists()
+    # Text check is appropriate here: migration DDL is a non-importable artifact;
+    # the column name in the Alembic script is the only verifiable artifact at unit level.
     assert "ssh_host_key" in migration.read_text()
 
 
 def test_node_model_has_ssh_host_key():
-    from pathlib import Path
+    from fleet_platform.models.node import Node
 
-    src = Path("fleet_platform/models/node.py").read_text()
-    assert "ssh_host_key" in src
+    assert hasattr(Node, "ssh_host_key"), "Node model must have an ssh_host_key column for TOFU host key storage (#86)"
 
 
 def test_webssh_has_tofu_check():
+    # verify_or_store_host_key is used inside a function body (local import). Use AST
+    # to confirm the import appears in the webssh module, which is the only testable
+    # signal without actually running the async WebSocket handler.
+    import ast
     from pathlib import Path
 
     src = Path("fleet_platform/api/routes/webssh.py").read_text()
-    assert "verify_or_store_host_key" in src
+    tree = ast.parse(src)
+    found = any(
+        isinstance(node, ast.ImportFrom)
+        and (node.module or "").endswith("ssh_host_key_svc")
+        and any(alias.name == "verify_or_store_host_key" for alias in node.names)
+        for node in ast.walk(tree)
+    )
+    assert found, "webssh must import verify_or_store_host_key from ssh_host_key_svc for TOFU verification (#86)"
 
 
 def test_ansible_tasks_no_unconditional_strict_host_key_no():
+    """AST-hardened absence guard: StrictHostKeyChecking=no must not appear as a string constant."""
+    import ast
     from pathlib import Path
 
     src = Path("fleet_platform/workers/ansible_tasks.py").read_text()
-    assert "StrictHostKeyChecking=no" not in src
+    tree = ast.parse(src)
+    str_consts = [
+        node.value for node in ast.walk(tree) if isinstance(node, ast.Constant) and isinstance(node.value, str)
+    ]
+    assert not any("StrictHostKeyChecking=no" in s for s in str_consts), (
+        "ansible_tasks must not contain StrictHostKeyChecking=no — TOFU key pinning provides the security model (#86)"
+    )
