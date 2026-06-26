@@ -52,7 +52,7 @@ class NodeListItem(BaseModel):
     @computed_field  # type: ignore[prop-decorator]
     @property
     def health(self) -> str:
-        """Unified worst-of rollup of minion presence + SSH + master health (#356).
+        """Unified worst-of rollup of minion presence + SSH + master health (#912).
 
         Derived, never stored. The granular ``status`` / ``ssh_state`` /
         ``master_status`` fields are still emitted for the UI's hover breakdown —
