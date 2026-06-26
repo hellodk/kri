@@ -38,10 +38,11 @@ export function ExecutionHistory() {
   const dateFrom = searchParams.get('from') || ''
   const dateTo = searchParams.get('to') || ''
 
-  // Live push: ansible-job transitions are pushed over SSE; invalidate the global
-  // playbook-run list so it refetches on PUSH. Its poll below is relaxed to a slow
-  // 30s safety-net. The salt list keeps its own poll — salt ExecutionJobs come
-  // from minion ingest and have no push event (#756).
+  // Live push: job-state transitions are pushed over SSE (#921).
+  // ansible_job events → queryKeysForEvent invalidates ['ansible-job', id] etc.;
+  // the onEvent callback below handles the broader ['ansible-jobs'] list key.
+  // salt_job events → queryKeysForEvent invalidates ['executions'] automatically,
+  // which covers ['executions', status, page] via prefix matching.
   useJobEventStream({
     onEvent: (ev) => {
       if (ev.kind === 'ansible_job') {
@@ -50,12 +51,14 @@ export function ExecutionHistory() {
     },
   })
 
-  // Salt execution history (ExecutionJob — from minion ingest)
+  // Salt execution history (ExecutionJob — from minion ingest). salt_job events
+  // are now pushed over SSE and invalidate this query on push (#921). The 30s
+  // interval is a slow safety-net for when the SSE stream is offline.
   const { data: saltData, isLoading: saltLoading, isError: saltError, refetch: saltRefetch } = useQuery({
     queryKey: ['executions', executionStatus, page],
     queryFn: () => executionsApi.list({ status: executionStatus || undefined, page, per_page: 25 }),
     staleTime: 10_000,
-    refetchInterval: 15_000,
+    refetchInterval: 30_000,
     enabled: typeFilter === 'all' || typeFilter === 'salt',
   })
 

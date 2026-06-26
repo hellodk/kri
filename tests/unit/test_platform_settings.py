@@ -103,28 +103,63 @@ def test_rag_embed_url_in_settings_update_schema():
 
 def test_rag_settings_route_get_fetches_embed_keys():
     """GET /api/v1/settings handler must include LLM_EMBED_BASE_URL and LLM_INCLUDE_NODE_IPS in bulk fetch (#664)."""
-    from pathlib import Path
+    import asyncio
+    from unittest.mock import AsyncMock, patch
 
-    src = (Path(__file__).resolve().parents[2] / "fleet_platform/api/routes/platform_settings.py").read_text()
-    get_fn_start = src.find("async def get_settings(")
-    get_fn_end = src.find("\n@router.", get_fn_start + 1)
-    get_fn = src[get_fn_start:get_fn_end]
-    assert "LLM_EMBED_BASE_URL" in get_fn, "GET handler must fetch LLM_EMBED_BASE_URL"
-    assert "LLM_INCLUDE_NODE_IPS" in get_fn, "GET handler must fetch LLM_INCLUDE_NODE_IPS"
+    from fleet_platform.api.routes.platform_settings import get_settings
+    from fleet_platform.services.platform_settings_svc import LLM_EMBED_BASE_URL, LLM_INCLUDE_NODE_IPS
+
+    queried_keys: list[str] = []
+
+    async def fake_bulk(db, keys):
+        queried_keys.extend(keys)
+        return {k: None for k in keys}
+
+    fake_db = AsyncMock()
+
+    with (
+        patch("fleet_platform.api.routes.platform_settings.get_settings_bulk", side_effect=fake_bulk),
+        patch("fleet_platform.api.routes.platform_settings.get_controller_pubkey", return_value=None),
+    ):
+        asyncio.run(get_settings(db=fake_db, _={}))
+
+    assert LLM_EMBED_BASE_URL in queried_keys, "GET handler must request LLM_EMBED_BASE_URL from DB"
+    assert LLM_INCLUDE_NODE_IPS in queried_keys, "GET handler must request LLM_INCLUDE_NODE_IPS from DB"
 
 
 def test_rag_settings_route_put_persists_embed_keys():
     """PUT /api/v1/settings handler must call set_setting for both RAG embedding keys (#664)."""
-    from pathlib import Path
+    import asyncio
+    from unittest.mock import AsyncMock, patch
 
-    src = (Path(__file__).resolve().parents[2] / "fleet_platform/api/routes/platform_settings.py").read_text()
-    put_fn_start = src.find("async def update_settings(")
-    put_fn_end = src.find("\n@router.", put_fn_start + 1)
-    if put_fn_end == -1:
-        put_fn_end = len(src)
-    put_fn = src[put_fn_start:put_fn_end]
-    assert "LLM_EMBED_BASE_URL" in put_fn, "PUT handler must call set_setting(db, LLM_EMBED_BASE_URL, ...)"
-    assert "LLM_INCLUDE_NODE_IPS" in put_fn, "PUT handler must call set_setting(db, LLM_INCLUDE_NODE_IPS, ...)"
+    from fleet_platform.api.routes.platform_settings import update_settings
+    from fleet_platform.schemas.ansible import PlatformSettingsUpdate
+    from fleet_platform.services.platform_settings_svc import LLM_EMBED_BASE_URL, LLM_INCLUDE_NODE_IPS
+
+    set_keys: list[str] = []
+
+    async def fake_set(db, key, value, **kwargs):
+        set_keys.append(key)
+
+    async def fake_get(db, key):
+        return None
+
+    fake_db = AsyncMock()
+    payload = PlatformSettingsUpdate(
+        llm_embed_base_url="http://embed.example.com",
+        llm_include_node_ips=True,
+    )
+
+    with (
+        patch("fleet_platform.api.routes.platform_settings.set_setting", side_effect=fake_set),
+        patch("fleet_platform.api.routes.platform_settings.get_setting", side_effect=fake_get),
+        patch("fleet_platform.api.routes.platform_settings.get_controller_pubkey", return_value=None),
+        patch("fleet_platform.api.routes.platform_settings.audit", new_callable=AsyncMock),
+    ):
+        asyncio.run(update_settings(payload=payload, db=fake_db, claims={"email": "admin@test"}))
+
+    assert LLM_EMBED_BASE_URL in set_keys, "PUT handler must call set_setting(db, LLM_EMBED_BASE_URL, ...)"
+    assert LLM_INCLUDE_NODE_IPS in set_keys, "PUT handler must call set_setting(db, LLM_INCLUDE_NODE_IPS, ...)"
 
 
 def test_playbook_sources_nonexistent_local_warns(caplog):

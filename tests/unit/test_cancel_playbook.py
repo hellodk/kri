@@ -38,14 +38,68 @@ def test_ansible_ssh_retries_is_2():
 
 
 def test_ansible_connect_timeout_removed():
-    """ANSIBLE_CONNECT_TIMEOUT is not a real Ansible env var and must not be set."""
-    import inspect
+    """ANSIBLE_CONNECT_TIMEOUT must not be set in the envvars passed to ansible_runner."""
+    from datetime import UTC, datetime, timedelta
+    from unittest.mock import MagicMock, patch
 
     import fleet_platform.workers.playbook_tasks as pt
 
-    source = inspect.getsource(pt.run_playbook)
-    assert "ANSIBLE_CONNECT_TIMEOUT" not in source, (
-        "ANSIBLE_CONNECT_TIMEOUT is not a real Ansible env var — must be removed"
+    job_id = str(uuid.uuid4())
+
+    mock_job = MagicMock()
+    mock_job.status = "running"
+    # Use a stale started_at to bypass the duplicate guard
+    mock_job.started_at = datetime.now(UTC) - timedelta(seconds=pt._DUPLICATE_GUARD_SECONDS + 60)
+    mock_job.playbook = "deploy.yml"
+    mock_job.target_type = "node"
+    mock_job.target_id = str(uuid.uuid4())
+    mock_job.extravars = {}
+    mock_job.timeout_seconds = 1800
+
+    mock_db = MagicMock()
+    mock_db.__enter__ = MagicMock(return_value=mock_db)
+    mock_db.__exit__ = MagicMock(return_value=False)
+    mock_db.execute.return_value.scalar_one_or_none.return_value = mock_job
+    mock_db.execute.return_value.scalar_one.return_value = mock_job
+
+    mock_thread = MagicMock()
+    mock_thread.is_alive.return_value = False
+    mock_runner = MagicMock()
+    mock_runner.status = "successful"
+    mock_runner.rc = 0
+
+    captured_envvars: dict = {}
+
+    def fake_run_async(**kwargs):
+        captured_envvars.update(kwargs.get("envvars", {}))
+        return (mock_thread, mock_runner)
+
+    with (
+        patch("fleet_platform.workers.playbook_tasks.get_sync_db", return_value=mock_db),
+        patch("fleet_platform.workers.playbook_tasks.ansible_runner") as mock_ar,
+        patch("fleet_platform.workers.playbook_tasks._resolve_playbook_path") as mock_rpp,
+        patch("fleet_platform.workers.playbook_tasks._resolve_hosts") as mock_rh,
+        patch("fleet_platform.workers.playbook_tasks._write_static_inventory", return_value="/tmp/inv.ini"),
+        patch("fleet_platform.workers.playbook_tasks._flush_stdout"),
+    ):
+        mock_ar.run_async.side_effect = fake_run_async
+        mock_rpp.return_value = (MagicMock(is_dir=lambda: False, __str__=lambda s: "deploy.yml"), MagicMock())
+        mock_rh.return_value = [
+            {
+                "hostname": "h",
+                "ip": "1.2.3.4",
+                "ssh_user": "admin",
+                "ssh_password": "",
+                "ssh_key": "",
+                "auth_mode": "password",
+                "credential_source": "node",
+            }
+        ]
+        pt.run_playbook(job_id)
+
+    assert mock_ar.run_async.called, "run_async was never called — test setup may be wrong"
+    assert "ANSIBLE_CONNECT_TIMEOUT" not in captured_envvars, (
+        "ANSIBLE_CONNECT_TIMEOUT is not a real Ansible env var and must not be in envvars"
     )
 
 

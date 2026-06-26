@@ -138,47 +138,69 @@ def test_get_connection_evicts_dead_before_reuse():
     ssh_connection_cache._cache.clear()
 
 
-# ── Structural tests ────────────────────────────────────────────────────────────
+# ── Structural tests (hardened: hasattr / module-namespace checks) ─────────────
 
 
 def test_cache_module_exists():
-    module = Path(__file__).parent.parent.parent / "fleet_platform/services/ssh_connection_cache.py"
-    assert module.exists()
-    content = module.read_text()
-    assert "get_connection" in content
+    from fleet_platform.services import ssh_connection_cache
+
+    assert hasattr(ssh_connection_cache, "get_connection"), "ssh_connection_cache must expose a get_connection function"
 
 
 def test_cache_has_ttl():
-    content = (Path(__file__).parent.parent.parent / "fleet_platform/services/ssh_connection_cache.py").read_text()
-    assert "IDLE_TTL_SECONDS" in content or "ttl" in content.lower()
+    from fleet_platform.services import ssh_connection_cache
+
+    assert hasattr(ssh_connection_cache, "IDLE_TTL_SECONDS") or hasattr(ssh_connection_cache, "TTL_SECONDS"), (
+        "ssh_connection_cache must define an IDLE_TTL_SECONDS constant"
+    )
 
 
 def test_cache_is_bounded():
-    content = (Path(__file__).parent.parent.parent / "fleet_platform/services/ssh_connection_cache.py").read_text()
-    assert "MAX_CACHED_CONNECTIONS" in content
+    from fleet_platform.services import ssh_connection_cache
+
+    assert hasattr(ssh_connection_cache, "MAX_CACHED_CONNECTIONS"), (
+        "ssh_connection_cache must define a MAX_CACHED_CONNECTIONS bound"
+    )
 
 
 def test_cache_has_eviction():
-    content = (Path(__file__).parent.parent.parent / "fleet_platform/services/ssh_connection_cache.py").read_text()
-    assert "evict" in content.lower()
+    from fleet_platform.services import ssh_connection_cache
+
+    assert hasattr(ssh_connection_cache, "evict_node"), "ssh_connection_cache must expose an evict_node function"
 
 
 def test_cache_has_stats():
-    content = (Path(__file__).parent.parent.parent / "fleet_platform/services/ssh_connection_cache.py").read_text()
-    assert "cache_stats" in content or "stats" in content.lower()
+    from fleet_platform.services import ssh_connection_cache
+
+    assert hasattr(ssh_connection_cache, "cache_stats"), "ssh_connection_cache must expose a cache_stats function"
 
 
 def test_webssh_imports_cache():
-    content = (Path(__file__).parent.parent.parent / "fleet_platform/api/routes/webssh.py").read_text()
-    assert "ssh_connection_cache" in content or "get_connection" in content
+    from fleet_platform.api.routes import webssh
+
+    assert hasattr(webssh, "get_connection") or hasattr(webssh, "ssh_connection_cache"), (
+        "webssh must import get_connection (or ssh_connection_cache) to use the SSH connection pool"
+    )
 
 
 def test_parse_description():
-    # Cache module should not use asyncssh at import time (TYPE_CHECKING guard)
-    content = (Path(__file__).parent.parent.parent / "fleet_platform/services/ssh_connection_cache.py").read_text()
-    assert "TYPE_CHECKING" in content
+    # Cache module should not use asyncssh at import time — verified via AST TYPE_CHECKING guard.
+    import ast
+
+    src = (Path(__file__).parent.parent.parent / "fleet_platform/services/ssh_connection_cache.py").read_text()
+    tree = ast.parse(src)
+    has_type_checking_guard = any(
+        isinstance(node, ast.If) and isinstance(node.test, ast.Name) and node.test.id == "TYPE_CHECKING"
+        for node in ast.walk(tree)
+    )
+    assert has_type_checking_guard, (
+        "ssh_connection_cache must guard asyncssh import under TYPE_CHECKING to avoid import-time side effects"
+    )
 
 
 def test_cache_evict_node_function():
-    content = (Path(__file__).parent.parent.parent / "fleet_platform/services/ssh_connection_cache.py").read_text()
-    assert "evict_node" in content
+    from fleet_platform.services import ssh_connection_cache
+
+    assert hasattr(ssh_connection_cache, "evict_node") and callable(ssh_connection_cache.evict_node), (
+        "ssh_connection_cache must expose a callable evict_node function"
+    )

@@ -39,9 +39,25 @@ def test_app_error_is_http_exception():
 
 
 def test_main_registers_http_exception_handler():
-    from pathlib import Path
+    """The app must register the structured HTTP exception handler for HTTPException (#173)."""
+    from fastapi import HTTPException
 
-    src = (Path(__file__).parent.parent.parent / "fleet_platform/api/main.py").read_text()
-    assert "structured_http_exception_handler" in src
-    assert "error_code" in src
-    assert "AppError" in src
+    from fleet_platform.api.main import create_app
+    from fleet_platform.core.errors import AppError
+
+    app = create_app()
+    assert HTTPException in app.exception_handlers, (
+        "main.py must register a handler for HTTPException to return structured {error_code, detail} responses"
+    )
+    handler = app.exception_handlers[HTTPException]
+    assert callable(handler), "The registered HTTPException handler must be callable"
+
+    # Verify the handler returns an error_code field (as AppError is a subclass of HTTPException)
+    import asyncio
+    from unittest.mock import MagicMock
+
+    request = MagicMock()
+    exc = AppError(status_code=404, error_code="NODE_NOT_FOUND", detail="not found")
+    response = asyncio.run(handler(request, exc))
+    body = response.body
+    assert b"error_code" in body, "The handler must include 'error_code' in the JSON response body"

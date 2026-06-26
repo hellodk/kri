@@ -106,17 +106,65 @@ class TestProcessStatOut:
 
 
 def test_sort_param_pattern_in_nodes_route():
-    """The GET /{node_id}/process_stats route must restrict sort to mem_rss_bytes|cpu_pct."""
-    import inspect
+    """The GET /{node_id}/process_stats route must reject sort values outside mem_rss_bytes|cpu_pct.
 
-    import fleet_platform.api.routes.nodes as nodes_mod
+    Drive the real route through the ASGI stack: an invalid sort must yield a 422
+    (FastAPI Query pattern validation), while a valid sort must NOT 422.
+    """
+    import asyncio
+    import uuid
+    from unittest.mock import AsyncMock
 
-    source = inspect.getsource(nodes_mod)
-    # The pattern string must appear verbatim in the route definition
-    assert "^(mem_rss_bytes|cpu_pct)$" in source, (
-        "Sort query param pattern '^(mem_rss_bytes|cpu_pct)$' not found in nodes.py — "
-        "the route may have drifted from the spec."
-    )
+    from httpx import ASGITransport, AsyncClient
+
+    from fleet_platform.api import deps
+    from fleet_platform.api.main import create_app
+    from fleet_platform.core.auth import create_access_token
+
+    class _FakeResult:
+        def scalar_one_or_none(self):
+            return None  # node not found → 404 for valid sort (but never 422)
+
+    class _FakeSession:
+        async def execute(self, *args, **kwargs):
+            return _FakeResult()
+
+        async def commit(self):
+            pass
+
+    async def _run():
+        app = create_app()
+
+        async def _override_db():
+            yield _FakeSession()
+
+        mock_redis = AsyncMock()
+        mock_redis.get.return_value = None
+
+        async def _override_redis():
+            return mock_redis
+
+        app.dependency_overrides[deps.get_db] = _override_db
+        app.dependency_overrides[deps.get_redis] = _override_redis
+
+        token = create_access_token(user_id=str(uuid.uuid4()), email="viewer@test.local", role="viewer")
+        node_id = uuid.uuid4()
+        async with AsyncClient(
+            transport=ASGITransport(app=app),
+            base_url="http://testserver",
+            headers={"Authorization": f"Bearer {token}"},
+        ) as client:
+            bad = await client.get(f"/api/v1/nodes/{node_id}/process_stats?sort=pid")
+            good = await client.get(f"/api/v1/nodes/{node_id}/process_stats?sort=mem_rss_bytes")
+
+        assert bad.status_code == 422, (
+            f"Invalid sort='pid' must be rejected with 422 by the route pattern, got {bad.status_code}"
+        )
+        assert good.status_code != 422, (
+            f"Valid sort='mem_rss_bytes' must NOT be rejected as invalid, got {good.status_code}"
+        )
+
+    asyncio.run(_run())
 
 
 def test_sort_param_pattern_rejects_arbitrary():

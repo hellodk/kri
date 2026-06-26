@@ -121,9 +121,15 @@ def test_two_masters_extravar_is_list_and_failover():
         patch("fleet_platform.workers.ansible_tasks.get_sync_db", new=_sync_db),
         patch("fleet_platform.workers.ansible_tasks._get_bootstrap_settings", return_value=("admin", "secret", "")),
         patch(
-            "fleet_platform.workers.ansible_tasks._get_node_credentials", return_value=("admin", "secret", "password")
+            "fleet_platform.workers.ansible_tasks.resolve_node_credentials_sync",
+            return_value={
+                "ssh_user": "admin",
+                "ssh_password": "secret",
+                "ssh_key": "",
+                "auth_mode": "password",
+                "credential_source": "node",
+            },
         ),
-        patch("fleet_platform.workers.ansible_tasks._get_group_credentials", return_value=("", "", "", "")),
         patch("ansible_runner.run_async", side_effect=_fake_run_async),
     ):
         from fleet_platform.workers.ansible_tasks import bootstrap_node
@@ -168,9 +174,15 @@ def test_zero_masters_refuses_bootstrap():
         patch("fleet_platform.workers.ansible_tasks.get_sync_db", new=_sync_db),
         patch("fleet_platform.workers.ansible_tasks._get_bootstrap_settings", return_value=("admin", "secret", "")),
         patch(
-            "fleet_platform.workers.ansible_tasks._get_node_credentials", return_value=("admin", "secret", "password")
+            "fleet_platform.workers.ansible_tasks.resolve_node_credentials_sync",
+            return_value={
+                "ssh_user": "admin",
+                "ssh_password": "secret",
+                "ssh_key": "",
+                "auth_mode": "password",
+                "credential_source": "node",
+            },
         ),
-        patch("fleet_platform.workers.ansible_tasks._get_group_credentials", return_value=("", "", "", "")),
         patch("ansible_runner.run_async") as mock_run_async,
     ):
         from fleet_platform.workers.ansible_tasks import bootstrap_node
@@ -225,9 +237,15 @@ def test_unreachable_master_logs_warning_and_proceeds():
         patch("fleet_platform.workers.ansible_tasks.get_sync_db", new=_sync_db),
         patch("fleet_platform.workers.ansible_tasks._get_bootstrap_settings", return_value=("admin", "secret", "")),
         patch(
-            "fleet_platform.workers.ansible_tasks._get_node_credentials", return_value=("admin", "secret", "password")
+            "fleet_platform.workers.ansible_tasks.resolve_node_credentials_sync",
+            return_value={
+                "ssh_user": "admin",
+                "ssh_password": "secret",
+                "ssh_key": "",
+                "auth_mode": "password",
+                "credential_source": "node",
+            },
         ),
-        patch("fleet_platform.workers.ansible_tasks._get_group_credentials", return_value=("", "", "", "")),
         patch("ansible_runner.run_async", side_effect=_fake_run_async),
         patch("fleet_platform.workers.ansible_tasks.logger") as mock_logger,
     ):

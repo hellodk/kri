@@ -3,6 +3,16 @@
 Serves the agent's planner / coder / worker / embed tiers from the 18× M4 mini
 fleet as OpenAI-compatible endpoints, routed by capability tag.
 
+> **Canonical serving path (#882).** Stand up an MLX serving node with the
+> `ml.mlx_serve` Salt state documented below — it is the one canonical path for
+> Salt-managed minis (launchd service, model pre-download, health). For
+> Ansible-managed nodes the equivalent is the **hydra** repo's
+> `ansible/roles/llm-mlx` role (vllm-mlx backend, `/metrics`, OOM guardrails).
+> The legacy `ml.mlx_cluster` primitive (bare `pip install` + a
+> `/etc/kri/mlx-cluster.conf` file, no service/health/model-download) was
+> **retired** — it never reflected how MLX is actually served. Do not resurrect
+> it; extend `ml.mlx_serve` instead.
+
 ## Tiers
 
 | Tier   | Model (4-bit MLX)                         | Minions      | Port | max_concurrent |

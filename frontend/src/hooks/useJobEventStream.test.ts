@@ -1,5 +1,5 @@
 /**
- * Tests for the pure helpers of the job-event push hook (#756 / ARC-11):
+ * Tests for the pure helpers of the job-event push hook (#756 / ARC-11, #921):
  *   - parseEventFrame: SSE wire frame → JobEvent | null
  *   - queryKeysForEvent: JobEvent → React Query keys to invalidate
  */
@@ -59,6 +59,23 @@ describe('queryKeysForEvent', () => {
       ['node', 'n1'],
       ['nodes'],
       ['fleet-overview'],
+    ])
+  })
+
+  it('maps a salt_job event to job + executions list keys', () => {
+    const ev: JobEvent = { kind: 'salt_job', id: 'j2', status: 'completed', node_id: 'n2' }
+    expect(queryKeysForEvent(ev)).toEqual([
+      ['job', 'j2'],
+      ['executions'],
+      ['executions-node', 'n2'],
+    ])
+  })
+
+  it('maps a salt_job event without node_id to job + executions keys only', () => {
+    const ev: JobEvent = { kind: 'salt_job', id: 'j3', status: 'completed' }
+    expect(queryKeysForEvent(ev)).toEqual([
+      ['job', 'j3'],
+      ['executions'],
     ])
   })
 

@@ -51,12 +51,19 @@ class TestRouteRegistration:
         """provision-status must use get_current_user (viewer-accessible, not admin-only)."""
         import inspect
 
-        from fleet_platform.api.routes.salt_masters import get_provision_status
+        import pytest
+        from fastapi import params as fa_params
 
-        src = inspect.getsource(get_provision_status)
-        assert "get_current_user" in src, "get_provision_status must use get_current_user (viewer-accessible)"
-        # Must NOT require admin — this is viewer-readable
-        assert "require_role" not in src, "get_provision_status must NOT use require_role — it is viewer-accessible"
+        from fleet_platform.api.routes.salt_masters import get_provision_status
+        from fleet_platform.core.auth import get_current_user
+
+        sig = inspect.signature(get_provision_status)
+        deps = [p.default.dependency for p in sig.parameters.values() if isinstance(p.default, fa_params.Depends)]
+        assert get_current_user in deps, "get_provision_status must use get_current_user (viewer-accessible)"
+        # Must NOT gate on a specific role — verify no Depends is a require_role closure
+        for dep in deps:
+            if getattr(dep, "__qualname__", "").endswith("require_role.<locals>.dependency"):
+                pytest.fail("get_provision_status must NOT use require_role — it is viewer-accessible")
 
 
 # ---------------------------------------------------------------------------

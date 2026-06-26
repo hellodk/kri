@@ -16,17 +16,11 @@ from unittest.mock import MagicMock, patch
 
 
 def test_run_playbook_has_acks_late_false():
-    """run_playbook decorator must set acks_late=False so a SIGKILLed worker
-    does NOT redeliver the message (#350)."""
-    import inspect
-
+    """run_playbook task must have acks_late=False — a SIGKILLed run must NOT be redelivered (#350)."""
     import fleet_platform.workers.playbook_tasks as pt
 
-    # The decorator call is on the task function definition; inspect the module
-    # source so we catch it even if the decorator kwarg is in a different line.
-    source = inspect.getsource(pt)
-    assert "acks_late=False" in source, (
-        "run_playbook task must declare acks_late=False to prevent redelivery on SIGKILL (#350)"
+    assert pt.run_playbook.acks_late is False, (
+        f"run_playbook.acks_late={pt.run_playbook.acks_late!r} — must be False to prevent redelivery on SIGKILL (#350)"
     )
 
 
