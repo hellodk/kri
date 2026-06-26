@@ -243,18 +243,22 @@ def test_inline_helpers_removed():
     assert not hasattr(credential_resolver, "_inline_group_creds")
 
 
-async def test_owner_secret_flags_ignores_inline_columns():
-    """owner_secret_flags no longer reads the inline columns: even when inline
-    ciphertext is supplied, an owner with no credential_id reports no secret."""
+async def test_owner_secret_flags_has_no_inline_params():
+    """owner_secret_flags resolves solely through the Credential store. The
+    deprecated ``inline_password_enc`` / ``inline_key_enc`` parameters were
+    dropped with the inline columns (#913), so the dual secret path cannot
+    silently come back, and an owner with no credential_id reports no secret."""
+    import inspect
+
     from fleet_platform.services.ssh_credential_link import owner_secret_flags
 
+    # Structural guard: the inline read-path parameters must not reappear.
+    params = set(inspect.signature(owner_secret_flags).parameters)
+    assert "inline_password_enc" not in params
+    assert "inline_key_enc" not in params
+
     db = AsyncMock(spec=AsyncSession)
-    has_password, has_key = await owner_secret_flags(
-        db,
-        credential_id=None,
-        inline_password_enc=encrypt_secret("legacy-inline-pw"),
-        inline_key_enc=encrypt_secret("legacy-inline-key"),
-    )
+    has_password, has_key = await owner_secret_flags(db, credential_id=None)
 
     assert has_password is False
     assert has_key is False

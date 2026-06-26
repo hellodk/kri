@@ -109,8 +109,7 @@ def _build_db(node, master, run_obj):
 
 
 def test_bootstrap_node_uses_resolver_not_inline_helpers():
-    """bootstrap_node must call resolve_node_credentials_sync and NOT call
-    _get_node_credentials / _get_group_credentials for credential resolution (#913)."""
+    """bootstrap_node must call resolve_node_credentials_sync for credential resolution (#913)."""
     from fleet_platform.workers.ansible_tasks import bootstrap_node
 
     node_id = uuid.uuid4()

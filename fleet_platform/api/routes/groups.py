@@ -350,13 +350,11 @@ async def update_group_credentials(
     has_password, has_key = await owner_secret_flags(
         db,
         credential_id=group.credential_id,
-        inline_password_enc=group.ssh_password_enc,
-        inline_key_enc=group.ssh_key_enc,
     )
     cred = await db.get(Credential, group.credential_id) if group.credential_id else None
     return {
         "group_id": str(group_id),
-        "ssh_username": cred.username if cred else group.ssh_username,
+        "ssh_username": cred.username if cred else None,
         "has_ssh_password": has_password,
         "has_ssh_key": has_key,
         "ssh_auth_mode": "key" if has_key else "password",
@@ -379,16 +377,14 @@ async def get_group_credentials(
     has_password, has_key = await owner_secret_flags(
         db,
         credential_id=group.credential_id,
-        inline_password_enc=group.ssh_password_enc,
-        inline_key_enc=group.ssh_key_enc,
     )
     cred = await db.get(Credential, group.credential_id) if group.credential_id else None
     return {
         "group_id": str(group_id),
-        "ssh_username": cred.username if cred else group.ssh_username,
+        "ssh_username": cred.username if cred else None,
         "has_ssh_password": has_password,
         "has_ssh_key": has_key,
-        "ssh_auth_mode": ("key" if has_key else "password") if cred else (group.ssh_auth_mode or "password"),
+        "ssh_auth_mode": "key" if has_key else "password",
         "session_max_mins": group.session_max_mins,
         "session_retention_days": group.session_retention_days,
         "credential_source": "group",

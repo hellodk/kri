@@ -202,11 +202,12 @@ async def update_node(
     has_password, has_key = await owner_secret_flags(
         db,
         credential_id=node.credential_id,
-        inline_password_enc=node.ssh_password_enc,
-        inline_key_enc=node.ssh_key_enc,
     )
+    cred = await db.get(Credential, node.credential_id) if node.credential_id else None
     return NodeDetailResponse.model_validate(node).model_copy(
         update={
+            "ssh_username": cred.username if cred else None,
+            "ssh_auth_mode": "key" if has_key else "password",
             "has_ssh_password": has_password,
             "has_ssh_key": has_key,
             "has_vnc_password": bool(node.vnc_password_enc),
@@ -377,16 +378,17 @@ async def get_node(
     has_password, has_key = await owner_secret_flags(
         db,
         credential_id=node.credential_id,
-        inline_password_enc=node.ssh_password_enc,
-        inline_key_enc=node.ssh_key_enc,
     )
     from fleet_platform.models.salt_master import SaltMaster
 
     master_status = (
         await db.execute(select(SaltMaster.status).where(SaltMaster.node_id == node.id).limit(1))
     ).scalar_one_or_none()
+    cred = await db.get(Credential, node.credential_id) if node.credential_id else None
     return NodeDetailResponse.model_validate(node).model_copy(
         update={
+            "ssh_username": cred.username if cred else None,
+            "ssh_auth_mode": "key" if has_key else "password",
             "has_ssh_password": has_password,
             "has_ssh_key": has_key,
             "is_master": master_status is not None,
@@ -475,14 +477,14 @@ async def get_node_resolved_credential(
 
     creds = await resolve_node_credentials(node, db)
 
-    # Member groups that carry a credential (FK or inline), in resolution order.
+    # Member groups that carry a credential (FK), in resolution order.
     cred_groups = (
         (
             await db.execute(
                 select(Group)
                 .join(GroupMember, GroupMember.group_id == Group.id)
                 .where(GroupMember.node_id == node_id)
-                .where((Group.credential_id.isnot(None)) | (Group.ssh_username.isnot(None)))
+                .where(Group.credential_id.isnot(None))
                 .order_by(Group.credential_priority.desc(), Group.name.asc())
             )
         )

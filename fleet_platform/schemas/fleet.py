@@ -90,23 +90,21 @@ class NodeDetailResponse(NodeListItem):
     @model_validator(mode="wrap")
     @classmethod
     def compute_ssh_flags(cls, data: Any, handler: Any) -> "NodeDetailResponse":
-        """Set has_ssh_password/has_ssh_key/has_vnc_password from ORM encrypted columns without exposing secrets."""
-        # FastAPI re-validates the return value through the response_model. When
-        # data is already a NodeDetailResponse (from our endpoint return), the flags
-        # are already correct — return it as-is to avoid re-computing from missing fields.
+        """Set has_vnc_password from the ORM encrypted column without exposing secrets.
+
+        has_ssh_password / has_ssh_key are set explicitly by route handlers via
+        model_copy (sourced from the Credential store); the inline ssh_password_enc /
+        ssh_key_enc columns were dropped in migration 063 (#913).
+        """
         if isinstance(data, cls):
             return data
         if isinstance(data, dict):
-            data.setdefault("has_ssh_password", bool(data.get("ssh_password_enc")))
-            data.setdefault("has_ssh_key", bool(data.get("ssh_key_enc")))
             data.setdefault("has_vnc_password", bool(data.get("vnc_password_enc")))
             return handler(data)
-        # ORM object: compute flags from the encrypted column presence.
+        # ORM object: set has_vnc_password from the column; ssh flags come from model_copy.
         result = handler(data)
         return result.model_copy(
             update={
-                "has_ssh_password": bool(getattr(data, "ssh_password_enc", None)),
-                "has_ssh_key": bool(getattr(data, "ssh_key_enc", None)),
                 "has_vnc_password": bool(getattr(data, "vnc_password_enc", None)),
             }
         )
