@@ -44,4 +44,10 @@ ENV PATH="/app/.venv/bin:$PATH"
 RUN groupadd --gid 1001 appgroup && \
     useradd --uid 1001 --gid appgroup --shell /bin/bash --create-home appuser && \
     chown -R appuser:appgroup /app
+# Agent quarantine root (AGENT_QUARANTINE_ROOT, default /srv/kri/agent-quarantine).
+# /srv is root-owned, so the non-root appuser cannot create it at runtime —
+# pre-create it owned by appuser, otherwise every agent artifact write
+# (generate_ansible_playbook / generate_salt_state / dry_run_artifact) fails
+# with PermissionError and the authoring/quarantine feature is unusable.
+RUN mkdir -p /srv/kri/agent-quarantine && chown -R appuser:appgroup /srv/kri
 USER appuser
