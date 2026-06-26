@@ -135,27 +135,62 @@ def test_collect_grains_mints_fresh_token_and_persists_hash(tmp_path):
     )
 
 
-def test_collect_grains_no_pillar_error_branch_is_gone():
-    """The dead 'no node_token found in pillar' branch must be removed (#739)."""
-    import inspect
+def test_collect_grains_no_pillar_error_branch_is_gone(tmp_path):
+    """Missing pillar file must NOT trigger the old 'no node_token found in pillar' error (#739).
 
+    If the dead branch were still present, an empty pillar dir would raise a RuntimeError
+    or return an error dict with a pillar-related message. The fix ensures the call succeeds.
+    """
     import fleet_platform.workers.ansible_tasks as mod
 
-    source = inspect.getsource(mod.collect_node_grains)
-    assert "no node_token found in pillar" not in source, (
-        "Dead pillar-error branch still present in collect_node_grains — fix #739 not applied"
+    node = _make_node()
+    ctx = _make_db_ctx(node)
+
+    with (
+        patch("fleet_platform.workers.ansible_tasks.get_sync_db", return_value=ctx),
+        patch("fleet_platform.workers.ansible_tasks._get_node_credentials", return_value=("admin", None, "password")),
+        patch("fleet_platform.workers.ansible_tasks._get_pillar_dir", return_value=tmp_path),
+        patch("fleet_platform.workers.ansible_tasks._resolve_node_master_creds", return_value=MASTER_CREDS),
+        patch("fleet_platform.workers.ansible_tasks._grains_via_salt_api", return_value=({"os": "Linux"}, None)),
+        patch("fleet_platform.workers.ansible_tasks.hash_password", return_value="$fake-hash$"),
+        patch("urllib.request.urlopen", return_value=_make_urlopen_ok()),
+    ):
+        result = mod.collect_node_grains.run(str(uuid.uuid4()))
+
+    assert result["status"] == "ok", f"Dead pillar-error branch may still be present — expected ok, got: {result}"
+    assert "pillar" not in str(result).lower(), (
+        f"Pillar error message leaked into result — dead branch not fully removed: {result}"
     )
 
 
-def test_collect_grains_no_pillar_file_read():
-    """pillar_file.exists() / pillar_file.read_text() must never be called (#739)."""
-    import inspect
+def test_collect_grains_no_pillar_file_read(tmp_path):
+    """collect_node_grains must NOT attempt to read a pillar file (#739).
 
+    The old implementation called pillar_file.exists() and pillar_file.read_text().
+    The fix replaces this with a freshly minted token. We verify by confirming
+    the call succeeds even when the pillar directory is completely empty.
+    """
     import fleet_platform.workers.ansible_tasks as mod
 
-    source = inspect.getsource(mod.collect_node_grains)
-    assert "pillar_file.exists()" not in source, (
-        "pillar_file.exists() still present — dead pillar read not removed (#739)"
+    node = _make_node()
+    ctx = _make_db_ctx(node)
+
+    # tmp_path is an empty directory — no pillar file at any expected path.
+    # If pillar_file.exists() / read_text() were still called, and the code treated
+    # a missing file as an error, the result would not be "ok".
+    with (
+        patch("fleet_platform.workers.ansible_tasks.get_sync_db", return_value=ctx),
+        patch("fleet_platform.workers.ansible_tasks._get_node_credentials", return_value=("admin", None, "password")),
+        patch("fleet_platform.workers.ansible_tasks._get_pillar_dir", return_value=tmp_path),
+        patch("fleet_platform.workers.ansible_tasks._resolve_node_master_creds", return_value=MASTER_CREDS),
+        patch("fleet_platform.workers.ansible_tasks._grains_via_salt_api", return_value=({"os": "Linux"}, None)),
+        patch("fleet_platform.workers.ansible_tasks.hash_password", return_value="$fake-hash$"),
+        patch("urllib.request.urlopen", return_value=_make_urlopen_ok()),
+    ):
+        result = mod.collect_node_grains.run(str(uuid.uuid4()))
+
+    assert result["status"] == "ok", (
+        f"pillar_file.exists() may still be called — expected ok with empty pillar dir, got: {result}"
     )
 
 
@@ -164,94 +199,109 @@ def test_collect_grains_no_pillar_file_read():
 # ---------------------------------------------------------------------------
 
 
-def _is_inside_with_get_sync_db(lines: list[str], target_idx: int) -> bool:
-    """Return True if the line at target_idx is nested inside a `with get_sync_db()` block."""
-    target_indent = len(lines[target_idx]) - len(lines[target_idx].lstrip())
-    current_min_indent = target_indent
-    for j in range(target_idx - 1, -1, -1):
-        src_line = lines[j]
-        stripped = src_line.lstrip()
-        if not stripped:
-            continue
-        line_indent = len(src_line) - len(stripped)
-        if line_indent >= current_min_indent:
-            # Same or deeper indent — sibling/child, not an enclosing block
-            continue
-        # First ancestor line at lower indent — is it a DB context?
-        if "with get_sync_db()" in src_line:
-            return True
-        # Update threshold to continue scanning for even higher ancestors
-        current_min_indent = line_indent
-    return False
+def _run_provision_master_with_logging(master_uuid):
+    """Drive provision_master through the success path, logging the relative order of
+    get_sync_db() context exits and the run_probe() network call.
+
+    Returns the ordered call_log so callers can assert that the probe runs only after
+    the DB session has been released (#738).
+
+    `run_probe` is imported locally inside provision_master via
+    `from fleet_platform.services.salt_master_probe import run_probe`, so patching it at
+    its source module captures the real `asyncio.run(run_probe(...))` invocation without
+    having to patch the locally-imported `asyncio`.
+    """
+    import fleet_platform.workers.ansible_tasks as mod
+
+    call_log: list[str] = []
+
+    master_mock = MagicMock()
+    master_mock.id = master_uuid
+    master_mock.ssh_host = "10.0.0.1"
+    master_mock.address = "10.0.0.1"
+    master_mock.ssh_user = "admin"
+    master_mock.ssh_key_enc = None
+    master_mock.ssh_password_enc = None
+    master_mock.api_password_enc = None
+    master_mock.provision_status = "provisioning"
+
+    db_call_count = [0]
+
+    def make_ctx(label: str):
+        db = MagicMock()
+        db.execute.return_value.scalar_one_or_none.return_value = master_mock
+        ctx = MagicMock()
+        ctx.__enter__ = MagicMock(return_value=db)
+
+        def on_exit(*args):
+            call_log.append(f"db_exit:{label}")
+            return False
+
+        ctx.__exit__ = MagicMock(side_effect=on_exit)
+        return ctx
+
+    def fake_get_sync_db():
+        idx = db_call_count[0]
+        db_call_count[0] += 1
+        labels = ["init", "probe", "final"]
+        label = labels[idx] if idx < len(labels) else f"extra_{idx}"
+        return make_ctx(label)
+
+    async def fake_run_probe(master):
+        call_log.append("run_probe")
+        return {"status": "online", "checks": []}
+
+    mock_thread = MagicMock()
+    mock_thread.is_alive.return_value = False
+    mock_runner = MagicMock()
+    mock_runner.status = "successful"
+    mock_runner.rc = 0
+
+    with (
+        patch("fleet_platform.workers.ansible_tasks.get_sync_db", side_effect=fake_get_sync_db),
+        patch("fleet_platform.workers.ansible_tasks.ansible_runner") as mock_ar,
+        patch("fleet_platform.workers.ansible_tasks._detect_os_family", return_value="Linux"),
+        patch("fleet_platform.workers.ansible_tasks._get_bootstrap_settings", return_value=("admin", None, None)),
+        patch("fleet_platform.services.salt_master_probe.run_probe", side_effect=fake_run_probe),
+    ):
+        mock_ar.run_async.return_value = (mock_thread, mock_runner)
+        mod.provision_master.run(str(master_uuid))
+
+    return call_log
 
 
 def test_provision_master_probe_runs_outside_db_session():
-    """asyncio.run(run_probe()) must be called AFTER get_sync_db context exits (#738).
+    """run_probe() must run AFTER the probe get_sync_db context exits (#738).
 
     Holding the DB session open during network I/O exhausts the sync pool under load.
     The fix: read master attrs inside the `with` block, expunge/copy the object, exit
     the block, then call asyncio.run(run_probe()) outside.
     """
-    import inspect
+    call_log = _run_provision_master_with_logging(uuid.uuid4())
 
-    import fleet_platform.workers.ansible_tasks as mod
+    assert "run_probe" in call_log, f"run_probe() was never called — call order: {call_log}"
 
-    source = inspect.getsource(mod.provision_master)
-    lines = source.splitlines()
-
-    probe_lines = [(i, line) for i, line in enumerate(lines) if "asyncio.run(run_probe" in line]
-    assert probe_lines, "asyncio.run(run_probe()) not found in provision_master — check function name"
-
-    for probe_idx, probe_line_text in probe_lines:
-        inside = _is_inside_with_get_sync_db(lines, probe_idx)
-        assert not inside, (
-            f"asyncio.run(run_probe()) at source line {probe_idx!r} is still nested inside "
-            "a `with get_sync_db()` block — DB session is held during probe I/O (#738 not fixed).\n"
-            f"Line: {probe_line_text.strip()!r}"
-        )
+    probe_exit_idx = next((i for i, e in enumerate(call_log) if e == "db_exit:probe"), None)
+    run_probe_idx = call_log.index("run_probe")
+    assert probe_exit_idx is not None, f"Probe DB context exit not found — call order: {call_log}"
+    assert probe_exit_idx < run_probe_idx, (
+        f"run_probe() ran while the probe DB session was still open (#738). call order: {call_log}"
+    )
 
 
 def test_provision_master_probe_db_session_released_before_probe():
-    """Structural test: the DB context must close before run_probe is called (#738).
+    """A get_sync_db() context must open and close BEFORE run_probe() runs (#738).
 
     We verify that after the fix the code reads master fields, exits `with get_sync_db()`,
     and only then invokes asyncio.run(run_probe()).
     """
-    import inspect
+    call_log = _run_provision_master_with_logging(uuid.uuid4())
 
-    import fleet_platform.workers.ansible_tasks as mod
+    assert "run_probe" in call_log, f"run_probe() was never called — call order: {call_log}"
+    run_probe_idx = call_log.index("run_probe")
 
-    source = inspect.getsource(mod.provision_master)
-    lines = source.splitlines()
-
-    # The probe call must exist
-    probe_indices = [i for i, src_line in enumerate(lines) if "asyncio.run(run_probe" in src_line]
-    assert probe_indices, "asyncio.run(run_probe()) missing from provision_master"
-
-    # There must be a `with get_sync_db()` block BEFORE the probe that closes before it
-    # (i.e., at the same or lower indentation as the probe call, and appearing earlier)
-    for probe_idx in probe_indices:
-        probe_indent = len(lines[probe_idx]) - len(lines[probe_idx].lstrip())
-
-        # Scan backwards for ANY `with get_sync_db()` at lower indent than the probe
-        # (meaning the probe must be OUTSIDE all DB contexts)
-        assert not _is_inside_with_get_sync_db(lines, probe_idx), (
-            "run_probe() still called inside an open DB session (#738)"
-        )
-
-        # Scan forward to confirm the probe line exists after the DB `with` block closes
-        # by checking that we can find a prior `with get_sync_db()` block at equal/lower indent
-        # that was opened and closed before this index
-        found_prior_db_open = False
-        for j in range(0, probe_idx):
-            src_line = lines[j]
-            stripped = src_line.lstrip()
-            if not stripped:
-                continue
-            line_indent = len(src_line) - len(stripped)
-            if "with get_sync_db()" in src_line and line_indent <= probe_indent:
-                found_prior_db_open = True
-                break
-        assert found_prior_db_open, (
-            "No prior `with get_sync_db()` block found before the probe call — check provision_master structure"
-        )
+    db_exits_before_probe = [e for e in call_log[:run_probe_idx] if e.startswith("db_exit:")]
+    assert db_exits_before_probe, (
+        f"No DB context exited before run_probe() — session still held during network I/O (#738). "
+        f"call order: {call_log}"
+    )

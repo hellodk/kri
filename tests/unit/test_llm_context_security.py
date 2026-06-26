@@ -43,18 +43,43 @@ def test_node_hostname_injection_does_not_break_table():
 
 
 def test_build_fleet_context_uses_bulk_settings():
-    """build_fleet_context must call get_settings_bulk, not individual get_setting."""
-    import inspect
+    """build_fleet_context must call get_settings_bulk rather than individual get_setting calls.
+
+    Both helpers are imported locally inside build_fleet_context, so we patch them at their
+    source module (platform_settings_svc) where the late import resolves them.
+    """
+    import asyncio
+    from unittest.mock import AsyncMock, MagicMock, patch
 
     from fleet_platform.services.llm_context import build_fleet_context
 
-    source = inspect.getsource(build_fleet_context)
-    assert "get_settings_bulk" in source, "Must use get_settings_bulk for settings"
-    # Count sequential get_setting calls — should be 0 for the 3 settings
-    import re
+    async def _run():
+        # `await db.execute(...)` must return a *sync* result object whose
+        # .scalars()/.scalar_one()/.all() are plain (non-coroutine) calls.
+        result = MagicMock()
+        result.scalar_one.return_value = 0
+        result.scalars.return_value.all.return_value = []
+        result.all.return_value = []
 
-    # Should not have bare 'await get_setting(db,' (individual calls)
-    individual_calls = re.findall(r"await get_setting\(db,", source)
-    assert len(individual_calls) == 0, (
-        f"Found {len(individual_calls)} sequential get_setting() calls — use get_settings_bulk"
-    )
+        db = AsyncMock()
+        db.execute = AsyncMock(return_value=result)
+
+        with (
+            patch(
+                "fleet_platform.services.platform_settings_svc.get_settings_bulk",
+                new_callable=AsyncMock,
+            ) as mock_bulk,
+            patch(
+                "fleet_platform.services.platform_settings_svc.get_setting",
+                new_callable=AsyncMock,
+            ) as mock_single,
+        ):
+            mock_bulk.return_value = {}
+            await build_fleet_context(db=db, intent="test")
+
+        assert mock_bulk.called, "build_fleet_context must call get_settings_bulk for settings"
+        assert not mock_single.called, (
+            "build_fleet_context must not call individual get_setting() — use get_settings_bulk"
+        )
+
+    asyncio.run(_run())

@@ -1,14 +1,14 @@
 # tests/unit/test_dynamic_timeout_348.py
 """TDD tests for #348: dynamic per-job playbook timeout + runner cancellation.
 
-Layer 1 — source-contract tests (grep module source / file system).
+Layer 1 — behavioral tests (task attributes, run_async call, SoftTimeLimitExceeded handler).
 Layer 2 — model/schema tests.
 Layer 3 — contract sync (TypeScript file).
 """
 
-import inspect
 import uuid
 from pathlib import Path
+from unittest.mock import MagicMock
 
 # ---------------------------------------------------------------------------
 # Layer 1 — source-contract tests
@@ -16,48 +16,166 @@ from pathlib import Path
 
 
 def test_decorator_has_soft_time_limit_7200():
-    """run_playbook decorator must raise the static ceiling to soft_time_limit=7200."""
+    """run_playbook task must declare soft_time_limit=7200 as the absolute ceiling (#348)."""
     import fleet_platform.workers.playbook_tasks as pt
 
-    source = inspect.getsource(pt)
-    assert "soft_time_limit=7200" in source, (
-        "run_playbook decorator must set soft_time_limit=7200 (per-job ceiling for #348)"
+    assert pt.run_playbook.soft_time_limit == 7200, (
+        f"run_playbook.soft_time_limit={pt.run_playbook.soft_time_limit} — must be 7200 (#348)"
     )
 
 
 def test_decorator_has_time_limit_7260():
-    """run_playbook decorator must set time_limit=7260 (7200 + 60s hard kill buffer)."""
+    """run_playbook task must declare time_limit=7260 (7200 + 60s hard kill buffer)."""
     import fleet_platform.workers.playbook_tasks as pt
 
-    source = inspect.getsource(pt)
-    assert "time_limit=7260" in source, "run_playbook decorator must set time_limit=7260 for #348"
+    assert pt.run_playbook.time_limit == 7260, (
+        f"run_playbook.time_limit={pt.run_playbook.time_limit} — must be 7260 (#348)"
+    )
+
+
+def _make_stale_job(timeout_seconds: int = 3600):
+    """Return a mock AnsibleJob with a stale started_at that bypasses the duplicate guard."""
+    from datetime import UTC, datetime, timedelta
+
+    import fleet_platform.workers.playbook_tasks as pt
+
+    job = MagicMock()
+    job.status = "running"
+    job.started_at = datetime.now(UTC) - timedelta(seconds=pt._DUPLICATE_GUARD_SECONDS + 60)
+    job.playbook = "deploy.yml"
+    job.target_type = "node"
+    job.target_id = str(uuid.uuid4())
+    job.extravars = {}
+    job.timeout_seconds = timeout_seconds
+    return job
+
+
+def _make_db_mock(job):
+    db = MagicMock()
+    db.__enter__ = MagicMock(return_value=db)
+    db.__exit__ = MagicMock(return_value=False)
+    db.execute.return_value.scalar_one_or_none.return_value = job
+    db.execute.return_value.scalar_one.return_value = job
+    return db
+
+
+def _patch_playbook_infra(mock_ar, job, *, thread=None, runner=None):
+    """Return a patch-stack context that lets run_playbook reach run_async."""
+    from unittest.mock import MagicMock, patch
+
+    if thread is None:
+        thread = MagicMock()
+        thread.is_alive.return_value = False
+    if runner is None:
+        runner = MagicMock()
+        runner.status = "successful"
+        runner.rc = 0
+
+    mock_rpp = MagicMock(return_value=(MagicMock(is_dir=lambda: False, __str__=lambda s: "deploy.yml"), MagicMock()))
+    mock_rh = MagicMock(
+        return_value=[
+            {
+                "hostname": "h",
+                "ip": "1.2.3.4",
+                "ssh_user": "admin",
+                "ssh_password": "",
+                "ssh_key": "",
+                "auth_mode": "password",
+                "credential_source": "node",
+            }
+        ]
+    )
+
+    return (
+        patch("fleet_platform.workers.playbook_tasks.get_sync_db", return_value=_make_db_mock(job)),
+        patch("fleet_platform.workers.playbook_tasks._resolve_playbook_path", mock_rpp),
+        patch("fleet_platform.workers.playbook_tasks._resolve_hosts", mock_rh),
+        patch("fleet_platform.workers.playbook_tasks._write_static_inventory", return_value="/tmp/inv.ini"),
+        patch("fleet_platform.workers.playbook_tasks._flush_stdout"),
+    )
 
 
 def test_run_async_receives_timeout_kwarg():
-    """ansible_runner.run_async must be called with a timeout= keyword so ansible-runner
-    kills the subprocess when the per-job timeout expires."""
+    """ansible_runner.run_async must be called with timeout=<job.timeout_seconds> (#348)."""
+    from contextlib import ExitStack
+    from unittest.mock import MagicMock, patch
+
     import fleet_platform.workers.playbook_tasks as pt
 
-    source = inspect.getsource(pt)
-    assert "timeout=timeout" in source, (
-        "run_async must be called with timeout=timeout so ansible-runner owns the kill (#348)"
+    job = _make_stale_job(timeout_seconds=3600)
+    job_id = str(uuid.uuid4())
+
+    mock_thread = MagicMock()
+    mock_thread.is_alive.return_value = False
+    mock_runner = MagicMock()
+    mock_runner.status = "successful"
+    mock_runner.rc = 0
+
+    with patch("fleet_platform.workers.playbook_tasks.ansible_runner") as mock_ar, ExitStack() as stack:
+        for p in _patch_playbook_infra(mock_ar, job, thread=mock_thread, runner=mock_runner):
+            stack.enter_context(p)
+        mock_ar.run_async.return_value = (mock_thread, mock_runner)
+        pt.run_playbook(job_id)
+
+    assert mock_ar.run_async.called, "run_async was never called"
+    _, kwargs = mock_ar.run_async.call_args
+    assert "timeout" in kwargs, "run_async must be called with a timeout= kwarg (#348)"
+    assert kwargs["timeout"] == 3600, (
+        f"run_async timeout kwarg must equal job.timeout_seconds (3600), got {kwargs['timeout']}"
     )
 
 
 def test_soft_time_limit_handler_cancels_runner():
-    """SoftTimeLimitExceeded handler must call runner.cancel() before the DB write."""
+    """SoftTimeLimitExceeded must trigger runner.cancel() (#348)."""
+    from contextlib import ExitStack
+    from unittest.mock import MagicMock, patch
+
+    from celery.exceptions import SoftTimeLimitExceeded
+
     import fleet_platform.workers.playbook_tasks as pt
 
-    source = inspect.getsource(pt)
-    assert "runner.cancel()" in source, "SoftTimeLimitExceeded handler must cancel the ansible-runner subprocess (#348)"
+    job = _make_stale_job()
+    job_id = str(uuid.uuid4())
+
+    mock_runner = MagicMock()
+    mock_thread = MagicMock()
+    # is_alive raises SoftTimeLimitExceeded — simulates Celery signal firing mid-loop
+    mock_thread.is_alive.side_effect = SoftTimeLimitExceeded()
+
+    with patch("fleet_platform.workers.playbook_tasks.ansible_runner") as mock_ar, ExitStack() as stack:
+        for p in _patch_playbook_infra(mock_ar, job, thread=mock_thread, runner=mock_runner):
+            stack.enter_context(p)
+        mock_ar.run_async.return_value = (mock_thread, mock_runner)
+        result = pt.run_playbook(job_id)
+
+    assert result["status"] == "timeout", f"Expected timeout, got {result!r}"
+    mock_runner.cancel.assert_called(), "SoftTimeLimitExceeded handler must call runner.cancel() (#348)"
 
 
 def test_soft_time_limit_handler_joins_thread():
-    """SoftTimeLimitExceeded handler must join the runner thread (best-effort)."""
+    """SoftTimeLimitExceeded must trigger thread.join() (best-effort cleanup) (#348)."""
+    from contextlib import ExitStack
+    from unittest.mock import MagicMock, patch
+
+    from celery.exceptions import SoftTimeLimitExceeded
+
     import fleet_platform.workers.playbook_tasks as pt
 
-    source = inspect.getsource(pt)
-    assert "thread.join(" in source, "SoftTimeLimitExceeded handler must join the runner thread (#348)"
+    job = _make_stale_job()
+    job_id = str(uuid.uuid4())
+
+    mock_runner = MagicMock()
+    mock_thread = MagicMock()
+    mock_thread.is_alive.side_effect = SoftTimeLimitExceeded()
+
+    with patch("fleet_platform.workers.playbook_tasks.ansible_runner") as mock_ar, ExitStack() as stack:
+        for p in _patch_playbook_infra(mock_ar, job, thread=mock_thread, runner=mock_runner):
+            stack.enter_context(p)
+        mock_ar.run_async.return_value = (mock_thread, mock_runner)
+        result = pt.run_playbook(job_id)
+
+    assert result["status"] == "timeout", f"Expected timeout, got {result!r}"
+    mock_thread.join.assert_called(), "SoftTimeLimitExceeded handler must call thread.join() (#348)"
 
 
 def test_migration_039_file_exists():
