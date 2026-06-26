@@ -310,6 +310,40 @@ export const OverviewTab = memo(function OverviewTab({
           ))}
         </dl>
       </div>
+      {/* Bootstrap / re-bootstrap form. Rendered at the grid top level so it is
+          available for any node regardless of bootstrap_status — including
+          freshly-imported "unregistered" nodes whose Bootstrap Status card is
+          hidden. The header Bootstrap button only flips showRebootstrap, so this
+          must not be nested inside the status card or it never appears. */}
+      {showRebootstrap && (
+        <div className="md:col-span-2 p-4 bg-amber-50 border border-amber-200 rounded-lg space-y-2">
+          <p className="text-xs text-amber-700 font-medium">
+            {node.bootstrap_status === 'unregistered'
+              ? 'This will run the bootstrap playbook on this node.'
+              : 'This will re-run the bootstrap playbook. Existing node data is preserved.'}
+          </p>
+          <div className="flex gap-2">
+            <input
+              type="text"
+              value={rebootstrapIp}
+              onChange={(e) => setRebootstrapIp(e.target.value)}
+              placeholder="Target IP address"
+              className="flex-1 text-sm border border-amber-300 rounded px-2 py-1 bg-white focus:outline-hidden focus:ring-2 focus:ring-amber-400"
+            />
+            <button
+              onClick={rebootstrap}
+              disabled={rebootstrapping || !rebootstrapIp.trim()}
+              className="px-3 py-1 text-sm bg-amber-600 text-white rounded hover:bg-amber-700 disabled:opacity-50"
+            >
+              {rebootstrapping ? 'Queuing…' : 'Confirm'}
+            </button>
+            <button onClick={() => setShowRebootstrap(false)} className="px-3 py-1 text-sm border border-gray-300 rounded hover:bg-gray-50">
+              Cancel
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Bootstrap status — only show if node has been bootstrapped or is bootstrapping */}
       {node.bootstrap_status !== 'unregistered' && (
         <div className="bg-white rounded-lg border border-gray-200 p-4 md:col-span-2 space-y-3">
@@ -352,32 +386,6 @@ export const OverviewTab = memo(function OverviewTab({
               )}
             </div>
           </div>
-
-          {/* Re-bootstrap inline form */}
-          {showRebootstrap && (
-            <div className="p-3 bg-amber-50 border border-amber-200 rounded-lg space-y-2">
-              <p className="text-xs text-amber-700 font-medium">This will re-run the bootstrap playbook. Existing node data is preserved.</p>
-              <div className="flex gap-2">
-                <input
-                  type="text"
-                  value={rebootstrapIp}
-                  onChange={(e) => setRebootstrapIp(e.target.value)}
-                  placeholder="Target IP address"
-                  className="flex-1 text-sm border border-amber-300 rounded px-2 py-1 bg-white focus:outline-hidden focus:ring-2 focus:ring-amber-400"
-                />
-                <button
-                  onClick={rebootstrap}
-                  disabled={rebootstrapping || !rebootstrapIp.trim()}
-                  className="px-3 py-1 text-sm bg-amber-600 text-white rounded hover:bg-amber-700 disabled:opacity-50"
-                >
-                  {rebootstrapping ? 'Queuing…' : 'Confirm'}
-                </button>
-                <button onClick={() => setShowRebootstrap(false)} className="px-3 py-1 text-sm border border-gray-300 rounded hover:bg-gray-50">
-                  Cancel
-                </button>
-              </div>
-            </div>
-          )}
 
           <div className={`flex items-center gap-3 p-3 rounded-lg border ${BOOTSTRAP_STATUS_STYLE[node.bootstrap_status]?.bg ?? 'bg-gray-50 border-gray-200'}`}>
             <span className={`text-sm font-semibold ${BOOTSTRAP_STATUS_STYLE[node.bootstrap_status]?.colour ?? 'text-gray-600'}`}>
