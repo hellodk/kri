@@ -33,25 +33,99 @@ def test_node_action_request_with_params():
 
 
 def test_node_actions_py_contains_dry_run_field():
-    """fleet_platform/api/routes/node_actions.py contains dry_run: bool = False."""
-    import inspect
+    """NodeActionRequest must have dry_run field with default False."""
+    from fleet_platform.api.routes.node_actions import NodeActionRequest
 
-    import fleet_platform.api.routes.node_actions as node_actions_module
-
-    source = inspect.getsource(node_actions_module.NodeActionRequest)
-    assert "dry_run: bool = False" in source
+    field = NodeActionRequest.model_fields.get("dry_run")
+    assert field is not None, "NodeActionRequest must have a dry_run field"
+    assert field.default is False, f"NodeActionRequest.dry_run must default to False, got {field.default!r}"
 
 
 def test_node_actions_py_has_dry_run_branch():
-    """fleet_platform/api/routes/node_actions.py has a dry_run response branch."""
-    import inspect
+    """POSTing a dry_run=True action must return status='dry_run' without dispatching anything.
 
-    import fleet_platform.api.routes.node_actions as node_actions_module
+    Drive the real endpoint through the ASGI stack (matching the behavioral style in
+    test_nondestructive_action_dispatch_628.py) and assert the dry-run response — and
+    that no Salt task is dispatched and no DB rows are added.
+    """
+    import asyncio
+    import uuid
+    from types import SimpleNamespace
+    from unittest.mock import AsyncMock, patch
 
-    source = inspect.getsource(node_actions_module.request_node_action)
-    assert "if payload.dry_run:" in source
-    assert 'status="dry_run"' in source
-    assert "No action created, no email sent" in source
+    from httpx import ASGITransport, AsyncClient
+
+    from fleet_platform.api import deps
+    from fleet_platform.api.limiter import limiter
+    from fleet_platform.api.main import create_app
+    from fleet_platform.core.auth import create_access_token
+
+    class _FakeResult:
+        def __init__(self, value):
+            self._value = value
+
+        def scalar_one_or_none(self):
+            return self._value
+
+    class _FakeSession:
+        def __init__(self, node):
+            self._node = node
+            self.added: list = []
+
+        async def execute(self, *args, **kwargs):
+            return _FakeResult(self._node)
+
+        def add(self, obj):
+            self.added.append(obj)
+
+        async def commit(self):
+            pass
+
+        async def rollback(self):
+            pass
+
+    async def _run():
+        limiter._storage.reset()
+        node = SimpleNamespace(minion_id="minion-xyz")
+        session = _FakeSession(node)
+        app = create_app()
+
+        async def _override_db():
+            yield session
+
+        mock_redis = AsyncMock()
+        mock_redis.get.return_value = None
+
+        async def _override_redis():
+            return mock_redis
+
+        app.dependency_overrides[deps.get_db] = _override_db
+        app.dependency_overrides[deps.get_redis] = _override_redis
+
+        token = create_access_token(user_id=str(uuid.uuid4()), email="operator@test.local", role="operator")
+        with patch("fleet_platform.workers.celery_app.celery_app.send_task") as send_task:
+            async with AsyncClient(
+                transport=ASGITransport(app=app),
+                base_url="http://testserver",
+                headers={"Authorization": f"Bearer {token}"},
+            ) as client:
+                resp = await client.post(
+                    f"/api/v1/nodes/{uuid.uuid4()}/actions",
+                    json={"action_type": "process_stop", "params": {"pid": "1234"}, "dry_run": True},
+                )
+        limiter._storage.reset()
+
+        assert resp.status_code == 202, resp.text
+        body = resp.json()
+        assert body["status"] == "dry_run", f"dry_run=True must return status='dry_run', got {body!r}"
+        assert "No action created, no email sent" in body["message"], (
+            f"dry_run response must include 'No action created, no email sent', got {body['message']!r}"
+        )
+        # No side effects: no Salt task dispatched, no rows added to the session.
+        assert not send_task.called, "dry_run must not dispatch a Salt task"
+        assert session.added == [], "dry_run must not create any DB rows"
+
+    asyncio.run(_run())
 
 
 def test_node_actions_py_dry_run_after_validate_and_404():
