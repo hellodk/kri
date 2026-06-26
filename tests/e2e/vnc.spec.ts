@@ -1,8 +1,31 @@
 /**
  * VNC — VNC feature flag and UI journeys
  */
-import { test, expect } from '@playwright/test'
-import { loginViaApi, getToken, ADMIN, VIEWER, API } from './helpers'
+import { test, expect, type APIRequestContext } from '@playwright/test'
+import { loginViaApi, getToken, ADMIN, VIEWER, API, SEED } from './helpers'
+
+/**
+ * The VNC (and SSH) button on the node detail page is enabled only when the node has a
+ * `bootstrap_ip`, which is set by queueing a bootstrap — not by plain node creation, and
+ * the global-setup seed nodes are intentionally IP-less. This helper creates a node, adds
+ * it to the seeded group-with-creds, and queues a bootstrap so `bootstrap_ip` is populated,
+ * then returns the node id so the VNC click tests target an enabled button (#905).
+ */
+async function bootstrappedNodeId(request: APIRequestContext, token: string): Promise<string> {
+  const auth = { Authorization: `Bearer ${token}` }
+  const minionId = `e2e-vnc-${Date.now()}`
+  const node = await (await request.post(`${API}/api/v1/nodes`, { headers: auth, data: { minion_id: minionId } })).json()
+  const grpRes = await request.get(`${API}/api/v1/groups?per_page=100`, { headers: auth })
+  const group = ((await grpRes.json()).items ?? []).find((g: { name: string }) => g.name === SEED.groupName)
+  if (group) {
+    await request.post(`${API}/api/v1/groups/${group.id}/members`, { headers: auth, data: { node_id: node.id } })
+  }
+  await request.post(`${API}/api/v1/ansible/bootstrap`, {
+    headers: auth,
+    data: { minion_id: minionId, target_ip: '192.168.99.50' },
+  })
+  return node.id
+}
 
 test.describe('VNC Feature Flag', () => {
 
@@ -114,17 +137,10 @@ test.describe('VNC Feature Flag', () => {
 
     await loginViaApi(page)
 
-    // Find a node
-    const nodesRes = await request.get(`${API}/api/v1/nodes?per_page=1`, {
-      headers: { Authorization: `Bearer ${token}` },
-    })
-    const { items } = await nodesRes.json()
-    if (!items?.length) {
-      test.skip()
-      return
-    }
+    // Use a freshly bootstrapped node so the VNC button is enabled (has bootstrap_ip).
+    const nodeId = await bootstrappedNodeId(request, token)
 
-    await page.goto(`/nodes/${items[0].id}`)
+    await page.goto(`/nodes/${nodeId}`)
     await page.waitForSelector('h1', { timeout: 8000 })
 
     // Click VNC button
@@ -152,17 +168,10 @@ test.describe('VNC Feature Flag', () => {
 
     await loginViaApi(page)
 
-    // Find a node
-    const nodesRes = await request.get(`${API}/api/v1/nodes?per_page=1`, {
-      headers: { Authorization: `Bearer ${token}` },
-    })
-    const { items } = await nodesRes.json()
-    if (!items?.length) {
-      test.skip()
-      return
-    }
+    // Use a freshly bootstrapped node so the VNC button is enabled (has bootstrap_ip).
+    const nodeId = await bootstrappedNodeId(request, token)
 
-    await page.goto(`/nodes/${items[0].id}`)
+    await page.goto(`/nodes/${nodeId}`)
     await page.waitForSelector('h1', { timeout: 8000 })
 
     // Click VNC button

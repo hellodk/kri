@@ -17,8 +17,8 @@ test.describe('Fleet Dashboard', () => {
     // Target the uppercase card labels specifically (text-xs uppercase tracking-wide)
     await expect(page.locator('.uppercase:has-text("Total Nodes")').first()).toBeVisible()
     await expect(page.locator('.uppercase:has-text("Online")').first()).toBeVisible()
-    await expect(page.locator('.uppercase:has-text("Offline")').first()).toBeVisible()
-    await expect(page.locator('.uppercase:has-text("Avg Drift Score")').first()).toBeVisible()
+    await expect(page.locator('.uppercase:has-text("Degraded")').first()).toBeVisible()
+    await expect(page.locator('.uppercase:has-text("Down")').first()).toBeVisible()
   })
 
   // ── Node table ──────────────────────────────────────────────────────────────
@@ -26,7 +26,7 @@ test.describe('Fleet Dashboard', () => {
   test('FLEET-02 node table shows hostname, status, OS, drift, last seen, tags', async ({ page }) => {
     const headers = page.locator('thead th')
     await expect(headers.filter({ hasText: 'Hostname' })).toBeVisible()
-    await expect(headers.filter({ hasText: 'Status' })).toBeVisible()
+    await expect(headers.filter({ hasText: 'Connectivity' })).toBeVisible()
     await expect(headers.filter({ hasText: /^OS$/ })).toBeVisible()
     await expect(headers.filter({ hasText: 'Drift' })).toBeVisible()
     await expect(headers.filter({ hasText: 'Last Seen' })).toBeVisible()
@@ -44,15 +44,19 @@ test.describe('Fleet Dashboard', () => {
   })
 
   test('FLEET-03 status filter Unknown narrows results', async ({ page }) => {
-    // All live nodes have status=unknown; filter by Unknown and verify results
-    await page.selectOption('select', 'unknown')
-    await page.waitForResponse('**/nodes**')
-    const badges = page.locator('tbody td').filter({ hasText: /unknown/i })
-    const count = await badges.count()
-    expect(count).toBeGreaterThan(0)
-    // After filtering by unknown, there should be no online badges
-    const onlineBadges = page.locator('tbody').locator('text=online')
-    await expect(onlineBadges).toHaveCount(0)
+    // The status select is the second <select> in the filter bar (index 1);
+    // the first (index 0) is the unified-health select. Use Promise.all so
+    // waitForResponse is registered before the select change fires the request.
+    const [response] = await Promise.all([
+      page.waitForResponse('**/nodes**'),
+      page.locator('select').nth(1).selectOption('unknown'),
+    ])
+    const body = await response.json()
+    // Seeded nodes carry status=unknown — the filtered response must have items
+    expect(body.items.length).toBeGreaterThan(0)
+    // The table must still show at least one row (Connectivity column renders
+    // a HealthBadge component, not raw "unknown" text, so we check rows not text)
+    await expect(page.locator('tbody tr').first()).toBeVisible()
   })
 
   test('FLEET-05 status filter All restores full table', async ({ page }) => {

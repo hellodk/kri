@@ -3,7 +3,7 @@
  * Covers: BASE-01..BASE-12 from TEST_CASES.md
  */
 import { test, expect } from '@playwright/test'
-import { loginViaApi, ADMIN, API } from './helpers'
+import { loginViaApi, getToken, ADMIN, API } from './helpers'
 
 test.describe('Baselines', () => {
 
@@ -18,29 +18,52 @@ test.describe('Baselines', () => {
     await expect(page.locator('button:has-text("+ New Baseline")')).toBeVisible()
   })
 
-  test('BASE-02 create global baseline appears in list', async ({ page }) => {
+  test('BASE-02 create global baseline appears in list', async ({ page, request }) => {
+    const name = `E2E Global ${Date.now()}`
     await page.click('button:has-text("+ New Baseline")')
-    await page.fill('input[placeholder="macOS fleet standard"]', `E2E Global ${Date.now()}`)
-    // target type radio — "global" is default
+    // Modal opens in 'choose' mode — must pick a creation method before form fields render
+    await page.click('button:has-text("Build manually")')
+    // Placeholder changed from "macOS fleet standard" to "macOS production standard"
+    await page.fill('input[placeholder="macOS production standard"]', name)
+    // Add one required package so hasContent becomes true (Create button guard)
+    await page.click('button:has-text("+ Add required package")')
+    await page.locator('input[placeholder="package name"]').first().fill('bash')
+    // global is the default target_type ("All nodes" radio pre-selected)
     await page.click('button:has-text("Create Baseline")')
-    await expect(page.locator('text=All nodes').first()).toBeVisible({ timeout: 6000 })
+    // Wait for modal to close (onSuccess calls onClose)
+    await expect(page.locator('h2:has-text("Build Manually")')).toBeHidden({ timeout: 8000 })
+    // Verify via API — list is paginated so newest item may not be on page 1
+    const token = await getToken(request)
+    const res = await request.get(`${API}/api/v1/baselines?per_page=100`, {
+      headers: { Authorization: `Bearer ${token}` },
+    })
+    expect(res.status()).toBe(200)
+    const body = await res.json()
+    const found = body.items.some(
+      (b: { name: string; target_type: string }) => b.name === name && b.target_type === 'global'
+    )
+    expect(found).toBeTruthy()
   })
 
-  test('BASE-05 invalid JSON disables create button', async ({ page }) => {
+  test('BASE-05 no content disables create button', async ({ page }) => {
     await page.click('button:has-text("+ New Baseline")')
-    await page.fill('input[placeholder="macOS fleet standard"]', 'Test Baseline')
-    const editor = page.locator('textarea')
-    await editor.fill('{invalid json here')
+    // Must enter manual mode before form fields render
+    await page.click('button:has-text("Build manually")')
+    await page.fill('input[placeholder="macOS production standard"]', 'Test Baseline')
+    // No packages or services added → hasContent is false → Create button stays disabled
     await expect(page.locator('button:has-text("Create Baseline")')).toBeDisabled()
   })
 
-  test('BASE-06 valid JSON enables create button', async ({ page }) => {
+  test('BASE-06 filled package enables create button', async ({ page }) => {
     await page.click('button:has-text("+ New Baseline")')
-    await page.fill('input[placeholder="macOS fleet standard"]', 'Valid Test')
-    const editor = page.locator('textarea')
-    await editor.fill('{"packages":[],"services":[]}')
+    // Must enter manual mode before form fields render
+    await page.click('button:has-text("Build manually")')
+    await page.fill('input[placeholder="macOS production standard"]', 'Valid Test')
+    // Add a package name so hasContent becomes true → Create button enabled
+    await page.click('button:has-text("+ Add required package")')
+    await page.locator('input[placeholder="package name"]').first().fill('bash')
     await expect(page.locator('button:has-text("Create Baseline")')).toBeEnabled()
-    await page.keyboard.press('Escape')
+    await page.click('button:has-text("Cancel")')
   })
 
   test('BASE-07 view baseline detail shows name and JSON', async ({ page }) => {

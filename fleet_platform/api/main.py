@@ -1,6 +1,7 @@
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, HTTPException, Request
+from fastapi.encoders import jsonable_encoder
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
@@ -139,9 +140,16 @@ def create_app() -> FastAPI:
 
     @app.exception_handler(RequestValidationError)
     async def structured_validation_exception_handler(request: Request, exc: RequestValidationError) -> JSONResponse:
+        # exc.errors() can embed non-serializable objects in each error's "ctx"
+        # (e.g. the raw ValueError raised by a custom field_validator like
+        # validate_minion_id). Serializing that dict directly makes JSONResponse
+        # raise "Object of type ValueError is not JSON serializable", which turns
+        # every custom-validator 422 into a 500 (#905, e.g. bootstrap path-traversal
+        # minion_id). jsonable_encoder coerces ctx values to JSON-safe forms, the
+        # same way FastAPI's built-in RequestValidationError handler does.
         return JSONResponse(
             status_code=422,
-            content={"error_code": "UNPROCESSABLE", "detail": exc.errors()},
+            content={"error_code": "UNPROCESSABLE", "detail": jsonable_encoder(exc.errors())},
         )
 
     # Middleware execution order (Starlette applies in reverse-registration order;
