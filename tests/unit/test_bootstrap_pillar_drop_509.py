@@ -152,10 +152,15 @@ def test_bootstrap_status_is_terminal_when_ansible_raises(tmp_path):
             "fleet_platform.workers.ansible_tasks._get_bootstrap_settings",
             return_value=("admin", "pw", "pubkey"),
         ),
-        patch("fleet_platform.workers.ansible_tasks._get_node_credentials", return_value=("admin", "pw", "password")),
         patch(
-            "fleet_platform.workers.ansible_tasks._get_group_credentials",
-            return_value=("admin", "pw", None, "password"),
+            "fleet_platform.workers.ansible_tasks.resolve_node_credentials_sync",
+            return_value={
+                "ssh_user": "admin",
+                "ssh_password": "pw",
+                "ssh_key": "",
+                "auth_mode": "password",
+                "credential_source": "node",
+            },
         ),
         patch(
             "fleet_platform.workers.ansible_tasks.ansible_runner.run_async",
@@ -217,10 +222,15 @@ def test_bootstrap_error_is_set_when_ansible_raises(tmp_path):
             "fleet_platform.workers.ansible_tasks._get_bootstrap_settings",
             return_value=("admin", "pw", "pubkey"),
         ),
-        patch("fleet_platform.workers.ansible_tasks._get_node_credentials", return_value=("admin", "pw", "password")),
         patch(
-            "fleet_platform.workers.ansible_tasks._get_group_credentials",
-            return_value=("admin", "pw", None, "password"),
+            "fleet_platform.workers.ansible_tasks.resolve_node_credentials_sync",
+            return_value={
+                "ssh_user": "admin",
+                "ssh_password": "pw",
+                "ssh_key": "",
+                "auth_mode": "password",
+                "credential_source": "node",
+            },
         ),
         patch(
             "fleet_platform.workers.ansible_tasks.ansible_runner.run_async",
@@ -276,10 +286,15 @@ def test_no_permission_error_when_pillar_dir_missing():
             "fleet_platform.workers.ansible_tasks._get_bootstrap_settings",
             return_value=("admin", "pw", "pubkey"),
         ),
-        patch("fleet_platform.workers.ansible_tasks._get_node_credentials", return_value=("admin", "pw", "password")),
         patch(
-            "fleet_platform.workers.ansible_tasks._get_group_credentials",
-            return_value=("admin", "pw", None, "password"),
+            "fleet_platform.workers.ansible_tasks.resolve_node_credentials_sync",
+            return_value={
+                "ssh_user": "admin",
+                "ssh_password": "pw",
+                "ssh_key": "",
+                "auth_mode": "password",
+                "credential_source": "node",
+            },
         ),
         patch(
             "fleet_platform.workers.ansible_tasks.ansible_runner.run_async",
