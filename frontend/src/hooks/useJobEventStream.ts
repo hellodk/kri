@@ -53,6 +53,12 @@ export function queryKeysForEvent(event: JobEvent): QueryKey[] {
     keys.push(['node', event.id])
     keys.push(['nodes'])
     keys.push(['fleet-overview'])
+  } else if (event.kind === 'salt_job') {
+    keys.push(['job', event.id])
+    keys.push(['executions'])
+    if (event.node_id) {
+      keys.push(['executions-node', event.node_id])
+    }
   }
   return keys
 }

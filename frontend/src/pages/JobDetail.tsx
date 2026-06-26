@@ -4,21 +4,22 @@ import { executionsApi } from '../api/executions'
 import { Skeleton } from '../components/Skeleton'
 import { ErrorState } from '../components/ErrorState'
 import { formatLocalDateTime, formatLocalTime } from '../utils/time'
+import { useJobEventStream } from '../hooks/useJobEventStream'
 
 export function JobDetail() {
   const { jobId } = useParams<{ jobId: string }>()
 
-  // Salt ExecutionJobs are ingested from minions, not published on the SSE
-  // channel (only ansible_job and bootstrap kinds are pushed). The fast 5s poll
-  // is relaxed to a 30s safety-net — push migration is not possible here without
-  // backend changes outside this scope (#756).
+  // salt_job events are pushed over SSE (#921); the hook invalidates ['job', jobId]
+  // on push so this query refetches immediately when a new salt execution lands.
+  // The slow 30s safety-net poll covers the gap when the SSE stream is offline.
+  useJobEventStream({ enabled: !!jobId })
+
   const { data: job, isLoading: jLoading, isError: jError } = useQuery({
     queryKey: ['job', jobId],
     queryFn: () => executionsApi.get(jobId!),
     enabled: !!jobId,
     staleTime: 10_000,
-    refetchInterval: (query) =>
-      query.state.data?.status === 'running' ? 30_000 : false,
+    refetchInterval: 30_000,
   })
 
   const { data: results, isLoading: rLoading } = useQuery({

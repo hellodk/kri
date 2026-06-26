@@ -22,6 +22,7 @@ from fleet_platform.models.facts import NodeFact
 from fleet_platform.models.node import Node, Tag
 from fleet_platform.models.process_stat import NodeProcessStat
 from fleet_platform.schemas.ingest import ExecutionIngestPayload, GrainIngestPayload, ProcessStatsIngestPayload
+from fleet_platform.services.job_events import async_publish_job_event
 from fleet_platform.services.node_status import verify_node_token
 from fleet_platform.workers.celery_app import celery_app
 
@@ -358,6 +359,10 @@ async def ingest_executions(
         )
         existing_job = existing.scalar_one()
         return {"status": "ok", "job_id": str(existing_job.id)}
+
+    # Notify the SSE stream so the frontend can invalidate its execution caches
+    # on PUSH instead of waiting for the next slow safety-net poll (#921).
+    await async_publish_job_event("salt_job", str(job.id), job.status, node_id=str(node.id))
 
     return {"status": "ok", "job_id": str(job.id)}
 
