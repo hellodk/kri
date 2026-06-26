@@ -1,6 +1,7 @@
 /// <reference types="vitest" />
 import { defineConfig } from 'vitest/config'
 import react from '@vitejs/plugin-react'
+import tailwindcss from '@tailwindcss/vite'
 import { readFileSync } from 'fs'
 import { resolve } from 'path'
 
@@ -16,7 +17,7 @@ function readVersion(): string {
 const APP_VERSION = readVersion()
 
 export default defineConfig({
-  plugins: [react()],
+  plugins: [tailwindcss(), react()],
   define: {
     // Replaced at build time — use as: declare const __APP_VERSION__: string
     __APP_VERSION__: JSON.stringify(APP_VERSION),

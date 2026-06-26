@@ -1013,8 +1013,8 @@ cmd_diagnose() {
 
 cmd_seed() {
     header "Seeding default users"
-    docker cp "$REPO_DIR/scripts/seed.py" deploy-api-1:/app/seed.py
-    docker exec deploy-api-1 uv run python3 /app/seed.py
+    docker cp "$REPO_DIR/scripts/seed_users.py" deploy-api-1:/app/seed_users.py
+    docker exec deploy-api-1 uv run python3 /app/seed_users.py
     success "Default users created"
 }
 

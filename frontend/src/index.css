@@ -13,3 +13,40 @@
   --color-brand-900: #2d3282;
   --color-brand-950: #1f2064;
 }
+
+/*
+ * Keychain / browser autofill normalisation.
+ * Without this, picking a saved password triggers two native behaviours that
+ * break our custom inputs: (1) the browser overlays its own credentials/key
+ * icon in the same place as our show/hide eye toggle, hiding it, and (2) it
+ * forces a pale-yellow background on the field that clashes with the dark UI.
+ */
+input::-webkit-credentials-auto-fill-button,
+input::-webkit-contacts-auto-fill-button {
+  display: none !important;
+  visibility: hidden;
+  pointer-events: none;
+  width: 0;
+  height: 0;
+  margin: 0;
+}
+
+/* Edge/IE native reveal & clear buttons — we provide our own. */
+input::-ms-reveal,
+input::-ms-clear {
+  display: none;
+}
+
+/* Repaint autofilled fields to match the dark glass theme instead of yellow. */
+input:-webkit-autofill,
+input:-webkit-autofill:hover,
+input:-webkit-autofill:focus,
+input:-webkit-autofill:active {
+  -webkit-text-fill-color: #ffffff;
+  caret-color: #ffffff;
+  -webkit-box-shadow: 0 0 0 1000px #1b1b38 inset;
+  box-shadow: 0 0 0 1000px #1b1b38 inset;
+  border-radius: 0.5rem;
+  /* Defeat the autofill background by deferring its transition indefinitely. */
+  transition: background-color 9999s ease-in-out 0s;
+}
