@@ -60,11 +60,13 @@ def test_parse_invalid_json_falls_back():
 
 
 def test_vms_endpoint_in_nodes_route():
-    src = (Path(__file__).parent.parent.parent / "fleet_platform/api/routes/nodes.py").read_text()
-    assert "list_node_vms" in src or "vms" in src
+    from fleet_platform.api.routes import nodes
+
+    assert hasattr(nodes, "list_node_vms"), "nodes route module must expose a list_node_vms endpoint handler (#47)"
 
 
 def test_vms_api_in_frontend():
+    # Frontend-only artifact: TypeScript is non-importable from Python unit tests.
     api = (Path(__file__).parent.parent.parent / "frontend/src/api/vms.ts").read_text()
     assert "listNodeVMs" in api
     assert "TartVM" in api

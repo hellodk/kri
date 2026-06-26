@@ -46,31 +46,40 @@ def test_timeout_clamped_to_maximum():
 
 def test_job_start_time_preinit_before_try_block():
     """
-    Source-contract test: job_start_time must be initialised before the try block
-    so SoftTimeLimitExceeded can reference it without NameError.
-
-    Checks that 'job_start_time' appears in the source before the 'try:' that
-    opens the main run_playbook body (i.e., the try block that contains run_async).
+    AST-hardened structural guard: job_start_time must be initialised before the
+    first try block in run_playbook so SoftTimeLimitExceeded can reference it
+    without NameError (#455).
     """
+    import ast
     from pathlib import Path
 
     src = Path("fleet_platform/workers/playbook_tasks.py").read_text()
+    tree = ast.parse(src)
 
-    # Find the position of 'job_start_time: float = 0.0' (pre-init line)
-    pre_init_pos = src.find("job_start_time: float = 0.0")
-    assert pre_init_pos != -1, (
-        "job_start_time: float = 0.0 not found in playbook_tasks.py. "
-        "It must be initialised before the try block (#455)."
+    # Locate the run_playbook function node
+    run_playbook_fn = None
+    for node in ast.walk(tree):
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)) and node.name == "run_playbook":
+            run_playbook_fn = node
+            break
+    assert run_playbook_fn is not None, "run_playbook function not found in playbook_tasks.py"
+
+    preinit_line: int | None = None
+    first_try_line: int | None = None
+
+    for node in ast.walk(run_playbook_fn):
+        if isinstance(node, ast.AnnAssign) and isinstance(node.target, ast.Name):
+            if node.target.id == "job_start_time":
+                preinit_line = node.lineno
+        elif isinstance(node, ast.Try):
+            if first_try_line is None or node.lineno < first_try_line:
+                first_try_line = node.lineno
+
+    assert preinit_line is not None, (
+        "job_start_time: float = 0.0 not found inside run_playbook — must be initialised before the try block (#455)."
     )
-
-    # Find the position of the first 'try:' after run_playbook function definition
-    run_playbook_pos = src.find("def run_playbook(")
-    assert run_playbook_pos != -1, "run_playbook function not found"
-
-    # The pre-init must come before the try block that wraps the main logic
-    first_try_after_func = src.find("\n    try:", run_playbook_pos)
-    assert first_try_after_func != -1, "Could not find try block in run_playbook"
-
-    assert pre_init_pos < first_try_after_func, (
-        f"job_start_time pre-init (pos {pre_init_pos}) must appear before the try block (pos {first_try_after_func})"
+    assert first_try_line is not None, "Could not find a try block inside run_playbook"
+    assert preinit_line < first_try_line, (
+        f"job_start_time pre-init (line {preinit_line}) must appear "
+        f"before the first try block (line {first_try_line}) (#455)"
     )
