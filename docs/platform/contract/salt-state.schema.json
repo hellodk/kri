@@ -1,0 +1,19 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://kri.platform/contracts/salt-state.schema.json",
+  "title": "kri-compliant Salt state (parsed)",
+  "$comment": "Validates the STRUCTURE of a parsed salt state (YAML -> JSON): a mapping of state-id -> declaration. Content-level rules (forbidden cmd.run/cmd.shell/cmd.powershell, dangerous-pattern regexes, 64KiB cap) are NOT expressible in JSON Schema and are enforced by validate_artifact / docs/platform/contract/contract.json. Passing this schema is necessary but not sufficient for compliance.",
+  "type": "object",
+  "minProperties": 1,
+  "properties": {
+    "include": {
+      "type": "array",
+      "items": { "type": "string" }
+    }
+  },
+  "additionalProperties": {
+    "title": "state declaration",
+    "type": "object",
+    "$comment": "Keys are state functions like 'pkg.installed' / 'service.running'; values are lists of argument mappings. cmd.run/cmd.shell/cmd.powershell are forbidden (enforced by validate_artifact)."
+  }
+}

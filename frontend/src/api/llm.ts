@@ -101,6 +101,11 @@ export interface StreamDelta {
   text: string
 }
 
+export interface StreamReasoning {
+  type: 'reasoning'
+  text: string
+}
+
 export interface StreamDone {
   type: 'done'
   query_id: string
@@ -118,10 +123,13 @@ export interface StreamError {
   error: string
 }
 
-export type StreamEvent = StreamDelta | StreamDone | StreamError
+export type StreamEvent = StreamDelta | StreamReasoning | StreamDone | StreamError
 
 export interface StreamCallbacks {
   onDelta?: (text: string, fullText: string) => void
+  // Chain-of-thought from reasoning models, streamed on a separate channel so
+  // the UI can show a live "thinking…" panel distinct from the answer.
+  onReasoning?: (text: string, fullReasoning: string) => void
   onDone?: (final: StreamDone) => void
   onError?: (message: string) => void
 }
@@ -176,6 +184,7 @@ async function runStream(
   const decoder = new TextDecoder('utf-8')
   let buffer = ''
   let fullText = ''
+  let fullReasoning = ''
 
   while (true) {
     const { value, done } = await reader.read()
@@ -201,6 +210,9 @@ async function runStream(
         if (ev.type === 'delta') {
           fullText += ev.text
           callbacks.onDelta?.(ev.text, fullText)
+        } else if (ev.type === 'reasoning') {
+          fullReasoning += ev.text
+          callbacks.onReasoning?.(ev.text, fullReasoning)
         } else if (ev.type === 'done') {
           callbacks.onDone?.(ev)
         } else if (ev.type === 'error') {

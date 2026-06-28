@@ -11,6 +11,9 @@ export interface ChatMessage {
   // `done` event. Used by the UI to render the typing indicator on the
   // bubble itself rather than as a separate row.
   streaming?: boolean
+  // Chain-of-thought streamed by reasoning models on a separate channel,
+  // rendered as a collapsible "thinking" panel above the answer.
+  reasoning?: string
 }
 
 interface LLMStore {
@@ -22,6 +25,8 @@ interface LLMStore {
   // entry — typically created with streaming: true just before the
   // first delta arrives.
   appendToLastMessage: (delta: string) => void
+  // Append a reasoning-delta to the last message's `reasoning` buffer in place.
+  appendReasoningToLastMessage: (delta: string) => void
   // Patch the last message (e.g. set meta + clear streaming flag on
   // the SSE `done` event, or set error on `error`).
   patchLastMessage: (patch: Partial<ChatMessage>) => void
@@ -42,6 +47,15 @@ export const useLLMStore = create<LLMStore>()(
           const next = s.messages.slice()
           const last = { ...next[next.length - 1] }
           last.content = (last.content || '') + delta
+          next[next.length - 1] = last
+          return { messages: next }
+        }),
+      appendReasoningToLastMessage: (delta) =>
+        set((s) => {
+          if (!s.messages.length) return s
+          const next = s.messages.slice()
+          const last = { ...next[next.length - 1] }
+          last.reasoning = (last.reasoning || '') + delta
           next[next.length - 1] = last
           return { messages: next }
         }),
