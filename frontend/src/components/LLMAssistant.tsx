@@ -67,7 +67,7 @@ export default function LLMAssistant() {
   const [agentEnabled, setAgentEnabled] = useState(false)
   const [agentView, setAgentView] = useState<'run' | 'artifacts' | 'approvals'>('run')
   const [agentTurns, setAgentTurns] = useState<AgentTurn[]>([])
-  const { messages, addMessage, clearMessages, appendToLastMessage, patchLastMessage } = useLLMStore()
+  const { messages, addMessage, clearMessages, appendToLastMessage, appendReasoningToLastMessage, patchLastMessage } = useLLMStore()
   const bottomRef = useRef<HTMLDivElement>(null)
   const intentDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const streamControllerRef = useRef<AbortController | null>(null)
@@ -404,17 +404,23 @@ export default function LLMAssistant() {
     setPrompt('')
     setStreaming(true)
     streamControllerRef.current?.abort()
+    let received = ''
     streamControllerRef.current = streamQuery(
       { prompt: text, intent: 'auto', history },
       {
-        onDelta: (delta) => {
+        onDelta: (delta, fullText) => {
+          received = fullText
           appendToLastMessage(delta)
         },
+        onReasoning: (delta) => {
+          appendReasoningToLastMessage(delta)
+        },
         onDone: (final) => {
-          // A `done` event with no preceding deltas means the stream returned
-          // zero tokens — treat as a failed turn so the bubble is visibly
-          // marked rather than silently empty (#840).
-          const isEmpty = !final.error && (final.output_tokens ?? 0) === 0
+          // A `done` event with no answer text at all means the stream returned
+          // nothing usable — treat as a failed turn so the bubble is visibly
+          // marked rather than silently empty (#840). Base this on actual
+          // streamed text, not token counts, since some servers omit usage.
+          const isEmpty = !final.error && received.trim() === ''
           patchLastMessage({
             streaming: false,
             error: final.error ?? (isEmpty ? 'No response received (empty stream)' : undefined),
@@ -653,20 +659,40 @@ export default function LLMAssistant() {
               >
                 {msg.error ? (
                   <span>⚠ {msg.error}</span>
-                ) : msg.streaming && !msg.content ? (
-                  // First-token latency: show the typing indicator inside the
-                  // assistant bubble until the first delta arrives. Once any
-                  // text exists the indicator hides and tokens render live.
-                  <div className="flex space-x-1 py-1">
-                    <span className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
-                    <span className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
-                    <span className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
-                  </div>
                 ) : (
-                  <pre className="whitespace-pre-wrap font-sans">
-                    {msg.content}
-                    {msg.streaming && <span className="inline-block w-2 h-4 ml-0.5 bg-gray-500 animate-pulse align-text-bottom" aria-hidden="true" />}
-                  </pre>
+                  <>
+                    {/* Reasoning models stream chain-of-thought separately; show
+                        it as a collapsible panel (auto-open while thinking, before
+                        the answer arrives) so there's no dead-air during long
+                        reasoning, without it polluting the final answer. */}
+                    {msg.reasoning && (
+                      <details
+                        className="mb-1.5 text-xs text-gray-500"
+                        open={msg.streaming && !msg.content}
+                      >
+                        <summary className="cursor-pointer select-none text-gray-400 hover:text-gray-600">
+                          {msg.streaming && !msg.content ? 'Thinking…' : 'Show reasoning'}
+                        </summary>
+                        <pre className="mt-1 whitespace-pre-wrap font-sans border-l-2 border-gray-200 pl-2 text-gray-500">
+                          {msg.reasoning}
+                        </pre>
+                      </details>
+                    )}
+                    {msg.streaming && !msg.content && !msg.reasoning ? (
+                      // First-token latency: show the typing indicator inside the
+                      // assistant bubble until the first delta arrives.
+                      <div className="flex space-x-1 py-1">
+                        <span className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
+                        <span className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
+                        <span className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
+                      </div>
+                    ) : msg.content ? (
+                      <pre className="whitespace-pre-wrap font-sans">
+                        {msg.content}
+                        {msg.streaming && <span className="inline-block w-2 h-4 ml-0.5 bg-gray-500 animate-pulse align-text-bottom" aria-hidden="true" />}
+                      </pre>
+                    ) : null}
+                  </>
                 )}
                 {msg.meta && (
                   <div className="mt-1 text-xs text-gray-600">
