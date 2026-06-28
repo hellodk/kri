@@ -225,13 +225,18 @@ async def test_endpoint(
 
     api_key = llm_svc.get_decrypted_api_key(endpoint)
     ping_prompt = "Reply with exactly one word: hello"
+    # Reasoning models (e.g. Qwen3/DeepSeek on mlx-lm) emit a few hundred tokens
+    # of chain-of-thought before any answer. A tiny budget gets fully consumed by
+    # thinking, leaving empty content and falsely flagging a healthy endpoint as
+    # broken — so give the probe enough room to clear the preamble (#probe).
+    _PROBE_MAX_TOKENS = 256
     t0 = time.perf_counter()
     try:
         if endpoint.provider == "anthropic":
             await call_anthropic(
                 api_key=api_key or "",
                 model=endpoint.model,
-                max_tokens=16,
+                max_tokens=_PROBE_MAX_TOKENS,
                 system_prompt="You are a test probe.",
                 user_prompt=ping_prompt,
             )
@@ -240,7 +245,7 @@ async def test_endpoint(
                 base_url=endpoint.base_url,
                 api_key=api_key,
                 model=endpoint.model,
-                max_tokens=16,
+                max_tokens=_PROBE_MAX_TOKENS,
                 system_prompt="You are a test probe.",
                 user_prompt=ping_prompt,
             )
@@ -565,6 +570,11 @@ async def submit_query_stream(
             async for event in source:
                 etype = event.get("type")
                 if etype == "delta":
+                    yield f"data: {json.dumps(event)}\n\n"
+                elif etype == "reasoning":
+                    # Forward chain-of-thought on its own channel so the UI can
+                    # render a live "thinking…" panel without it being persisted
+                    # as the answer (#reasoning).
                     yield f"data: {json.dumps(event)}\n\n"
                 elif etype == "error":
                     error = event.get("error") or "unknown error"

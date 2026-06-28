@@ -195,8 +195,13 @@ async def call_openai_compat(
     if not is_thinking:
         payload["stop"] = ["</s>", "<|im_end|>", "<|endoftext|>", "Human:", "User:"]
     payload["stream"] = True
+    # Request a trailing usage chunk (OpenAI spec). Servers like mlx-lm omit
+    # token usage from streamed responses unless asked, which otherwise leaves
+    # input/output token accounting stuck at zero (#tokens).
+    payload["stream_options"] = {"include_usage": True}
 
     content_parts: list[str] = []
+    reasoning_parts: list[str] = []
     prompt_tokens = 0
     completion_tokens = 0
 
@@ -220,11 +225,13 @@ async def call_openai_compat(
                         chunk = _json.loads(data_str)
                     except _json.JSONDecodeError:
                         continue
-                    # Aggregate delta content
+                    # Aggregate delta content (and any separate reasoning stream)
                     for choice in chunk.get("choices", []):
                         delta = choice.get("delta", {})
                         if delta.get("content"):
                             content_parts.append(delta["content"])
+                        if delta.get("reasoning"):
+                            reasoning_parts.append(delta["reasoning"])
                     # Some providers send usage in the final chunk
                     if "usage" in chunk and chunk["usage"]:
                         prompt_tokens = chunk["usage"].get("prompt_tokens", 0) or 0
@@ -241,6 +248,15 @@ async def call_openai_compat(
         raise LLMCallError(f"Network error: {exc}") from exc
 
     content: str = "".join(content_parts)
+    reasoning: str = "".join(reasoning_parts)
+
+    # Reasoning models (e.g. Qwen3/DeepSeek on mlx-lm) stream their chain of
+    # thought in a separate ``reasoning`` field and only emit ``content`` once
+    # thinking finishes. If the token budget was consumed entirely by thinking,
+    # fall back to the reasoning text rather than discarding a non-empty reply
+    # and reporting the endpoint as broken (#reasoning).
+    if not content and reasoning:
+        content = reasoning.strip()
 
     # A genuinely empty response with zero completion tokens indicates a
     # server-side crash (e.g. vllm-mlx position_embeddings error) that returns
@@ -319,12 +335,14 @@ async def call_openai_compat_tools(
         "messages": messages,
         "tools": tools,
         "stream": True,
+        "stream_options": {"include_usage": True},
     }
     # Stop tokens can truncate a native tool-call argument stream mid-JSON, so we
     # omit them here regardless of model size — the accumulator needs the full
     # arguments fragment sequence to parse.
 
     content_parts: list[str] = []
+    reasoning_parts: list[str] = []
     accumulator = ToolCallAccumulator()
     prompt_tokens = 0
     completion_tokens = 0
@@ -353,6 +371,8 @@ async def call_openai_compat_tools(
                         delta = choice.get("delta", {})
                         if delta.get("content"):
                             content_parts.append(delta["content"])
+                        if delta.get("reasoning"):
+                            reasoning_parts.append(delta["reasoning"])
                         if delta.get("tool_calls"):
                             accumulator.add_delta(delta)
                     if "usage" in chunk and chunk["usage"]:
@@ -370,12 +390,18 @@ async def call_openai_compat_tools(
         raise LLMCallError(f"Network error: {exc}") from exc
 
     content: str = "".join(content_parts)
+    reasoning: str = "".join(reasoning_parts)
     finalized = accumulator.finalize()
     # Re-emit as raw OpenAI-shaped tool_calls so extract_tool_calls() can
     # normalize them through the same path as a non-streaming response.
     tool_calls: list[dict] = [
         {"id": tc.id, "function": {"name": tc.name, "arguments": _json.dumps(tc.arguments)}} for tc in finalized
     ]
+    # If a reasoning model spent its whole budget thinking and produced no
+    # final content (and no tool call), surface the reasoning rather than a
+    # spurious "endpoint broken" error (#reasoning).
+    if not content and not tool_calls and reasoning:
+        content = reasoning.strip()
 
     # Empty AND no tool calls AND zero tokens means a server-side crash returning
     # HTTP 200 with nothing (#840). A tool-call-only reply (no content) is valid.
@@ -599,11 +625,13 @@ async def stream_openai_compat(
         "top_p": 0.9,
         "messages": messages,
         "stream": True,
+        "stream_options": {"include_usage": True},
     }
     if not is_thinking:
         payload["stop"] = ["</s>", "<|im_end|>", "<|endoftext|>", "Human:", "User:"]
 
     content_parts: list[str] = []
+    reasoning_parts: list[str] = []
     prompt_tokens = 0
     completion_tokens = 0
 
@@ -633,6 +661,14 @@ async def stream_openai_compat(
                         if text:
                             content_parts.append(text)
                             yield {"type": "delta", "text": text}
+                        # Reasoning models stream chain-of-thought in a separate
+                        # field; surface it on its own channel so the UI can show
+                        # live "thinking…" instead of dead-air, without polluting
+                        # the answer bubble (#reasoning).
+                        rtext = delta.get("reasoning")
+                        if rtext:
+                            reasoning_parts.append(rtext)
+                            yield {"type": "reasoning", "text": rtext}
                     if "usage" in chunk and chunk["usage"]:
                         prompt_tokens = chunk["usage"].get("prompt_tokens", 0) or 0
                         completion_tokens = chunk["usage"].get("completion_tokens", 0) or 0
@@ -653,6 +689,13 @@ async def stream_openai_compat(
         return
 
     content = "".join(content_parts)
+    reasoning = "".join(reasoning_parts)
+
+    # If the model only ever produced reasoning (budget exhausted before a
+    # final answer), promote the reasoning to the answer so the turn is usable
+    # rather than reported as broken (#reasoning).
+    if not content and reasoning:
+        content = reasoning.strip()
 
     # A genuinely empty response with zero completion tokens indicates a
     # server-side crash that returns HTTP 200 but delivers nothing (#840).
