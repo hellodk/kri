@@ -1,0 +1,88 @@
+{
+  "$comment": "Machine-readable companion to docs/platform/ansible-salt-contract.md. Mirrors fleet_platform/services/artifact_validation.py and related intake/runtime constants. The running validator is the source of truth; keep this file consistent with it on every CONTRACT_VERSION bump.",
+  "contract_version": "1.0.0",
+  "source_of_truth": "fleet_platform/services/artifact_validation.py",
+  "kinds": ["ansible_playbook", "salt_state"],
+  "limits": {
+    "max_artifact_bytes": 65536,
+    "max_filename_chars": 128,
+    "max_quarantine_filename_chars": 255,
+    "session_quota_bytes": 5242880,
+    "user_quota_bytes": 52428800,
+    "ttl_seconds": 86400,
+    "yaml_loader": "safe_load"
+  },
+  "filename": {
+    "regex": "^[A-Za-z0-9._@-]+$",
+    "reserved_suffix": ".meta.json",
+    "disallowed": [".", "..", "/", "\\", "\u0000"]
+  },
+  "ansible_playbook": {
+    "top_level_type": "list",
+    "play_type": "mapping",
+    "requires_per_play_one_of": ["hosts", "import_playbook"],
+    "requires_one_of_is_warning": true,
+    "forbidden_modules": [
+      "raw",
+      "ansible.builtin.raw",
+      "script",
+      "ansible.builtin.script"
+    ],
+    "module_scan_keys": ["tasks", "block", "rescue", "always"],
+    "preferred_inventory_group": "targets"
+  },
+  "salt_state": {
+    "top_level_type": "mapping",
+    "declaration_type": "mapping",
+    "declaration_type_is_warning": true,
+    "skipped_keys": ["include"],
+    "forbidden_functions": ["cmd.run", "cmd.shell", "cmd.powershell"]
+  },
+  "dangerous_patterns": [
+    { "label": "recursive root/home delete", "regex": "rm\\s+-rf\\s+(/|/\\*|~|\\$HOME)(\\s|$|'|\\\")" },
+    { "label": "fork bomb", "regex": ":\\(\\)\\s*\\{\\s*:\\s*\\|\\s*:\\s*&\\s*\\}\\s*;\\s*:" },
+    { "label": "dd to block device", "regex": "\\bdd\\b[^\\n]*\\bof=/dev/(sd|nvme|disk|rdisk|hd)" },
+    { "label": "pipe-to-shell remote exec", "regex": "(curl|wget)\\s[^\\n|]*\\|\\s*(sudo\\s+)?(ba)?sh" },
+    { "label": "filesystem/device overwrite", "regex": "mkfs\\.|>\\s*/dev/sd" },
+    { "label": "world-writable root", "regex": "chmod\\s+-R\\s+0?777\\s+/" },
+    { "label": "TLS verification bypass", "regex": "--no-check-certificate|validate_certs\\s*:\\s*(no|false)|verify\\s*=\\s*False|insecure_skip_verify" },
+    { "label": "sensitive system file access", "regex": "/etc/(shadow|sudoers)\\b" },
+    { "label": "raw network egress/listener", "regex": "\\b(0\\.0\\.0\\.0/0|nc\\s+-l|ncat\\s+-l|/dev/tcp/)" }
+  ],
+  "salt_execution_allowlist": [
+    "state.apply", "state.highstate", "state.show_sls",
+    "pkg.install", "pkg.remove", "pkg.list_pkgs", "pkg.upgrade",
+    "pip.install", "pip.installed", "pip.list",
+    "service.start", "service.stop", "service.restart", "service.disable",
+    "service.enable", "service.status", "service.get_all", "service.available", "service.enabled",
+    "disk.usage", "disk.inodeusage", "status.loadavg", "status.meminfo",
+    "grains.items", "grains.get", "test.ping", "test.version",
+    "saltutil.sync_all", "saltutil.refresh_grains", "saltutil.refresh_pillar",
+    "system.reboot", "ps.list_processes", "ps.kill_pid"
+  ],
+  "salt_execution_permanently_excluded": ["cmd.run", "cmd.shell", "cmd.powershell"],
+  "salt_always_present": ["test.ping", "grains.items", "grains.get"],
+  "salt_state_name_regex": "^[a-zA-Z0-9_][a-zA-Z0-9_.-]*$",
+  "forbidden_grain_keys": ["master", "pillar"],
+  "bootstrap_runtime_vars": [
+    "salt_masters",
+    "salt_master_address",
+    "minion_id",
+    "controller_pubkey",
+    "ingest_url",
+    "node_token",
+    "node_exporter_version",
+    "node_exporter_listen_address",
+    "node_exporter_url_override"
+  ],
+  "minion_id_regex": "^[a-zA-Z0-9._-]{1,128}$",
+  "platform_api": {
+    "validate": { "method": "POST", "path": "/api/v1/contract/validate", "status": "proposed" },
+    "bootstrap": { "method": "POST", "path": "/api/v1/ansible/bootstrap", "status": "available" },
+    "ingest_grains": { "method": "POST", "path": "/api/v1/ingest/grains", "status": "available" },
+    "list_playbooks": { "method": "GET", "path": "/api/v1/playbooks", "status": "available" },
+    "run_playbook": { "method": "POST", "path": "/api/v1/playbooks/run", "status": "available" },
+    "apply_salt": { "method": "POST", "path": "/api/v1/salt/apply", "status": "available" },
+    "promote_playbook": { "method": "POST", "path": "/api/v1/agent/artifacts/{session_id}/{filename}/promote", "status": "available", "role": "admin" }
+  }
+}
