@@ -1,0 +1,31 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://kri.platform/contracts/ansible-playbook.schema.json",
+  "title": "kri-compliant Ansible playbook (parsed)",
+  "$comment": "Validates the STRUCTURE of a parsed playbook (YAML -> JSON). Content-level rules (forbidden modules raw/script, dangerous-pattern regexes, 64KiB cap) are NOT expressible in JSON Schema and are enforced by validate_artifact / docs/platform/contract/contract.json. A document passing this schema is necessary but not sufficient for compliance.",
+  "type": "array",
+  "minItems": 1,
+  "items": {
+    "type": "object",
+    "title": "play",
+    "anyOf": [
+      { "required": ["hosts"] },
+      { "required": ["import_playbook"] }
+    ],
+    "properties": {
+      "name": { "type": "string" },
+      "hosts": { "type": ["string", "array"] },
+      "import_playbook": { "type": "string" },
+      "become": { "type": "boolean" },
+      "become_method": { "type": "string" },
+      "gather_facts": { "type": ["boolean", "string"] },
+      "vars": { "type": "object" },
+      "roles": { "type": "array" },
+      "tasks": { "type": "array", "items": { "type": "object" } },
+      "pre_tasks": { "type": "array", "items": { "type": "object" } },
+      "post_tasks": { "type": "array", "items": { "type": "object" } },
+      "handlers": { "type": "array", "items": { "type": "object" } }
+    },
+    "additionalProperties": true
+  }
+}
