@@ -37,7 +37,7 @@ def test_monitoring_registered_in_app():
     """The monitoring summary route must be mounted on the real FastAPI app."""
     from fleet_platform.api.main import app
 
-    paths = {r.path for r in app.routes}  # type: ignore[attr-defined]
+    paths = set(app.openapi()["paths"])
     assert "/api/v1/monitoring/summary" in paths
 
 
