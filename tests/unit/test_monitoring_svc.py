@@ -156,8 +156,8 @@ def test_monitoring_summary_endpoint_registered():
     """Verify /api/v1/monitoring/summary route is registered in the FastAPI app."""
     from fleet_platform.api.main import app
 
-    routes = [r.path for r in app.routes]  # type: ignore[attr-defined]
-    assert "/api/v1/monitoring/summary" in routes
+    paths = set(app.openapi()["paths"])
+    assert "/api/v1/monitoring/summary" in paths
 
 
 def test_monitoring_summary_schema_fields():

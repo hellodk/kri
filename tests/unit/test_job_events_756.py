@@ -94,5 +94,5 @@ def test_events_router_registered_in_app():
     from fleet_platform.api.main import create_app
 
     app = create_app()
-    paths = {getattr(r, "path", None) for r in app.routes}
+    paths = set(app.openapi()["paths"])
     assert "/api/v1/events/jobs/stream" in paths
