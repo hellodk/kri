@@ -13,6 +13,11 @@ updates:
     groups:
       python:
         patterns: ["*"]
+    ignore:
+      # celery/kombu don't support redis 8.x yet; block major redis bumps
+      # until they do, otherwise the whole python group fails to resolve.
+      - dependency-name: "redis"
+        update-types: ["version-update:semver-major"]
 
   - package-ecosystem: npm
     directory: /frontend
