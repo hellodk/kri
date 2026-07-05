@@ -10,6 +10,9 @@ updates:
     commit-message:
       prefix: "chore(deps)"
     open-pull-requests-limit: 5
+    groups:
+      python:
+        patterns: ["*"]
 
   - package-ecosystem: npm
     directory: /frontend
@@ -21,6 +24,9 @@ updates:
     commit-message:
       prefix: "chore(deps)"
     open-pull-requests-limit: 5
+    groups:
+      frontend:
+        patterns: ["*"]
 
   - package-ecosystem: github-actions
     directory: /
@@ -32,3 +38,6 @@ updates:
     commit-message:
       prefix: "chore(deps)"
     open-pull-requests-limit: 3
+    groups:
+      actions:
+        patterns: ["*"]
