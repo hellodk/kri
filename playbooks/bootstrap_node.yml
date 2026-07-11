@@ -17,17 +17,39 @@
 #
 # Version pins: see group_vars/all.yml
 #
-# This playbook is a thin orchestrator (roles-refactor Phase 3). The actual
-# work lives in:
+# This playbook is a thin orchestrator (roles-refactor Phase 3). It runs as TWO
+# plays so that node monitoring is DECOUPLED from Salt (#967): node_exporter must
+# land even when the salt-master is unreachable, so it runs in its own play
+# BEFORE and OUTSIDE the salt reachability gate. The work lives in:
 #   playbooks/tasks/host_prep_gate.yml — master reachability gate (#536/#537)
 #   playbooks/tasks/host_prep.yml      — Xcode CLT, authorized_keys, VNC
 #   playbooks/roles/common              — OS/arch fact normalization
 #   playbooks/roles/salt_minion         — salt-minion install/config/service
-#   playbooks/roles/node_telemetry      — psutil/macmon/tart
-#   playbooks/roles/node_exporter       — Prometheus node_exporter
+#   playbooks/roles/node_telemetry      — psutil/macmon
+#   playbooks/roles/node_exporter       — Prometheus node_exporter (Salt-independent)
 #   playbooks/roles/kri_enroll          — Salt schedules + grains push
 
-- name: Bootstrap fleet node into kri fleet
+# ── Play 1: node monitoring — independent of Salt ─────────────────────────────
+# Runs first and is NOT gated on salt-master reachability, so metrics land on
+# every reachable host regardless of Salt enrolment success.
+- name: Install node monitoring (independent of Salt)
+  hosts: targets
+  gather_facts: true
+  vars:
+    ansible_ssh_common_args: '-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null'
+    ansible_become: true
+    ansible_become_method: sudo
+
+  pre_tasks:
+    - name: Normalize OS/arch facts (common role)
+      ansible.builtin.import_role:
+        name: common
+
+  roles:
+    - node_exporter
+
+# ── Play 2: Salt enrolment + telemetry — gated on salt-master reachability ─────
+- name: Enrol fleet node into kri Salt fleet
   hosts: targets
   gather_facts: true
   vars:
@@ -49,5 +71,4 @@
   roles:
     - salt_minion
     - node_telemetry
-    - node_exporter
     - kri_enroll

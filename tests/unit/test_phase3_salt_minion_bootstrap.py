@@ -27,10 +27,32 @@ def _bootstrap_text() -> str:
     return BOOTSTRAP_PLAYBOOK.read_text()
 
 
-def _bootstrap_play() -> dict:
+def _bootstrap_plays() -> list[dict]:
     plays = yaml.safe_load(_bootstrap_text())
-    assert isinstance(plays, list) and len(plays) == 1
-    return plays[0]
+    # Two plays since #967 decoupled monitoring: [monitoring, salt-enrolment].
+    assert isinstance(plays, list) and len(plays) == 2
+    return plays
+
+
+def _play_role_names(play: dict) -> list[str]:
+    roles = play.get("roles", [])
+    return [r if isinstance(r, str) else r.get("role", r.get("name")) for r in roles]
+
+
+def _monitoring_play() -> dict:
+    """The Salt-independent play — the one that runs node_exporter."""
+    for play in _bootstrap_plays():
+        if "node_exporter" in _play_role_names(play):
+            return play
+    raise AssertionError("no play runs the node_exporter role")
+
+
+def _salt_play() -> dict:
+    """The Salt-enrolment play — the one that runs salt_minion."""
+    for play in _bootstrap_plays():
+        if "salt_minion" in _play_role_names(play):
+            return play
+    raise AssertionError("no play runs the salt_minion role")
 
 
 def _non_comment_text(path: Path) -> str:
@@ -58,35 +80,47 @@ def test_bootstrap_playbook_exists_and_is_valid_yaml():
     yaml.safe_load(_bootstrap_text())
 
 
-def test_bootstrap_playbook_still_hosts_targets():
-    play = _bootstrap_play()
-    assert play.get("hosts") == "targets", "bootstrap_node.yml must still target the 'targets' inventory group"
+def test_bootstrap_playbook_both_plays_host_targets():
+    for play in _bootstrap_plays():
+        assert play.get("hosts") == "targets", "every bootstrap play must target the 'targets' inventory group"
 
 
 def test_bootstrap_playbook_keeps_play_vars():
-    play = _bootstrap_play()
-    play_vars = play.get("vars", {})
-    assert play_vars.get("ansible_become") is True
-    assert "ansible_become_method" in play_vars
-    assert "ansible_ssh_common_args" in play_vars
+    for play in _bootstrap_plays():
+        play_vars = play.get("vars", {})
+        assert play_vars.get("ansible_become") is True
+        assert "ansible_become_method" in play_vars
+        assert "ansible_ssh_common_args" in play_vars
 
 
-def test_bootstrap_playbook_roles_list_is_exact():
-    play = _bootstrap_play()
-    roles = play.get("roles", [])
-    # Roles may be plain strings or dicts with a "role"/"name" key — normalize.
-    role_names = [r if isinstance(r, str) else r.get("role", r.get("name")) for r in roles]
-    assert role_names == ["salt_minion", "node_telemetry", "node_exporter", "kri_enroll"], (
-        f"expected exactly [salt_minion, node_telemetry, node_exporter, kri_enroll], got {role_names}"
+def test_salt_play_roles_list_is_exact():
+    role_names = _play_role_names(_salt_play())
+    assert role_names == ["salt_minion", "node_telemetry", "kri_enroll"], (
+        f"expected exactly [salt_minion, node_telemetry, kri_enroll], got {role_names}"
     )
 
 
-def test_bootstrap_playbook_imports_host_prep_tasks_in_pre_tasks():
-    text = _bootstrap_text()
-    play = _bootstrap_play()
-    assert "pre_tasks" in play, "bootstrap_node.yml must use pre_tasks for host prep"
-    assert "tasks/host_prep_gate.yml" in text
-    assert "tasks/host_prep.yml" in text
+def test_monitoring_play_runs_only_node_exporter():
+    assert _play_role_names(_monitoring_play()) == ["node_exporter"]
+
+
+def test_node_exporter_play_is_not_gated_on_salt_reachability():
+    """#967: node_exporter must run in a play WITHOUT the salt reachability gate,
+    so metrics land even when the master is unreachable."""
+    play = _monitoring_play()
+    pre_task_text = yaml.dump(play.get("pre_tasks", []))
+    assert "host_prep_gate" not in pre_task_text, (
+        "the node_exporter (monitoring) play must NOT import the salt reachability "
+        "gate — monitoring is decoupled from Salt."
+    )
+
+
+def test_salt_play_imports_host_prep_tasks_in_pre_tasks():
+    play = _salt_play()
+    pre_task_text = yaml.dump(play.get("pre_tasks", []))
+    assert "pre_tasks" in play, "the salt play must use pre_tasks for host prep"
+    assert "tasks/host_prep_gate.yml" in pre_task_text
+    assert "tasks/host_prep.yml" in pre_task_text
 
 
 def test_bootstrap_playbook_references_none_of_the_moved_inline_salt_tasks():
