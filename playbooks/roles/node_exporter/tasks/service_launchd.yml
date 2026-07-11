@@ -1,0 +1,20 @@
+---
+# playbooks/roles/node_exporter/tasks/service_launchd.yml
+# launchd plist + load/start for node_exporter (macOS only).
+
+- name: Install node_exporter launchd plist
+  ansible.builtin.template:
+    src: io.prometheus.node_exporter.plist.j2
+    dest: /Library/LaunchDaemons/io.prometheus.node_exporter.plist
+    owner: root
+    group: wheel
+    mode: "0644"
+  become: true
+  notify: Restart node_exporter (launchd)
+
+- name: Load and start node_exporter via launchd
+  ansible.builtin.shell: |
+    launchctl load -w /Library/LaunchDaemons/io.prometheus.node_exporter.plist 2>/dev/null || true
+    launchctl start io.prometheus.node_exporter 2>/dev/null || true
+  become: true
+  changed_when: false

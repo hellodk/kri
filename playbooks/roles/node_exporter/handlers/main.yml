@@ -1,5 +1,16 @@
 ---
-- name: restart node_exporter macos
-  command: launchctl kickstart -k system/io.prometheus.node_exporter
+# playbooks/roles/node_exporter/handlers/main.yml
+# Restart handlers, notified only on unit/plist change — the main service tasks use
+# `state: started`, never a forced `state: restarted`.
+
+- name: Restart node_exporter (systemd)
+  ansible.builtin.systemd:
+    name: node_exporter
+    state: restarted
+  become: true
+  when: ansible_system == "Linux"
+
+- name: Restart node_exporter (launchd)
+  ansible.builtin.command: launchctl kickstart -k system/io.prometheus.node_exporter
   become: true
   when: ansible_system == "Darwin"

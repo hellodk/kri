@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>io.prometheus.node_exporter</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>{{ node_exporter_install_dir }}/node_exporter</string>
+    <string>--web.listen-address={{ node_exporter_listen_address }}</string>
+  </array>
+  <key>RunAtLoad</key>
+  <true/>
+  <key>KeepAlive</key>
+  <true/>
+  <key>StandardOutPath</key>
+  <string>/var/log/node_exporter.log</string>
+  <key>StandardErrorPath</key>
+  <string>/var/log/node_exporter.log</string>
+</dict>
+</plist>

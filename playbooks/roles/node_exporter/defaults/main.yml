@@ -1,5 +1,35 @@
 ---
+# playbooks/roles/node_exporter/defaults/main.yml
+# Canonical node_exporter role defaults. Mirrors the variable scheme used by
+# playbooks/tasks/bootstrap/node_exporter_{linux,macos}.yml so the role and the
+# bootstrap flow stay drift-free.
+
 node_exporter_version: "1.8.2"
+
+# Canonical listen-address var. Derived from the legacy node_exporter_port when set,
+# so existing inventories that only set node_exporter_port keep working unchanged.
+node_exporter_listen_address: ":{{ node_exporter_port | default(9100) }}"
+
+# --- Legacy vars (back-compat only — prefer node_exporter_listen_address) ---
 node_exporter_port: 9100
-node_exporter_user: "node_exporter"
 node_exporter_install_dir: "/usr/local/bin"
+node_exporter_user: "node_exporter"
+
+# --- Download source resolution ---
+# Precedence: node_exporter_url_override > artifactory_binary_url +
+# artifactory_node_exporter_path > node_exporter_official_base.
+node_exporter_url_override: ""
+artifactory_binary_url: ""
+artifactory_node_exporter_path: "node_exporter/{{ node_exporter_version }}"
+node_exporter_official_base: "https://github.com/prometheus/node_exporter/releases/download/v{{ node_exporter_version }}"
+
+_kri_var_descriptions:
+  node_exporter_version: "node_exporter release version to install (without leading v)."
+  node_exporter_listen_address: "Listen address passed to --web.listen-address, e.g. ':9100'. Derived from legacy node_exporter_port if unset."
+  node_exporter_port: "Legacy var — port only. Prefer node_exporter_listen_address for new inventory."
+  node_exporter_install_dir: "Directory the node_exporter binary is installed into."
+  node_exporter_user: "Dedicated system user/group node_exporter runs as (Linux/systemd only)."
+  node_exporter_url_override: "Full URL override for the node_exporter tarball. Takes precedence over artifactory/official resolution."
+  artifactory_binary_url: "Base URL of an Artifactory (or similar) binary mirror. Leave blank to use the official GitHub release URL."
+  artifactory_node_exporter_path: "Path segment under artifactory_binary_url where node_exporter tarballs live."
+  node_exporter_official_base: "Official upstream GitHub release base URL, used when no artifactory/override is set."

@@ -1,8 +1,31 @@
 ---
-- name: Include macOS tasks
-  import_tasks: macos.yml
+# playbooks/roles/node_exporter/tasks/main.yml
+# Canonical node_exporter role. Derives OS/arch facts itself (no dependency on a
+# `common` role) then installs the binary and configures the OS-appropriate service.
+#
+# IMPORTANT: this role must be safe to run against every host in a multi-host play.
+# It must NEVER short-circuit the play early on a per-host basis — doing so aborts
+# the whole play, not just this host.
+
+- name: Set node_exporter OS/arch facts (Linux)
+  ansible.builtin.set_fact:
+    ne_os: "linux"
+    ne_arch: "{{ 'arm64' if ansible_architecture in ['arm64', 'aarch64'] else 'amd64' }}"
+  when: ansible_system == "Linux"
+
+- name: Set node_exporter OS/arch facts (macOS)
+  ansible.builtin.set_fact:
+    ne_os: "darwin"
+    ne_arch: "{{ 'arm64' if ansible_architecture in ['arm64', 'aarch64'] else 'amd64' }}"
   when: ansible_system == "Darwin"
 
-- name: Include Linux tasks
-  import_tasks: linux.yml
+- name: Install node_exporter binary
+  ansible.builtin.include_tasks: install.yml
+
+- name: Configure node_exporter systemd service (Linux)
+  ansible.builtin.include_tasks: service_systemd.yml
   when: ansible_system == "Linux"
+
+- name: Configure node_exporter launchd service (macOS)
+  ansible.builtin.include_tasks: service_launchd.yml
+  when: ansible_system == "Darwin"

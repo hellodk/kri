@@ -1,0 +1,21 @@
+---
+galaxy_info:
+  role_name: node_exporter
+  description: Installs and configures Prometheus node_exporter (systemd on Linux, launchd on macOS).
+  license: MIT
+  min_ansible_version: "2.14"
+  platforms:
+    - name: EL
+      versions:
+        - all
+    - name: Debian
+      versions:
+        - all
+    - name: Ubuntu
+      versions:
+        - all
+    - name: MacOSX
+      versions:
+        - all
+
+dependencies: []
