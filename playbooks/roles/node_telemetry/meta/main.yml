@@ -2,9 +2,8 @@
 galaxy_info:
   role_name: node_telemetry
   description: >-
-    Installs node telemetry / tooling dependencies (psutil, macmon, tart)
-    consumed by the Salt process_collector and the kri Processes / Virtual
-    Machines tabs.
+    Installs node telemetry / tooling dependencies (psutil, macmon)
+    consumed by the Salt process_collector and the kri Processes tab.
   license: MIT
   min_ansible_version: "2.14"
   platforms:

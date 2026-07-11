@@ -25,9 +25,6 @@ vi.mock('../../api/ansible', () => ({
 vi.mock('../../api/playbooks', () => ({
   playbooksApi: { run: vi.fn() },
 }))
-vi.mock('../../api/vms', () => ({
-  vmsApi: { listNodeVMs: vi.fn().mockResolvedValue([]) },
-}))
 vi.mock('../../api/saltOps', () => ({
   saltOpsApi: { cmd: vi.fn() },
 }))

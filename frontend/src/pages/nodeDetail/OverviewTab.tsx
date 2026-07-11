@@ -4,7 +4,6 @@ import { Link } from 'react-router-dom'
 import { fleetApi } from '../../api/fleet'
 import { ansibleApi } from '../../api/ansible'
 import { playbooksApi } from '../../api/playbooks'
-import { vmsApi } from '../../api/vms'
 import { api } from '../../api/client'
 import { saltOpsApi } from '../../api/saltOps'
 import { saltMasterBadge } from '../../lib/saltMasterHelpers'
@@ -80,14 +79,6 @@ export const OverviewTab = memo(function OverviewTab({
       }
       return 2000
     },
-  })
-
-  const { data: nodeVMs, isLoading: vmsLoading } = useQuery({
-    queryKey: ['node-vms', nodeId],
-    queryFn: () => vmsApi.listNodeVMs(nodeId),
-    staleTime: 30_000,
-    refetchInterval: 30_000,
-    enabled: !!nodeId,
   })
 
   const addTagMutation = useMutation({
@@ -659,57 +650,6 @@ export const OverviewTab = memo(function OverviewTab({
         )}
       </div>
 
-      {/* Virtual Machines Panel */}
-      <div className="bg-white rounded-lg border border-gray-200 p-4 md:col-span-2">
-        <h3 className="font-semibold text-gray-700 mb-3">Virtual Machines</h3>
-        {vmsLoading && (
-          <div className="space-y-2">
-            <div className="h-4 w-32 bg-gray-200 rounded animate-pulse" />
-            <div className="h-4 w-24 bg-gray-200 rounded animate-pulse" />
-          </div>
-        )}
-        {!vmsLoading && nodeVMs?.error && (
-          <p className="text-sm text-red-700 bg-red-50 border border-red-200 rounded p-2">{nodeVMs.error}</p>
-        )}
-        {!vmsLoading && !nodeVMs?.error && nodeVMs?.vms.length === 0 && (
-          <p className="text-sm text-gray-500">tart is not installed or no VMs are running on this node.</p>
-        )}
-        {!vmsLoading && !nodeVMs?.error && nodeVMs?.vms && nodeVMs.vms.length > 0 && (
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b border-gray-200">
-                  <th scope="col" className="text-left px-3 py-2 font-semibold text-gray-700">Name</th>
-                  <th scope="col" className="text-left px-3 py-2 font-semibold text-gray-700">State</th>
-                  <th scope="col" className="text-left px-3 py-2 font-semibold text-gray-700">CPU</th>
-                  <th scope="col" className="text-left px-3 py-2 font-semibold text-gray-700">Memory</th>
-                  <th scope="col" className="text-left px-3 py-2 font-semibold text-gray-700">Source</th>
-                </tr>
-              </thead>
-              <tbody>
-                {nodeVMs.vms.map((vm) => (
-                  <tr key={vm.name} className="border-b border-gray-100 hover:bg-gray-50 transition-colors">
-                    <td className="px-3 py-2 font-medium text-gray-900">{vm.name}</td>
-                    <td className="px-3 py-2">
-                      <span className={`inline-block px-2 py-0.5 rounded text-xs font-semibold ${
-                        vm.state === 'Running' ? 'bg-emerald-100 text-emerald-800' :
-                        vm.state === 'Stopped' ? 'bg-gray-100 text-gray-800' :
-                        vm.state === 'Suspended' ? 'bg-yellow-100 text-yellow-800' :
-                        'bg-gray-100 text-gray-800'
-                      }`}>
-                        {vm.state}
-                      </span>
-                    </td>
-                    <td className="px-3 py-2 text-gray-600">{vm.cpu ? `${vm.cpu} cores` : '—'}</td>
-                    <td className="px-3 py-2 text-gray-600">{vm.memory ? `${vm.memory} MB` : '—'}</td>
-                    <td className="px-3 py-2 text-gray-600 text-xs font-mono">{vm.source || '—'}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </div>
     </div>
   )
 })

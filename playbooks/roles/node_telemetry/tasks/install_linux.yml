@@ -1,6 +1,6 @@
 ---
 # playbooks/roles/node_telemetry/tasks/install_linux.yml
-# psutil via the distro package manager. macmon/tart have no Linux equivalent
+# psutil via the distro package manager. macmon has no Linux equivalent
 # (Homebrew-only, Apple-Silicon-only tooling).
 
 - name: Install python3-psutil (Debian/Ubuntu)
