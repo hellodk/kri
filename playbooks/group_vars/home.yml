@@ -1,6 +1,0 @@
-ansible_become: true
-ansible_become_method: sudo
-ansible_become_password: '{{ ansible_ssh_pass }}'
-ansible_ssh_common_args: -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null
-brew_prefix_arm64: /opt/homebrew
-brew_prefix_x86: /usr/local

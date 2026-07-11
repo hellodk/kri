@@ -417,12 +417,14 @@
     # ── Install kri heartbeat schedule via Salt ───────────────────────────────
     # This runs base.heartbeat on the minion so grain_report is sent every
     # 5 minutes automatically. Without this, nodes go offline after 15 min.
-    # Waits for salt-master to accept the minion key first (may take ~10s).
-    - name: Wait for salt-master to accept minion key
+    # Verifies the minion can actually reach the master before applying any
+    # state.apply below — state.apply fetches state from the MASTER and has
+    # no built-in timeout, so an unreachable master would hang indefinitely.
+    - name: Verify minion can reach salt-master (test.ping)
       command: >
-        {{ salt_call_bin }} --local test.ping
+        timeout 30 {{ salt_call_bin }} test.ping
       register: salt_ping
-      retries: 12
+      retries: 6
       delay: 5
       until: salt_ping.rc == 0
       become: true
@@ -431,7 +433,7 @@
 
     - name: Apply kri heartbeat schedule via salt-call
       shell: |
-        {{ salt_call_bin }} state.apply base.heartbeat
+        timeout 120 {{ salt_call_bin }} state.apply base.heartbeat
       become: true
       changed_when: false
       failed_when: false
@@ -442,7 +444,7 @@
     # CPU/mem/io to the kri ingest API (Processes tab data source, #610/#625).
     - name: Apply kri process-report schedule via salt-call
       shell: |
-        {{ salt_call_bin }} state.apply base.process_report_schedule
+        timeout 120 {{ salt_call_bin }} state.apply base.process_report_schedule
       become: true
       changed_when: false
       failed_when: false

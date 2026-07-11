@@ -8,7 +8,7 @@
     path: "{{ item }}"
     state: directory
     owner: root
-    group: wheel
+    group: "{{ 'wheel' if ansible_system == 'Darwin' else 'root' }}"
     mode: "0700"
   loop:
     - "{{ salt_pki_dir }}"
@@ -70,7 +70,7 @@
     content: "{{ _master_pem_content.content | b64decode }}"
     dest: "{{ salt_pki_dir }}/master.pem"
     owner: root
-    group: wheel
+    group: "{{ 'wheel' if ansible_system == 'Darwin' else 'root' }}"
     mode: "0400"
   when: _master_pem.stat.exists | default(false)
 
@@ -79,7 +79,7 @@
     content: "{{ _master_pub_content.content | b64decode }}"
     dest: "{{ salt_pki_dir }}/master.pub"
     owner: root
-    group: wheel
+    group: "{{ 'wheel' if ansible_system == 'Darwin' else 'root' }}"
     mode: "0444"
   when: _master_pem.stat.exists | default(false)
 
@@ -88,7 +88,7 @@
     src: "{{ playbook_dir }}/../deploy/salt-pki/minions/"
     dest: "{{ salt_pki_dir }}/minions/"
     owner: root
-    group: wheel
+    group: "{{ 'wheel' if ansible_system == 'Darwin' else 'root' }}"
     mode: "0644"
   become: true
   when: lookup('fileglob', playbook_dir + '/../deploy/salt-pki/minions/*') | length > 0
