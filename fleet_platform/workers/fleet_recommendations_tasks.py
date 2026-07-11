@@ -40,8 +40,15 @@ def generate_fleet_recommendations() -> dict:
                 "node_count": recommendation.node_count,
             }
 
+    from fleet_platform.services.llm_caller import LLMCallError
+
     try:
         return asyncio.run(_run())
     except ValueError as exc:
         logger.info("generate_fleet_recommendations: skipped — %s", exc)
         return {"status": "skipped", "reason": str(exc)}
+    except LLMCallError as exc:
+        # Transient LLM outage: log + return cleanly so beat records a normal
+        # result rather than a noisy task failure.
+        logger.warning("generate_fleet_recommendations: LLM call failed — %s", exc)
+        return {"status": "error", "reason": str(exc)}

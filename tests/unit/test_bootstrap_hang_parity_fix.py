@@ -49,41 +49,38 @@ def test_bootstrap_gate_no_longer_uses_local_test_ping():
     )
 
 
-def test_bootstrap_gate_is_a_real_ping_wrapped_in_timeout():
+def test_bootstrap_gate_is_a_real_ping_bounded_by_async():
     src = _bootstrap_node_src()
-    assert "timeout 30 {{ salt_call_bin }} test.ping" in src, (
-        "The reachability gate must run a real `test.ping` (no --local) wrapped "
-        "in `timeout 30` so an unreachable master fails the gate instead of hanging."
-    )
+    # Real ping (no --local), bounded by Ansible async/poll — NOT the `timeout`
+    # binary, which is absent on stock macOS (would 127 → gate never passes →
+    # heartbeat silently skipped → node goes offline).
+    assert 'command: "{{ salt_call_bin }} test.ping"' in src
+    assert "async: 30" in src and "poll: 5" in src
+    assert "timeout 30" not in src
     assert "register: salt_ping" in src
-    assert "until: salt_ping.rc == 0" in src
+    assert "until: salt_ping.rc | default(1) == 0" in src
 
 
-def test_heartbeat_state_apply_wrapped_in_timeout():
+def test_heartbeat_state_apply_bounded_by_async():
     src = _bootstrap_node_src()
-    assert "timeout 120 {{ salt_call_bin }} state.apply base.heartbeat" in src, (
-        "The heartbeat state.apply must be wrapped in `timeout 120` so it "
-        "cannot block indefinitely even if the gate passed but the master "
-        "later becomes unreachable."
-    )
+    assert 'command: "{{ salt_call_bin }} state.apply base.heartbeat"' in src
+    assert "async: 120" in src
+    assert "timeout 120" not in src  # no dependency on the macOS-absent timeout binary
 
 
-def test_process_report_state_apply_wrapped_in_timeout():
+def test_process_report_state_apply_bounded_by_async():
     src = _bootstrap_node_src()
-    assert "timeout 120 {{ salt_call_bin }} state.apply base.process_report_schedule" in src, (
-        "The process-report state.apply must be wrapped in `timeout 120`."
-    )
+    assert 'command: "{{ salt_call_bin }} state.apply base.process_report_schedule"' in src
 
 
 def test_both_schedule_tasks_gated_on_salt_ping():
     src = _bootstrap_node_src()
-    # There must be exactly two `when: salt_ping.rc == 0` guards — one for
-    # each state.apply task (heartbeat and process_report_schedule). Prior to
-    # the fix, the process-report task had NO guard at all.
-    occurrences = src.count("when: salt_ping.rc == 0")
-    assert occurrences >= 2, (
+    # Exactly two `when` guards + one `until` all use the default(1)-safe form
+    # (so an async timeout, which has no `rc`, doesn't error the guard).
+    when_guards = src.count("when: salt_ping.rc | default(1) == 0")
+    assert when_guards >= 2, (
         "Both the heartbeat and process-report state.apply tasks must be "
-        f"gated on `when: salt_ping.rc == 0` (found {occurrences} occurrence(s))."
+        f"gated on the default-safe salt_ping guard (found {when_guards})."
     )
 
 

@@ -420,35 +420,41 @@
     # Verifies the minion can actually reach the master before applying any
     # state.apply below — state.apply fetches state from the MASTER and has
     # no built-in timeout, so an unreachable master would hang indefinitely.
+    # We bound each call with Ansible async/poll (NOT the `timeout` binary,
+    # which is absent on stock macOS) so it is killed after N seconds on any OS.
+    # On an async timeout the result has no `rc`, so guards use rc | default(1).
     - name: Verify minion can reach salt-master (test.ping)
-      command: >
-        timeout 30 {{ salt_call_bin }} test.ping
+      command: "{{ salt_call_bin }} test.ping"
+      async: 30
+      poll: 5
       register: salt_ping
       retries: 6
       delay: 5
-      until: salt_ping.rc == 0
+      until: salt_ping.rc | default(1) == 0
       become: true
       changed_when: false
       failed_when: false
 
     - name: Apply kri heartbeat schedule via salt-call
-      shell: |
-        timeout 120 {{ salt_call_bin }} state.apply base.heartbeat
+      command: "{{ salt_call_bin }} state.apply base.heartbeat"
+      async: 120
+      poll: 5
       become: true
       changed_when: false
       failed_when: false
-      when: salt_ping.rc == 0
+      when: salt_ping.rc | default(1) == 0
 
     # ── Install kri process-telemetry schedule via Salt ───────────────────────
     # Runs base.process_report every 30s so the node reports per-process
     # CPU/mem/io to the kri ingest API (Processes tab data source, #610/#625).
     - name: Apply kri process-report schedule via salt-call
-      shell: |
-        timeout 120 {{ salt_call_bin }} state.apply base.process_report_schedule
+      command: "{{ salt_call_bin }} state.apply base.process_report_schedule"
+      async: 120
+      poll: 5
       become: true
       changed_when: false
       failed_when: false
-      when: salt_ping.rc == 0
+      when: salt_ping.rc | default(1) == 0
 
     # ── Push initial grains to kri Fleet Platform (macOS) ────────────────────
     - name: Push Ansible facts + packages as grains to kri ingest API (macOS)

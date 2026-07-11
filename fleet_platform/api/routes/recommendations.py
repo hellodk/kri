@@ -61,8 +61,12 @@ async def generate_recommendations(
     claims: dict = Depends(require_role("operator", "admin")),
 ):
     """Generate a fresh fleet-wide recommendation set on demand."""
+    from fleet_platform.services.llm_caller import LLMCallError
+
     try:
         recommendation = await generate_fleet_recommendations(db, generated_by=claims.get("email", "unknown"))
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
+    except LLMCallError as exc:
+        raise HTTPException(status_code=502, detail=f"LLM call failed: {exc}") from exc
     return FleetRecommendationResponse.model_validate(recommendation)

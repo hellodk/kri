@@ -5,9 +5,9 @@ export interface Recommendation {
   generated_at: string
   content: string
   model: string
-  provider: string
+  provider: string | null
   node_count: number
-  generated_by: string
+  generated_by: string | null
 }
 
 export const recommendationsApi = {

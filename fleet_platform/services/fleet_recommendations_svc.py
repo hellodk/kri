@@ -39,14 +39,41 @@ _SYSTEM_PROMPT = (
 )
 
 
+async def _resolve_model(endpoint) -> str:
+    """Resolve the endpoint's '__auto__' sentinel to a concrete healthy model id.
+
+    Mirrors api/routes/llm.py::_resolve_model but raises ValueError (not
+    HTTPException) so it composes with this service's error handling. Non-auto
+    endpoints return their model unchanged.
+    """
+    if endpoint.model != "__auto__":
+        return endpoint.model
+
+    from fleet_platform.services import model_health_cache as hc
+    from fleet_platform.services.model_discovery import discover_models_with_health
+
+    url = endpoint.base_url or ""
+    provider = endpoint.provider
+    if hc.is_stale(url, provider):
+        await discover_models_with_health(url, provider, api_key=get_decrypted_api_key(endpoint))
+    healthy = hc.get_healthy_models(url, provider)
+    if not healthy:
+        raise ValueError(
+            f"No healthy model available on endpoint '{endpoint.name}' for auto-selection."
+        )
+    return healthy[0]["id"]
+
+
 async def generate_fleet_recommendations(db: AsyncSession, generated_by: str) -> FleetRecommendation:
     """Generate a fresh fleet-wide recommendation set and persist it.
 
-    Raises ValueError if no LLM endpoint is configured/enabled.
+    Raises ValueError if no LLM endpoint is configured/enabled, or LLMCallError
+    if the provider call fails.
     """
     endpoint = await get_default_endpoint(db)
     if not endpoint or not endpoint.enabled:
         raise ValueError("No LLM endpoint configured.")
+    resolved_model = await _resolve_model(endpoint)
 
     # build_fleet_context returns (system_prompt, rag_citations) — the second
     # element is RAG citations, not node records (RAG is only performed for
@@ -60,7 +87,7 @@ async def generate_fleet_recommendations(db: AsyncSession, generated_by: str) ->
     if endpoint.provider == "anthropic":
         content, _input_tokens, _output_tokens = await call_anthropic(
             api_key=api_key or "",
-            model=endpoint.model,
+            model=resolved_model,
             max_tokens=_MAX_TOKENS,
             system_prompt=_SYSTEM_PROMPT,
             user_prompt=_fleet_context,
@@ -74,7 +101,7 @@ async def generate_fleet_recommendations(db: AsyncSession, generated_by: str) ->
         content, _input_tokens, _output_tokens = await call_openai_compat(
             base_url=endpoint.base_url,
             api_key=api_key,
-            model=endpoint.model,
+            model=resolved_model,
             max_tokens=_MAX_TOKENS,
             system_prompt=_SYSTEM_PROMPT,
             user_prompt=_fleet_context,
@@ -84,7 +111,7 @@ async def generate_fleet_recommendations(db: AsyncSession, generated_by: str) ->
 
     recommendation = FleetRecommendation(
         content=content,
-        model=endpoint.model,
+        model=resolved_model,
         node_count=node_count,
         provider=endpoint.provider,
         generated_by=generated_by,
