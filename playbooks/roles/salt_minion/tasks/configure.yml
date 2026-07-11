@@ -1,0 +1,46 @@
+---
+# playbooks/roles/salt_minion/tasks/configure.yml
+# Create /etc/salt config directories and write the minion config + master
+# pubkey pre-seed. Shared by macOS and Linux.
+
+- name: Create salt-minion config directories
+  ansible.builtin.file:
+    path: "{{ item.path }}"
+    state: directory
+    owner: root
+    group: "{{ salt_group }}"
+    mode: "{{ item.mode }}"
+  loop:
+    - { path: /etc/salt, mode: '0755' }
+    - { path: /etc/salt/pki/minion, mode: '0700' }
+  become: true
+
+- name: Write Salt minion config
+  ansible.builtin.template:
+    src: minion.conf.j2
+    dest: /etc/salt/minion
+    owner: root
+    group: "{{ salt_group }}"
+    mode: "0644"
+  become: true
+  notify: Restart salt-minion
+
+# Write the master's public key directly so the minion never needs to
+# perform a full initial re-authentication (which requires session support
+# and is incompatible across minor Salt versions).
+# This key is stable — it lives in deploy/salt-pki/master.pub and
+# must be supplied as the salt_master_pub_key variable.
+- name: Write master public key to minion PKI (prevents re-auth on reconnect)
+  ansible.builtin.copy:
+    dest: /etc/salt/pki/minion/minion_master.pub
+    content: "{{ salt_master_pub_key }}"
+    owner: root
+    group: "{{ salt_group }}"
+    mode: "0644"
+  become: true
+  # Pre-seed only when a master pubkey is supplied (#549). Omitted in
+  # multi-master HA: the minion TOFU-fetches each master's key on first
+  # connect and its key is accepted on the master (kri Salt Keys UI /
+  # salt-key -a / auto_accept). Without this the minion still installs,
+  # configures, and connects — it just pends for key acceptance.
+  when: salt_master_pub_key is defined

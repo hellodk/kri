@@ -17,6 +17,12 @@ scripts/, playbooks/) are deleted: playbooks/group_vars/home.yml and
 playbooks/inventory/dynamic.py. (deploy_salt_master_mm1.yml and
 setup_salt_master.yml are still referenced elsewhere and are intentionally
 kept.)
+
+Roles-refactor Phase 3: the async schedule-gate logic (Fix 1) moved out of the
+bootstrap_node.yml monolith into playbooks/roles/kri_enroll/tasks/main.yml
+(done in Phase 2, wired up in Phase 3) — verbatim, so _bootstrap_node_src()
+below reads that file instead. Fix 2/Fix 3 assertions are untouched by the
+roles-refactor and still read the original locations.
 """
 
 from pathlib import Path
@@ -28,7 +34,7 @@ _GROUP_CONDITIONAL = "group: \"{{ 'wheel' if ansible_system == 'Darwin' else 'ro
 
 
 def _bootstrap_node_src() -> str:
-    return (_PLAYBOOKS / "bootstrap_node.yml").read_text()
+    return (_PLAYBOOKS / "roles" / "kri_enroll" / "tasks" / "main.yml").read_text()
 
 
 def _salt_master_task_src(name: str) -> str:

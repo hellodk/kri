@@ -1,0 +1,40 @@
+---
+# playbooks/roles/salt_minion/tasks/service.yml
+# Start salt-minion (launchd macOS / systemd Linux) and verify it is running
+# via ansible.builtin.service_facts (NOT `ps aux | grep salt-minion`, which is
+# fragile across shells/locales and race-prone right after service start).
+
+- name: Load salt-minion launchd service (macOS)
+  shell: launchctl load -w /Library/LaunchDaemons/com.saltstack.salt.minion.plist 2>/dev/null || true
+  become: true
+  changed_when: false
+  when: ansible_os_family == 'Darwin'
+
+- name: Start salt-minion service (macOS)
+  shell: launchctl start com.saltstack.salt.minion 2>/dev/null || true
+  become: true
+  changed_when: false
+  when: ansible_os_family == 'Darwin'
+
+- name: Enable and start salt-minion via systemd (Linux)
+  ansible.builtin.systemd:
+    name: salt-minion
+    enabled: true
+    state: started
+    daemon_reload: true
+  become: true
+  when: ansible_os_family in ['Debian', 'RedHat']
+
+# Re-gathers service_facts on each retry (the `until` re-evaluates the whole
+# task, not a stale registered value) until the minion shows up as running.
+- name: Verify salt-minion service is running (service_facts)
+  ansible.builtin.service_facts:
+  register: salt_minion_service_check
+  until: >-
+    (ansible_os_family == 'Darwin' and 'com.saltstack.salt.minion' in ansible_facts.services)
+    or
+    (ansible_os_family in ['Debian', 'RedHat'] and
+     ansible_facts.services.get('salt-minion.service', {}).get('state', '') == 'running')
+  retries: 6
+  delay: 5
+  become: false

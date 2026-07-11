@@ -6,13 +6,17 @@ Verifies at the playbook file level (no live host needed) that:
 2. The Check installed salt version task uses pkgutil (not salt-minion --version
    which boots the macOS onedir daemon and never returns).
 3. The shasum -a 512 on-target verification task is still present (the real gate).
+
+Roles-refactor Phase 3: this logic moved out of the bootstrap_node.yml monolith
+into playbooks/roles/salt_minion/tasks/install_macos.yml, verbatim (the #694 fix
+must be preserved exactly regardless of which file it lives in).
 """
 
 from pathlib import Path
 
 # Resolve relative to this test file so the test works from any cwd (source-contract
 # pattern: Path(__file__) not an absolute path).
-PLAYBOOK = Path(__file__).parent.parent.parent / "playbooks" / "bootstrap_node.yml"
+PLAYBOOK = Path(__file__).parent.parent.parent / "playbooks" / "roles" / "salt_minion" / "tasks" / "install_macos.yml"
 
 
 def _content() -> str:

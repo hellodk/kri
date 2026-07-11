@@ -1,0 +1,20 @@
+---
+# playbooks/roles/salt_minion/tasks/install_redhat.yml
+# Install salt-minion via dnf (RHEL/Rocky). Dispatched only when
+# ansible_os_family == 'RedHat' (see tasks/main.yml).
+
+- name: Add Salt project dnf repo (RedHat)
+  yum_repository:
+    name: salt
+    description: Salt repo
+    baseurl: "{{ salt_rpm_repo_baseurl }}"
+    gpgcheck: true
+    gpgkey: "{{ salt_rpm_gpg_url }}"
+    enabled: true
+  become: true
+
+- name: Install salt-minion (RHEL/Rocky)
+  dnf:
+    name: "salt-minion-{{ salt_version }}"
+    state: present
+  become: true

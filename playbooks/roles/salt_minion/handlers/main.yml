@@ -1,0 +1,19 @@
+---
+# playbooks/roles/salt_minion/handlers/main.yml
+- name: Restart salt-minion (macOS)
+  shell: |
+    launchctl stop com.saltstack.salt.minion 2>/dev/null || true
+    sleep 2
+    launchctl start com.saltstack.salt.minion 2>/dev/null || true
+  become: true
+  when: ansible_os_family == 'Darwin'
+  listen: Restart salt-minion
+
+- name: Restart salt-minion (systemd)
+  ansible.builtin.systemd:
+    name: salt-minion
+    state: restarted
+    daemon_reload: true
+  become: true
+  when: ansible_os_family in ['Debian', 'RedHat']
+  listen: Restart salt-minion

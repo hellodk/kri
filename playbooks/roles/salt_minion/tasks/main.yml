@@ -1,0 +1,25 @@
+---
+# playbooks/roles/salt_minion/tasks/main.yml
+# Installs, configures, and starts salt-minion (macOS onedir pkg / apt / dnf).
+#
+# REQUIRES the common role's facts (cpu_arch, salt_group) and gathered facts
+# (ansible_os_family) to already be present on the host — run the common role
+# (and `gather_facts: true`) before this role. See README in the common role.
+
+- name: Install salt-minion (macOS)
+  ansible.builtin.include_tasks: install_macos.yml
+  when: ansible_os_family == 'Darwin'
+
+- name: Install salt-minion (Debian/Ubuntu)
+  ansible.builtin.include_tasks: install_debian.yml
+  when: ansible_os_family == 'Debian'
+
+- name: Install salt-minion (RHEL/Rocky)
+  ansible.builtin.include_tasks: install_redhat.yml
+  when: ansible_os_family == 'RedHat'
+
+- name: Configure salt-minion
+  ansible.builtin.include_tasks: configure.yml
+
+- name: Start and verify salt-minion service
+  ansible.builtin.include_tasks: service.yml

@@ -1,0 +1,24 @@
+---
+galaxy_info:
+  role_name: salt_minion
+  description: >-
+    Installs, configures, and starts salt-minion (macOS onedir .pkg, apt, or
+    dnf) with HA failover master config (#537) and optional master-pubkey
+    pre-seed (#549). Preserves the #694 pkgutil-based version detection fix.
+  license: MIT
+  min_ansible_version: "2.14"
+  platforms:
+    - name: EL
+      versions:
+        - all
+    - name: Debian
+      versions:
+        - all
+    - name: Ubuntu
+      versions:
+        - all
+    - name: MacOSX
+      versions:
+        - all
+
+dependencies: []

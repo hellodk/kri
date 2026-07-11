@@ -1,0 +1,95 @@
+---
+# playbooks/roles/salt_minion/tasks/install_macos.yml
+# Salt-minion via official onedir pkg (pinned, air-gap ready) — macOS.
+# Uses the Salt Project's onedir installer — installs to /opt/salt/
+# Not Homebrew: Homebrew does not allow pinning specific salt versions.
+# For air-gap: set artifactory_binary_url in group_vars/all.yml or host_vars/.
+#
+# Dispatched only when ansible_os_family == 'Darwin' (see tasks/main.yml) —
+# tasks below do not repeat that guard.
+
+- name: Resolve salt pkg filename for this arch (macOS)
+  set_fact:
+    salt_pkg_filename: "{{ salt_pkg_arm64 if cpu_arch == 'arm64' else salt_pkg_x86_64 }}"
+    salt_checksum_filename: "{{ salt_pkg_checksum_arm64 if cpu_arch == 'arm64' else salt_pkg_checksum_x86_64 }}"
+
+# Resolution precedence: salt_pkg_url_override > artifactory_binary_url +
+# artifactory_salt_path > salt_pkg_official_base. Defaults (artifactory_salt_path
+# = salt/{{ salt_version }}) reproduce the previous URL exactly. The checksum
+# follows the same tiers; when the pkg is fully overridden, the checksum is
+# taken from the same directory (override | dirname) since it is a sibling file.
+- name: Set download URL (override > Artifactory > official) (macOS)
+  set_fact:
+    salt_pkg_url: >-
+      {%- if salt_pkg_url_override -%}{{ salt_pkg_url_override }}
+      {%- elif artifactory_binary_url -%}{{ artifactory_binary_url.rstrip('/') }}/{{ artifactory_salt_path }}/{{ salt_pkg_filename }}
+      {%- else -%}{{ salt_pkg_official_base }}/{{ salt_pkg_filename }}
+      {%- endif -%}
+    salt_checksum_url: >-
+      {%- if salt_pkg_url_override -%}{{ salt_pkg_url_override | dirname }}/{{ salt_checksum_filename }}
+      {%- elif artifactory_binary_url -%}{{ artifactory_binary_url.rstrip('/') }}/{{ artifactory_salt_path }}/{{ salt_checksum_filename }}
+      {%- else -%}{{ salt_pkg_official_base }}/{{ salt_checksum_filename }}
+      {%- endif -%}
+
+# NOTE: do NOT use `/opt/salt/salt-minion --version` for detection — on the
+# macOS onedir build it prints the version then continues booting the daemon
+# (never reaches EOF), so a piped `| awk` hangs until ANSIBLE_TASK_TIMEOUT.
+# pkgutil reads the installed .pkg receipt and exits cleanly+instantly. (#694)
+- name: Check installed salt version (macOS)
+  shell: pkgutil --pkg-info com.saltstack.salt 2>/dev/null | awk '/^version:/ {print $2}'
+  register: installed_salt_version
+  changed_when: false
+  failed_when: false
+  become: false
+
+- name: Download salt pkg checksum (macOS)
+  get_url:
+    url: "{{ salt_checksum_url }}"
+    dest: "/tmp/{{ salt_checksum_filename }}"
+    mode: "0644"
+    force: true
+  when: installed_salt_version.stdout.strip() != salt_version
+  become: false
+
+- name: Download salt pkg with verified checksum (macOS)
+  get_url:
+    url: "{{ salt_pkg_url }}"
+    dest: "/tmp/{{ salt_pkg_filename }}"
+    mode: "0644"
+  when: installed_salt_version.stdout.strip() != salt_version
+  become: false
+
+- name: Verify salt pkg checksum (macOS)
+  shell: |
+    EXPECTED=$(cat /tmp/{{ salt_checksum_filename }} | awk '{print $1}')
+    ACTUAL=$(shasum -a 512 /tmp/{{ salt_pkg_filename }} | awk '{print $1}')
+    if [ "$EXPECTED" != "$ACTUAL" ]; then
+      echo "CHECKSUM MISMATCH: expected $EXPECTED got $ACTUAL" >&2
+      exit 1
+    fi
+    echo "Checksum OK: $ACTUAL"
+  when: installed_salt_version.stdout.strip() != salt_version
+  changed_when: false
+  become: false
+
+- name: Stop salt-minion service before upgrade (macOS)
+  shell: launchctl stop com.saltstack.salt.minion 2>/dev/null || true
+  when: installed_salt_version.stdout.strip() != salt_version
+  become: true
+  changed_when: false
+
+- name: Install salt pkg (macOS)
+  shell: installer -pkg /tmp/{{ salt_pkg_filename }} -target /
+  when: installed_salt_version.stdout.strip() != salt_version
+  become: true
+  register: salt_install_result
+  changed_when: salt_install_result.rc == 0
+
+# Use pkgutil (clean exit) instead of `salt-minion --version` (boots daemon → hangs).
+- name: Confirm installed salt version matches expected (macOS)
+  shell: pkgutil --pkg-info com.saltstack.salt 2>/dev/null | awk '/^version:/ {print $2}'
+  register: verified_salt_version
+  changed_when: false
+  failed_when: verified_salt_version.stdout.strip() != salt_version
+  become: false
+  when: salt_install_result is defined and salt_install_result.changed

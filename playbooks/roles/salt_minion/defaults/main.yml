@@ -1,0 +1,5 @@
+---
+# playbooks/roles/salt_minion/defaults/main.yml
+# No role-specific defaults. salt_version / salt_pkg_* / salt_deb_* / salt_rpm_*
+# / artifactory_* vars are supplied by playbooks/group_vars/all.yml and
+# consumed here directly (mirrors the common role's pattern).

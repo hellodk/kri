@@ -2,8 +2,18 @@
 
 Tests:
   - parse_nc_reachability: rc 0 → True; non-zero → False; mixed list.
-  - bootstrap_node.yml: contains node-side nc -z check over salt_masters
-    and a fail-when-none-reachable guard before the minion-config write.
+  - playbooks/tasks/host_prep_gate.yml: contains a node-side reachability
+    check over salt_masters and a fail-when-none-reachable guard, run before
+    the salt_minion role.
+
+Roles-refactor Phase 3 (§9 #2): the reachability check moved out of the
+bootstrap_node.yml monolith into playbooks/tasks/host_prep_gate.yml, and its
+implementation changed from two `nc -z` shell loops to a single
+`ansible.builtin.wait_for` loop over `salt_masters | product([4505, 4506])`.
+The behavioural contract (probe both ports for every master; fail the play
+only when NONE are reachable; run before minion config is written) is
+unchanged — only the underlying module is more robust. The class below
+verifies the new implementation preserves that contract.
 """
 
 from __future__ import annotations
@@ -66,10 +76,16 @@ class TestParseNcReachability:
 
 
 # ---------------------------------------------------------------------------
-# bootstrap_node.yml source assertions (#536)
+# host_prep_gate.yml source assertions (#536, updated for roles-refactor Phase 3)
 # ---------------------------------------------------------------------------
 
+_GATE_PATH = Path(__file__).parents[2] / "playbooks" / "tasks" / "host_prep_gate.yml"
 _PLAYBOOK_PATH = Path(__file__).parents[2] / "playbooks" / "bootstrap_node.yml"
+
+
+@pytest.fixture(scope="module")
+def gate_text() -> str:
+    return _GATE_PATH.read_text(encoding="utf-8")
 
 
 @pytest.fixture(scope="module")
@@ -78,45 +94,44 @@ def playbook_text() -> str:
 
 
 class TestBootstrapPlaybookNodeVantage:
-    def test_playbook_exists(self) -> None:
-        assert _PLAYBOOK_PATH.exists(), f"Playbook not found: {_PLAYBOOK_PATH}"
+    def test_gate_file_exists(self) -> None:
+        assert _GATE_PATH.exists(), f"Gate task file not found: {_GATE_PATH}"
 
-    def test_nc_z_check_present(self, playbook_text: str) -> None:
-        """Playbook must contain an nc -z check iterating over salt_masters."""
-        assert "nc -z" in playbook_text, "bootstrap_node.yml must contain 'nc -z' for node-vantage TCP probe"
+    def test_wait_for_check_present(self, gate_text: str) -> None:
+        """Gate must use ansible.builtin.wait_for for the node-vantage TCP probe."""
+        assert "wait_for" in gate_text, "host_prep_gate.yml must contain a wait_for task for the node-vantage TCP probe"
+        assert "nc -z" not in gate_text, "host_prep_gate.yml must not use nc -z (replaced by wait_for, §9 #2)"
 
-    def test_nc_loops_over_salt_masters(self, playbook_text: str) -> None:
-        """The nc check must loop over the salt_masters variable."""
-        assert "salt_masters" in playbook_text, "bootstrap_node.yml must reference 'salt_masters' for the nc loop"
-        # The loop + nc should both appear together (not just incidentally)
-        assert "loop:" in playbook_text or "with_items:" in playbook_text, (
-            "bootstrap_node.yml must use a loop construct for the nc checks"
+    def test_wait_for_loops_over_salt_masters(self, gate_text: str) -> None:
+        """The wait_for check must loop over the salt_masters variable (via product)."""
+        assert "salt_masters" in gate_text, "host_prep_gate.yml must reference 'salt_masters' for the loop"
+        assert "product(" in gate_text, "host_prep_gate.yml must build the master x port pairs with the product filter"
+        assert "loop:" in gate_text, "host_prep_gate.yml must use a loop construct for the wait_for checks"
+
+    def test_checks_port_4505(self, gate_text: str) -> None:
+        assert "4505" in gate_text, "host_prep_gate.yml must probe port 4505 (Salt publish)"
+
+    def test_checks_port_4506(self, gate_text: str) -> None:
+        assert "4506" in gate_text, "host_prep_gate.yml must probe port 4506 (Salt return)"
+
+    def test_fail_when_none_reachable_guard_present(self, gate_text: str) -> None:
+        """Gate must fail the play if no master is reachable."""
+        assert "fail:" in gate_text or "ansible.builtin.fail:" in gate_text, (
+            "host_prep_gate.yml must have a 'fail:' task when no master is reachable"
         )
 
-    def test_nc_checks_port_4505(self, playbook_text: str) -> None:
-        assert "4505" in playbook_text, "bootstrap_node.yml must probe port 4505 (Salt publish)"
-
-    def test_nc_checks_port_4506(self, playbook_text: str) -> None:
-        assert "4506" in playbook_text, "bootstrap_node.yml must probe port 4506 (Salt return)"
-
-    def test_fail_when_none_reachable_guard_present(self, playbook_text: str) -> None:
-        """Playbook must fail the play if no master is reachable."""
-        assert "fail:" in playbook_text or "ansible.builtin.fail:" in playbook_text, (
-            "bootstrap_node.yml must have a 'fail:' task when no master is reachable"
-        )
-
-    def test_fail_guard_message_mentions_network_firewall(self, playbook_text: str) -> None:
+    def test_fail_guard_message_mentions_network_firewall(self, gate_text: str) -> None:
         """The failure message must mention network/firewall to aid diagnosis."""
-        assert "network" in playbook_text.lower() or "firewall" in playbook_text.lower(), (
-            "bootstrap_node.yml fail task must mention 'network' or 'firewall'"
+        assert "network" in gate_text.lower() or "firewall" in gate_text.lower(), (
+            "host_prep_gate.yml fail task must mention 'network' or 'firewall'"
         )
 
-    def test_nc_check_appears_before_minion_config_write(self, playbook_text: str) -> None:
-        """The nc reachability check must appear before 'Write Salt minion config'."""
-        nc_pos = playbook_text.find("nc -z")
-        minion_config_pos = playbook_text.find("Write Salt minion config")
-        assert nc_pos != -1, "nc -z not found in playbook"
-        assert minion_config_pos != -1, "'Write Salt minion config' task not found"
-        assert nc_pos < minion_config_pos, (
-            "nc -z reachability check must appear BEFORE 'Write Salt minion config' in the playbook"
+    def test_gate_runs_before_salt_minion_role(self, playbook_text: str) -> None:
+        """The reachability gate must run before the salt_minion role (pre_tasks before roles)."""
+        gate_pos = playbook_text.find("host_prep_gate.yml")
+        roles_pos = playbook_text.find("- salt_minion")
+        assert gate_pos != -1, "bootstrap_node.yml must import tasks/host_prep_gate.yml"
+        assert roles_pos != -1, "bootstrap_node.yml must list the salt_minion role"
+        assert gate_pos < roles_pos, (
+            "host_prep_gate.yml import must appear BEFORE the salt_minion role in bootstrap_node.yml"
         )

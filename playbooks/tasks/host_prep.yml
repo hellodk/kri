@@ -1,0 +1,50 @@
+---
+# playbooks/tasks/host_prep.yml
+# Bootstrap glue tasks: Xcode CLT (macOS Homebrew prerequisite — MUST run
+# before any brew-installing role, e.g. node_telemetry, hence this file is
+# imported in bootstrap_node.yml's pre_tasks, ahead of the roles: list),
+# controller SSH key authorization, and macOS Screen Sharing (VNC).
+
+# ── macOS: Xcode Command Line Tools ──────────────────────────────────────────
+- name: Check if Xcode CLT is installed
+  ansible.builtin.command: xcode-select -p
+  register: xcode_check
+  failed_when: false
+  changed_when: false
+  become: false
+  when: ansible_os_family == 'Darwin'
+
+- name: Install Xcode Command Line Tools (headless via softwareupdate)
+  ansible.builtin.shell: |
+    touch /tmp/.com.apple.dt.CommandLineTools.installondemand.in-progress
+    LABEL=$(softwareupdate -l 2>&1 | awk -F'*' '/Command Line/{print $2}' | head -1 | xargs)
+    if [ -n "$LABEL" ]; then
+      softwareupdate -i "$LABEL" --agree-to-license
+    fi
+    rm -f /tmp/.com.apple.dt.CommandLineTools.installondemand.in-progress
+  when: ansible_os_family == 'Darwin' and xcode_check.rc != 0
+  become: true
+  timeout: 600
+  register: clt_install
+  changed_when: clt_install.rc == 0
+
+# ── Authorised keys ───────────────────────────────────────────────────────────
+# §9 #12: ansible.posix.authorized_key creates ~/.ssh itself (mode 0700) —
+# no separate "ensure ~/.ssh exists" task needed.
+- name: Authorise kri controller public key
+  ansible.posix.authorized_key:
+    user: "{{ ansible_user }}"
+    key: "{{ controller_pubkey }}"
+    state: present
+  become: false
+  when: controller_pubkey is defined
+
+# ── macOS: Enable Screen Sharing (VNC) ────────────────────────────────────────
+- name: Enable macOS Screen Sharing (VNC on port 5900)
+  ansible.builtin.shell: |
+    /bin/launchctl load -w /System/Library/LaunchDaemons/com.apple.screensharing.plist 2>/dev/null || true
+    /usr/bin/defaults write /var/db/RealVNC/vncserver Enabled -bool true 2>/dev/null || true
+  become: true
+  failed_when: false
+  changed_when: false
+  when: ansible_os_family == 'Darwin'
