@@ -1,6 +1,7 @@
 import { useState, useMemo, useEffect } from 'react'
 import { Link } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { Monitor } from 'lucide-react'
 import { useJobEventStream } from '../hooks/useJobEventStream'
 import { fleetApi } from '../api/fleet'
 import { api } from '../api/client'
@@ -804,7 +805,7 @@ export function FleetDashboard() {
           <>
             {nodes?.items.length === 0 ? (
               <div className="px-4 py-16 text-center space-y-4">
-                <p className="text-4xl">🖥️</p>
+                <Monitor size={36} className="mx-auto text-gray-300" />
                 <p className="text-lg font-semibold text-gray-700">No nodes in your fleet yet</p>
                 <p className="text-sm text-gray-500 max-w-sm mx-auto">
                   Bootstrap a Mac Mini to get started. Make sure Remote Login (SSH) is enabled on the device first.

@@ -1,10 +1,11 @@
 import { useSearchParams } from 'react-router-dom'
+import type { LucideIcon } from 'lucide-react'
 import { useSaltKeysStore } from '../stores/saltKeysStore'
 
 export interface HubTab {
   key: string
   label: string
-  icon: string
+  icon: LucideIcon
   component: React.ComponentType
   showBadge?: boolean
 }
@@ -43,7 +44,7 @@ export function HubPage({ tabs, defaultTab }: HubPageProps) {
                     : 'border-transparent text-gray-500 hover:text-gray-800 hover:border-gray-300',
                 ].join(' ')}
               >
-                <span className="font-mono text-base">{tab.icon}</span>
+                <tab.icon size={16} />
                 {tab.label}
                 {hasBadge && (
                   <span className="ml-1 px-1.5 py-0.5 rounded-full bg-amber-500 text-white text-[10px] font-bold leading-none">

@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect, useCallback } from 'react'
 import clsx from 'clsx'
+import { Zap } from 'lucide-react'
 
 export const AUTO_VALUE = '__auto__'
 
@@ -41,7 +42,7 @@ export function ModelCombobox({ models, value, onChange, onRefresh, refreshing }
 
   const displayValue =
     value === AUTO_VALUE
-      ? '⚡ Auto'
+      ? 'Auto'
       : models.find((m) => m.id === value)?.name ?? value
 
   function select(id: string) {
@@ -103,7 +104,8 @@ export function ModelCombobox({ models, value, onChange, onRefresh, refreshing }
           setTimeout(() => inputRef.current?.focus(), 0)
         }}
       >
-        <span className={clsx('font-mono', value === AUTO_VALUE ? 'text-blue-700 font-semibold' : 'text-gray-900')}>
+        <span className={clsx('font-mono inline-flex items-center gap-1.5', value === AUTO_VALUE ? 'text-blue-700 font-semibold' : 'text-gray-900')}>
+          {value === AUTO_VALUE && <Zap size={14} />}
           {displayValue || <span className="text-gray-400">Select a model…</span>}
         </span>
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#9CA3AF" strokeWidth="2">
@@ -136,7 +138,7 @@ export function ModelCombobox({ models, value, onChange, onRefresh, refreshing }
             )}
             onClick={() => select(AUTO_VALUE)}
           >
-            <span className="text-base">⚡</span>
+            <Zap size={16} className="text-blue-700 shrink-0" />
             <div>
               <div className="text-sm font-semibold text-blue-700">Auto</div>
               <div className="text-xs text-blue-500">Smart router picks best model per request</div>

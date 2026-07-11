@@ -1,5 +1,6 @@
 import { memo, useState } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { RefreshCw, Package } from 'lucide-react'
 import { sbomApi } from '../../api/sbom'
 import { api } from '../../api/client'
 import { formatIST } from '../../utils/time'
@@ -62,7 +63,7 @@ export const SbomTab = memo(function SbomTab({ nodeId }: { nodeId: string }) {
           </select>
         ) : null}
         <button
-          className="ml-auto text-sm px-3 py-1.5 rounded bg-brand-600 text-white hover:bg-brand-700 disabled:opacity-50"
+          className="ml-auto text-sm px-3 py-1.5 rounded bg-brand-600 text-white hover:bg-brand-700 disabled:opacity-50 inline-flex items-center gap-1.5"
           disabled={triggeringScan}
           onClick={async () => {
             setTriggeringScan(true)
@@ -77,7 +78,7 @@ export const SbomTab = memo(function SbomTab({ nodeId }: { nodeId: string }) {
             }
           }}
         >
-          {triggeringScan ? 'Queuing…' : '⟳ Scan now'}
+          {triggeringScan ? 'Queuing…' : <><RefreshCw size={14} /> Scan now</>}
         </button>
       </div>
 
@@ -168,7 +169,7 @@ export const SbomTab = memo(function SbomTab({ nodeId }: { nodeId: string }) {
         </>
       ) : (
         <div className="text-center py-12 text-gray-500 text-sm">
-          <p className="text-2xl mb-2">📦</p>
+          <Package size={24} className="mx-auto mb-2 text-gray-300" />
           <p>No SBOM scans yet.</p>
           <p className="text-xs mt-1">Click "Scan now" to trigger a Trivy scan.</p>
         </div>

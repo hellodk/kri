@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { useSearchParams, useNavigate } from 'react-router-dom'
+import { RefreshCw, Zap } from 'lucide-react'
 import { resolveSettingsTab, type SettingsTab } from '../lib/settingsTabParam'
 import { Skeleton } from '../components/Skeleton'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
@@ -17,7 +18,7 @@ import { PlaybookLibraryTab } from './PlaybookLibraryTab'
 import { formatLocalDate } from '../utils/time'
 
 function UrlStatusPill({ status, checking }: { status?: { ok: boolean; latency_ms: number | null; error?: string } | null; checking: boolean }) {
-  if (checking) return <span className="text-xs text-gray-400 flex items-center gap-1"><span className="inline-block animate-spin">⟳</span> Checking</span>
+  if (checking) return <span className="text-xs text-gray-400 flex items-center gap-1"><RefreshCw size={11} className="animate-spin" /> Checking</span>
   if (!status) return null
   if (status.ok) return (
     <span className="text-xs font-medium text-emerald-600 flex items-center gap-1">
@@ -2032,7 +2033,7 @@ function StatusPill({ result, checking }: {
 }) {
   if (checking) return (
     <span className="inline-flex items-center gap-1 text-xs text-gray-400 whitespace-nowrap">
-      <span className="animate-spin inline-block">⟳</span> Checking
+      <RefreshCw size={11} className="animate-spin" /> Checking
     </span>
   )
   if (!result) return <span className="text-xs text-gray-300">—</span>
@@ -2258,7 +2259,7 @@ function LLMEndpointsSection() {
                       </td>
                       <td className="px-4 py-3">
                         {ep.model === '__auto__' ? (
-                          <span className="text-blue-700 text-xs font-semibold">⚡ Auto</span>
+                          <span className="text-blue-700 text-xs font-semibold inline-flex items-center gap-1"><Zap size={12} /> Auto</span>
                         ) : (
                           <span className="font-mono text-gray-700 text-xs">{ep.model}</span>
                         )}

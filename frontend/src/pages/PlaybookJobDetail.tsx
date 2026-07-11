@@ -1,6 +1,7 @@
 import { useParams, Link } from 'react-router-dom'
 import { useEffect, useRef, useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { Play } from 'lucide-react'
 import { playbooksApi, type AnsibleJob } from '../api/playbooks'
 import { PlaybookRunModal } from './PlaybookRunModal'
 import { LogPane } from '../lib/LogPane'
@@ -267,7 +268,7 @@ export function PlaybookJobDetail() {
               // Prefer server-extracted running_task; fall back to regex on accumulated logText for old servers
               const taskName = job?.running_task ?? logText.match(/\[running: ([^\]]+)\]\s*$/)?.[1]
               return taskName ? (
-                <p className="text-xs text-amber-600 mt-0.5 font-mono">▶ {taskName}</p>
+                <p className="text-xs text-amber-600 mt-0.5 font-mono inline-flex items-center gap-1"><Play size={11} />{taskName}</p>
               ) : null
             })()}
           </div>

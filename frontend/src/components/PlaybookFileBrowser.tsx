@@ -1,13 +1,15 @@
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { FileText, FileCode, Wrench, Palette, Package, Folder, type LucideIcon } from 'lucide-react'
 import { ansibleApi, type FileNode } from '../api/ansible'
 import { useToastStore } from '../stores/toastStore'
 
 function FileIcon({ ext }: { ext?: string }) {
-  const icons: Record<string, string> = {
-    yml: '📄', yaml: '📄', py: '🐍', sh: '⚙', md: '📝', j2: '🎨', ini: '🔧', cfg: '🔧', conf: '🔧', sls: '🧂',
+  const icons: Record<string, LucideIcon> = {
+    yml: FileText, yaml: FileText, py: FileCode, sh: Wrench, md: FileText, j2: Palette, ini: Wrench, cfg: Wrench, conf: Wrench, sls: Package,
   }
-  return <span className="mr-1 text-xs">{icons[ext ?? ''] ?? '📄'}</span>
+  const Icon = icons[ext ?? ''] ?? FileText
+  return <Icon size={12} className="mr-1 shrink-0 inline" />
 }
 
 function TreeNode({
@@ -169,7 +171,7 @@ export function PlaybookFileBrowser() {
         ) : (
           <div className="flex-1 flex items-center justify-center text-sm text-gray-400">
             <div className="text-center space-y-2">
-              <p className="text-2xl">📁</p>
+              <Folder size={28} className="mx-auto text-gray-300" />
               <p>Select a file to view or edit</p>
               <p className="text-xs text-gray-300">Changes are saved directly to disk and affect all future runs</p>
             </div>

@@ -1,20 +1,35 @@
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import {
+  ClipboardList,
+  Folder,
+  ListChecks,
+  Zap,
+  Settings2,
+  Braces,
+  Palette,
+  FileText,
+  Info,
+  CornerDownRight,
+  ChevronDown,
+  ChevronRight,
+  type LucideIcon,
+} from 'lucide-react'
 import { ansibleApi, type PlaybookTreeNode } from '../api/ansible'
 import { useToastStore } from '../stores/toastStore'
 import type { PlaybookEntry } from '../api/playbooks'
 
-const TYPE_ICONS: Record<string, string> = {
-  playbook: '▤',
-  role: '📁',
-  tasks: '▷',
-  handlers: '⚡',
-  defaults: '⚙',
-  vars: '📋',
-  template: '🎨',
-  file: '📄',
-  meta: 'ℹ',
-  include: '↩',
+const TYPE_ICONS: Record<string, LucideIcon> = {
+  playbook: ClipboardList,
+  role: Folder,
+  tasks: ListChecks,
+  handlers: Zap,
+  defaults: Settings2,
+  vars: Braces,
+  template: Palette,
+  file: FileText,
+  meta: Info,
+  include: CornerDownRight,
 }
 
 const TYPE_COLORS: Record<string, string> = {
@@ -43,7 +58,7 @@ function TreeItem({
 }) {
   const [open, setOpen] = useState(depth < 2)
   const hasChildren = node.children && node.children.length > 0
-  const icon = TYPE_ICONS[node.type] ?? '📄'
+  const Icon = TYPE_ICONS[node.type] ?? FileText
   const color = TYPE_COLORS[node.type] ?? 'text-gray-600'
   const isSelected = selectedPath === node.path
   const indent = depth * 12
@@ -56,8 +71,8 @@ function TreeItem({
           className={`flex items-center w-full text-left py-1 px-2 rounded-lg hover:bg-gray-100 group ${isSelected ? 'bg-brand-50' : ''}`}
           style={{ paddingLeft: `${indent + 8}px` }}
         >
-          <span className="text-gray-400 mr-1.5 text-xs">{open ? '▾' : '▸'}</span>
-          <span className={`mr-1.5 text-xs ${color}`}>{icon}</span>
+          <span className="text-gray-400 mr-1.5 shrink-0">{open ? <ChevronDown size={12} /> : <ChevronRight size={12} />}</span>
+          <span className={`mr-1.5 shrink-0 ${color}`}><Icon size={12} /></span>
           <span className="text-xs font-medium text-gray-700 truncate">{node.label}</span>
           {!node.exists && <span className="ml-1 text-xs text-gray-300">(not found)</span>}
         </button>
@@ -81,7 +96,7 @@ function TreeItem({
       style={{ paddingLeft: `${indent + 20}px` }}
       title={node.task_name ? `Task: ${node.task_name}` : undefined}
     >
-      <span className={`mr-1.5 ${color}`}>{icon}</span>
+      <span className={`mr-1.5 shrink-0 ${color}`}><Icon size={12} /></span>
       <span className="truncate font-mono">{node.label}</span>
       {node.task_name && (
         <span className="ml-auto text-gray-300 text-[10px] truncate max-w-[80px] pl-2">{node.task_name}</span>
@@ -201,11 +216,14 @@ export function PlaybookDrawer({
 
             {/* Legend */}
             <div className="px-3 py-2 border-t border-gray-100 bg-gray-50 space-y-0.5">
-              {[['🎨', 'template', 'Jinja2 template'], ['▷', 'tasks', 'Task list'], ['⚡', 'handlers', 'Handlers'], ['📋', 'vars', 'Variables']].map(([icon, , label]) => (
-                <div key={label} className="flex items-center gap-1.5 text-[10px] text-gray-400">
-                  <span>{icon}</span><span>{label}</span>
-                </div>
-              ))}
+              {[['template', 'Jinja2 template'], ['tasks', 'Task list'], ['handlers', 'Handlers'], ['vars', 'Variables']].map(([type, label]) => {
+                const LegendIcon = TYPE_ICONS[type]
+                return (
+                  <div key={label} className="flex items-center gap-1.5 text-[10px] text-gray-400">
+                    <LegendIcon size={11} /><span>{label}</span>
+                  </div>
+                )
+              })}
             </div>
           </div>
 
@@ -216,8 +234,11 @@ export function PlaybookDrawer({
                 {/* Editor header */}
                 <div className="flex items-center justify-between px-4 py-2 border-b border-gray-100 bg-gray-50 shrink-0">
                   <div className="flex items-center gap-2 min-w-0">
-                    <span className={`${TYPE_COLORS[selectedNode.type] ?? 'text-gray-500'} text-sm`}>
-                      {TYPE_ICONS[selectedNode.type] ?? '📄'}
+                    <span className={`${TYPE_COLORS[selectedNode.type] ?? 'text-gray-500'} shrink-0`}>
+                      {(() => {
+                        const HeaderIcon = TYPE_ICONS[selectedNode.type] ?? FileText
+                        return <HeaderIcon size={14} />
+                      })()}
                     </span>
                     <code className="text-xs text-gray-700 truncate font-mono">{selectedNode.path}</code>
                     {isDirty && <span className="text-xs text-amber-600 font-semibold shrink-0">● unsaved</span>}

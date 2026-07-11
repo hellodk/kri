@@ -1,4 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { Key } from 'lucide-react'
 import { saltKeysApi } from '../api/saltKeys'
 import { useToastStore } from '../stores/toastStore'
 import { Skeleton } from '../components/Skeleton'
@@ -137,7 +138,7 @@ export function SaltKeysPage() {
 
       {!isLoading && !keys?.degraded && sections.every((s) => s.items.length === 0) && (
         <div className="text-center py-16 text-gray-400">
-          <p className="text-3xl mb-2">🔑</p>
+          <Key size={28} className="mx-auto mb-2" />
           <p className="text-sm">No minion keys yet.</p>
           <p className="text-xs mt-1">Bootstrap a node to see its key appear here.</p>
         </div>

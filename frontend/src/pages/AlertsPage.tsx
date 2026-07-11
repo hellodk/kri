@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { Link } from 'react-router-dom'
 import { formatDistanceToNow } from 'date-fns'
+import { WifiOff, BarChart3, ShieldAlert, Key, Bell } from 'lucide-react'
 import {
   alertsApi,
   type AlertRule,
@@ -23,11 +24,11 @@ const EVENT_TYPES = [
 
 function eventIcon(type: string) {
   switch (type) {
-    case 'node_offline': return '🔴'
-    case 'drift_threshold': return '📊'
-    case 'cve_found': return '🛡️'
-    case 'key_pending': return '🔑'
-    default: return '🔔'
+    case 'node_offline': return <WifiOff size={15} className="text-red-500" />
+    case 'drift_threshold': return <BarChart3 size={15} />
+    case 'cve_found': return <ShieldAlert size={15} className="text-amber-600" />
+    case 'key_pending': return <Key size={15} />
+    default: return <Bell size={15} />
   }
 }
 

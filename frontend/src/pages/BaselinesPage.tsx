@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { Camera, Pencil, Package, Ban, Settings2 } from 'lucide-react'
 import { api } from '../api/client'
 import { baselinesApi, type Baseline, type CaptureResult } from '../api/baselines'
 import { groupsApi } from '../api/groups'
@@ -436,8 +437,10 @@ function CreateBaselineModal({ onClose, existing }: { onClose: () => void; exist
             {mode !== 'choose' && (
               <button onClick={() => setMode('choose')} className="text-gray-400 hover:text-gray-600 text-sm">← Back</button>
             )}
-            <h2 className="text-lg font-bold text-gray-900">
-              {isEdit ? `Edit Baseline` : mode === 'choose' ? 'New Baseline' : mode === 'capture' ? '📸 Capture from Node' : '✏️ Build Manually'}
+            <h2 className="text-lg font-bold text-gray-900 inline-flex items-center gap-1.5">
+              {mode === 'capture' && !isEdit && <Camera size={17} />}
+              {mode === 'manual' && !isEdit && <Pencil size={17} />}
+              {isEdit ? `Edit Baseline` : mode === 'choose' ? 'New Baseline' : mode === 'capture' ? 'Capture from Node' : 'Build Manually'}
             </h2>
           </div>
           <button onClick={onClose} className="w-8 h-8 flex items-center justify-center rounded-lg text-gray-400 hover:text-gray-600 hover:bg-gray-100 text-lg">×</button>
@@ -453,7 +456,7 @@ function CreateBaselineModal({ onClose, existing }: { onClose: () => void; exist
                   onClick={() => setMode('capture')}
                   className="group border-2 border-gray-200 hover:border-brand-500 rounded-xl p-5 text-left transition-colors"
                 >
-                  <div className="text-3xl mb-3">📸</div>
+                  <Camera size={28} className="mb-3 text-gray-700" />
                   <p className="font-semibold text-gray-900 group-hover:text-brand-700">Capture from node</p>
                   <p className="text-sm text-gray-500 mt-1">
                     Snapshot what's actually installed on a live node. One click — perfect for "gold image" workflows.
@@ -463,7 +466,7 @@ function CreateBaselineModal({ onClose, existing }: { onClose: () => void; exist
                   onClick={() => setMode('manual')}
                   className="group border-2 border-gray-200 hover:border-brand-500 rounded-xl p-5 text-left transition-colors"
                 >
-                  <div className="text-3xl mb-3">✏️</div>
+                  <Pencil size={28} className="mb-3 text-gray-700" />
                   <p className="font-semibold text-gray-900 group-hover:text-brand-700">Build manually</p>
                   <p className="text-sm text-gray-500 mt-1">
                     Specify required packages, forbidden packages, and expected service states one by one.
@@ -487,12 +490,12 @@ function CreateBaselineModal({ onClose, existing }: { onClose: () => void; exist
               {/* Summary badge when content exists */}
               {hasContent && (
                 <div className="bg-gray-50 border border-gray-200 rounded-lg px-3 py-2 flex gap-4 text-xs text-gray-600">
-                  <span>📦 {required.filter(r => r.name.trim()).length} required</span>
+                  <span className="inline-flex items-center gap-1.5"><Package size={13} /> {required.filter(r => r.name.trim()).length} required</span>
                   {forbidden.filter(f => f.name.trim()).length > 0 && (
-                    <span>🚫 {forbidden.filter(f => f.name.trim()).length} forbidden</span>
+                    <span className="inline-flex items-center gap-1.5"><Ban size={13} /> {forbidden.filter(f => f.name.trim()).length} forbidden</span>
                   )}
                   {services.filter(s => s.name.trim()).length > 0 && (
-                    <span>⚙️ {services.filter(s => s.name.trim()).length} services</span>
+                    <span className="inline-flex items-center gap-1.5"><Settings2 size={13} /> {services.filter(s => s.name.trim()).length} services</span>
                   )}
                 </div>
               )}

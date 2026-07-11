@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { Play, Lock, AlertTriangle, Key } from 'lucide-react'
 import { playbooksApi } from '../api/playbooks'
 import type { PlaybookEntry } from '../api/playbooks'
 import { fleetApi } from '../api/fleet'
@@ -32,7 +33,7 @@ function JobOutput({ jobData, jobId, status, label, colour, logText }: {
           <span className="text-sm text-gray-600 flex-1">on <span className="font-medium font-mono">{jobData.target_label}</span></span>
         )}
         {taskName && (
-          <span className="text-xs text-amber-600 font-mono shrink-0">▶ {taskName}</span>
+          <span className="text-xs text-amber-600 font-mono shrink-0 inline-flex items-center gap-1"><Play size={11} />{taskName}</span>
         )}
         {isLive && (
           <div className="w-4 h-4 border-2 border-brand-600 border-t-transparent rounded-full animate-spin shrink-0" />
@@ -331,10 +332,10 @@ export function PlaybookRunModal({ playbook, onClose, initialTargetType, initial
                         <div className="flex items-center gap-2">
                           <span className="text-xs font-mono font-medium text-gray-800">{key}</span>
                           {isSensitive && (
-                            <span className="text-xs text-blue-500 bg-blue-50 px-1.5 py-0.5 rounded">🔒 sensitive</span>
+                            <span className="text-xs text-blue-500 bg-blue-50 px-1.5 py-0.5 rounded inline-flex items-center gap-1"><Lock size={11} /> sensitive</span>
                           )}
                           {SYSTEM_VARS.has(key) && (
-                            <span className="text-xs text-amber-600 bg-amber-50 px-1.5 py-0.5 rounded">⚠ system</span>
+                            <span className="text-xs text-amber-600 bg-amber-50 px-1.5 py-0.5 rounded inline-flex items-center gap-1"><AlertTriangle size={11} /> system</span>
                           )}
                         </div>
                         {helpText && (
@@ -421,7 +422,7 @@ export function PlaybookRunModal({ playbook, onClose, initialTargetType, initial
             {/* SSH Credentials — resolved automatically, no prompt */}
             <div className="border-t border-gray-100 pt-4">
               <div className="flex items-start gap-2 rounded-lg border border-gray-200 bg-gray-50 px-3 py-2.5">
-                <span className="text-base leading-none mt-0.5" aria-hidden>🔑</span>
+                <Key size={16} className="mt-0.5 shrink-0 text-gray-500" aria-hidden />
                 <p className="text-sm text-gray-600">
                   SSH credentials are resolved automatically for each host
                   <span className="text-gray-500"> (node&nbsp;→&nbsp;group&nbsp;→&nbsp;global settings)</span>.

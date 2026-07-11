@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
+import { Monitor, Users, Play, Hexagon, Sparkles, type LucideIcon } from 'lucide-react'
 import { api } from '../../api/client'
 import { useAuthStore } from '../../stores/authStore'
 import { useFilterStore } from '../../stores/filterStore'
@@ -30,12 +31,12 @@ const TYPE_LABEL: Record<string, string> = {
   llm_query: 'AI Queries',
 }
 
-const TYPE_ICON: Record<string, string> = {
-  node: '💻',
-  group: '▦',
-  ansible_job: '▷',
-  salt_execution: '⬡',
-  llm_query: '🤖',
+const TYPE_ICON: Record<string, LucideIcon> = {
+  node: Monitor,
+  group: Users,
+  ansible_job: Play,
+  salt_execution: Hexagon,
+  llm_query: Sparkles,
 }
 
 function statusDot(status?: string) {
@@ -178,8 +179,12 @@ export function TopBar() {
                   return (
                     <div key={type}>
                       <div className="px-4 py-1 bg-gray-50 border-b border-gray-100">
-                        <span className="text-xs font-semibold text-gray-400 uppercase tracking-wide">
-                          {TYPE_ICON[type]} {TYPE_LABEL[type] ?? type}
+                        <span className="text-xs font-semibold text-gray-400 uppercase tracking-wide inline-flex items-center gap-1.5">
+                          {(() => {
+                            const Icon = TYPE_ICON[type]
+                            return Icon ? <Icon size={12} /> : null
+                          })()}
+                          {TYPE_LABEL[type] ?? type}
                         </span>
                       </div>
                       {items.map((r) => {

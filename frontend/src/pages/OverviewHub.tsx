@@ -1,3 +1,4 @@
+import { LayoutDashboard, Hexagon, HeartPulse, Users, Server } from 'lucide-react'
 import { HubPage } from '../components/HubPage'
 import type { HubTab } from '../components/HubPage'
 import { DashboardPage } from './DashboardPage'
@@ -17,11 +18,11 @@ function FleetHealthAndMonitoring() {
 }
 
 const TABS: HubTab[] = [
-  { key: 'fleet-overview', label: 'Fleet Overview', icon: '⊞', component: DashboardPage },
-  { key: 'fleet',          label: 'Fleet',          icon: '⬡', component: FleetDashboard },
-  { key: 'fleet-health',   label: 'Fleet Health',   icon: '♥', component: FleetHealthAndMonitoring },
-  { key: 'groups',         label: 'Groups',         icon: '◫', component: GroupExplorer },
-  { key: 'salt-masters',   label: 'Salt Masters',   icon: '◆', component: SaltMastersTab },
+  { key: 'fleet-overview', label: 'Fleet Overview', icon: LayoutDashboard, component: DashboardPage },
+  { key: 'fleet',          label: 'Fleet',          icon: Hexagon,         component: FleetDashboard },
+  { key: 'fleet-health',   label: 'Fleet Health',   icon: HeartPulse,      component: FleetHealthAndMonitoring },
+  { key: 'groups',         label: 'Groups',         icon: Users,           component: GroupExplorer },
+  { key: 'salt-masters',   label: 'Salt Masters',   icon: Server,          component: SaltMastersTab },
 ]
 
 export function OverviewHub() {

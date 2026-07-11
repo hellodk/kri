@@ -1,5 +1,6 @@
 import { memo } from 'react'
 import { useQuery } from '@tanstack/react-query'
+import { AlertTriangle, Zap } from 'lucide-react'
 import { fleetApi } from '../../api/fleet'
 
 // ResolvedCredentialPanel — shows which SSH credential a node resolves to,
@@ -47,7 +48,7 @@ export const ResolvedCredentialPanel = memo(function ResolvedCredentialPanel({ n
 
       {!data.has_usable_secret && (
         <div className="mb-3 flex items-center gap-2 px-3 py-2 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700 font-medium">
-          <span className="shrink-0">⚠</span>
+          <AlertTriangle size={16} className="shrink-0" />
           <span>No usable credential resolved — WebSSH/bootstrap will fail.</span>
         </div>
       )}
@@ -55,7 +56,7 @@ export const ResolvedCredentialPanel = memo(function ResolvedCredentialPanel({ n
       {data.multi_group_conflict && (
         <div className="mb-3 px-3 py-2.5 bg-amber-50 border border-amber-200 rounded-lg">
           <div className="flex items-center gap-1.5 text-sm text-amber-800 font-medium mb-1.5">
-            <span>⚡</span>
+            <Zap size={14} />
             Multi-group credential conflict
           </div>
           <p className="text-xs text-amber-700 mb-2">

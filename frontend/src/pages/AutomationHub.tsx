@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
+import { History, ClipboardList, Rocket, Terminal, Key } from 'lucide-react'
 import { HubPage } from '../components/HubPage'
 import type { HubTab } from '../components/HubPage'
 import { ExecutionHistory } from './ExecutionHistory'
@@ -10,11 +11,11 @@ import { SaltKeysPage } from './SaltKeysPage'
 import { playbookSourcesApi } from '../api/playbooks'
 
 const TABS: HubTab[] = [
-  { key: 'executions',   label: 'Executions',   icon: '▷', component: ExecutionHistory },
-  { key: 'playbooks',    label: 'Playbooks',    icon: '▤', component: PlaybooksPage },
-  { key: 'provisioning', label: 'Provisioning', icon: '⊡', component: ProvisioningPage },
-  { key: 'salt-ops',     label: 'Salt Ops',     icon: '▹', component: SaltOpsPage },
-  { key: 'salt-keys',    label: 'Minion Keys',  icon: '⊗', component: SaltKeysPage, showBadge: true },
+  { key: 'executions',   label: 'Executions',   icon: History,       component: ExecutionHistory },
+  { key: 'playbooks',    label: 'Playbooks',    icon: ClipboardList, component: PlaybooksPage },
+  { key: 'provisioning', label: 'Provisioning', icon: Rocket,        component: ProvisioningPage },
+  { key: 'salt-ops',     label: 'Salt Ops',     icon: Terminal,      component: SaltOpsPage },
+  { key: 'salt-keys',    label: 'Minion Keys',  icon: Key,           component: SaltKeysPage, showBadge: true },
 ]
 
 type SyncResult = { label: string; ok: boolean }

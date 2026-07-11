@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useNavigate } from 'react-router-dom'
+import { Star, ClipboardList, Folder, Play, AlertTriangle, type LucideIcon } from 'lucide-react'
 import { playbooksApi } from '../api/playbooks'
 import { ansibleApi } from '../api/ansible'
 import { libraryApi } from '../api/playbookLibrary'
@@ -27,7 +28,7 @@ function filterAndSort(entries: PlaybookEntry[], q: string): PlaybookEntry[] {
 
 interface PlaybookRowProps {
   p: PlaybookEntry
-  badge: string
+  badge: LucideIcon
   badgeClass: string
   mastersBlocked: boolean
   onRun: (p: PlaybookEntry) => void
@@ -36,7 +37,7 @@ interface PlaybookRowProps {
   isFavPending: (catalogId: string | null) => boolean
 }
 
-function PlaybookRow({ p, badge, badgeClass, mastersBlocked, onRun, onFiles, onToggleFavorite, isFavPending }: PlaybookRowProps) {
+function PlaybookRow({ p, badge: Badge, badgeClass, mastersBlocked, onRun, onFiles, onToggleFavorite, isFavPending }: PlaybookRowProps) {
   const isFav = !!p.is_favorite
   return (
     <tr className="border-b border-gray-50 hover:bg-gray-50 transition-colors last:border-0">
@@ -49,25 +50,25 @@ function PlaybookRow({ p, badge, badgeClass, mastersBlocked, onRun, onFiles, onT
             className="leading-none disabled:opacity-40"
           >
             {isFav ? (
-              <span className="text-amber-400 text-lg">★</span>
+              <Star size={16} className="text-amber-400" fill="currentColor" />
             ) : (
-              <span className="text-gray-500 hover:text-amber-400 text-lg">☆</span>
+              <Star size={16} className="text-gray-500 hover:text-amber-400" />
             )}
           </button>
         ) : (
-          <span className="text-gray-500 text-lg" title="Not in library">☆</span>
+          <span title="Not in library"><Star size={16} className="text-gray-500" /></span>
         )}
       </td>
       <td className="px-5 py-3">
         <div className="flex items-center gap-2">
-          <span className={`text-xs px-1.5 py-0.5 rounded font-semibold ${badgeClass}`}>{badge}</span>
+          <span className={`text-xs px-1.5 py-0.5 rounded font-semibold inline-flex items-center gap-1 ${badgeClass}`}><Badge size={11} /></span>
           <span className="font-medium text-gray-900 text-sm">{p.name}</span>
           {p.lint_errors.length > 0 && (
             <span
-              className="text-xs px-1.5 py-0.5 rounded bg-red-50 text-red-600 font-medium border border-red-200"
+              className="text-xs px-1.5 py-0.5 rounded bg-red-50 text-red-600 font-medium border border-red-200 inline-flex items-center gap-1"
               title={p.lint_errors.join('\n')}
             >
-              ⚠ errors
+              <AlertTriangle size={11} /> errors
             </span>
           )}
         </div>
@@ -89,17 +90,17 @@ function PlaybookRow({ p, badge, badgeClass, mastersBlocked, onRun, onFiles, onT
         <div className="flex items-center justify-end gap-2">
           <button
             onClick={() => onFiles(p)}
-            className="px-3 py-1.5 text-xs font-medium border border-gray-200 text-gray-600 rounded-lg hover:bg-gray-50 transition-colors"
+            className="px-3 py-1.5 text-xs font-medium border border-gray-200 text-gray-600 rounded-lg hover:bg-gray-50 transition-colors inline-flex items-center gap-1.5"
           >
-            📁 Files
+            <Folder size={13} /> Files
           </button>
           <button
             onClick={() => onRun(p)}
             disabled={p.lint_errors.length > 0 || mastersBlocked}
             title={mastersBlocked ? 'No enabled salt-master — configure one in Overview → Salt Masters' : undefined}
-            className="px-3 py-1.5 text-xs font-medium bg-brand-600 text-white rounded-lg hover:bg-brand-700 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+            className="px-3 py-1.5 text-xs font-medium bg-brand-600 text-white rounded-lg hover:bg-brand-700 transition-colors disabled:opacity-40 disabled:cursor-not-allowed inline-flex items-center gap-1.5"
           >
-            ▷ Run
+            <Play size={13} /> Run
           </button>
         </div>
       </td>
@@ -134,7 +135,7 @@ function EntriesTable({
   onToggleFavorite,
   isFavPending,
 }: EntriesTableProps) {
-  const badge = entryType === 'playbook' ? '▤' : '⊡'
+  const badge = entryType === 'playbook' ? ClipboardList : Folder
   const badgeClass =
     entryType === 'playbook'
       ? 'bg-brand-50 text-brand-700'
@@ -401,7 +402,7 @@ export function PlaybooksPage() {
                     <PlaybookRow
                       key={`fav-pb-${p.filename}`}
                       p={p}
-                      badge="▤"
+                      badge={ClipboardList}
                       badgeClass="bg-brand-50 text-brand-700"
                       mastersBlocked={mastersBlocked}
                       onRun={setPendingRun}
@@ -414,7 +415,7 @@ export function PlaybooksPage() {
                     <PlaybookRow
                       key={`fav-role-${r.filename}`}
                       p={r}
-                      badge="⊡"
+                      badge={Folder}
                       badgeClass="bg-gray-100 text-gray-600"
                       mastersBlocked={mastersBlocked}
                       onRun={setPendingRun}

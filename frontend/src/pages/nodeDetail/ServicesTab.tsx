@@ -1,5 +1,6 @@
 import { memo, useState, useEffect } from 'react'
 import { useQuery } from '@tanstack/react-query'
+import { RefreshCw } from 'lucide-react'
 import { api } from '../../api/client'
 import { useToastStore } from '../../stores/toastStore'
 import { isProtectedTarget } from './utils'
@@ -82,9 +83,13 @@ export const ServicesTab = memo(function ServicesTab({
         <button
           onClick={fetchServices}
           disabled={servicesLoading || servicesPolling}
-          className="px-3 py-1.5 text-xs font-medium bg-white border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 disabled:opacity-50"
+          className="px-3 py-1.5 text-xs font-medium bg-white border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 disabled:opacity-50 inline-flex items-center gap-1.5"
         >
-          {servicesLoading ? 'Loading…' : servicesPolling ? '⟳ Fetching…' : serviceList.length > 0 ? '↺ Refresh' : '↺ Load'}
+          {servicesLoading
+            ? 'Loading…'
+            : servicesPolling
+              ? <><RefreshCw size={12} className="animate-spin" /> Fetching…</>
+              : <><RefreshCw size={12} /> {serviceList.length > 0 ? 'Refresh' : 'Load'}</>}
         </button>
       </div>
 

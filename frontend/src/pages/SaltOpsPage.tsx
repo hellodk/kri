@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
+import { Zap } from 'lucide-react'
 import { saltOpsApi, type SaltState } from '../api/saltOps'
 import { fleetApi } from '../api/fleet'
 import { api } from '../api/client'
@@ -200,9 +201,9 @@ export function SaltOpsPage() {
           </button>
           <button
             onClick={() => setShowQuickInstall(true)}
-            className="px-4 py-2 text-sm font-medium bg-white border border-gray-200 text-gray-700 rounded-lg hover:bg-gray-50 shadow-xs"
+            className="px-4 py-2 text-sm font-medium bg-white border border-gray-200 text-gray-700 rounded-lg hover:bg-gray-50 shadow-xs inline-flex items-center gap-1.5"
           >
-            ⚡ Quick Install
+            <Zap size={15} /> Quick Install
           </button>
         </div>
       </div>
@@ -231,7 +232,7 @@ export function SaltOpsPage() {
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex items-center justify-between">
-              <h2 className="text-lg font-bold text-gray-900">⚡ Quick Install</h2>
+              <h2 className="text-lg font-bold text-gray-900 inline-flex items-center gap-1.5"><Zap size={17} /> Quick Install</h2>
               <button
                 onClick={() => setShowQuickInstall(false)}
                 className="text-gray-400 hover:text-gray-600 text-xl leading-none"
