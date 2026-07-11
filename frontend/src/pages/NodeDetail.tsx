@@ -1,4 +1,4 @@
-import { Suspense, lazy, useState, useCallback } from 'react'
+import { Suspense, lazy, useState } from 'react'
 import { useParams, Link } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { fleetApi } from '../api/fleet'
@@ -16,8 +16,8 @@ import { VNCViewer } from '../components/VNCViewer'
 import { formatDistanceToNow } from 'date-fns'
 import { useToastStore } from '../stores/toastStore'
 import { useAuthStore } from '../stores/authStore'
-import { api } from '../api/client'
 import { useJobEventStream } from '../hooks/useJobEventStream'
+import { Wrench, Rocket, SquareTerminal, Monitor, Crown } from 'lucide-react'
 import { isMacOSNode, type Tab } from './nodeDetail/utils'
 import { OverviewTab } from './nodeDetail/OverviewTab'
 import { DriftTab } from './nodeDetail/DriftTab'
@@ -50,10 +50,6 @@ export function NodeDetail() {
   const [showJenkinsConfigure, setShowJenkinsConfigure] = useState(false)
   const [jenkinsForm, setJenkinsForm] = useState({ jenkins_url: '', agent_name: '' })
   const [checkingJenkins, setCheckingJenkins] = useState(false)
-  // AI Recommendations state — shared by Overview + Resources tabs
-  const [aiLoading, setAiLoading] = useState(false)
-  const [aiRecommendation, setAiRecommendation] = useState<string | null>(null)
-  const [aiError, setAiError] = useState<string | null>(null)
   const qc = useQueryClient()
   const toast = useToastStore((s) => s.add)
   const currentUser = useAuthStore((s) => s.user)
@@ -150,24 +146,6 @@ export function NodeDetail() {
     }
   }
 
-  const askAI = useCallback(async () => {
-    if (!nodeId) return
-    setAiLoading(true)
-    setAiRecommendation(null)
-    setAiError(null)
-    try {
-      const resp = await api.post<{ recommendation: string; model_used: string }>(
-        `/api/v1/nodes/${nodeId}/ask-ai`,
-        {}
-      )
-      setAiRecommendation(resp.recommendation)
-    } catch (e: unknown) {
-      setAiError(e instanceof Error ? e.message : 'AI unavailable')
-    } finally {
-      setAiLoading(false)
-    }
-  }, [nodeId])
-
   if (isLoading) return <Skeleton rows={8} />
   if (isError || !node) return <ErrorState message="Node not found" retry={refetch} />
 
@@ -216,22 +194,9 @@ export function NodeDetail() {
         </div>
         <div className="flex items-center gap-2">
           <button
-            onClick={askAI}
-            disabled={aiLoading}
-            title="Get AI recommendations for this node"
-            className="px-3 py-2 text-sm font-medium rounded-lg border border-blue-200 bg-blue-50 text-blue-600 hover:bg-blue-100 shadow-xs disabled:opacity-50 transition-colors flex items-center gap-1.5"
-          >
-            {aiLoading ? (
-              <span className="w-3.5 h-3.5 border border-blue-400 border-t-transparent rounded-full animate-spin" />
-            ) : (
-              <span>🤖</span>
-            )}
-            <span className="hidden sm:inline">Ask AI</span>
-          </button>
-          <button
             onClick={() => maintenanceMutation.mutate(!node.maintenance_mode)}
             disabled={maintenanceMutation.isPending}
-            className={`px-3 py-2 text-sm font-medium rounded-lg border shadow-xs disabled:opacity-50 transition-colors ${
+            className={`px-3 py-2 text-sm font-medium rounded-lg border shadow-xs disabled:opacity-50 transition-colors inline-flex items-center gap-1.5 ${
               node.maintenance_mode
                 ? 'bg-amber-100 text-amber-700 border-amber-300 hover:bg-amber-200'
                 : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'
@@ -240,19 +205,23 @@ export function NodeDetail() {
           >
             {maintenanceMutation.isPending
               ? '…'
-              : node.maintenance_mode
-              ? '⚙ Exit Maintenance'
-              : '⚙ Maintenance'}
+              : (
+                <>
+                  <Wrench size={16} />
+                  {node.maintenance_mode ? 'Exit Maintenance' : 'Maintenance'}
+                </>
+              )}
           </button>
           <button
             onClick={() => {
               setRebootstrapIp(node.bootstrap_ip ?? node.ip_address ?? '')
               setShowRebootstrap(true)
             }}
-            className="px-4 py-2 bg-brand-600 text-white text-sm font-medium rounded-lg hover:bg-brand-700 shadow-xs transition-colors"
+            className="px-4 py-2 bg-brand-600 text-white text-sm font-medium rounded-lg hover:bg-brand-700 shadow-xs transition-colors inline-flex items-center gap-1.5"
             title="Run Ansible bootstrap playbook on this node"
           >
-            ⊡ Bootstrap
+            <Rocket size={16} />
+            Bootstrap
           </button>
           <button
             onClick={() => {
@@ -267,18 +236,20 @@ export function NodeDetail() {
               setShowSSH(true)
             }}
             disabled={!node.bootstrap_ip}
-            className="px-4 py-2 bg-emerald-600 text-white text-sm font-medium rounded-lg hover:bg-emerald-700 disabled:opacity-40 shadow-xs font-mono"
+            className="px-4 py-2 bg-emerald-600 text-white text-sm font-medium rounded-lg hover:bg-emerald-700 disabled:opacity-40 shadow-xs font-mono inline-flex items-center gap-1.5"
             title={!node.bootstrap_ip ? 'Bootstrap node first to get its IP' : `SSH into ${node.hostname} (${node.status})`}
           >
+            <SquareTerminal size={16} />
             SSH
           </button>
           {vncEnabled && (
             <button
               onClick={() => setShowVNC(true)}
               disabled={!node.bootstrap_ip}
-              className="px-4 py-2 bg-purple-600 text-white text-sm font-medium rounded-lg hover:bg-purple-700 disabled:opacity-40 shadow-xs font-mono"
+              className="px-4 py-2 bg-purple-600 text-white text-sm font-medium rounded-lg hover:bg-purple-700 disabled:opacity-40 shadow-xs font-mono inline-flex items-center gap-1.5"
               title={!node.bootstrap_ip ? 'Bootstrap node first to get its IP' : `VNC into ${node.hostname} (${node.status})`}
             >
+              <Monitor size={16} />
               VNC
             </button>
           )}
@@ -292,9 +263,9 @@ export function NodeDetail() {
                   ? 'Bootstrap the node first to obtain a reachable IP'
                   : 'Promote this node to also act as a salt-master'
               }
-              className="px-3 py-2 text-sm font-medium rounded-lg border border-indigo-300 bg-indigo-50 text-indigo-700 hover:bg-indigo-100 disabled:opacity-40 shadow-xs transition-colors"
+              className="px-3 py-2 text-sm font-medium rounded-lg border border-indigo-300 bg-indigo-50 text-indigo-700 hover:bg-indigo-100 disabled:opacity-40 shadow-xs transition-colors inline-flex items-center gap-1.5"
             >
-              {promoteMutation.isPending ? 'Promoting…' : '⬆ Promote to Master'}
+              {promoteMutation.isPending ? 'Promoting…' : (<><Crown size={16} />Promote to Master</>)}
             </button>
           )}
           <Link to="/fleet" className="text-sm text-brand-600 hover:underline">← Fleet</Link>
@@ -349,10 +320,6 @@ export function NodeDetail() {
           setShowRebootstrap={setShowRebootstrap}
           rebootstrapIp={rebootstrapIp}
           setRebootstrapIp={setRebootstrapIp}
-          aiLoading={aiLoading}
-          aiRecommendation={aiRecommendation}
-          aiError={aiError}
-          onAskAI={askAI}
           refetchNode={refetch}
         />
       )}
@@ -476,10 +443,6 @@ export function NodeDetail() {
       {tab === 'resources' && (
         <ResourcesTab
           nodeId={nodeId!}
-          aiLoading={aiLoading}
-          aiRecommendation={aiRecommendation}
-          aiError={aiError}
-          onAskAI={askAI}
         />
       )}
     </div>

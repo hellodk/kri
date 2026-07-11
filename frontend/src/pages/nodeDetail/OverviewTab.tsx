@@ -14,7 +14,6 @@ import { useToastStore } from '../../stores/toastStore'
 import { BOOTSTRAP_STATUS_STYLE } from './utils'
 import { ConnectivityPanel } from './ConnectivityPanel'
 import { ResolvedCredentialPanel } from './ResolvedCredentialPanel'
-import { AiRecommendationPanel } from './AiRecommendationPanel'
 import type { SaltMaster } from '../../api/saltMasters'
 import type { NodeDetail as NodeDetailData } from '../../types'
 
@@ -27,10 +26,6 @@ export const OverviewTab = memo(function OverviewTab({
   setShowRebootstrap,
   rebootstrapIp,
   setRebootstrapIp,
-  aiLoading,
-  aiRecommendation,
-  aiError,
-  onAskAI,
   refetchNode,
 }: {
   node: NodeDetailData
@@ -41,10 +36,6 @@ export const OverviewTab = memo(function OverviewTab({
   setShowRebootstrap: (v: boolean) => void
   rebootstrapIp: string
   setRebootstrapIp: (v: string) => void
-  aiLoading: boolean
-  aiRecommendation: string | null
-  aiError: string | null
-  onAskAI: () => void
   refetchNode: () => void
 }) {
   const qc = useQueryClient()
@@ -665,40 +656,6 @@ export const OverviewTab = memo(function OverviewTab({
               <p className="text-gray-600 dark:text-gray-400 mt-1">{quickTaskOutput.reason}</p>
             )}
           </div>
-        )}
-      </div>
-
-      {/* AI Recommendations */}
-      <div className="bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200 rounded-xl p-5 md:col-span-2">
-        <div className="flex items-center justify-between mb-3">
-          <div className="flex items-center gap-2">
-            <span className="text-base">🤖</span>
-            <h3 className="text-sm font-semibold text-gray-900">AI Recommendations</h3>
-          </div>
-          <button
-            onClick={onAskAI}
-            disabled={aiLoading}
-            className="px-3 py-1.5 text-xs font-medium bg-blue-600 hover:bg-blue-700 text-white rounded-lg disabled:opacity-50 transition-colors flex items-center gap-1.5"
-          >
-            {aiLoading ? (
-              <><span className="w-3 h-3 border border-white/40 border-t-white rounded-full animate-spin inline-block" />Analyzing…</>
-            ) : (
-              'Ask AI'
-            )}
-          </button>
-        </div>
-
-        {aiRecommendation ? (
-          <AiRecommendationPanel text={aiRecommendation} />
-        ) : aiError ? (
-          <div className="flex items-start gap-2 p-3 bg-red-50 border border-red-200 rounded-lg">
-            <span className="text-red-500 mt-0.5">⚠</span>
-            <p className="text-sm text-red-700">{aiError}</p>
-          </div>
-        ) : (
-          <p className="text-sm text-gray-500">
-            Get AI-powered analysis of this node's health, resource usage, and drift — with actionable recommendations.
-          </p>
         )}
       </div>
 

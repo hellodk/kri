@@ -2,20 +2,11 @@ import { memo, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { api } from '../../api/client'
 import { Sparkline } from './Sparkline'
-import { AiRecommendationPanel } from './AiRecommendationPanel'
 
 export const ResourcesTab = memo(function ResourcesTab({
   nodeId,
-  aiLoading,
-  aiRecommendation,
-  aiError,
-  onAskAI,
 }: {
   nodeId: string
-  aiLoading: boolean
-  aiRecommendation: string | null
-  aiError: string | null
-  onAskAI: () => void
 }) {
   const [metricsRange, setMetricsRange] = useState<'15m' | '1h' | '6h' | '24h'>('1h')
 
@@ -96,41 +87,6 @@ export const ResourcesTab = memo(function ResourcesTab({
       <p className="text-xs text-gray-500 text-center">
         Source: Prometheus ({metricsData?.instance}) · Refreshes every 30s
       </p>
-
-      {/* AI Recommendations — Resources tab */}
-      <div className="bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200 rounded-xl p-5">
-        <div className="flex items-center justify-between mb-3">
-          <div className="flex items-center gap-2">
-            <span className="text-base">🤖</span>
-            <h3 className="text-sm font-semibold text-gray-900">AI Analysis</h3>
-            <span className="text-xs text-gray-500">Resource usage, drift &amp; alerts</span>
-          </div>
-          <button
-            onClick={onAskAI}
-            disabled={aiLoading}
-            className="px-3 py-1.5 text-xs font-medium bg-blue-600 hover:bg-blue-700 text-white rounded-lg disabled:opacity-50 transition-colors flex items-center gap-1.5"
-          >
-            {aiLoading ? (
-              <><span className="w-3 h-3 border border-white/40 border-t-white rounded-full animate-spin inline-block" />Analyzing…</>
-            ) : (
-              'Get AI Analysis'
-            )}
-          </button>
-        </div>
-
-        {aiRecommendation ? (
-          <AiRecommendationPanel text={aiRecommendation} />
-        ) : aiError ? (
-          <div className="flex items-start gap-2 p-3 bg-red-50 border border-red-200 rounded-lg">
-            <span className="text-red-500 mt-0.5">⚠</span>
-            <p className="text-sm text-red-700">{aiError}</p>
-          </div>
-        ) : (
-          <p className="text-sm text-gray-500">
-            Click "Get AI Analysis" for an AI-powered assessment of this node's resource usage, configuration drift, and recent alerts — with ranked actionable recommendations.
-          </p>
-        )}
-      </div>
     </div>
   )
 })

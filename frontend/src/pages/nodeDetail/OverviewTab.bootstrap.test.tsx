@@ -40,7 +40,6 @@ vi.mock('../../stores/toastStore', () => ({
 // Child panels fire their own queries — stub them out to isolate this test.
 vi.mock('./ConnectivityPanel', () => ({ ConnectivityPanel: () => null }))
 vi.mock('./ResolvedCredentialPanel', () => ({ ResolvedCredentialPanel: () => null }))
-vi.mock('./AiRecommendationPanel', () => ({ AiRecommendationPanel: () => null }))
 
 // ── Helpers ──────────────────────────────────────────────────────────────────────
 
@@ -72,10 +71,6 @@ function renderOverview(props: { showRebootstrap: boolean; node?: NodeDetailData
           setShowRebootstrap={vi.fn()}
           rebootstrapIp="192.168.1.64"
           setRebootstrapIp={vi.fn()}
-          aiLoading={false}
-          aiRecommendation={null}
-          aiError={null}
-          onAskAI={vi.fn()}
           refetchNode={vi.fn()}
         />
       </MemoryRouter>
