@@ -1,0 +1,21 @@
+---
+# playbooks/roles/node_telemetry/tasks/install_linux.yml
+# psutil via the distro package manager. macmon/tart have no Linux equivalent
+# (Homebrew-only, Apple-Silicon-only tooling).
+
+- name: Install python3-psutil (Debian/Ubuntu)
+  ansible.builtin.apt:
+    name: "{{ node_telemetry_psutil_package_apt }}"
+    state: present
+    update_cache: true
+  become: true
+  failed_when: false
+  when: ansible_os_family == 'Debian'
+
+- name: Install python3-psutil (RHEL/Rocky)
+  ansible.builtin.dnf:
+    name: "{{ node_telemetry_psutil_package_dnf }}"
+    state: present
+  become: true
+  failed_when: false
+  when: ansible_os_family == 'RedHat'

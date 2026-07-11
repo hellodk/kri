@@ -1,0 +1,116 @@
+---
+# playbooks/roles/kri_enroll/tasks/main.yml
+# (Re)enrolls a node with the kri Fleet Platform:
+#   1. Verifies the salt-minion can reach its master before applying schedules
+#      (state.apply fetches from the MASTER and has no built-in timeout, so an
+#      unreachable master would hang indefinitely — bounded via async/poll,
+#      NOT the `timeout` binary which is absent on stock macOS).
+#   2. Applies the kri heartbeat + process-report schedules via salt-call.
+#   3. Pushes initial grains (facts + packages) to the kri ingest API.
+#
+# REQUIRES the common role's facts (cpu_arch, salt_call_bin, brew_prefix,
+# brew_user on macOS) and gathered facts (ansible_distribution_version,
+# ansible_processor_vcpus, ansible_memtotal_mb, ansible_product_name, ...).
+
+# ── Salt schedules (fixes a hang — preserve exactly, do not regress) ────────
+- name: Verify minion can reach salt-master (test.ping)
+  ansible.builtin.command: "{{ salt_call_bin }} test.ping"
+  async: 30
+  poll: 5
+  register: salt_ping
+  retries: 6
+  delay: 5
+  until: salt_ping.rc | default(1) == 0
+  become: true
+  changed_when: false
+  failed_when: false
+
+- name: Apply kri heartbeat schedule via salt-call
+  ansible.builtin.command: "{{ salt_call_bin }} state.apply base.heartbeat"
+  async: 120
+  poll: 5
+  become: true
+  changed_when: false
+  failed_when: false
+  when: salt_ping.rc | default(1) == 0
+
+- name: Apply kri process-report schedule via salt-call
+  ansible.builtin.command: "{{ salt_call_bin }} state.apply base.process_report_schedule"
+  async: 120
+  poll: 5
+  become: true
+  changed_when: false
+  failed_when: false
+  when: salt_ping.rc | default(1) == 0
+
+# ── macOS-only: hardware serial (no gathered-fact equivalent — §9 #4 keeps
+# this one shell call, everything else below uses gathered facts). ──────────
+- name: Collect serial number (macOS)
+  ansible.builtin.shell: |
+    system_profiler SPHardwareDataType 2>/dev/null | awk -F': ' '/Serial Number/{print $2}' | tr -d ' \n\r' ||
+    echo ''
+  register: serial_result
+  changed_when: false
+  become: false
+  failed_when: false
+  when: ansible_os_family == 'Darwin'
+
+# ── macOS-only: installed Homebrew packages (fed into grains.brew_pkgs) ─────
+- name: Collect installed Homebrew packages (macOS)
+  ansible.builtin.shell: "{{ brew_prefix }}/bin/brew list --versions 2>/dev/null || true"
+  register: brew_list_result
+  changed_when: false
+  become: false
+  become_user: "{{ brew_user }}"
+  environment:
+    PATH: "{{ brew_prefix }}/bin:/usr/local/bin:/usr/bin:/bin"
+    HOME: "/Users/{{ brew_user }}"
+  failed_when: false
+  when: ansible_os_family == 'Darwin'
+
+- name: Parse brew packages into dict (macOS)
+  ansible.builtin.set_fact:
+    brew_pkgs: "{{ brew_pkgs | default({}) | combine({item.split()[0]: item.split()[1] | default('')}) }}"
+  loop: "{{ brew_list_result.stdout_lines | default([]) | select('match', '^[a-zA-Z].*') | list }}"
+  when: ansible_os_family == 'Darwin' and brew_list_result is defined and brew_list_result.rc == 0 and brew_list_result.stdout != ''
+
+# ── Push initial grains to kri Fleet Platform ────────────────────────────────
+# §9 #7 — ONE OS-conditional uri task (was two near-duplicate macOS/Linux
+# blocks). §9 #4 — OS/CPU/RAM/model fields use gathered facts on BOTH OSes;
+# the macOS serial has no gathered-fact equivalent so serial_result is kept.
+- name: Push Ansible facts + packages as grains to kri ingest API
+  ansible.builtin.uri:
+    url: "{{ ingest_url }}/grains"
+    method: POST
+    headers:
+      Content-Type: "application/json"
+      X-Node-Token: "{{ node_token }}"
+    body_format: json
+    body:
+      minion_id: "{{ minion_id }}"
+      grains:
+        id: "{{ minion_id }}"
+        host: "{{ ansible_hostname | default(minion_id) }}"
+        fqdn: "{{ ansible_fqdn | default(ansible_hostname) | default(minion_id) }}"
+        os: "{{ 'MacOS' if ansible_os_family == 'Darwin' else (ansible_distribution | default('Linux')) }}"
+        os_family: "{{ 'MacOS' if ansible_os_family == 'Darwin' else (ansible_os_family | default('Linux')) }}"
+        osfullname: "{{ 'macOS' if ansible_os_family == 'Darwin' else (ansible_distribution | default('Linux')) }}"
+        osrelease: "{{ ansible_distribution_version | default('') }}"
+        kernel: "{{ 'Darwin' if ansible_os_family == 'Darwin' else 'Linux' }}"
+        kernelrelease: "{{ ansible_kernel | default('') }}"
+        cpuarch: "{{ cpu_arch }}"
+        num_cpus: "{{ ansible_processor_vcpus | default(0) }}"
+        mem_total: "{{ ansible_memtotal_mb | default(0) }}"
+        productname: "{{ ansible_product_name | default('') }}"
+        serialnumber: "{{ (serial_result.stdout | trim | default('')) if ansible_os_family == 'Darwin' else (ansible_product_serial | default('')) }}"
+        saltversion: "{{ salt_version }}"
+        ip4_interfaces:
+          "{{ ansible_default_ipv4.interface | default('en0' if ansible_os_family == 'Darwin' else 'eth0') }}":
+            - "{{ ansible_default_ipv4.address | default('') }}"
+        brew_pkgs: "{{ brew_pkgs | default({}) }}"
+    status_code: [200, 201, 204]
+    timeout: 30
+  become: false
+  no_log: true
+  failed_when: false
+  when: ingest_url is defined and node_token is defined

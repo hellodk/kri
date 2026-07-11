@@ -1,0 +1,4 @@
+---
+# playbooks/roles/kri_enroll/defaults/main.yml
+# ingest_url, node_token, minion_id, salt_version are per-node identity/secrets
+# — set in host_vars or passed with -e. No safe defaults exist for these.

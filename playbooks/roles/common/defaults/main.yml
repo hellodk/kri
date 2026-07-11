@@ -1,0 +1,4 @@
+---
+# playbooks/roles/common/defaults/main.yml
+# No role-specific defaults. brew_prefix_arm64 / brew_prefix_x86 are supplied by
+# playbooks/group_vars/all.yml and consumed here to derive brew_prefix.

@@ -1,0 +1,51 @@
+---
+# playbooks/roles/node_telemetry/tasks/install_macos.yml
+# psutil (process_collector dependency) + macmon/tart (Homebrew CLIs), macOS only.
+#
+# Homebrew tasks run as brew_user (never root, per the common role's brew_user
+# fact) so they land in a writable location regardless of how Homebrew/python3
+# is managed on the host.
+
+- name: Check for python3 psutil (macOS)
+  ansible.builtin.shell: python3 -c "import psutil" 2>/dev/null
+  register: psutil_check_macos
+  changed_when: false
+  failed_when: false
+  become: false
+  become_user: "{{ brew_user }}"
+  environment:
+    PATH: "{{ brew_prefix }}/bin:/usr/local/bin:/usr/bin:/bin"
+    HOME: "/Users/{{ brew_user }}"
+  when: ansible_os_family == 'Darwin'
+
+- name: Install python3 psutil via pip --user (macOS)
+  ansible.builtin.shell: python3 -m pip install --user --upgrade psutil
+  register: psutil_install_macos
+  changed_when: "'Successfully installed' in psutil_install_macos.stdout"
+  failed_when: false
+  become: false
+  become_user: "{{ brew_user }}"
+  environment:
+    PATH: "{{ brew_prefix }}/bin:/usr/local/bin:/usr/bin:/bin"
+    HOME: "/Users/{{ brew_user }}"
+  when: ansible_os_family == 'Darwin' and psutil_check_macos.rc != 0
+
+# ── macmon + tart: §9 #9 — keep as guarded `shell` (NOT
+# community.general.homebrew — that collection is not vendored), made
+# idempotent via `creates` on the installed binary. ──────────────────────────
+- name: Install macmon and tart via Homebrew (macOS)
+  # item.formula may be tap-qualified (cirruslabs/cli/tart); item.bin is the
+  # installed binary name used for the `creates` idempotency guard.
+  ansible.builtin.shell: "{{ brew_prefix }}/bin/brew install {{ item.formula }}"
+  args:
+    creates: "{{ brew_prefix }}/bin/{{ item.bin }}"
+  register: node_telemetry_brew_install
+  changed_when: "'already installed' not in (node_telemetry_brew_install.stderr | default(''))"
+  failed_when: false
+  become: false
+  become_user: "{{ brew_user }}"
+  environment:
+    PATH: "{{ brew_prefix }}/bin:/usr/local/bin:/usr/bin:/bin"
+    HOME: "/Users/{{ brew_user }}"
+  loop: "{{ node_telemetry_brew_packages }}"
+  when: ansible_os_family == 'Darwin'

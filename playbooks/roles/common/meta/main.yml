@@ -1,0 +1,23 @@
+---
+galaxy_info:
+  role_name: common
+  description: >-
+    Normalizes OS/arch facts (cpu_arch, ne_arch, ne_os, salt_call_bin,
+    salt_group, brew_prefix, brew_user) shared across kri bootstrap roles.
+  license: MIT
+  min_ansible_version: "2.14"
+  platforms:
+    - name: EL
+      versions:
+        - all
+    - name: Debian
+      versions:
+        - all
+    - name: Ubuntu
+      versions:
+        - all
+    - name: MacOSX
+      versions:
+        - all
+
+dependencies: []

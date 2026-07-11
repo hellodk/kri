@@ -1,0 +1,22 @@
+---
+# playbooks/roles/node_telemetry/tasks/main.yml
+# Installs node telemetry / tooling dependencies (psutil, macmon, tart).
+#
+#   psutil  — python3 module required by the Salt process_collector
+#             (salt/states/base/files/process_collector.py); feeds the
+#             Processes tab. Installed on BOTH macOS and Linux.
+#   macmon  — Apple-Silicon sudoless system monitor CLI (vladkens/macmon),
+#             Homebrew only, macOS-only (no Linux equivalent).
+#   tart    — cirruslabs/tart VM CLI; installing the binary has no runtime cost
+#             (only running VMs consume resources). Powers the Virtual Machines
+#             tab (`tart list`). Homebrew only, macOS-only.
+#
+# REQUIRES the common role's facts (brew_prefix, brew_user) on macOS.
+
+- name: Install node telemetry dependencies (macOS)
+  ansible.builtin.include_tasks: install_macos.yml
+  when: ansible_os_family == 'Darwin'
+
+- name: Install node telemetry dependencies (Linux)
+  ansible.builtin.include_tasks: install_linux.yml
+  when: ansible_os_family in ['Debian', 'RedHat']

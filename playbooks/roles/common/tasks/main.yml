@@ -1,0 +1,39 @@
+---
+# playbooks/roles/common/tasks/main.yml
+# Normalizes OS/arch facts shared across all bootstrap roles: cpu_arch, ne_arch,
+# ne_os, salt_call_bin, salt_group, brew_prefix, brew_user.
+#
+# REQUIRES gathered facts (ansible_architecture, ansible_os_family, ...) to
+# already be present on the host before this role runs — either `gather_facts:
+# true` at the play level, or an explicit `setup:` task earlier in the play.
+# See README.md.
+
+# ── §9 #1 — derive arch from the gathered `ansible_architecture` fact.
+# NOT `raw: uname -m` (that bypasses the module subsystem and needs its own
+# fact-gathering workaround before Python/SSH pipelining is confirmed). ──────
+- name: Set cpu_arch and ne_arch facts (derived from gathered ansible_architecture)
+  ansible.builtin.set_fact:
+    cpu_arch: "{{ 'arm64' if ansible_architecture in ['arm64', 'aarch64'] else 'x86_64' }}"
+    ne_arch: "{{ 'arm64' if ansible_architecture in ['arm64', 'aarch64'] else 'amd64' }}"
+
+- name: Set OS-specific runtime facts
+  ansible.builtin.set_fact:
+    ne_os: "{{ 'darwin' if ansible_os_family == 'Darwin' else 'linux' }}"
+    salt_call_bin: "{{ '/opt/salt/salt-call' if ansible_os_family == 'Darwin' else 'salt-call' }}"
+    salt_group: "{{ 'wheel' if ansible_os_family == 'Darwin' else 'root' }}"
+    brew_prefix: >-
+      {{ brew_prefix_arm64 if cpu_arch == 'arm64' else brew_prefix_x86 }}
+
+# ── macOS: Detect actual user (even when SSH'd as root) ─────────────────────
+- name: Get logged-in macOS user from console
+  ansible.builtin.command: stat -f "%Su" /dev/console
+  register: mac_console_user
+  changed_when: false
+  become: false
+  failed_when: false
+  when: ansible_os_family == 'Darwin'
+
+- name: Set brew_user fact (macOS)
+  ansible.builtin.set_fact:
+    brew_user: "{{ ansible_user if ansible_user != 'root' else mac_console_user.stdout }}"
+  when: ansible_os_family == 'Darwin'
