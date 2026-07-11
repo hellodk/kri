@@ -50,6 +50,33 @@ _MAX_STDOUT_BYTES = 2 * 1024 * 1024
 _TRUNCATION_SENTINEL = "\n\n[output truncated at 2 MB — full log not retained]"
 
 
+def _mask_extravar(key: str, value: object) -> str:
+    """Render an extravar value for display, masking secrets (#960).
+
+    Any key hinting at a credential (pass/password/token/secret/credential, or
+    ending in _key) is redacted to ****; long non-secret values are truncated.
+    """
+    kl = key.lower()
+    if any(h in kl for h in ("pass", "token", "secret", "credential")) or kl.endswith("_key"):
+        return "****"
+    s = str(value)
+    return s if len(s) <= 120 else s[:117] + "..."
+
+
+def _format_ansible_cmdline(playbook: str, inventory: str, extravars: dict) -> str:
+    """Build the reproducible ansible-playbook command line for the log header.
+
+    Secrets are masked via _mask_extravar. Emitted at the top of the bootstrap /
+    provision output so operators see the exact effective invocation (#960).
+    """
+    parts = ["ansible-playbook", "-i", inventory, playbook]
+    for k, v in extravars.items():
+        parts.append("-e")
+        parts.append(f"{k}={_mask_extravar(k, v)}")
+    cmd = " ".join(parts)
+    return f"── Ansible command ──────────────────────────────────────────\n$ {cmd}\n──────────────────────────────────────────────────────────────\n"
+
+
 @celery_app.task(
     name="fleet_platform.workers.ansible_tasks.bootstrap_node",
     bind=True,
@@ -310,23 +337,28 @@ def bootstrap_node(
             if node_exporter_url_override is not None:
                 runtime_extravars["node_exporter_url_override"] = node_exporter_url_override
 
+            _bootstrap_playbook = str(_PLAYBOOKS_DIR / "bootstrap_node.yml")
+            _extravars = {
+                # Multi-master HA list (#534): playbook renders master: [list] + failover settings.
+                "salt_masters": master_addresses,
+                # Back-compat: single-value alias (first master) for any downstream that may
+                # still reference salt_master_address.
+                "salt_master_address": first_master_address,
+                "minion_id": node_minion_id,
+                "controller_pubkey": controller_pubkey,
+                "ingest_url": ingest_url,
+                "node_token": raw_token,
+                **password_extravars,
+                **runtime_extravars,
+            }
+            # Emit the full effective command (secrets masked) at the top of the log (#960).
+            _append_capped(stdout_lines, _format_ansible_cmdline(_bootstrap_playbook, str(inv_path), _extravars), _trunc_ref)
+
             thread, runner = ansible_runner.run_async(
                 private_data_dir=tmpdir,
-                playbook=str(_PLAYBOOKS_DIR / "bootstrap_node.yml"),
+                playbook=_bootstrap_playbook,
                 inventory=str(inv_path),
-                extravars={
-                    # Multi-master HA list (#534): playbook renders master: [list] + failover settings.
-                    "salt_masters": master_addresses,
-                    # Back-compat: single-value alias (first master) for any downstream that may
-                    # still reference salt_master_address.
-                    "salt_master_address": first_master_address,
-                    "minion_id": node_minion_id,
-                    "controller_pubkey": controller_pubkey,
-                    "ingest_url": ingest_url,
-                    "node_token": raw_token,
-                    **password_extravars,
-                    **runtime_extravars,
-                },
+                extravars=_extravars,
                 envvars={
                     "ANSIBLE_COLLECTIONS_PATH": str(_PLAYBOOKS_DIR / "collections" / "installed"),
                     # -F /dev/null skips ~/.ssh/config entirely — required when the config
@@ -853,16 +885,21 @@ def provision_master(self, salt_master_id: str, action: str = "install") -> dict
                         _append_capped(stdout_lines, msg, _trunc_ref)
                 return True
 
+            _provision_playbook = str(_PLAYBOOKS_DIR / playbook_name)
+            _extravars = {
+                "target_host": ssh_host,
+                "ansible_user": ssh_user,
+                "kri_salt_api_password": api_password,
+                **password_extravars,
+            }
+            # Emit the full effective command (secrets masked) at the top of the log (#960).
+            _append_capped(stdout_lines, _format_ansible_cmdline(_provision_playbook, str(inv_path), _extravars), _trunc_ref)
+
             thread, runner = ansible_runner.run_async(
                 private_data_dir=tmpdir,
-                playbook=str(_PLAYBOOKS_DIR / playbook_name),
+                playbook=_provision_playbook,
                 inventory=str(inv_path),
-                extravars={
-                    "target_host": ssh_host,
-                    "ansible_user": ssh_user,
-                    "kri_salt_api_password": api_password,
-                    **password_extravars,
-                },
+                extravars=_extravars,
                 envvars={
                     "ANSIBLE_COLLECTIONS_PATH": str(_PLAYBOOKS_DIR / "collections" / "installed"),
                     "ANSIBLE_SSH_ARGS": ssh_args,
