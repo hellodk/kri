@@ -300,3 +300,25 @@ scripts/kri test unit   # includes tests for playbook_discovery / playbook_tasks
 5. Adopt **Molecule** for role CI now, or defer (adds dev-dep + CI time)?
 6. Target `ansible-lint` **`production`** profile as the CI gate, or start at `safety`/`shared` and ratchet up?
 ```
+---
+
+## 9. Optimization decisions — LOCKED 2026-07-11 (fold into the refactor)
+
+These shell→module / idempotency optimizations are **not** to be applied as a standalone edit to the `bootstrap_node.yml` monolith — they are **folded into the roles refactor** (Phases 2–3 above), applied per role as tasks move into `common`/`salt_minion`/`node_telemetry`/`kri_enroll`.
+
+**Collection policy:** stay on `ansible.builtin` + `ansible.posix` (already vendored). **Do NOT vendor `community.general`** — so `homebrew`/`launchd` modules are OUT; brew stays `shell` but made idempotent with `creates`/`changed_when`.
+
+| # | Current (bootstrap_node.yml, live line refs) | Target (builtin/posix) | Notes |
+|---|---|---|---|
+| 1 | `raw: uname -m` (L32) | gathered `ansible_architecture` (setup) → `cpu_arch`/`ne_arch` set_fact | in `common` role |
+| 2 | `nc -z … 4505` / `4506` (L62/L70) | `ansible.builtin.wait_for` **loop** over `salt_masters × [4505,4506]` | no `nc` dependency; `host_prep_gate.yml` |
+| 3 | `ps aux \| grep salt-minion` (L311) | `ansible.builtin.service_facts` (or `wait_for` on the launchd/systemd unit) | `salt_minion` role |
+| 4 | `sw_vers` / `sysctl hw.logicalcpu` / `hw.memsize` / `hw.model` (L348–384) | gathered facts: `ansible_distribution_version`, `ansible_processor_vcpus`, `ansible_memtotal_mb`, `ansible_product_name` | keep `shell` ONLY for serial via `system_profiler`; `kri_enroll` |
+| 5 | `pkgutil` / `installer -pkg` / `stat` / `xcode-select` | keep `shell`/`command` (macOS-specific, no module) + add `changed_when`/`creates` guards | `salt_minion` / host_prep |
+| 6 | `/etc/salt*` dir creation ×N | `ansible.builtin.file` **loop** over `[{path,mode}]` | `salt_minion` role |
+| 7 | two grains-push `uri:` blocks (macOS + Linux, L452/L490) | ONE `ansible.builtin.uri` task with an OS-conditional `body` dict | `kri_enroll` role (spec §8) |
+| 8 | bare module names throughout | **FQCN** `ansible.builtin.*` (handlers already are) | `ansible-lint --fix`, all roles |
+| 9 | `brew list` + `brew install macmon/tart` (L393) | **keep `shell`** + `creates`/`changed_when` idempotency (NOT `community.general.homebrew` — collection not vendored) | `node_telemetry` role |
+| 10 | `launchctl load/start/stop` (L203/290/296) | keep `shell` (NOT `community.general.launchd`); drive restarts via **handlers** | `salt_minion` handlers |
+
+**Rationale:** items 1–8 are pure idiomatic wins available with the vendored collections and belong inside the role tasks they migrate to; 9–10 would need `community.general`, which the user declined to vendor (air-gap/repo-size), so those two stay as guarded shell.
