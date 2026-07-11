@@ -692,6 +692,51 @@ _MASTER_PLAYBOOKS: dict[str, str] = {
 _DEFAULT_OS_FAMILY = "Linux"
 
 
+def _resolve_master_ssh_creds(master, db) -> dict:
+    """Resolve SSH creds for provisioning a salt-master (#965).
+
+    Mirrors bootstrap_node's FK-aware chain: per-master creds on the SaltMaster
+    row → the linked node's resolved credentials (when the master was promoted
+    from a node, ``master.node_id`` set) → global bootstrap settings. Never
+    silently defaults the user to 'admin' — an unresolvable user yields '' so the
+    caller fails with a clear message instead of SSHing as the wrong user.
+    """
+    from fleet_platform.services.platform_settings_svc import decrypt_secret
+
+    global_user, global_password, _pub = _get_bootstrap_settings(db)
+
+    # 1. Per-master explicit creds (decrypt whatever is stored on the row).
+    master_key: str | None = None
+    if master.ssh_key_enc:
+        try:
+            master_key = decrypt_secret(master.ssh_key_enc)
+        except Exception as _e:  # pragma: no cover - defensive
+            logger.warning("_resolve_master_ssh_creds: cannot decrypt ssh_key_enc: %s", _e)
+    master_password: str | None = None
+    if master.ssh_password_enc:
+        try:
+            master_password = decrypt_secret(master.ssh_password_enc)
+        except Exception as _e:  # pragma: no cover - defensive
+            logger.warning("_resolve_master_ssh_creds: cannot decrypt ssh_password_enc: %s", _e)
+
+    # 2. Linked-node resolved creds (promoted-from-node case).
+    node_creds: dict = {}
+    if master.node_id:
+        node = db.execute(select(Node).where(Node.id == master.node_id)).scalar_one_or_none()
+        if node is not None:
+            node_creds = resolve_node_credentials_sync(node, db) or {}
+
+    # Priority: per-master > linked node > global. No 'admin' default.
+    ssh_user = master.ssh_user or node_creds.get("ssh_user") or global_user or ""
+    ssh_key = master_key or (node_creds.get("ssh_key") or None)
+    ssh_password = master_password or (node_creds.get("ssh_password") or None)
+    # Global password is the last resort, only when nothing else supplied a secret.
+    if not ssh_key and not ssh_password:
+        ssh_password = global_password
+
+    return {"ssh_user": ssh_user, "ssh_password": ssh_password, "ssh_key": ssh_key}
+
+
 @celery_app.task(
     name="fleet_platform.workers.ansible_tasks.provision_master",
     bind=True,
@@ -725,38 +770,25 @@ def provision_master(self, salt_master_id: str, action: str = "install") -> dict
         # Resolve SSH host
         ssh_host: str = master.ssh_host or master.address
 
-        # Global bootstrap credentials as fallback
-        _global_ssh_user, _global_ssh_password, _controller_pubkey = _get_bootstrap_settings(db)
+        # Resolve SSH creds via the FK-aware chain (per-master > linked node >
+        # global). A master promoted from a node inherits that node's working
+        # credentials; no silent 'admin' default. (#965)
+        _master_creds = _resolve_master_ssh_creds(master, db)
+        ssh_user = _master_creds["ssh_user"]
+        ssh_password: str | None = _master_creds["ssh_password"]
+        ssh_key: str | None = _master_creds["ssh_key"]
 
-        # Priority: per-master creds > global settings
-        ssh_user: str = master.ssh_user or _global_ssh_user or "admin"
-
-        # Decrypt per-master SSH key / password
-        ssh_key: str | None = None
-        if master.ssh_key_enc:
-            try:
-                ssh_key = decrypt_secret(master.ssh_key_enc)
-            except Exception as _e:
-                logger.warning(
-                    "provision_master: cannot decrypt ssh_key_enc for master_id=%s: %s",
-                    salt_master_id,
-                    _e,
-                )
-
-        ssh_password: str | None = None
-        if master.ssh_password_enc:
-            try:
-                ssh_password = decrypt_secret(master.ssh_password_enc)
-            except Exception as _e:
-                logger.warning(
-                    "provision_master: cannot decrypt ssh_password_enc for master_id=%s: %s",
-                    salt_master_id,
-                    _e,
-                )
-
-        # Fall back to global password only when no per-master creds at all
-        if not ssh_key and not ssh_password:
-            ssh_password = _global_ssh_password
+        if not ssh_user:
+            _err = (
+                f"No SSH user could be resolved for master {master.name!r} — set SSH "
+                "credentials on the master record (or the linked node), or configure "
+                "the global bootstrap user in Settings → Bootstrap."
+            )
+            logger.warning("provision_master: %s master_id=%s", _err, salt_master_id)
+            master.provision_status = "error"
+            master.provision_error = _err
+            db.commit()
+            return {"status": "error", "reason": _err}
 
         # Decrypt salt-api password (krisalt user)
         api_password: str = ""
