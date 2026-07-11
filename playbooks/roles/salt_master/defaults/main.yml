@@ -89,6 +89,15 @@ salt_master_interface: "0.0.0.0"
 salt_presence_events: true
 salt_loop_interval: 60
 
+# Auto-accept incoming minion keys. Defaults to true to match the kri
+# SaltMaster.auto_accept model default and the trusted-LAN homelab policy:
+# kri's unattended bootstrap runs `salt-call state.apply` on the minion during
+# the playbook, which blocks until the key is accepted. With auto_accept the
+# key is accepted the instant the minion connects, so bootstrap converges
+# without a manual accept step. Set to false for environments that require
+# explicit key approval via the kri Minion Keys UI.
+salt_master_auto_accept: true
+
 # Co-locate a salt-minion on the master (#707) so the master is also a managed
 # node of itself (appears under its own master in the kri UI, targetable by
 # states). Disable with -e salt_master_install_minion=false.

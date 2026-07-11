@@ -39,6 +39,15 @@
   delegate_to: localhost
   become: false
   register: _master_pem
+  # Best-effort: a root-owned (0700) deploy/salt-pki/ that the launching user
+  # cannot traverse must NOT hard-fail the whole master install. When the stat
+  # can't read the path, treat it as "no pre-provisioned key" and skip the push;
+  # the target keeps whatever master keypair it already has (a reinstall on a
+  # host with an existing stable key), or salt-master self-generates on first
+  # start (a truly fresh host). To actively push the controller's canonical
+  # keypair, run the playbook as root (sudo -E ansible-playbook) so this read
+  # can see the root-owned file.
+  failed_when: false
 
 - name: Read master private key from controller
   slurp:
@@ -46,7 +55,7 @@
   delegate_to: localhost
   become: false
   register: _master_pem_content
-  when: _master_pem.stat.exists
+  when: _master_pem.stat.exists | default(false)
 
 - name: Read master public key from controller
   slurp:
@@ -54,7 +63,7 @@
   delegate_to: localhost
   become: false
   register: _master_pub_content
-  when: _master_pem.stat.exists
+  when: _master_pem.stat.exists | default(false)
 
 - name: Install master private key on target
   copy:
@@ -63,7 +72,7 @@
     owner: root
     group: wheel
     mode: "0400"
-  when: _master_pem.stat.exists
+  when: _master_pem.stat.exists | default(false)
 
 - name: Install master public key on target
   copy:
@@ -72,7 +81,7 @@
     owner: root
     group: wheel
     mode: "0444"
-  when: _master_pem.stat.exists
+  when: _master_pem.stat.exists | default(false)
 
 - name: Copy accepted minion keys
   copy:

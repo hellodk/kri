@@ -1,8 +1,11 @@
 # kri Salt Master configuration — managed by Ansible role salt_master
 # Installed to /etc/salt/master.d/kri.conf on {{ inventory_hostname }}
 
-# Keys must be manually accepted via kri UI (Settings → Minion Keys)
-auto_accept: False
+# Auto-accept minion keys on connect (salt_master_auto_accept, default true).
+# Required for kri's unattended bootstrap to converge on trusted LAN/overlay
+# networks; set salt_master_auto_accept=false to require manual approval via
+# the kri UI (Settings → Minion Keys).
+auto_accept: {{ salt_master_auto_accept | bool | ternary('True', 'False') }}
 
 # Pillar data per minion (ingest_url + node_token written by kri worker)
 pillar_roots:
