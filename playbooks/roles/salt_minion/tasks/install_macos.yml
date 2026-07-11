@@ -1,9 +1,14 @@
 ---
 # playbooks/roles/salt_minion/tasks/install_macos.yml
-# Salt-minion via official onedir pkg (pinned, air-gap ready) — macOS.
+# Salt-minion via official onedir pkg (pinned, AIR-GAPPED) — macOS.
 # Uses the Salt Project's onedir installer — installs to /opt/salt/
 # Not Homebrew: Homebrew does not allow pinning specific salt versions.
-# For air-gap: set artifactory_binary_url in group_vars/all.yml or host_vars/.
+#
+# Air-gap: the pinned pkg + its .sha512 are bundled under playbooks/files/ and
+# COPIED to the target — nothing is downloaded at runtime. The bundled checksum
+# is validated against the copied pkg before install. (#966)
+# Only the arm64 pkg is bundled today; x86_64 macOS / Linux onedir air-gap is
+# tracked separately (#696).
 #
 # Dispatched only when ansible_os_family == 'Darwin' (see tasks/main.yml) —
 # tasks below do not repeat that guard.
@@ -12,24 +17,6 @@
   set_fact:
     salt_pkg_filename: "{{ salt_pkg_arm64 if cpu_arch == 'arm64' else salt_pkg_x86_64 }}"
     salt_checksum_filename: "{{ salt_pkg_checksum_arm64 if cpu_arch == 'arm64' else salt_pkg_checksum_x86_64 }}"
-
-# Resolution precedence: salt_pkg_url_override > artifactory_binary_url +
-# artifactory_salt_path > salt_pkg_official_base. Defaults (artifactory_salt_path
-# = salt/{{ salt_version }}) reproduce the previous URL exactly. The checksum
-# follows the same tiers; when the pkg is fully overridden, the checksum is
-# taken from the same directory (override | dirname) since it is a sibling file.
-- name: Set download URL (override > Artifactory > official) (macOS)
-  set_fact:
-    salt_pkg_url: >-
-      {%- if salt_pkg_url_override -%}{{ salt_pkg_url_override }}
-      {%- elif artifactory_binary_url -%}{{ artifactory_binary_url.rstrip('/') }}/{{ artifactory_salt_path }}/{{ salt_pkg_filename }}
-      {%- else -%}{{ salt_pkg_official_base }}/{{ salt_pkg_filename }}
-      {%- endif -%}
-    salt_checksum_url: >-
-      {%- if salt_pkg_url_override -%}{{ salt_pkg_url_override | dirname }}/{{ salt_checksum_filename }}
-      {%- elif artifactory_binary_url -%}{{ artifactory_binary_url.rstrip('/') }}/{{ artifactory_salt_path }}/{{ salt_checksum_filename }}
-      {%- else -%}{{ salt_pkg_official_base }}/{{ salt_checksum_filename }}
-      {%- endif -%}
 
 # NOTE: do NOT use `/opt/salt/salt-minion --version` for detection — on the
 # macOS onedir build it prints the version then continues booting the daemon
@@ -42,18 +29,19 @@
   failed_when: false
   become: false
 
-- name: Download salt pkg checksum (macOS)
-  get_url:
-    url: "{{ salt_checksum_url }}"
+# Copy the bundled pkg + checksum from playbooks/files/ (air-gap; no download).
+# playbook_dir resolves to playbooks/, so files/ is the bundled-artifacts dir.
+- name: Copy bundled salt pkg checksum to target (macOS)
+  ansible.builtin.copy:
+    src: "{{ playbook_dir }}/files/{{ salt_checksum_filename }}"
     dest: "/tmp/{{ salt_checksum_filename }}"
     mode: "0644"
-    force: true
   when: installed_salt_version.stdout.strip() != salt_version
   become: false
 
-- name: Download salt pkg with verified checksum (macOS)
-  get_url:
-    url: "{{ salt_pkg_url }}"
+- name: Copy bundled salt pkg to target (macOS)
+  ansible.builtin.copy:
+    src: "{{ playbook_dir }}/files/{{ salt_pkg_filename }}"
     dest: "/tmp/{{ salt_pkg_filename }}"
     mode: "0644"
   when: installed_salt_version.stdout.strip() != salt_version
