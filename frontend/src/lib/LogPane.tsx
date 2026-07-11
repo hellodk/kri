@@ -1,4 +1,5 @@
 import { useMemo, useLayoutEffect, useRef, useState } from 'react'
+import { Copy, Check } from 'lucide-react'
 import { AnsiText } from './AnsiText'
 import { isAtBottom } from './scrollFollow'
 import { tailLines, TAIL_MAX_LINES } from './tailLines'
@@ -25,6 +26,18 @@ export function LogPane({
   const ref = useRef<HTMLPreElement>(null)
   const [following, setFollowing] = useState(true)
   const [showAll, setShowAll] = useState(false)
+  const [copied, setCopied] = useState(false)
+
+  async function copyOutput() {
+    // Copy the FULL raw output, not just the tailed view.
+    try {
+      await navigator.clipboard.writeText(raw)
+      setCopied(true)
+      setTimeout(() => setCopied(false), 1500)
+    } catch {
+      // Clipboard API unavailable (e.g. non-secure context) — silently ignore.
+    }
+  }
 
   // Compute the tailed text and line count. When showAll is true, render all lines;
   // otherwise, tail to TAIL_MAX_LINES.
@@ -59,14 +72,24 @@ export function LogPane({
 
   return (
     <div className="relative flex-1 min-h-0">
+      {raw && (
+        <button
+          type="button"
+          onClick={copyOutput}
+          title="Copy full output"
+          className="absolute top-2 right-2 z-20 inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-semibold bg-gray-800/90 text-gray-100 border border-gray-600 rounded-md shadow-sm hover:bg-gray-700"
+        >
+          {copied ? <><Check size={14} className="text-emerald-400" />Copied</> : <><Copy size={14} />Copy</>}
+        </button>
+      )}
       {hiddenLines > 0 && (
-        <div className="absolute top-0 inset-x-0 z-10 flex items-center justify-between px-3 py-1.5 bg-gray-900/95 border-b border-gray-700 text-xs text-gray-300">
+        <div className="absolute top-0 inset-x-0 z-10 flex items-center justify-between pl-3 pr-24 py-1.5 bg-gray-900/95 border-b border-gray-700 text-xs text-gray-300">
           <span>Showing last {TAIL_MAX_LINES} lines — {hiddenLines.toLocaleString()} earlier lines hidden</span>
           <button type="button" onClick={() => setShowAll(true)} className="font-semibold text-blue-400 hover:underline">Show all</button>
         </div>
       )}
       {showAll && totalLines > TAIL_MAX_LINES && (
-        <div className="absolute top-0 inset-x-0 z-10 flex items-center justify-between px-3 py-1.5 bg-gray-900/95 border-b border-gray-700 text-xs text-gray-300">
+        <div className="absolute top-0 inset-x-0 z-10 flex items-center justify-between pl-3 pr-24 py-1.5 bg-gray-900/95 border-b border-gray-700 text-xs text-gray-300">
           <span>Showing all {totalLines.toLocaleString()} lines</span>
           <button type="button" onClick={() => setShowAll(false)} className="font-semibold text-blue-400 hover:underline">Collapse</button>
         </div>

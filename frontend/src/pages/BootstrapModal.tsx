@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import { Copy, Check } from 'lucide-react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useNavigate } from 'react-router-dom'
 import { ansibleApi } from '../api/ansible'
@@ -206,6 +207,7 @@ function SingleMode({ onClose }: { onClose: () => void }) {
   const { label, colour } = STATUS_LABEL[status ?? 'pending'] ?? STATUS_LABEL.pending
 
   const [showLogs, setShowLogs] = useState(false)
+  const [copiedLogs, setCopiedLogs] = useState(false)
 
   const { data: logsData } = useQuery({
     queryKey: ['bootstrap-logs', nodeId],
@@ -736,7 +738,7 @@ function SingleMode({ onClose }: { onClose: () => void }) {
       {showLogs && logsData && (
         <div className="rounded-xl border border-gray-200 overflow-hidden">
           {/* Ansible output header */}
-          <div className="flex border-b border-gray-200 bg-gray-50">
+          <div className="flex items-center justify-between border-b border-gray-200 bg-gray-50">
             <div className="px-4 py-2 text-xs font-medium border-b-2 border-brand-600 text-brand-700 bg-white">
               <span className="flex items-center gap-1.5">
                 Ansible output
@@ -748,6 +750,22 @@ function SingleMode({ onClose }: { onClose: () => void }) {
                 )}
               </span>
             </div>
+            {(localLogs ?? logsData.ansible_stdout) && (
+              <button
+                type="button"
+                title="Copy full Ansible output"
+                onClick={async () => {
+                  try {
+                    await navigator.clipboard.writeText(localLogs ?? logsData.ansible_stdout ?? '')
+                    setCopiedLogs(true)
+                    setTimeout(() => setCopiedLogs(false), 1500)
+                  } catch { /* clipboard unavailable */ }
+                }}
+                className="mr-3 inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium text-gray-600 border border-gray-300 rounded-md hover:bg-gray-100"
+              >
+                {copiedLogs ? <><Check size={14} className="text-emerald-600" />Copied</> : <><Copy size={14} />Copy</>}
+              </button>
+            )}
           </div>
           {/* Content */}
           <pre
