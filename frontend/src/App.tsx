@@ -50,6 +50,7 @@ const AlertsPage = lazy(() => import('./pages/AlertsPage').then((m) => ({ defaul
 const FleetHealthPage = lazy(() => import('./pages/FleetHealthPage'))
 const DashboardPage = lazy(() => import('./pages/DashboardPage').then((m) => ({ default: m.DashboardPage })))
 const MonitoringPage = lazy(() => import('./pages/MonitoringPage').then((m) => ({ default: m.MonitoringPage })))
+const RecommendationsPage = lazy(() => import('./pages/RecommendationsPage').then((m) => ({ default: m.RecommendationsPage })))
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -177,6 +178,7 @@ export default function App() {
             <Route path="/alerts" element={<AlertsPage />} />
             <Route path="/fleet-health" element={<FleetHealthPage />} />
             <Route path="/monitoring" element={<MonitoringPage />} />
+            <Route path="/recommendations" element={<RecommendationsPage />} />
             <Route path="/dashboard" element={<DashboardPage />} />
             <Route path="/settings" element={<SettingsPage />} />
             <Route path="*" element={<NotFoundPage />} />

@@ -1,21 +1,23 @@
 import { NavLink, useLocation } from 'react-router-dom'
+import { type LucideIcon, LayoutDashboard, ShieldCheck, Workflow, ClipboardCheck, Settings, Sparkles } from 'lucide-react'
 import { useFilterStore } from '../../stores/filterStore'
 import { useSaltKeysStore } from '../../stores/saltKeysStore'
 
 // Hub nav entries — children live as tabs inside the hub page
 const HUB_LINKS = [
-  { to: '/overview',   label: 'Overview',   icon: '⊞' },
-  { to: '/compliance', label: 'Compliance', icon: '◑' },
-  { to: '/automation', label: 'Automation', icon: '▷', showBadge: true },
+  { to: '/overview',   label: 'Overview',   icon: LayoutDashboard },
+  { to: '/compliance', label: 'Compliance', icon: ShieldCheck },
+  { to: '/automation', label: 'Automation', icon: Workflow, showBadge: true },
 ] as const
 
 // System entries keep their child items (no hub)
 const SYSTEM_LINKS = [
-  { to: '/audit',    label: 'Audit',    icon: '◎' },
-  { to: '/settings', label: 'Settings', icon: '⚙' },
+  { to: '/audit',           label: 'Audit',           icon: ClipboardCheck },
+  { to: '/recommendations', label: 'Recommendations', icon: Sparkles },
+  { to: '/settings',        label: 'Settings',        icon: Settings },
 ] as const
 
-type LinkDef = { to: string; label: string; icon: string; showBadge?: boolean }
+type LinkDef = { to: string; label: string; icon: LucideIcon; showBadge?: boolean }
 
 export function Sidebar() {
   const open = useFilterStore((s) => s.sidebarOpen)
@@ -44,8 +46,8 @@ export function Sidebar() {
               : 'text-white/70 hover:text-white/90 hover:bg-white/5 border border-transparent'
           }`}
         >
-          <span className="relative text-base shrink-0 font-mono">
-            {link.icon}
+          <span className="relative shrink-0">
+            <link.icon size={18} />
             {hasBadge && (
               <span className="absolute -top-1.5 -right-1.5 w-3.5 h-3.5 rounded-full bg-amber-500 border border-[#0f0f23] text-[8px] font-bold text-white flex items-center justify-center">
                 {pendingCount > 9 ? '9+' : pendingCount}
