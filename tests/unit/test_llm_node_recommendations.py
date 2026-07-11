@@ -1,12 +1,12 @@
-"""Tests for LLM quick-fix recommendations on NodeDetail (#294)."""
+"""Per-node Ask AI (#294) was replaced by fleet-wide recommendations (#4)."""
 
 
-def test_ask_ai_route_registered():
-    """The /ask-ai route must exist in node_actions router."""
+def test_ask_ai_route_removed():
+    """The per-node /ask-ai route must no longer exist in node_actions router."""
     from fleet_platform.api.routes.node_actions import router
 
     paths = [r.path for r in router.routes]
-    assert any("ask-ai" in p for p in paths), f"ask-ai route not found in {paths}"
+    assert not any("ask-ai" in p for p in paths), f"ask-ai route still present in {paths}"
 
 
 def test_node_context_string_contains_key_fields():

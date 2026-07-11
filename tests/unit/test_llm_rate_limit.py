@@ -27,24 +27,25 @@ def test_llm_submit_query_has_rate_limit():
     assert request_param.annotation == Request, "request param must be annotated as Request"
 
 
-def test_node_actions_ask_ai_has_rate_limit():
-    """Verify that ask_ai_about_node has @limiter.limit decorator."""
+def test_node_actions_ask_ai_removed():
+    """ask_ai_about_node was removed (#4) — per-node Ask AI is now fleet-wide recommendations."""
     from fleet_platform.api.routes import node_actions
 
-    # Check that limiter is imported
-    assert hasattr(node_actions, "limiter"), "node_actions must import limiter"
+    assert not hasattr(node_actions, "ask_ai_about_node"), "ask_ai_about_node should have been removed"
 
-    # Check that ask_ai_about_node exists
-    assert hasattr(node_actions, "ask_ai_about_node"), "ask_ai_about_node function must exist"
 
-    # Get the function
-    func = node_actions.ask_ai_about_node
-    # Check signature includes request: Request as first param
+def test_recommendations_generate_has_rate_limit():
+    """Verify that generate_recommendations has @limiter.limit decorator."""
+    from fleet_platform.api.routes import recommendations
+
+    assert hasattr(recommendations, "limiter"), "recommendations must import limiter"
+    assert hasattr(recommendations, "generate_recommendations"), "generate_recommendations function must exist"
+
+    func = recommendations.generate_recommendations
     sig = inspect.signature(func)
     params = list(sig.parameters.keys())
     assert params[0] == "request", f"First param must be 'request', got {params[0]}"
 
-    # Check that request has Request type annotation
     request_param = sig.parameters["request"]
     from fastapi import Request
 

@@ -46,6 +46,7 @@ from fleet_platform.api.routes.node_secrets import router as node_secrets_router
 from fleet_platform.api.routes.oidc import router as oidc_router
 from fleet_platform.api.routes.playbook_library import router as playbook_library_router
 from fleet_platform.api.routes.provisioning import router as provisioning_router
+from fleet_platform.api.routes.recommendations import router as recommendations_router
 from fleet_platform.api.routes.salt_keys import router as salt_keys_router
 from fleet_platform.api.routes.salt_masters import router as salt_masters_router
 from fleet_platform.api.routes.salt_ops import router as salt_ops_router
@@ -215,6 +216,7 @@ def create_app() -> FastAPI:
     app.include_router(playbook_library_router, tags=["playbook-library"])
     app.include_router(agent_router, tags=["agent"])
     app.include_router(events_router, tags=["events"])
+    app.include_router(recommendations_router, tags=["recommendations"])
 
     @app.get("/metrics", include_in_schema=False)
     async def metrics_endpoint(request: Request):

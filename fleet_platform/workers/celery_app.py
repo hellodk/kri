@@ -54,6 +54,7 @@ celery_app = Celery(
         "fleet_platform.workers.embedding_tasks",
         "fleet_platform.workers.mobileconfig_tasks",
         "fleet_platform.workers.connectivity_tasks",
+        "fleet_platform.workers.fleet_recommendations_tasks",
     ],
 )
 
@@ -209,6 +210,11 @@ celery_app.conf.update(
         "sweep-agent-quarantine": {
             "task": "fleet_platform.workers.maintenance.sweep_agent_quarantine",
             "schedule": crontab(minute=15),  # hourly — TTL is 24h, so hourly is ample (#713)
+            "options": {"queue": "maintenance"},
+        },
+        "generate-fleet-recommendations": {
+            "task": "fleet_platform.workers.fleet_recommendations_tasks.generate_fleet_recommendations",
+            "schedule": crontab(hour=6, minute=0),  # daily 06:00 UTC (#4)
             "options": {"queue": "maintenance"},
         },
     },

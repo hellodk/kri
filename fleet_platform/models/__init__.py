@@ -9,6 +9,7 @@ from fleet_platform.models.drift import DesiredStateBaseline, DriftRecord
 from fleet_platform.models.execution import ExecutionJob, ExecutionResult
 from fleet_platform.models.facts import NodeFact
 from fleet_platform.models.fleet_embedding import FleetEmbedding
+from fleet_platform.models.fleet_recommendation import FleetRecommendation
 from fleet_platform.models.group import Group, GroupMember
 from fleet_platform.models.group_secret import GroupSecret
 from fleet_platform.models.ios_tracking import Certificate, JenkinsAgent
@@ -83,4 +84,5 @@ __all__ = [
     "VulnerabilityFinding",
     "LicenseFinding",
     "SaltMaster",
+    "FleetRecommendation",
 ]
