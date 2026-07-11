@@ -1,6 +1,6 @@
 ---
 # playbooks/roles/node_telemetry/tasks/install_macos.yml
-# psutil (process_collector dependency) + macmon/tart (Homebrew CLIs), macOS only.
+# psutil (process_collector dependency) + macmon (Homebrew CLI), macOS only.
 #
 # Homebrew tasks run as brew_user (never root, per the common role's brew_user
 # fact) so they land in a writable location regardless of how Homebrew/python3
@@ -30,11 +30,11 @@
     HOME: "/Users/{{ brew_user }}"
   when: ansible_os_family == 'Darwin' and psutil_check_macos.rc != 0
 
-# ── macmon + tart: §9 #9 — keep as guarded `shell` (NOT
+# ── macmon: §9 #9 — guarded `shell` (NOT
 # community.general.homebrew — that collection is not vendored), made
 # idempotent via `creates` on the installed binary. ──────────────────────────
-- name: Install macmon and tart via Homebrew (macOS)
-  # item.formula may be tap-qualified (cirruslabs/cli/tart); item.bin is the
+- name: Install macmon via Homebrew (macOS)
+  # item.formula is the brew formula; item.bin is the
   # installed binary name used for the `creates` idempotency guard.
   ansible.builtin.shell: "{{ brew_prefix }}/bin/brew install {{ item.formula }}"
   args:

@@ -144,8 +144,8 @@ def test_node_telemetry_defaults_declares_package_lists():
     defaults = (NODE_TELEMETRY_DIR / "defaults" / "main.yml").read_text()
     assert "node_telemetry_brew_packages" in defaults
     assert "macmon" in defaults
-    # tart must keep its tap qualifier — `brew install tart` fails (not in core).
-    assert "cirruslabs/cli/tart" in defaults, "tart must be installed from the cirruslabs/cli tap"
+    # tart removed 2026-07-11 (not needed on the fleet).
+    assert "tart" not in defaults, "tart should no longer be installed"
 
 
 # ── kri_enroll role: exactly one grains uri task, async gate preserved ───────

@@ -6,8 +6,6 @@
 # vendored, so community.general.homebrew is out).
 node_telemetry_brew_packages:
   - { formula: macmon, bin: macmon }
-  # tart is NOT in homebrew-core — it lives in the cirruslabs/cli tap.
-  - { formula: cirruslabs/cli/tart, bin: tart }
 
 # Linux distro package names for the psutil python3 module.
 node_telemetry_psutil_package_apt: python3-psutil

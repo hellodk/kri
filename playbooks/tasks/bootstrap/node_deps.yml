@@ -85,28 +85,4 @@
     PATH: "{{ brew_prefix }}/bin:/usr/local/bin:/usr/bin:/bin"
     HOME: "/Users/{{ brew_user }}"
   when: ansible_os_family == 'Darwin' and macmon_check.stdout == 'absent'
-
-# ── tart: macOS-only Homebrew CLI (cirruslabs/cli/tart) ───────────────────────
-- name: Check if tart is installed (macOS)
-  shell: "{{ brew_prefix }}/bin/brew list tart >/dev/null 2>&1 && echo present || echo absent"
-  register: tart_check
-  changed_when: false
-  failed_when: false
-  become: false
-  become_user: "{{ brew_user }}"
-  environment:
-    PATH: "{{ brew_prefix }}/bin:/usr/local/bin:/usr/bin:/bin"
-    HOME: "/Users/{{ brew_user }}"
-  when: ansible_os_family == 'Darwin'
-
-- name: Install tart via Homebrew (macOS)
-  shell: "{{ brew_prefix }}/bin/brew install cirruslabs/cli/tart"
-  register: tart_install
-  changed_when: "'already installed' not in tart_install.stderr"
-  failed_when: false
-  become: false
-  become_user: "{{ brew_user }}"
-  environment:
-    PATH: "{{ brew_prefix }}/bin:/usr/local/bin:/usr/bin:/bin"
-    HOME: "/Users/{{ brew_user }}"
-  when: ansible_os_family == 'Darwin' and tart_check.stdout == 'absent'
+# tart (cirruslabs VM CLI) removed — not needed on the fleet (2026-07-11).
