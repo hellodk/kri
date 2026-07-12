@@ -18,6 +18,12 @@ Endpoints:
     GET    /api/v1/salt/masters/{master_id}/provision-status — latest provision run (viewer+).
     POST   /api/v1/salt/masters/from-node/{node_id}          — promote node to master (admin only).
     GET    /api/v1/salt/masters/{master_id}/minions          — nodes using this master (viewer+).
+    POST   /api/v1/salt/masters/{master_id}/attach-minions   — re-point minions at this master, additively (admin only).
+
+attach-minions added in #977 (master-promotion Phase C): re-points selected
+minions at a master additively (HA) — the minion's rendered config gains the
+target master alongside its current one; Node.salt_master_id (single-FK
+ownership) moves to the target. See reconfigure_minions in ansible_tasks.py.
 """
 
 import asyncio
@@ -546,3 +552,50 @@ async def list_master_minions(
     )
     nodes = nodes_result.scalars().all()
     return [NodeListItem.model_validate(n) for n in nodes]
+
+
+class AttachMinionsRequest(BaseModel):
+    """Body for the attach-minions endpoint — node ids to re-point at this master."""
+
+    node_ids: List[str]
+
+
+@router.post("/masters/{master_id}/attach-minions", status_code=202)
+async def attach_minions(
+    master_id: uuid.UUID,
+    body: AttachMinionsRequest,
+    db: AsyncSession = Depends(get_db),
+    _: dict = Depends(require_role("admin")),
+):
+    """Re-point selected minions at ``master_id``, additively (#977, Phase C).
+
+    Enqueues ``reconfigure_minions`` which builds the additive ``salt_masters``
+    list per node (current master's address + this master's address, deduped),
+    re-renders the minion config, restarts the service, accepts the minion's
+    key on this master, and moves ``Node.salt_master_id`` (single-FK ownership)
+    to this master. The task runs asynchronously; the caller receives 202.
+
+    Returns 404 if the master does not exist, 422 if ``node_ids`` is empty.
+    Requires admin role.
+    """
+    from fleet_platform.workers.celery_app import celery_app
+
+    result = await db.execute(select(SaltMaster).where(SaltMaster.id == master_id))
+    master = result.scalar_one_or_none()
+    if master is None:
+        raise HTTPException(status_code=404, detail=f"SaltMaster {master_id} not found")
+
+    if not body.node_ids:
+        raise HTTPException(status_code=422, detail="node_ids must not be empty")
+
+    celery_app.send_task(
+        "fleet_platform.workers.ansible_tasks.reconfigure_minions",
+        args=[str(master_id), body.node_ids],
+        queue="ansible",
+    )
+
+    return {
+        "status": "queued",
+        "master_id": str(master_id),
+        "count": len(body.node_ids),
+    }

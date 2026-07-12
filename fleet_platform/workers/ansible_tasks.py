@@ -800,7 +800,6 @@ def provision_master(self, salt_master_id: str, action: str = "install") -> dict
     The salt-master role is idempotent; action='reconfigure' is identical to
     action='install' at playbook level — no special-casing needed.
     """
-    from fleet_platform.services.platform_settings_svc import decrypt_secret
     from fleet_platform.services.salt_master_probe import run_probe
 
     master_uuid = _uuid.UUID(salt_master_id)
@@ -1137,3 +1136,216 @@ def provision_master(self, salt_master_id: str, action: str = "install") -> dict
         "action": action,
         "os_family": os_family if uname_output is not None else "unknown",
     }
+
+
+# ---------------------------------------------------------------------------
+# Master-promotion Phase C — attach minions to a master, additively (#977)
+# ---------------------------------------------------------------------------
+
+_RECONFIGURE_TIMEOUT_SECONDS = 300  # 5 minutes — thin re-render + restart, not a full install
+
+
+def _additive_master_list(cur_addr: str | None, target_addr: str) -> list[str]:
+    """Build the additive (HA) ``salt_masters`` list for a minion re-point (#977).
+
+    The re-pointed minion's rendered config must list BOTH the current master's
+    address and the target master's address (unique, order preserved) so it
+    gains the target as a failover master without losing its existing one.
+    When ``cur_addr`` is falsy (no prior master) or equal to ``target_addr``
+    (already pointed at the target) the result collapses to a single entry —
+    never a duplicate.
+    """
+    candidates = [addr for addr in (cur_addr, target_addr) if addr]
+    return list(dict.fromkeys(candidates))
+
+
+@celery_app.task(
+    name="fleet_platform.workers.ansible_tasks.reconfigure_minions",
+    bind=True,
+    max_retries=0,
+    queue="ansible",  # dedicated long-job queue — isolates from control plane (#579)
+    acks_late=False,
+)
+def reconfigure_minions(self, master_id: str, node_ids: list[str]) -> dict:
+    """Re-point selected minions at ``master_id``, additively (HA attach, #977).
+
+    For each node: builds the additive ``salt_masters`` list (current master's
+    address + target master's address, deduped preserving order), re-renders
+    the minion config + restarts the service via
+    ``playbooks/reconfigure_minion_masters.yml``, accepts the minion's key on
+    the target master (salt-api ``key.accept`` scoped to that minion_id only —
+    the shared master keypair means no new key TRUST is needed on the minion
+    itself), then sets ``node.salt_master_id`` to the target master so it owns
+    the node in the UI and can command it.
+
+    Never raises on a per-node failure — failures are collected and returned
+    so one bad node does not abort the whole batch.
+    """
+    from fleet_platform.services.salt_api_client import SaltApiError, run_wheel
+
+    target_uuid = _uuid.UUID(master_id)
+    reconfigured: list[str] = []
+    failed: list[str] = []
+
+    for node_id in node_ids:
+        node_uuid = _uuid.UUID(node_id)
+
+        # 1. Load node + target master + node's current master, all in-session,
+        # capturing scalars before the session closes (avoid DetachedInstanceError).
+        with get_sync_db() as db:
+            target_master = db.execute(select(SaltMaster).where(SaltMaster.id == target_uuid)).scalar_one_or_none()
+            node = db.execute(select(Node).where(Node.id == node_uuid)).scalar_one_or_none()
+            if target_master is None or node is None:
+                logger.warning(
+                    "reconfigure_minions: master or node not found master_id=%s node_id=%s", master_id, node_id
+                )
+                failed.append(node_id)
+                continue
+
+            cur_master = None
+            if node.salt_master_id:
+                cur_master = db.execute(
+                    select(SaltMaster).where(SaltMaster.id == node.salt_master_id)
+                ).scalar_one_or_none()
+
+            target_addr = target_master.address
+            cur_addr = cur_master.address if cur_master is not None else None
+            additive = _additive_master_list(cur_addr, target_addr)
+
+            minion_id = node.minion_id
+            target_ip = node.ip_address or node.bootstrap_ip
+            node_ssh_host_key = node.ssh_host_key
+
+            if not target_ip:
+                logger.warning("reconfigure_minions: node %s has no ip_address/bootstrap_ip", node_id)
+                failed.append(minion_id or node_id)
+                continue
+
+            # 2. Resolve the NODE's SSH creds (mirrors bootstrap_node — this is the
+            # minion host we SSH into, not the master's own creds).
+            resolved_creds = resolve_node_credentials_sync(node, db)
+            ssh_user = resolved_creds["ssh_user"] or "admin"
+            ssh_password = resolved_creds["ssh_password"]
+            node_ssh_key = resolved_creds["ssh_key"] or None
+
+        if not ssh_password and not node_ssh_key:
+            logger.warning("reconfigure_minions: no usable SSH credentials for node_id=%s", node_id)
+            failed.append(minion_id or node_id)
+            continue
+
+        # 3. Run the re-point playbook against this one minion.
+        try:
+            with tempfile.TemporaryDirectory(prefix="kri-reconfigure-") as tmpdir:
+                key_file_path: str | None = None
+                if node_ssh_key:
+                    key_path = Path(tmpdir) / "id_reconfigure"
+                    key_path.write_text(node_ssh_key)
+                    key_path.chmod(0o600)
+                    key_file_path = str(key_path)
+
+                inv_path = Path(tmpdir) / "inventory.ini"
+                if key_file_path:
+                    inv_path.write_text(
+                        f"[targets]\n"
+                        f"{target_ip} ansible_host={target_ip} "
+                        f"ansible_user={ssh_user} "
+                        f"ansible_ssh_private_key_file={key_file_path}\n"
+                    )
+                else:
+                    inv_path.write_text(f"[targets]\n{target_ip} ansible_host={target_ip} ansible_user={ssh_user}\n")
+                inv_path.chmod(0o600)
+
+                # TOFU: reuse the node's stored host key for strict verification
+                # if available, otherwise accept on first connection (mirrors
+                # bootstrap_node — this node has already been bootstrapped once).
+                known_hosts_file: str | None = None
+                if node_ssh_host_key:
+                    _kh_token = to_known_hosts_token(node_ssh_host_key)
+                    if _kh_token:
+                        tmp_kh = tempfile.NamedTemporaryFile(mode="w", suffix=".known_hosts", delete=False)
+                        tmp_kh.write(f"{target_ip} {_kh_token}\n")
+                        tmp_kh.close()
+                        known_hosts_file = tmp_kh.name
+                        strict_check = f"-o StrictHostKeyChecking=yes -o UserKnownHostsFile={known_hosts_file}"
+                    else:
+                        strict_check = "-o StrictHostKeyChecking=accept-new"
+                else:
+                    strict_check = "-o StrictHostKeyChecking=accept-new"
+
+                ssh_args = f"-F /dev/null {strict_check}"
+                if key_file_path:
+                    ssh_args += f" -i {key_file_path}"
+
+                password_extravars: dict[str, str] = {}
+                if not key_file_path and ssh_password:
+                    password_extravars["ansible_ssh_pass"] = ssh_password
+                    password_extravars["ansible_become_password"] = ssh_password
+
+                extravars = {
+                    "salt_masters": additive,
+                    "minion_id": minion_id,
+                    **password_extravars,
+                }
+
+                playbook = str(_PLAYBOOKS_DIR / "reconfigure_minion_masters.yml")
+                run = ansible_runner.run(
+                    private_data_dir=tmpdir,
+                    playbook=playbook,
+                    inventory=str(inv_path),
+                    extravars=extravars,
+                    envvars={
+                        "ANSIBLE_COLLECTIONS_PATH": str(_PLAYBOOKS_DIR / "collections" / "installed"),
+                        "ANSIBLE_SSH_ARGS": ssh_args,
+                        "PYTHONUNBUFFERED": "1",
+                    },
+                    quiet=True,
+                    rotate_artifacts=0,
+                    timeout=_RECONFIGURE_TIMEOUT_SECONDS,
+                )
+
+                if known_hosts_file:
+                    Path(known_hosts_file).unlink(missing_ok=True)
+
+            if run is None or run.status != "successful" or run.rc != 0:
+                logger.error(
+                    "reconfigure_minions: ansible failed for node_id=%s minion_id=%s rc=%s status=%s",
+                    node_id,
+                    minion_id,
+                    getattr(run, "rc", "N/A"),
+                    getattr(run, "status", "error"),
+                )
+                failed.append(minion_id or node_id)
+                continue
+
+        except Exception:
+            logger.exception("reconfigure_minions: unexpected error for node_id=%s", node_id)
+            failed.append(minion_id or node_id)
+            continue
+
+        # 4. Accept the minion's key on the target master, scoped to this minion
+        # only — the shared master keypair means no new TRUST is needed, just
+        # acceptance on the newly-owning master. Never fails the whole batch.
+        try:
+            run_wheel(target_master, "key.accept", match=minion_id)
+        except SaltApiError as exc:
+            logger.warning(
+                "reconfigure_minions: salt-api key.accept failed master=%s minion_id=%s: %s",
+                target_master.name,
+                minion_id,
+                exc.reason,
+            )
+        except Exception as exc:  # noqa: BLE001
+            logger.warning(
+                "reconfigure_minions: key.accept unexpected error minion_id=%s: %s", minion_id, exc
+            )
+
+        # 5. Re-point ownership: the target master now owns this node in kri.
+        with get_sync_db() as db:
+            _n = db.execute(select(Node).where(Node.id == node_uuid)).scalar_one_or_none()
+            if _n:
+                _n.salt_master_id = target_uuid
+                db.commit()
+
+        reconfigured.append(minion_id)
+
+    return {"status": "ok", "reconfigured": reconfigured, "failed": failed}

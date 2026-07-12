@@ -1,0 +1,47 @@
+---
+# playbooks/reconfigure_minion_masters.yml
+# Re-point an already-bootstrapped minion at an updated salt-master list (#977).
+#
+# Additive at config level: the caller computes the new `salt_masters` list as
+# unique([current master address, target master address]) so the minion's
+# rendered config lists BOTH masters (HA/failover) rather than replacing one
+# with the other. The FK that decides which master OWNS the node in kri
+# (Node.salt_master_id) is updated by the Celery task after this playbook
+# succeeds — this playbook only touches the minion's on-disk config + service.
+#
+# Shared master keypair means no new key trust is needed on the minion itself;
+# only the target master needs to accept this minion's key (done by the task
+# via salt-api key.accept after this playbook succeeds).
+#
+# Required variables (passed as extravars by reconfigure_minions):
+#   salt_masters — List of Salt master addresses (LAN IP / hostname), additive.
+#   minion_id    — Salt minion ID (must match the minion's existing id).
+#
+# This is a thin re-render + restart — it does not reinstall salt-minion and
+# does not pre-seed a master pubkey (salt_master_pub_key is optional and
+# omitted here; configure.yml's key pre-seed task is guarded by
+# `when: salt_master_pub_key is defined`).
+
+- name: Re-point minion(s) at updated salt-master list
+  hosts: targets
+  gather_facts: true
+  vars:
+    ansible_ssh_common_args: '-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null'
+    ansible_become: true
+    ansible_become_method: sudo
+
+  pre_tasks:
+    - name: Normalize OS/arch facts (common role)
+      ansible.builtin.import_role:
+        name: common
+
+  tasks:
+    - name: Re-render minion config with the new master list
+      ansible.builtin.import_role:
+        name: salt_minion
+        tasks_from: configure
+
+    - name: Restart + verify salt-minion
+      ansible.builtin.import_role:
+        name: salt_minion
+        tasks_from: service
