@@ -77,6 +77,25 @@ def _format_ansible_cmdline(playbook: str, inventory: str, extravars: dict) -> s
     return f"── Ansible command ──────────────────────────────────────────\n$ {cmd}\n──────────────────────────────────────────────────────────────\n"
 
 
+def _classify_ansible_failure_category(full_stdout: str) -> str | None:
+    """Categorize an ansible failure from its stdout for human error messages.
+
+    Order matters: the salt-master reachability gate (host_prep_gate.yml) prints
+    the word "UNREACHABLE" in *debug* lines even though SSH itself succeeded, so
+    it must be checked BEFORE the SSH-unreachable marker. Real SSH-unreachable is
+    Ansible's host marker "UNREACHABLE!" (with the exclamation) or "unreachable=1"
+    in the PLAY RECAP — never the bare word (#992). Returns None when none match
+    so the caller keeps its own rc/status default.
+    """
+    if "Target cannot reach any salt-master" in full_stdout:
+        return "salt_master_gate"
+    if "Authentication failure" in full_stdout or "Permission denied" in full_stdout:
+        return "ssh_auth"
+    if "UNREACHABLE!" in full_stdout or "unreachable=1" in full_stdout:
+        return "ssh_unreachable"
+    return None
+
+
 @celery_app.task(
     name="fleet_platform.workers.ansible_tasks.bootstrap_node",
     bind=True,
@@ -441,9 +460,15 @@ def bootstrap_node(
                 f"Timed out after 10 minutes. Last task: {last_task}" if last_task else "Timed out after 10 minutes."
             )
         elif final_status != "successful" or runner.rc != 0:
-            if "Authentication failure" in full_stdout or "Permission denied" in full_stdout:
+            _cat = _classify_ansible_failure_category(full_stdout)
+            if _cat == "salt_master_gate":
+                bootstrap_error = (
+                    "SSH reached the node, but it cannot reach the salt-master on "
+                    "4505/4506 — check the master is running and reachable from this node"
+                )
+            elif _cat == "ssh_auth":
                 bootstrap_error = "SSH auth failed: check SSH username/password in Settings → Bootstrap"
-            elif "UNREACHABLE" in full_stdout:
+            elif _cat == "ssh_unreachable":
                 bootstrap_error = f"SSH unreachable: check IP {target_ip} and SSH credentials in Settings"
             elif "No such file or directory" in full_stdout and "salt" in full_stdout:
                 bootstrap_error = "Salt package not found on target node"
@@ -1098,9 +1123,15 @@ def provision_master(self, salt_master_id: str, action: str = "install") -> dict
                 else f"Timed out after {_prov_timeout_min} minutes."
             )
         elif final_status != "successful" or runner.rc != 0:
-            if "Authentication failure" in full_stdout or "Permission denied" in full_stdout:
+            _cat = _classify_ansible_failure_category(full_stdout)
+            if _cat == "salt_master_gate":
+                provision_error = (
+                    "SSH reached the master node, but it cannot reach a salt-master on "
+                    "4505/4506 — check network/firewall"
+                )
+            elif _cat == "ssh_auth":
                 provision_error = "SSH auth failed: check SSH username/password on the master record"
-            elif "UNREACHABLE" in full_stdout:
+            elif _cat == "ssh_unreachable":
                 provision_error = f"SSH unreachable: check ssh_host ({ssh_host}) and SSH credentials"
             else:
                 provision_error = f"ansible rc={rc_display} status={final_status}"
