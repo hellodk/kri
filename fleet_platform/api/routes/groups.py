@@ -331,10 +331,9 @@ async def update_group_credentials(
 
     # SSH credential updates (#725): inline ssh_* input is upserted into the
     # group's dedicated Credential row instead of the deprecated inline columns.
-    # #985 Phase 2b: the group<->credential link is now read/written via the
-    # credential_groups association (fleet_platform.services.credential_group_svc)
-    # instead of the legacy Group.credential_id column — the column is kept
-    # (unwritten) for expand-contract safety.
+    # #985 Phase 2b: the group<->credential link is read/written via the
+    # credential_groups association (fleet_platform.services.credential_group_svc).
+    # The legacy Group.credential_id column was dropped for good in #989.
     current_credential_id = await get_group_credential_id(db, group.id)
     cred_id = await upsert_owner_ssh_credential(
         db,

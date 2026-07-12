@@ -1,13 +1,10 @@
 # tests/unit/test_resolver_credential_groups_984.py
-"""Unit tests for the #984 credential_groups resolver tier (Phase 2a).
+"""Unit tests for the ``credential_groups`` resolver tier (#984), now the ONLY
+group/node credential source since the #989 Chunk 1 contract (per-node and
+legacy ``Group.credential_id`` tiers, plus the global password fallback, were
+all removed).
 
-Migration 065 (Phase 1) added the ``credential_groups`` association table
-(``credential_id``, ``group_id UNIQUE``). This phase makes both the async and
-sync resolvers PREFER that association over the legacy ``Group.credential_id``
-column, while keeping the legacy tier as an expand-contract fallback.
-
-Tier order under test: node FK (1) -> credential_groups (1b, NEW) -> legacy
-group FK (2) -> controller (3) -> global (4).
+Tier order under test: credential_groups (1) -> controller (2) -> none (3).
 """
 
 import uuid
@@ -26,12 +23,11 @@ from fleet_platform.services.platform_settings_svc import encrypt_secret
 # ---------------------------------------------------------------------------
 
 
-def _node(ssh_host_key=None, credential_id=None):
+def _node(ssh_host_key=None):
     node = MagicMock()
     node.id = uuid.uuid4()
     node.minion_id = "node-01"
     node.ssh_host_key = ssh_host_key
-    node.credential_id = credential_id
     return node
 
 
@@ -57,11 +53,9 @@ class _Row:
 
 
 def _make_async_db(first_results, scalar_results=None):
-    """AsyncMock db.execute() side_effect: each item is either consumed via
-    ``.first()`` (credential_groups tier) or ``.scalar_one_or_none()`` (legacy
-    group / global tiers), in call order. ``first_results`` supplies the very
-    first db.execute() call (the credential_groups tier); remaining calls
-    consume from ``scalar_results`` in order."""
+    """AsyncMock db.execute() side_effect: the first call is consumed via
+    ``.first()`` (the credential_groups tier); remaining calls consume from
+    ``scalar_results`` in order (e.g. the SSH_USERNAME global setting)."""
     db = AsyncMock(spec=AsyncSession)
     results = []
 
@@ -145,37 +139,15 @@ async def test_async_credential_groups_priority_ordering_handled_by_query():
     assert result["ssh_user"] == "highpriority"
 
 
-async def test_async_no_credential_groups_mapping_falls_through_to_legacy_group():
-    """Node with NO credential_groups mapping falls through to the legacy group
-    tier exactly as before (#699 behaviour preserved)."""
-    from unittest.mock import MagicMock as _MM
-
-    legacy_cred = _credential(kind="username_password", username="legacyuser", secret_plain="legacypw")
-    legacy_group = _MM()
-    legacy_group.name = "legacy-prod"
-    legacy_group.credential_id = legacy_cred.id
-    legacy_group.credential_priority = 0
-
+async def test_async_no_credential_groups_mapping_falls_through_to_none():
+    """Node with NO credential_groups mapping and no controller key resolves
+    to the credential-less 'none' tier — there is no legacy group fallback."""
     node = _node()
-    db = _make_async_db(None, scalar_results=[legacy_group])
-    db.get = AsyncMock(return_value=legacy_cred)
+    db = _make_async_db(None, scalar_results=[None])  # SSH_USERNAME
 
     result = await resolve_node_credentials(node, db)
 
-    assert result["credential_source"] == "group:legacy-prod"
-    assert result["ssh_user"] == "legacyuser"
-    assert result["ssh_password"] == "legacypw"
-
-
-async def test_async_no_credential_groups_no_legacy_group_falls_through_to_global():
-    """Node with no credential_groups mapping and no legacy group falls all the
-    way through to controller/global exactly as before."""
-    node = _node()
-    db = _make_async_db(None, scalar_results=[None, None, None])  # legacy group, SSH_USERNAME, SSH_PASSWORD
-
-    result = await resolve_node_credentials(node, db)
-
-    assert result["credential_source"] == "global"
+    assert result["credential_source"] == "none"
     assert result["ssh_user"] == "admin"
     assert result["ssh_password"] == ""
 
@@ -209,45 +181,12 @@ def test_sync_credential_groups_tier_ssh_key():
     assert result["auth_mode"] == "key"
 
 
-def test_sync_no_credential_groups_mapping_falls_through_to_legacy_group():
-    legacy_cred = _credential(kind="username_password", username="legacyuser", secret_plain="legacypw")
-    legacy_group = MagicMock()
-    legacy_group.name = "legacy-prod"
-    legacy_group.credential_id = legacy_cred.id
-    legacy_group.credential_priority = 0
-
+def test_sync_no_credential_groups_mapping_falls_through_to_none():
     node = _node()
-    db = _make_sync_db(None, scalar_results=[legacy_group])
-    db.get.return_value = legacy_cred
+    db = _make_sync_db(None, scalar_results=[None])  # SSH_USERNAME
 
     result = resolve_node_credentials_sync(node, db)
 
-    assert result["credential_source"] == "group:legacy-prod"
-    assert result["ssh_user"] == "legacyuser"
-    assert result["ssh_password"] == "legacypw"
-
-
-def test_sync_no_credential_groups_no_legacy_group_falls_through_to_global():
-    node = _node()
-    db = _make_sync_db(None, scalar_results=[None, None, None])  # legacy group, SSH_USERNAME, SSH_PASSWORD
-
-    result = resolve_node_credentials_sync(node, db)
-
-    assert result["credential_source"] == "global"
+    assert result["credential_source"] == "none"
     assert result["ssh_user"] == "admin"
     assert result["ssh_password"] == ""
-
-
-def test_sync_node_credential_still_wins_over_credential_groups_tier():
-    """Node-level FK (tier 1) still wins over the new credential_groups tier
-    (tier 1b) — priority chain preserved."""
-    node_cred = _credential(kind="username_password", username="nodeuser", secret_plain="nodepw")
-    node = _node(credential_id=node_cred.id)
-    db = MagicMock()
-    db.get.return_value = node_cred
-
-    result = resolve_node_credentials_sync(node, db)
-
-    assert result["credential_source"] == "node"
-    assert result["ssh_user"] == "nodeuser"
-    db.execute.assert_not_called()  # tier 1 short-circuits before credential_groups tier runs

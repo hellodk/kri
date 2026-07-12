@@ -54,16 +54,6 @@ class Node(Base, TimestampMixin):
     ssh_checked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     ssh_detail: Mapped[str | None] = mapped_column(String(255), nullable=True)
 
-    # First-class Credential store reference (#703). Nullable: nodes are born from
-    # salt-minion check-ins with no operator in the loop, so a credential is never
-    # mandatory. Resolution falls back to group -> controller -> global.
-    credential_id: Mapped[uuid.UUID | None] = mapped_column(
-        UUID(as_uuid=True),
-        ForeignKey("credentials.id", ondelete="SET NULL"),
-        nullable=True,
-        index=True,
-    )
-
     # Per-node VNC password (encrypted at rest)
     vnc_password_enc: Mapped[str | None] = mapped_column(Text, nullable=True)
 

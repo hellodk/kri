@@ -42,12 +42,14 @@ def test_credential_group_has_unique_group_id():
     assert ("group_id",) in cols
 
 
-# ── expand-contract: old columns are KEPT this phase ─────────────────────────
+# ── expand-contract: old columns were kept through Phase 1, dropped in #989 ──
 
 
-def test_group_and_node_still_have_credential_id_this_phase():
-    assert "credential_id" in Group.__table__.columns
-    assert "credential_id" in Node.__table__.columns
+def test_group_and_node_no_longer_have_credential_id():
+    """The #989 Chunk 1 contract-phase migration (067) dropped both columns —
+    this phase's additive migration (065) is what made that drop safe."""
+    assert "credential_id" not in Group.__table__.columns
+    assert "credential_id" not in Node.__table__.columns
 
 
 # ── migration is additive (no drops in the expand phase) ─────────────────────

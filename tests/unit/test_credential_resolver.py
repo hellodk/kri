@@ -1,10 +1,11 @@
 # tests/unit/test_credential_resolver.py
 """Unit tests for fleet_platform.services.credential_resolver.
 
-As of #748 (ARC-4) the resolver reads secrets ONLY from the first-class
-``Credential`` store (node/group ``credential_id``) plus the controller/global
-platform tiers. The deprecated inline ``ssh_*`` columns are no longer consulted
-— see ``test_748_no_inline_ssh_fallback.py`` for the regression guards.
+As of #989 (Chunk 1 — GROUP-ONLY credential contract) the resolver has exactly
+two tiers: the ``credential_groups`` association (a node's group membership)
+and the controller key. There is no per-node credential, no legacy
+``Group.credential_id`` column, and no global-password fallback — a node with
+no usable secret in either tier resolves to ``credential_source: 'none'``.
 """
 
 import uuid
@@ -16,59 +17,53 @@ from fleet_platform.services.credential_resolver import (
     node_has_group,
     resolve_node_credentials,
 )
-from fleet_platform.services.platform_settings_svc import _fernet, encrypt_secret
+from fleet_platform.services.platform_settings_svc import encrypt_secret
 
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
 
 
-class _FirstResult:
-    """Marks a value that should be returned via ``.first()`` instead of
-    ``.scalar_one_or_none()`` (#984 — the credential_groups tier calls ``.first()``
-    on its query result, unlike the row-returning legacy queries)."""
+class _Row:
+    """Mimics a SQLAlchemy (Credential, group_name) Row consumed via ``.first()``."""
 
-    def __init__(self, value):
-        self.value = value
+    def __init__(self, cred, name):
+        self._t = (cred, name)
+
+    def __iter__(self):
+        return iter(self._t)
 
 
-def _make_db(*scalar_returns):
-    """Build an AsyncMock db whose execute() returns results in order.
+def _make_db(cg_result, *scalar_returns):
+    """Build an AsyncMock db.
 
-    Wrap a value in :class:`_FirstResult` to have it consumed via ``.first()``
-    (the #984 credential_groups tier) instead of ``.scalar_one_or_none()``.
+    ``cg_result`` is what the credential_groups tier's ``.first()`` call
+    returns (a :class:`_Row` or ``None``). Any further ``scalar_returns`` are
+    consumed in order via ``.scalar_one_or_none()`` by subsequent calls
+    (e.g. the global SSH_USERNAME setting read).
     """
     db = AsyncMock(spec=AsyncSession)
-    side_effects = []
+    results = []
+
+    r0 = MagicMock()
+    r0.first.return_value = cg_result
+    results.append(r0)
+
     for val in scalar_returns:
-        result = MagicMock()
-        if isinstance(val, _FirstResult):
-            result.first.return_value = val.value
-        else:
-            result.scalar_one_or_none.return_value = val
-        side_effects.append(result)
-    if len(side_effects) == 1:
-        db.execute.return_value = side_effects[0]
-    elif side_effects:
-        db.execute.side_effect = side_effects
+        r = MagicMock()
+        r.scalar_one_or_none.return_value = val
+        results.append(r)
+
+    db.execute.side_effect = results
     return db
 
 
-def _node(ssh_host_key=None, credential_id=None):
+def _node(ssh_host_key=None):
     node = MagicMock()
     node.id = uuid.uuid4()
     node.minion_id = "node-01"
     node.ssh_host_key = ssh_host_key  # None = not bootstrapped
-    node.credential_id = credential_id  # None = no FK
     return node
-
-
-def _group(name="mygroup", credential_id=None, credential_priority=0):
-    group = MagicMock()
-    group.name = name
-    group.credential_id = credential_id
-    group.credential_priority = credential_priority
-    return group
 
 
 def _credential(kind="username_password", username="cuser", secret_plain="cpw"):
@@ -89,152 +84,68 @@ def _platform_row(value, is_encrypted=False):
 
 
 # ---------------------------------------------------------------------------
-# Node-level Credential FK resolution
+# credential_groups tier
 # ---------------------------------------------------------------------------
 
 
-async def test_node_credential_fk_password():
-    """Node FK -> username_password Credential resolves to password auth, source 'node'."""
-    cred = _credential(kind="username_password", username="cuser", secret_plain="cpw")
-    node = _node(credential_id=cred.id)
-    db = AsyncMock(spec=AsyncSession)
-    db.get.return_value = cred
+async def test_credential_group_tier_password():
+    """Group credential (via credential_groups) resolves to password auth, source 'group:<name>'."""
+    cred = _credential(kind="username_password", username="cguser", secret_plain="cgpw")
+    node = _node()
+    db = _make_db(_Row(cred, "prod"))
 
     result = await resolve_node_credentials(node, db)
 
-    assert result["credential_source"] == "node"
-    assert result["ssh_user"] == "cuser"
-    assert result["ssh_password"] == "cpw"
+    assert result["credential_source"] == "group:prod"
+    assert result["ssh_user"] == "cguser"
+    assert result["ssh_password"] == "cgpw"
     assert result["ssh_key"] == ""
     assert result["auth_mode"] == "password"
     assert cred.last_used_at is not None  # touched for audit/rotation
-    db.execute.assert_not_called()  # FK hit short-circuits the group query
 
 
-async def test_node_credential_fk_ssh_key():
-    """Node FK -> ssh_key Credential resolves to key auth."""
+async def test_credential_group_tier_ssh_key():
     cred = _credential(kind="ssh_key", username="keyuser", secret_plain="PRIVATE_KEY_BLOB")
-    node = _node(credential_id=cred.id)
-    db = AsyncMock(spec=AsyncSession)
-    db.get.return_value = cred
+    node = _node()
+    db = _make_db(_Row(cred, "prod"))
 
     result = await resolve_node_credentials(node, db)
 
-    assert result["credential_source"] == "node"
+    assert result["credential_source"] == "group:prod"
     assert result["ssh_user"] == "keyuser"
     assert result["ssh_key"] == "PRIVATE_KEY_BLOB"
     assert result["ssh_password"] == ""
     assert result["auth_mode"] == "key"
 
 
-async def test_node_credential_secret_decrypt_failure_swallowed():
-    """A node Credential whose secret_enc is garbage -> empty secret, no usable
-    secret -> falls through to global. Decryption failure is logged, not raised."""
+async def test_credential_group_secret_decrypt_failure_falls_through_to_none():
+    """A group Credential whose secret_enc is garbage -> empty secret, no usable
+    secret -> falls through to the credential-less 'none' tier. Decryption
+    failure is logged, not raised."""
     cred = MagicMock()
     cred.id = uuid.uuid4()
     cred.kind = "username_password"
-    cred.username = "cuser"
+    cred.username = "cguser"
     cred.secret_enc = "not-valid-fernet-data"
     cred.last_used_at = None
-    node = _node(credential_id=cred.id)
-    db = _make_db(_FirstResult(None), None, None, None)  # cred-group tier, group query, 2 global settings
-    db.get.return_value = cred
+    node = _node()
+    db = _make_db(_Row(cred, "prod"), None)  # cred-group tier, then SSH_USERNAME
 
     result = await resolve_node_credentials(node, db)
 
-    assert result["credential_source"] == "global"
+    assert result["credential_source"] == "none"
     assert result["ssh_password"] == ""
 
 
-async def test_node_fk_dangling_falls_through_to_global():
-    """A dangling node FK (credential row gone) no longer falls back to inline
-    columns (#748) — it falls all the way through to the global tier."""
-    node = _node(credential_id=uuid.uuid4())
-    db = _make_db(_FirstResult(None), None, None, None)  # cred-group tier, group query, 2 global settings
-    db.get.return_value = None  # credential deleted out from under the FK
-
-    result = await resolve_node_credentials(node, db)
-
-    assert result["credential_source"] == "global"
-
-
-# ---------------------------------------------------------------------------
-# Group-level Credential FK resolution
-# ---------------------------------------------------------------------------
-
-
-async def test_group_credential_fk():
-    """Group FK -> Credential resolves with source 'group:<name>'."""
-    cred = _credential(kind="username_password", username="guser", secret_plain="gpw")
-    group = _group(name="prod", credential_id=cred.id)
+async def test_no_credential_group_mapping_falls_through_to_none():
+    """A node with no credential_groups mapping and no controller key resolves
+    to the credential-less 'none' tier."""
     node = _node()
-    db = _make_db(_FirstResult(None), group)  # cred-group tier (no assoc row), legacy group query
-    db.get = AsyncMock(return_value=cred)
+    db = _make_db(None, None)  # cred-group tier (no mapping), SSH_USERNAME
 
     result = await resolve_node_credentials(node, db)
 
-    assert result["credential_source"] == "group:prod"
-    assert result["ssh_user"] == "guser"
-    assert result["ssh_password"] == "gpw"
-
-
-async def test_group_credential_fk_ssh_key():
-    cred = _credential(kind="ssh_key", username="guser", secret_plain="GROUP_KEY")
-    group = _group(name="prod", credential_id=cred.id)
-    node = _node()
-    db = _make_db(_FirstResult(None), group)  # cred-group tier (no assoc row), legacy group query
-    db.get = AsyncMock(return_value=cred)
-
-    result = await resolve_node_credentials(node, db)
-
-    assert result["ssh_key"] == "GROUP_KEY"
-    assert result["auth_mode"] == "key"
-
-
-async def test_node_fk_wins_over_group():
-    """When both the node FK and a group FK resolve, the node credential wins."""
-    node_cred = _credential(username="nodeuser", secret_plain="nodepw")
-    node = _node(credential_id=node_cred.id)
-    db = AsyncMock(spec=AsyncSession)
-    db.get.return_value = node_cred
-
-    result = await resolve_node_credentials(node, db)
-
-    assert result["ssh_user"] == "nodeuser"
-    db.execute.assert_not_called()
-
-
-async def test_node_fk_empty_secret_falls_through_to_group():
-    """A node FK pointing at a secret-less credential (#704 Class-A defect) is
-    skipped; resolution falls through to the usable group credential."""
-    empty_node_cred = _credential(kind="username_password", username="nuser", secret_plain=None)
-    group_cred = _credential(kind="username_password", username="guser", secret_plain="gpw")
-    group = _group(name="prod", credential_id=group_cred.id)
-    node = _node(credential_id=empty_node_cred.id)
-    db = _make_db(_FirstResult(None), group)  # cred-group tier (no assoc row), legacy group query
-
-    async def _get(_model, ident):
-        return empty_node_cred if ident == empty_node_cred.id else group_cred
-
-    db.get = AsyncMock(side_effect=_get)
-
-    result = await resolve_node_credentials(node, db)
-
-    assert result["credential_source"] == "group:prod"
-    assert result["ssh_user"] == "guser"
-    assert result["ssh_password"] == "gpw"
-
-
-async def test_node_fk_empty_secret_falls_through_to_global():
-    """An empty node FK with no group falls all the way through to global."""
-    empty_node_cred = _credential(kind="username_password", username="nuser", secret_plain=None)
-    node = _node(credential_id=empty_node_cred.id)
-    db = _make_db(_FirstResult(None), None, None, None)  # cred-group tier, group query, SSH_USERNAME, SSH_PASSWORD
-    db.get = AsyncMock(return_value=empty_node_cred)
-
-    result = await resolve_node_credentials(node, db)
-
-    assert result["credential_source"] == "global"
+    assert result["credential_source"] == "none"
 
 
 # ---------------------------------------------------------------------------
@@ -243,11 +154,9 @@ async def test_node_fk_empty_secret_falls_through_to_global():
 
 
 async def test_controller_key_tier():
-    """Bootstrapped node (ssh_host_key set), no credential -> controller key."""
+    """Bootstrapped node (ssh_host_key set), no group credential -> controller key."""
     node = _node(ssh_host_key="ecdsa-sha2-nistp256 AAAA...")
-    db = _make_db(
-        _FirstResult(None), None, None
-    )  # cred-group tier, legacy group query (None), SSH_USERNAME for controller user
+    db = _make_db(None, None)  # cred-group tier (no mapping), SSH_USERNAME for controller user
 
     with patch(
         "fleet_platform.services.credential_resolver._read_controller_key",
@@ -260,58 +169,64 @@ async def test_controller_key_tier():
     assert result["ssh_key"] == "CONTROLLER_KEY"
 
 
+async def test_controller_key_missing_falls_through_to_none():
+    """Bootstrapped node but controller key file absent -> credential-less 'none' tier."""
+    node = _node(ssh_host_key="ecdsa-sha2-nistp256 AAAA...")
+    db = _make_db(None, None)  # cred-group tier (no mapping), SSH_USERNAME
+
+    with patch(
+        "fleet_platform.services.credential_resolver._read_controller_key",
+        return_value="",
+    ):
+        result = await resolve_node_credentials(node, db)
+
+    assert result["credential_source"] == "none"
+
+
+async def test_credential_group_wins_over_controller_key():
+    """A usable group credential wins over the controller-key tier even when
+    ssh_host_key is set."""
+    cred = _credential(kind="username_password", username="cguser", secret_plain="cgpw")
+    node = _node(ssh_host_key="ecdsa-sha2-nistp256 AAAA...")
+    db = _make_db(_Row(cred, "prod"))
+
+    with patch(
+        "fleet_platform.services.credential_resolver._read_controller_key",
+        return_value="SHOULD_NOT_BE_USED",
+    ):
+        result = await resolve_node_credentials(node, db)
+
+    assert result["credential_source"] == "group:prod"
+    assert result["ssh_user"] == "cguser"
+
+
 # ---------------------------------------------------------------------------
-# Global fallback tier
+# Credential-less 'none' tier
 # ---------------------------------------------------------------------------
 
 
-async def test_global_fallback_no_settings():
+async def test_none_tier_no_settings():
     node = _node()
-    db = _make_db(_FirstResult(None), None, None, None)  # cred-group, group, SSH_USERNAME, SSH_PASSWORD all None
+    db = _make_db(None, None)  # cred-group tier (no mapping), SSH_USERNAME
 
     result = await resolve_node_credentials(node, db)
 
-    assert result["credential_source"] == "global"
+    assert result["credential_source"] == "none"
     assert result["ssh_user"] == "admin"
     assert result["ssh_password"] == ""
     assert result["ssh_key"] == ""
     assert result["auth_mode"] == "password"
 
 
-async def test_global_fallback_with_setting():
+async def test_none_tier_uses_ssh_username_setting_as_login_user():
+    """SSH_USERNAME is still read for the login user — never as a password source."""
     node = _node()
-    db = _make_db(_FirstResult(None), None, _platform_row("deploy", is_encrypted=False), None)
+    db = _make_db(None, _platform_row("deploy", is_encrypted=False))
 
     result = await resolve_node_credentials(node, db)
 
-    assert result["credential_source"] == "global"
+    assert result["credential_source"] == "none"
     assert result["ssh_user"] == "deploy"
-
-
-async def test_global_fallback_with_encrypted_password():
-    node = _node()
-    encrypted_pw = _fernet().encrypt(b"secretpass").decode()
-    user_row = _platform_row("admin", is_encrypted=False)
-    pw_row = _platform_row(encrypted_pw, is_encrypted=True)
-    db = _make_db(_FirstResult(None), None, user_row, pw_row)
-
-    result = await resolve_node_credentials(node, db)
-
-    assert result["credential_source"] == "global"
-    assert result["ssh_user"] == "admin"
-    assert result["ssh_password"] == "secretpass"
-
-
-async def test_global_fallback_decrypt_failure_returns_empty():
-    """_get_global_setting swallows Fernet errors and returns ''."""
-    node = _node()
-    user_row = _platform_row("admin", is_encrypted=False)
-    pw_row = _platform_row("not-valid-fernet-ciphertext", is_encrypted=True)
-    db = _make_db(_FirstResult(None), None, user_row, pw_row)
-
-    result = await resolve_node_credentials(node, db)
-
-    assert result["credential_source"] == "global"
     assert result["ssh_password"] == ""
 
 
@@ -322,16 +237,22 @@ async def test_global_fallback_decrypt_failure_returns_empty():
 
 async def test_node_has_group_true():
     member = MagicMock()
-    db = _make_db(member)
+    db = AsyncMock(spec=AsyncSession)
+    result = MagicMock()
+    result.scalar_one_or_none.return_value = member
+    db.execute.return_value = result
 
-    result = await node_has_group(uuid.uuid4(), db)
+    result_val = await node_has_group(uuid.uuid4(), db)
 
-    assert result is True
+    assert result_val is True
 
 
 async def test_node_has_group_false():
-    db = _make_db(None)
+    db = AsyncMock(spec=AsyncSession)
+    result = MagicMock()
+    result.scalar_one_or_none.return_value = None
+    db.execute.return_value = result
 
-    result = await node_has_group(uuid.uuid4(), db)
+    result_val = await node_has_group(uuid.uuid4(), db)
 
-    assert result is False
+    assert result_val is False

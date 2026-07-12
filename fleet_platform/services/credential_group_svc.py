@@ -1,11 +1,11 @@
 """Read/write helpers for the ``credential_groups`` association (#985 Phase 2b).
 
 Phase 2a (resolver, #984) made resolution prefer ``credential_groups`` over the
-legacy ``Group.credential_id`` column. This phase moves the *write* path (group
+legacy ``Group.credential_id`` column. This phase moved the *write* path (group
 credential PATCH) and the credential reference-count reads onto the same
-association, so ``credential_groups`` becomes the source of truth for both
-reads and writes while ``Group.credential_id`` is kept (unwritten) for
-expand-contract safety — it is dropped in a later phase.
+association, so ``credential_groups`` is the sole source of truth for both
+reads and writes — ``Group.credential_id`` (and ``Node.credential_id``) were
+dropped for good in the #989 Chunk 1 contract-phase migration (067).
 
 One credential per group is enforced by ``UNIQUE(group_id)`` on
 ``credential_groups`` (migration 065). :func:`set_group_credential` performs an

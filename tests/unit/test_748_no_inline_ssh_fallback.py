@@ -1,21 +1,23 @@
-"""#748 (ARC-4): the inline SSH credential read-fallback is gone.
+"""#748 (ARC-4) + #989 (Chunk 1): no inline SSH fallback, no node/legacy-group tier.
 
 Before #748, ``credential_resolver`` and ``ssh_credential_link`` read the
 deprecated inline ``ssh_*`` columns on nodes/groups as a fallback when no
-``credential_id`` was set — a second secret-resolution path. These tests pin the
-new contract:
+credential was linked — a second secret-resolution path. #989 Chunk 1 went
+further and contracted the model to GROUP-ONLY: the per-node
+``Node.credential_id`` FK, the legacy ``Group.credential_id`` FK, and the
+global-password fallback were all dropped along with their columns. These
+tests pin the current contract:
 
-* resolution flows ONLY through the ``Credential`` store (+ controller/global
-  platform tiers), never the inline columns;
-* a node whose only "credential" would have been inline data resolves to no
-  usable secret and :func:`require_usable_node_credentials` raises;
-* the inline helper functions are gone, so the dual path cannot silently come
-  back. (The inline columns themselves remain on the model for now — the
-  physical DROP migration is deferred until the remaining inline readers in
-  sibling-owned ``workers``/``api`` modules are removed.)
+* resolution flows ONLY through ``credential_groups`` (+ the controller-key
+  tier), never inline columns, never a per-node/legacy-group FK, never a
+  global password;
+* a node with only inline-style poison data and no credential_groups mapping
+  resolves to no usable secret and :func:`require_usable_node_credentials`
+  raises;
+* the inline helper functions and the legacy tier helpers are gone, so none of
+  these dual paths can silently come back.
 """
 
-import uuid
 from unittest.mock import AsyncMock, MagicMock
 
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -35,57 +37,54 @@ from fleet_platform.services.platform_settings_svc import encrypt_secret
 # ---------------------------------------------------------------------------
 
 
-def _make_db(*scalar_returns):
-    """AsyncMock db whose execute() returns scalar_one_or_none results in order."""
+def _make_db(cg_result, *scalar_returns):
+    """AsyncMock db: first execute() is consumed via ``.first()`` (credential_groups
+    tier); remaining calls via ``.scalar_one_or_none()`` (e.g. SSH_USERNAME)."""
     db = AsyncMock(spec=AsyncSession)
-    side_effects = []
+    results = []
+    r0 = MagicMock()
+    r0.first.return_value = cg_result
+    results.append(r0)
     for val in scalar_returns:
-        result = MagicMock()
-        result.scalar_one_or_none.return_value = val
-        side_effects.append(result)
-    if len(side_effects) == 1:
-        db.execute.return_value = side_effects[0]
-    elif side_effects:
-        db.execute.side_effect = side_effects
+        r = MagicMock()
+        r.scalar_one_or_none.return_value = val
+        results.append(r)
+    db.execute.side_effect = results
     return db
 
 
-def _sync_db(*scalar_returns):
+def _sync_db(cg_result, *scalar_returns):
     db = MagicMock()
-    side_effects = []
+    results = []
+    r0 = MagicMock()
+    r0.first.return_value = cg_result
+    results.append(r0)
     for val in scalar_returns:
-        result = MagicMock()
-        result.scalar_one_or_none.return_value = val
-        side_effects.append(result)
-    if len(side_effects) == 1:
-        db.execute.return_value = side_effects[0]
-    elif side_effects:
-        db.execute.side_effect = side_effects
+        r = MagicMock()
+        r.scalar_one_or_none.return_value = val
+        results.append(r)
+    db.execute.side_effect = results
     return db
 
 
-def _node_with_inline(credential_id=None, ssh_host_key=None):
-    """A node carrying *only* legacy inline-style attributes (no credential_id).
+def _node_with_inline(ssh_host_key=None):
+    """A node carrying *only* legacy inline-style poison attributes.
 
     Uses a plain MagicMock so the inline attributes exist as object attributes —
     if the resolver still read them, these poison values would leak into the
-    result. They must not.
+    result. They must not. There is no ``credential_id`` attribute at all
+    (#989 — the column is gone from the real model).
     """
-    node = MagicMock()
-    node.id = uuid.uuid4()
+    node = MagicMock(spec=["id", "minion_id", "ssh_host_key"])
+    node.id = "legacy-node-id"
     node.minion_id = "legacy-node-01"
-    node.credential_id = credential_id
     node.ssh_host_key = ssh_host_key
-    node.ssh_username = "inline-operator"
-    node.ssh_password_enc = encrypt_secret("inline-secret")
-    node.ssh_key_enc = encrypt_secret("inline-key")
-    node.ssh_auth_mode = "password"
     return node
 
 
 def _credential(kind="username_password", username="cuser", secret_plain="cpw"):
     cred = MagicMock()
-    cred.id = uuid.uuid4()
+    cred.id = "cred-id"
     cred.kind = kind
     cred.username = username
     cred.secret_enc = encrypt_secret(secret_plain) if secret_plain is not None else ""
@@ -93,101 +92,83 @@ def _credential(kind="username_password", username="cuser", secret_plain="cpw"):
     return cred
 
 
+class _Row:
+    """Mimics a SQLAlchemy (Credential, group_name) Row consumed via ``.first()``."""
+
+    def __init__(self, cred, name):
+        self._t = (cred, name)
+
+    def __iter__(self):
+        return iter(self._t)
+
+
 # ---------------------------------------------------------------------------
 # Credential-store resolution still works (happy path preserved)
 # ---------------------------------------------------------------------------
 
 
-async def test_resolve_with_credential_id_works():
+async def test_resolve_via_credential_groups_works():
     cred = _credential(username="cuser", secret_plain="cpw")
-    node = MagicMock()
-    node.id = uuid.uuid4()
-    node.credential_id = cred.id
-    node.ssh_host_key = None
-    db = AsyncMock(spec=AsyncSession)
-    db.get.return_value = cred
+    node = _node_with_inline()
+    db = _make_db(_Row(cred, "prod"))
 
     result = await resolve_node_credentials(node, db)
 
-    assert result["credential_source"] == "node"
+    assert result["credential_source"] == "group:prod"
     assert result["ssh_user"] == "cuser"
     assert result["ssh_password"] == "cpw"
-    db.execute.assert_not_called()
 
 
-def test_resolve_sync_with_credential_id_works():
+def test_resolve_sync_via_credential_groups_works():
     cred = _credential(kind="ssh_key", username="keyuser", secret_plain="KEYBLOB")
-    node = MagicMock()
-    node.id = uuid.uuid4()
-    node.credential_id = cred.id
-    node.ssh_host_key = None
-    db = MagicMock()
-    db.get.return_value = cred
+    node = _node_with_inline()
+    db = _sync_db(_Row(cred, "prod"))
 
     result = resolve_node_credentials_sync(node, db)
 
-    assert result["credential_source"] == "node"
+    assert result["credential_source"] == "group:prod"
     assert result["ssh_key"] == "KEYBLOB"
     assert result["auth_mode"] == "key"
 
 
 # ---------------------------------------------------------------------------
-# Inline columns are never read
+# Inline columns / node-level / legacy-group tiers are never read
 # ---------------------------------------------------------------------------
 
 
-async def test_node_inline_data_ignored_no_credential_id():
-    """A node with inline ssh_* attrs but no credential_id must NOT resolve to
-    the inline values — it falls through to the global tier instead."""
+async def test_node_inline_data_ignored_no_credential_groups_mapping():
+    """A node with inline-style poison attrs but no credential_groups mapping
+    must NOT resolve to any inline value — it falls through to the credential-
+    less 'none' tier (there is no global password fallback, #989)."""
     node = _node_with_inline()
-    # group query -> None, SSH_USERNAME -> None, SSH_PASSWORD -> None
-    db = _make_db(None, None, None)
+    # credential_groups tier -> None, SSH_USERNAME -> None
+    db = _make_db(None, None)
 
     result = await resolve_node_credentials(node, db)
 
-    assert result["credential_source"] == "global"
-    assert result["ssh_user"] == "admin"  # global default, not "inline-operator"
-    assert result["ssh_password"] == ""  # the inline secret is never read
+    assert result["credential_source"] == "none"
+    assert result["ssh_user"] == "admin"  # default, not any poisoned value
+    assert result["ssh_password"] == ""
     assert result["ssh_key"] == ""
 
 
-def test_sync_node_inline_data_ignored_no_credential_id():
+def test_sync_node_inline_data_ignored_no_credential_groups_mapping():
     node = _node_with_inline()
-    db = _sync_db(None, None, None)
+    db = _sync_db(None, None)
 
     result = resolve_node_credentials_sync(node, db)
 
-    assert result["credential_source"] == "global"
+    assert result["credential_source"] == "none"
     assert result["ssh_user"] == "admin"
     assert result["ssh_password"] == ""
 
 
-async def test_group_inline_only_not_selected_as_primary():
-    """A member group with only inline ssh_username (no credential_id) is no
-    longer eligible — the group tier is skipped and resolution hits global."""
-    group = MagicMock()
-    group.name = "legacy-group"
-    group.credential_id = None
-    group.ssh_username = "group-inline-user"
-    node = _node_with_inline()
-    # Even if a group row were returned, a None credential_id means skip it.
-    db = _make_db(group, None, None)
-
-    result = await resolve_node_credentials(node, db)
-
-    assert result["credential_source"] == "global"
-    assert result["ssh_user"] == "admin"
-
-
-def test_primary_group_stmt_filters_on_credential_id_only():
-    """The group selection must be eligible by credential_id only — the inline
-    ``ssh_username`` column must NOT appear in the WHERE filter (the SELECT list
-    still mentions every column while the deprecated columns remain on the model,
-    so we assert on the predicate, not the projection)."""
-    stmt = credential_resolver._primary_group_stmt(uuid.uuid4())
-    where_sql = str(stmt.whereclause)
-    assert "credential_id IS NOT NULL" in where_sql
-    assert "ssh_username" not in where_sql
+def test_no_node_level_or_legacy_group_tier_helpers_exist():
+    """The per-node and legacy-Group.credential_id tiers were removed for good
+    in #989 Chunk 1 — their helper must not exist. The read-only audit helper
+    (now credential_groups-only) is untouched and must still exist."""
+    assert not hasattr(credential_resolver, "_primary_group_stmt")
+    assert hasattr(credential_resolver, "nodes_using_credential")
 
 
 # ---------------------------------------------------------------------------
@@ -196,10 +177,10 @@ def test_primary_group_stmt_filters_on_credential_id_only():
 
 
 async def test_require_raises_for_inline_only_node():
-    """A node with only inline data and no credential_id has no usable secret —
-    require_usable_node_credentials must raise the documented error."""
+    """A node with only inline poison data and no credential_groups mapping has
+    no usable secret — require_usable_node_credentials must raise."""
     node = _node_with_inline()
-    db = _make_db(None, None, None)
+    db = _make_db(None, None)
 
     try:
         await require_usable_node_credentials(node, db)
@@ -210,23 +191,19 @@ async def test_require_raises_for_inline_only_node():
 
 def test_require_sync_raises_for_inline_only_node():
     node = _node_with_inline()
-    db = _sync_db(None, None, None)
+    db = _sync_db(None, None)
 
     try:
         require_usable_node_credentials_sync(node, db)
         raise AssertionError("expected NoUsableCredentialError")
     except NoUsableCredentialError as exc:
-        assert "credential_id" in str(exc)
+        assert "group" in str(exc)
 
 
 async def test_require_returns_creds_when_credential_present():
     cred = _credential(username="cuser", secret_plain="cpw")
-    node = MagicMock()
-    node.id = uuid.uuid4()
-    node.credential_id = cred.id
-    node.ssh_host_key = None
-    db = AsyncMock(spec=AsyncSession)
-    db.get.return_value = cred
+    node = _node_with_inline()
+    db = _make_db(_Row(cred, "prod"))
 
     result = await require_usable_node_credentials(node, db)
 

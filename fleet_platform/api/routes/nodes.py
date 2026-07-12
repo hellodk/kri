@@ -458,8 +458,7 @@ async def get_node_resolved_credential(
     creds = await resolve_node_credentials(node, db)
 
     # Member groups that carry a credential via the credential_groups association
-    # (#984/#986 — preferred over the legacy Group.credential_id column), in
-    # resolution order.
+    # (#984/#986/#989 — the only group/node credential source), in resolution order.
     cred_groups = (
         (
             await db.execute(
@@ -481,9 +480,9 @@ async def get_node_resolved_credential(
         "ssh_user": creds["ssh_user"],
         "auth_mode": creds["auth_mode"],
         "has_usable_secret": has_usable_secret(creds),
-        # Deprecated: per-node credentials are retired (#986 Phase 2c). Retained
-        # in the response for backward compatibility, always null going forward.
-        "node_credential_id": str(node.credential_id) if node.credential_id else None,
+        # Deprecated: per-node credentials removed entirely (#989 Chunk 1).
+        # Always null — retained in the response for API backward compatibility.
+        "node_credential_id": None,
         "multi_group_conflict": len(cred_groups) >= 2 and creds["credential_source"].startswith("group:"),
         "credential_bearing_groups": conflict_groups,
     }

@@ -26,13 +26,6 @@ class Group(Base, TimestampMixin):
     session_max_mins: Mapped[int] = mapped_column(Integer, default=60)
     session_retention_days: Mapped[int] = mapped_column(Integer, default=30)
 
-    # First-class Credential store reference (#703).
-    credential_id: Mapped[uuid.UUID | None] = mapped_column(
-        UUID(as_uuid=True),
-        ForeignKey("credentials.id", ondelete="SET NULL"),
-        nullable=True,
-        index=True,
-    )
     # Tiebreak when a node belongs to 2+ credential-bearing groups (#699).
     # Higher wins; alphabetical name remains the stable final tiebreak.
     credential_priority: Mapped[int] = mapped_column(Integer, nullable=False, default=0, server_default="0")

@@ -18,26 +18,26 @@ def _host(hostname, ip, ssh_user, ssh_password="", ssh_key="", auth_mode="passwo
     }
 
 
-def _make_node(ssh_host_key=None, credential_id=None):
+def _make_node(ssh_host_key=None):
     """Build a minimal Node-like stub for credential resolver tests.
 
-    Inline ssh_* attributes are intentionally NOT set: as of #748 the resolver
-    never reads them, so credential state is expressed via ``credential_id``.
+    As of #989 (GROUP-ONLY contract) a node carries no credential state of its
+    own — only ``ssh_host_key`` (controller-key tier) and group membership
+    (mocked at the DB layer via the credential_groups tier).
     """
     node = MagicMock()
     node.id = 1
     node.minion_id = "node-01"
     node.ssh_host_key = ssh_host_key
-    node.credential_id = credential_id  # no FK; explicit to avoid MagicMock truthy default (#704)
     return node
 
 
 def _make_db_no_group_no_global():
-    """Sync DB stub: no group membership, no platform settings."""
+    """Sync DB stub: no credential_groups mapping, no platform settings."""
     db = MagicMock()
-    # scalar_one_or_none() returns None for both group query and platform setting query
+    # scalar_one_or_none() returns None for the platform setting query
     db.execute.return_value.scalar_one_or_none.return_value = None
-    # first() returns None for the #984 credential_groups tier (same fixed
+    # first() returns None for the credential_groups tier (same fixed
     # return_value mock is reused across every db.execute() call here).
     db.execute.return_value.first.return_value = None
     return db
@@ -68,8 +68,9 @@ def test_sync_resolver_bootstrapped_node_uses_controller_key(tmp_path):
     assert result["ssh_password"] == ""
 
 
-def test_sync_resolver_bootstrapped_node_key_missing_falls_to_global(tmp_path):
-    """Bootstrapped node but controller key file absent → falls through to global tier."""
+def test_sync_resolver_bootstrapped_node_key_missing_falls_to_none(tmp_path):
+    """Bootstrapped node but controller key file absent → falls through to the
+    credential-less 'none' tier (no global password fallback, #989)."""
     from fleet_platform.services.credential_resolver import resolve_node_credentials_sync
 
     node = _make_node(ssh_host_key="ecdsa-sha2-nistp256 AAAA...")
@@ -81,13 +82,13 @@ def test_sync_resolver_bootstrapped_node_key_missing_falls_to_global(tmp_path):
     ):
         result = resolve_node_credentials_sync(node, db)
 
-    assert result["credential_source"] == "global"
+    assert result["credential_source"] == "none"
 
 
-def test_sync_resolver_bootstrapped_node_with_credential_fk_wins_over_controller():
-    """Node with ssh_host_key set AND a node-level Credential FK → the explicit
-    credential wins over the controller key tier (#748: the FK is the only
-    node-level override now that inline columns are gone)."""
+def test_sync_resolver_bootstrapped_node_with_credential_group_wins_over_controller():
+    """Node with ssh_host_key set AND a usable credential_groups credential → the
+    group credential wins over the controller key tier (#989: credential_groups
+    is the only per-node/group secret source, and it is tried first)."""
     from fleet_platform.services.credential_resolver import resolve_node_credentials_sync
     from fleet_platform.services.platform_settings_svc import encrypt_secret
 
@@ -98,9 +99,11 @@ def test_sync_resolver_bootstrapped_node_with_credential_fk_wins_over_controller
     cred.secret_enc = encrypt_secret("ops-pw")
     cred.last_used_at = None
 
-    node = _make_node(ssh_host_key="ecdsa-sha2-nistp256 AAAA...", credential_id=cred.id)
-    db = _make_db_no_group_no_global()
-    db.get.return_value = cred
+    node = _make_node(ssh_host_key="ecdsa-sha2-nistp256 AAAA...")
+    db = MagicMock()
+    cg_result = MagicMock()
+    cg_result.first.return_value = (cred, "prod")
+    db.execute.return_value = cg_result
 
     with patch(
         "fleet_platform.services.credential_resolver._read_controller_key",
@@ -108,13 +111,14 @@ def test_sync_resolver_bootstrapped_node_with_credential_fk_wins_over_controller
     ):
         result = resolve_node_credentials_sync(node, db)
 
-    assert result["credential_source"] == "node"
+    assert result["credential_source"] == "group:prod"
     assert result["ssh_user"] == "ops"
     assert result["ssh_password"] == "ops-pw"
 
 
-def test_sync_resolver_non_bootstrapped_node_uses_global():
-    """Node without ssh_host_key (never bootstrapped) → skips controller tier → global."""
+def test_sync_resolver_non_bootstrapped_node_uses_none_tier():
+    """Node without ssh_host_key (never bootstrapped) → skips controller tier →
+    credential-less 'none' tier."""
     from fleet_platform.services.credential_resolver import resolve_node_credentials_sync
 
     node = _make_node(ssh_host_key=None)
@@ -126,7 +130,7 @@ def test_sync_resolver_non_bootstrapped_node_uses_global():
     ) as mock_ck:
         result = resolve_node_credentials_sync(node, db)
 
-    assert result["credential_source"] == "global"
+    assert result["credential_source"] == "none"
     mock_ck.assert_not_called()
 
 
@@ -170,8 +174,8 @@ def test_async_resolver_bootstrapped_node_uses_controller_key():
     assert result["ssh_password"] == ""
 
 
-def test_async_resolver_bootstrapped_node_key_missing_falls_to_global():
-    """Async resolver: bootstrapped node but key absent → global tier."""
+def test_async_resolver_bootstrapped_node_key_missing_falls_to_none():
+    """Async resolver: bootstrapped node but key absent → credential-less 'none' tier."""
     import asyncio
 
     from fleet_platform.services.credential_resolver import resolve_node_credentials
@@ -196,7 +200,7 @@ def test_async_resolver_bootstrapped_node_key_missing_falls_to_global():
             return await resolve_node_credentials(node, db)
 
     result = asyncio.run(_run())
-    assert result["credential_source"] == "global"
+    assert result["credential_source"] == "none"
 
 
 def test_inventory_writes_per_host_user_and_password():

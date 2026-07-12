@@ -1,63 +1,57 @@
 # tests/unit/test_credential_resolver_sync.py
 """Unit tests for the sync credential resolver used by the playbook worker (#279).
 
-As of #748 (ARC-4) the sync resolver, like its async twin, reads secrets only
-from the ``Credential`` store plus the controller/global platform tiers — never
-the deprecated inline ``ssh_*`` columns.
+As of #989 (Chunk 1 — GROUP-ONLY credential contract) the sync resolver, like
+its async twin, has exactly two tiers: ``credential_groups`` (a node's group
+membership) and the controller key. There is no per-node credential, no legacy
+``Group.credential_id`` column, and no global-password fallback.
 """
 
 import uuid
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
 
-from fleet_platform.services.platform_settings_svc import _fernet, encrypt_secret
-
-
-class _FirstResult:
-    """Marks a value that should be returned via ``.first()`` instead of
-    ``.scalar_one_or_none()`` (#984 — the credential_groups tier calls ``.first()``
-    on its query result, unlike the row-returning legacy queries)."""
-
-    def __init__(self, value):
-        self.value = value
+from fleet_platform.services.platform_settings_svc import encrypt_secret
 
 
-def _sync_db(*scalar_returns):
-    """Build a MagicMock sync Session whose execute() returns results in order.
+class _Row:
+    """Mimics a SQLAlchemy (Credential, group_name) Row consumed via ``.first()``."""
 
-    Wrap a value in :class:`_FirstResult` to have it consumed via ``.first()``
-    (the #984 credential_groups tier) instead of ``.scalar_one_or_none()``.
+    def __init__(self, cred, name):
+        self._t = (cred, name)
+
+    def __iter__(self):
+        return iter(self._t)
+
+
+def _sync_db(cg_result, *scalar_returns):
+    """Build a MagicMock sync Session.
+
+    ``cg_result`` is what the credential_groups tier's ``.first()`` call
+    returns. Any further ``scalar_returns`` are consumed in order via
+    ``.scalar_one_or_none()`` by subsequent calls (e.g. SSH_USERNAME).
     """
     db = MagicMock()
-    side_effects = []
+    results = []
+
+    r0 = MagicMock()
+    r0.first.return_value = cg_result
+    results.append(r0)
+
     for val in scalar_returns:
-        result = MagicMock()
-        if isinstance(val, _FirstResult):
-            result.first.return_value = val.value
-        else:
-            result.scalar_one_or_none.return_value = val
-        side_effects.append(result)
-    if len(side_effects) == 1:
-        db.execute.return_value = side_effects[0]
-    elif side_effects:
-        db.execute.side_effect = side_effects
+        r = MagicMock()
+        r.scalar_one_or_none.return_value = val
+        results.append(r)
+
+    db.execute.side_effect = results
     return db
 
 
-def _node(ssh_host_key=None, credential_id=None):
+def _node(ssh_host_key=None):
     node = MagicMock()
     node.id = uuid.uuid4()
     node.minion_id = "node-01"
     node.ssh_host_key = ssh_host_key
-    node.credential_id = credential_id
     return node
-
-
-def _group(name="prod", credential_id=None, credential_priority=0):
-    g = MagicMock()
-    g.name = name
-    g.credential_id = credential_id
-    g.credential_priority = credential_priority
-    return g
 
 
 def _credential(kind="username_password", username="cuser", secret_plain="cpw"):
@@ -77,32 +71,13 @@ def _platform_row(value, is_encrypted=False):
     return row
 
 
-def test_sync_node_credential_fk():
-    """Sync resolver dereferences node.credential_id, source 'node' (#698)."""
-    from fleet_platform.services.credential_resolver import resolve_node_credentials_sync
-
-    cred = _credential(kind="username_password", username="cuser", secret_plain="cpw")
-    node = _node(credential_id=cred.id)
-    db = MagicMock()
-    db.get.return_value = cred
-
-    result = resolve_node_credentials_sync(node, db)
-
-    assert result["credential_source"] == "node"
-    assert result["ssh_user"] == "cuser"
-    assert result["ssh_password"] == "cpw"
-    db.execute.assert_not_called()
-
-
-def test_sync_group_credential_fk():
-    """Sync resolver dereferences group.credential_id, source 'group:<name>' (#698)."""
+def test_sync_credential_group_tier():
+    """Sync resolver resolves via credential_groups, source 'group:<name>'."""
     from fleet_platform.services.credential_resolver import resolve_node_credentials_sync
 
     cred = _credential(kind="ssh_key", username="guser", secret_plain="KEYBLOB")
-    group = _group(name="prod", credential_id=cred.id)
     node = _node()
-    db = _sync_db(_FirstResult(None), group)  # cred-group tier (no assoc row), legacy group query
-    db.get.return_value = cred
+    db = _sync_db(_Row(cred, "prod"))
 
     result = resolve_node_credentials_sync(node, db)
 
@@ -112,31 +87,58 @@ def test_sync_group_credential_fk():
     assert result["auth_mode"] == "key"
 
 
-def test_sync_global_fallback():
+def test_sync_none_tier():
     from fleet_platform.services.credential_resolver import resolve_node_credentials_sync
 
     node = _node()
-    encrypted_pw = _fernet().encrypt(b"secretpass").decode()
-    db = _sync_db(
-        _FirstResult(None), None, _platform_row("deploy"), _platform_row(encrypted_pw, is_encrypted=True)
-    )  # cred-group tier, legacy group, SSH_USERNAME, SSH_PASSWORD
+    db = _sync_db(None, _platform_row("deploy"))  # cred-group tier (no mapping), SSH_USERNAME
+
     result = resolve_node_credentials_sync(node, db)
-    assert result["credential_source"] == "global"
+
+    assert result["credential_source"] == "none"
     assert result["ssh_user"] == "deploy"
-    assert result["ssh_password"] == "secretpass"
+    assert result["ssh_password"] == ""
 
 
-def test_sync_node_fk_empty_secret_falls_through_to_group():
-    """Sync twin: an empty-secret node FK (#704 Class-A defect) is skipped and
-    resolution falls through to the usable group credential."""
+def test_sync_credential_group_empty_secret_falls_through_to_none():
+    """A group Credential with no usable secret is skipped; resolution falls
+    through to the credential-less 'none' tier (no per-node fallback exists)."""
     from fleet_platform.services.credential_resolver import resolve_node_credentials_sync
 
-    empty_node_cred = _credential(kind="username_password", username="nuser", secret_plain=None)
-    group_cred = _credential(kind="username_password", username="guser", secret_plain="gpw")
-    group = _group(name="prod", credential_id=group_cred.id)
-    node = _node(credential_id=empty_node_cred.id)
-    db = _sync_db(_FirstResult(None), group)  # cred-group tier (no assoc row), legacy group query
-    db.get.side_effect = lambda _model, ident: empty_node_cred if ident == empty_node_cred.id else group_cred
+    empty_group_cred = _credential(kind="username_password", username="guser", secret_plain=None)
+    node = _node()
+    db = _sync_db(_Row(empty_group_cred, "prod"), None)  # cred-group tier, then SSH_USERNAME
+
+    result = resolve_node_credentials_sync(node, db)
+
+    assert result["credential_source"] == "none"
+
+
+def test_sync_controller_key_tier():
+    from fleet_platform.services.credential_resolver import resolve_node_credentials_sync
+
+    node = _node(ssh_host_key="ecdsa-sha2-nistp256 AAAA...")
+    db = _sync_db(None, None)  # cred-group tier (no mapping), SSH_USERNAME for controller user
+
+    with patch(
+        "fleet_platform.services.credential_resolver._read_controller_key",
+        return_value="CONTROLLER_KEY",
+    ):
+        result = resolve_node_credentials_sync(node, db)
+
+    assert result["credential_source"] == "controller"
+    assert result["auth_mode"] == "key"
+    assert result["ssh_key"] == "CONTROLLER_KEY"
+
+
+def test_sync_credential_group_wins_over_controller():
+    """A usable group credential wins over the controller-key tier even when
+    ssh_host_key is set."""
+    from fleet_platform.services.credential_resolver import resolve_node_credentials_sync
+
+    cred = _credential(kind="username_password", username="guser", secret_plain="gpw")
+    node = _node(ssh_host_key="ecdsa-sha2-nistp256 AAAA...")
+    db = _sync_db(_Row(cred, "prod"))
 
     result = resolve_node_credentials_sync(node, db)
 

@@ -167,8 +167,8 @@ def bootstrap_node(
             {"master": m, "auto_accept": getattr(m, "auto_accept", True), "name": m.name} for m in master_objs
         ]
 
-        # Resolve SSH credentials via the FK-aware credential resolver (#913).
-        # Chain: node.credential_id → group.credential_id → controller key → global settings.
+        # Resolve SSH credentials via the group-only credential resolver (#989).
+        # Chain: credential_groups (group membership) → controller key → none.
         # Per-run ssh_username argument still takes priority over the resolved user.
         resolved_creds = resolve_node_credentials_sync(node, db)
         ssh_user = ssh_username or resolved_creds["ssh_user"] or "admin"
