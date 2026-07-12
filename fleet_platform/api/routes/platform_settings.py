@@ -327,7 +327,9 @@ async def update_settings(
     if payload.otlp_protocol is not None:
         await set_setting(db, OTLP_PROTOCOL, payload.otlp_protocol)
     if payload.otlp_headers is not None:
-        await set_setting(db, OTLP_HEADERS, payload.otlp_headers)
+        # otlp_headers typically carries an Authorization: Bearer token — encrypt
+        # at rest like every other secret-bearing setting (#991 S1).
+        await set_setting(db, OTLP_HEADERS, payload.otlp_headers, encrypt=True)
     await audit(
         db,
         actor=claims["email"],

@@ -33,6 +33,7 @@
       eauth: pam
     validate_certs: false
     status_code: 200
+  no_log: true  # POSTs kri_salt_api_password — never render it into the provision log on failure (#991 S2)
   register: salt_api_login_result
   failed_when: >
     salt_api_login_result.status != 200

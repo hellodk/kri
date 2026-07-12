@@ -12,6 +12,7 @@ nc(1) checks in playbooks/bootstrap_node.yml (see #536, epic #537).
 Issue #517, epic #523.
 """
 
+import asyncio
 import socket
 import time
 from typing import Any, TypedDict
@@ -378,12 +379,19 @@ def _aggregate(checks: list[CheckResult]) -> AggregateLiteral:
 async def run_probe(master: SaltMaster) -> ProbeResult:
     """Validate a salt-master's prerequisites and return structured results.
 
-    This is an async function but all network I/O inside is synchronous
-    (requests + socket).  For production use wrap in asyncio.to_thread or
-    anyio.to_thread.run_sync when calling from the FastAPI handler.
+    The probe body is synchronous network I/O (requests + socket), so it is
+    offloaded to a worker thread via ``asyncio.to_thread`` — the FastAPI event
+    loop keeps yielding and ``asyncio.wait_for`` at the call site can actually
+    enforce its timeout instead of being frozen for the full 50s+ (#991 A1).
 
     No check may raise — all exceptions are caught and returned as fail/warn.
     """
+    return await asyncio.to_thread(_run_probe_sync, master)
+
+
+def _run_probe_sync(master: SaltMaster) -> ProbeResult:
+    """Synchronous probe body — all blocking network I/O lives here so
+    :func:`run_probe` can hand it to ``asyncio.to_thread`` (#991 A1)."""
     from fleet_platform.services.platform_settings_svc import decrypt_secret
 
     # Decrypt the API password once
