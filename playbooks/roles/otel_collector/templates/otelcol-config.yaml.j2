@@ -6,6 +6,12 @@ receivers:
           scrape_interval: 30s
           static_configs:
             - targets: ["127.0.0.1:9100"]
+processors:
+  resource/fleet:
+    attributes:
+      - key: fleet_instance
+        value: "{{ otel_node_instance | default(minion_id ~ ':9100', true) }}"
+        action: upsert
 exporters:
   {% if otlp_protocol == 'grpc' %}otlp{% else %}otlphttp{% endif %}:
     endpoint: "{{ otlp_endpoint }}"
@@ -17,4 +23,5 @@ service:
   pipelines:
     metrics:
       receivers: [prometheus]
+      processors: [resource/fleet]
       exporters: [{% if otlp_protocol == 'grpc' %}otlp{% else %}otlphttp{% endif %}]

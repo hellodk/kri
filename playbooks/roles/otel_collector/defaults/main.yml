@@ -19,6 +19,12 @@ otlp_endpoint: "http://127.0.0.1:30318"
 otlp_protocol: "http"
 otlp_headers: ""
 
+# --- Stable Prometheus label for this node's metrics ---
+# Empty by default: the template falls back to "<minion_id>:9100". Set
+# explicitly only if the node's fleet_instance needs to differ from that
+# convention.
+otel_node_instance: ""
+
 # --- Download source resolution ---
 # Precedence: otel_collector_url_override > artifactory_binary_url +
 # artifactory_otel_collector_path > otel_collector_official_base.
@@ -36,6 +42,7 @@ _kri_var_descriptions:
   otlp_endpoint: "OTLP push target (http(s)://host:port). Passed as an extravar from kri Settings."
   otlp_protocol: "OTLP wire protocol: 'http' (otlphttp exporter) or 'grpc' (otlp exporter)."
   otlp_headers: "Optional OTLP exporter headers block (YAML mapping text), e.g. auth headers. Empty by default."
+  otel_node_instance: "Stable Prometheus label identifying this node's metrics; defaults to <minion_id>:9100."
   otel_collector_url_override: "Full URL override for the otelcol-contrib tarball. Takes precedence over artifactory/official resolution."
   artifactory_binary_url: "Base URL of an Artifactory (or similar) binary mirror. Leave blank to use the official GitHub release URL."
   artifactory_otel_collector_path: "Path segment under artifactory_binary_url where otelcol-contrib tarballs live."

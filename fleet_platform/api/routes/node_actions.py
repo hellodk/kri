@@ -281,7 +281,11 @@ async def get_node_metrics(
         return {"available": False, "reason": "Node has no IP address — bootstrap first"}
 
     prom_base = await get_setting(db, PROMETHEUS_URL) or "http://prometheus-operated.monitoring.svc:9090"
-    instance = f"{node_ip}:9100"
+    # The gateway's resource_to_telemetry_conversion turns the otelcol resource
+    # attribute "fleet_instance" (stamped by the resource/fleet processor) into
+    # a Prometheus label. Unlike "instance"/"job", Prometheus's scrape of the
+    # gateway does not overwrite it, so it's the stable selector to query by.
+    fleet_instance = f"{node_ip}:9100"
 
     # Time range
     range_map = {"15m": "15m", "1h": "1h", "6h": "6h", "24h": "24h"}
@@ -290,18 +294,22 @@ async def get_node_metrics(
     step = step_map.get(range, "60s")
 
     queries = {
-        "cpu": f'100 - avg(rate(node_cpu_seconds_total{{instance="{instance}",mode="idle"}}[5m])) * 100',
+        "cpu": f'100 - avg(rate(node_cpu_seconds_total{{fleet_instance="{fleet_instance}",mode="idle"}}[5m])) * 100',
         "mem_used_pct": (
-            f'(1 - node_memory_MemAvailable_bytes{{instance="{instance}"}}'
-            f' / node_memory_MemTotal_bytes{{instance="{instance}"}}) * 100'
+            f'(1 - node_memory_MemAvailable_bytes{{fleet_instance="{fleet_instance}"}}'
+            f' / node_memory_MemTotal_bytes{{fleet_instance="{fleet_instance}"}}) * 100'
         ),
-        "disk_read_kbs": f'rate(node_disk_read_bytes_total{{instance="{instance}"}}[5m]) / 1024',
-        "disk_write_kbs": f'rate(node_disk_written_bytes_total{{instance="{instance}"}}[5m]) / 1024',
-        "net_rx_kbs": f'rate(node_network_receive_bytes_total{{instance="{instance}",device!="lo"}}[5m]) / 1024',
-        "net_tx_kbs": f'rate(node_network_transmit_bytes_total{{instance="{instance}",device!="lo"}}[5m]) / 1024',
+        "disk_read_kbs": f'rate(node_disk_read_bytes_total{{fleet_instance="{fleet_instance}"}}[5m]) / 1024',
+        "disk_write_kbs": f'rate(node_disk_written_bytes_total{{fleet_instance="{fleet_instance}"}}[5m]) / 1024',
+        "net_rx_kbs": (
+            f'rate(node_network_receive_bytes_total{{fleet_instance="{fleet_instance}",device!="lo"}}[5m]) / 1024'
+        ),
+        "net_tx_kbs": (
+            f'rate(node_network_transmit_bytes_total{{fleet_instance="{fleet_instance}",device!="lo"}}[5m]) / 1024'
+        ),
     }
 
-    results: dict = {"available": True, "instance": instance, "range": range, "series": {}}
+    results: dict = {"available": True, "instance": fleet_instance, "range": range, "series": {}}
 
     try:
         async with _httpx.AsyncClient(timeout=8.0) as client:
@@ -333,7 +341,7 @@ async def get_node_metrics(
     if total_points == 0:
         results["available"] = False
         results["reason"] = (
-            f"No metrics for {instance} — is node_exporter running? "
+            f"No metrics for {fleet_instance} — is node_exporter running? "
             "Monitoring installs during bootstrap; re-run bootstrap for this node if it is missing."
         )
 
