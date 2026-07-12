@@ -15,6 +15,7 @@ from fleet_platform.api.deps import get_db, get_redis
 from fleet_platform.core.audit import audit
 from fleet_platform.core.auth import get_current_user, hash_password, require_role
 from fleet_platform.core.validators import MINION_ID_RE
+from fleet_platform.models.group import Group
 from fleet_platform.models.node import Node
 from fleet_platform.schemas.fleet import FleetOverviewResponse
 from fleet_platform.schemas.node_import import (
@@ -160,6 +161,23 @@ async def _import_from_salt(db: AsyncSession) -> list[dict]:
         return []
 
 
+async def _get_or_create_default_group(db: AsyncSession) -> Group:
+    """Return the seeded 'default' group, creating it if migration 065's seed is
+    absent.
+
+    Guarantees every group-less imported node still joins a group (upholding the
+    node-in-≥1-group invariant) and resolves a credential via credential_groups,
+    instead of being silently skipped when the seed is missing (#994/C4). Never
+    returns None.
+    """
+    grp = (await db.execute(select(Group).where(Group.name == "default"))).scalar_one_or_none()
+    if grp is None:
+        grp = Group(name="default", type="static")
+        db.add(grp)
+        await db.flush()
+    return grp
+
+
 @router.post("/nodes/import/validate", response_model=ImportValidateResponse)
 async def import_validate(
     payload: ImportValidateRequest,
@@ -265,22 +283,19 @@ async def import_commit(
                 )
             )
         else:
-            # No explicit group: fall back to the seeded "default" group
-            # (migration 065) so the node still resolves a credential via
-            # credential_groups. Skip silently if it's missing rather than crash.
-            from fleet_platform.models.group import Group, GroupMember
+            # No explicit group: join the seeded (or freshly created) "default"
+            # group so the node always belongs to ≥1 group and resolves a
+            # credential via credential_groups — never leave it group-less (#994/C4).
+            from fleet_platform.models.group import GroupMember
 
-            _default_group = (
-                await db.execute(select(Group).where(Group.name == "default"))
-            ).scalar_one_or_none()
-            if _default_group is not None:
-                db.add(
-                    GroupMember(
-                        group_id=_default_group.id,
-                        node_id=node.id,
-                        added_at=datetime.now(UTC),
-                    )
+            _default_group = await _get_or_create_default_group(db)
+            db.add(
+                GroupMember(
+                    group_id=_default_group.id,
+                    node_id=node.id,
+                    added_at=datetime.now(UTC),
                 )
+            )
 
     # Import-supplied SSH creds become the TARGET GROUP's credential (new model,
     # #988): create/update a Credential from the inline creds and map it to the
@@ -288,33 +303,29 @@ async def import_commit(
     # it. This restores the "type creds during import" workflow inside the
     # group-scoped model (Phase 3 will replace the raw fields with a picker).
     if payload.ssh_username or _ssh_pw or _ssh_key:
-        from fleet_platform.models.group import Group
         from fleet_platform.services.credential_group_svc import (
             get_group_credential_id,
             set_group_credential,
         )
         from fleet_platform.services.ssh_credential_link import upsert_owner_ssh_credential
 
-        _target_group_id: uuid.UUID | None = None
         if payload.group_id:
-            _target_group_id = uuid.UUID(payload.group_id)
+            _grp = await db.get(Group, uuid.UUID(payload.group_id))
         else:
-            _dg = (await db.execute(select(Group).where(Group.name == "default"))).scalar_one_or_none()
-            _target_group_id = _dg.id if _dg is not None else None
+            _grp = await _get_or_create_default_group(db)
 
-        if _target_group_id is not None:
-            _grp = await db.get(Group, _target_group_id)
+        if _grp is not None:
             _cred_id = await upsert_owner_ssh_credential(
                 db,
                 owner_name=f"group:{_grp.name}",
-                current_credential_id=await get_group_credential_id(db, _target_group_id),
+                current_credential_id=await get_group_credential_id(db, _grp.id),
                 ssh_username=payload.ssh_username,
                 ssh_password=_ssh_pw,
                 ssh_key=_ssh_key,
                 ssh_auth_mode=payload.ssh_auth_mode or ("key" if (_ssh_key and not _ssh_pw) else "password"),
             )
             if _cred_id is not None:
-                await set_group_credential(db, _target_group_id, _cred_id)
+                await set_group_credential(db, _grp.id, _cred_id)
 
     await audit(
         db,
