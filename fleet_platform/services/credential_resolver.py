@@ -39,6 +39,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from fleet_platform.models.credential import Credential
+from fleet_platform.models.credential_group import CredentialGroup
 from fleet_platform.models.group import Group, GroupMember
 from fleet_platform.models.node import Node
 from fleet_platform.models.platform_setting import PlatformSetting
@@ -125,6 +126,27 @@ def _credential_to_creds(cred: Credential, source: str) -> dict:
     }
 
 
+def _credential_group_stmt(node_id):
+    """Member group whose credential comes via ``credential_groups`` (#984).
+
+    Expand-contract Phase 2a: prefer the normalized ``credential_groups``
+    association (added in migration 065, Phase 1) over the legacy
+    ``Group.credential_id`` column. Same tiebreak as :func:`_primary_group_stmt`
+    — highest ``credential_priority`` then name. Returns ``(Credential, group_name)``
+    rows.
+    """
+    return (
+        select(Credential, Group.name)
+        .select_from(GroupMember)
+        .join(Group, Group.id == GroupMember.group_id)
+        .join(CredentialGroup, CredentialGroup.group_id == Group.id)
+        .join(Credential, Credential.id == CredentialGroup.credential_id)
+        .where(GroupMember.node_id == node_id)
+        .order_by(Group.credential_priority.desc(), Group.name.asc())
+        .limit(1)
+    )
+
+
 def _primary_group_stmt(node_id):
     """Member group that carries a Credential FK, highest priority then name.
 
@@ -160,7 +182,18 @@ async def resolve_node_credentials(node: Node, db: AsyncSession) -> dict:
             if has_usable_secret(creds):
                 return creds
 
-    # 2. Primary group credential (highest priority, then name).
+    # 1b. Group credential via credential_groups association (#984 normalized
+    #     model, expand-contract Phase 2a — preferred over the legacy tier below).
+    _cg_row = (await db.execute(_credential_group_stmt(node.id))).first()
+    if _cg_row is not None:
+        _cred, _gname = _cg_row
+        creds = _credential_to_creds(_cred, f"group:{_gname}")
+        if has_usable_secret(creds):
+            return creds
+
+    # 2. Primary group credential (highest priority, then name). Legacy
+    #    Group.credential_id fallback — kept for expand-contract until the
+    #    column is dropped in a later phase.
     group = (await db.execute(_primary_group_stmt(node.id))).scalar_one_or_none()
     if group is not None and group.credential_id:
         cred = await db.get(Credential, group.credential_id)
@@ -213,7 +246,18 @@ def resolve_node_credentials_sync(node: Node, db) -> dict:
             if has_usable_secret(creds):
                 return creds
 
-    # 2. Primary group credential (highest priority, then name).
+    # 1b. Group credential via credential_groups association (#984 normalized
+    #     model, expand-contract Phase 2a — preferred over the legacy tier below).
+    _cg_row = db.execute(_credential_group_stmt(node.id)).first()
+    if _cg_row is not None:
+        _cred, _gname = _cg_row
+        creds = _credential_to_creds(_cred, f"group:{_gname}")
+        if has_usable_secret(creds):
+            return creds
+
+    # 2. Primary group credential (highest priority, then name). Legacy
+    #    Group.credential_id fallback — kept for expand-contract until the
+    #    column is dropped in a later phase.
     group = db.execute(_primary_group_stmt(node.id)).scalar_one_or_none()
     if group is not None and group.credential_id:
         cred = db.get(Credential, group.credential_id)
@@ -319,8 +363,11 @@ async def nodes_using_credential(credential_id, db: AsyncSession) -> list[tuple[
     Resolution-aware: a node counts if its node-level FK points at the credential
     (``source='node'``), or — when the node has no node-level credential — its
     primary credential-bearing group (highest ``credential_priority``, then name)
-    points at it (``source='group:<name>'``). This is the read-only audit/rotation
-    view; it deliberately ignores controller/global tiers (not Credential rows).
+    points at it (``source='group:<name>'``), via either the ``credential_groups``
+    association (#984, preferred) or the legacy ``Group.credential_id`` column
+    (expand-contract fallback — both counted so nothing is missed while both
+    paths coexist). This is the read-only audit/rotation view; it deliberately
+    ignores controller/global tiers (not Credential rows).
     """
     results: list[tuple[Node, str]] = []
     seen: set = set()
@@ -330,16 +377,20 @@ async def nodes_using_credential(credential_id, db: AsyncSession) -> list[tuple[
         results.append((n, "node"))
         seen.add(n.id)
 
-    # Candidate nodes: members of a group that references this credential, with no
-    # node-level credential of their own. Confirm this credential's group actually
-    # wins the priority tiebreak for each candidate before counting it.
+    # Candidate nodes: members of a group that references this credential — via
+    # either the new credential_groups association or the legacy Group.credential_id
+    # column — with no node-level credential of their own. Confirm this credential's
+    # group actually wins the priority tiebreak for each candidate before counting it.
     candidates = (
         (
             await db.execute(
                 select(Node)
                 .join(GroupMember, GroupMember.node_id == Node.id)
                 .join(Group, Group.id == GroupMember.group_id)
-                .where(Group.credential_id == credential_id)
+                .outerjoin(CredentialGroup, CredentialGroup.group_id == Group.id)
+                .where(
+                    (Group.credential_id == credential_id) | (CredentialGroup.credential_id == credential_id)
+                )
                 .where(Node.credential_id.is_(None))
                 .distinct()
             )
@@ -350,6 +401,13 @@ async def nodes_using_credential(credential_id, db: AsyncSession) -> list[tuple[
     for n in candidates:
         if n.id in seen:
             continue
+        _cg_row = (await db.execute(_credential_group_stmt(n.id))).first()
+        if _cg_row is not None:
+            _cred, _gname = _cg_row
+            if _cred.id == credential_id:
+                results.append((n, f"group:{_gname}"))
+                seen.add(n.id)
+                continue
         group = (await db.execute(_primary_group_stmt(n.id))).scalar_one_or_none()
         if group is not None and group.credential_id == credential_id:
             results.append((n, f"group:{group.name}"))

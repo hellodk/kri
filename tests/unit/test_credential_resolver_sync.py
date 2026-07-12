@@ -12,13 +12,29 @@ from unittest.mock import MagicMock
 from fleet_platform.services.platform_settings_svc import _fernet, encrypt_secret
 
 
+class _FirstResult:
+    """Marks a value that should be returned via ``.first()`` instead of
+    ``.scalar_one_or_none()`` (#984 — the credential_groups tier calls ``.first()``
+    on its query result, unlike the row-returning legacy queries)."""
+
+    def __init__(self, value):
+        self.value = value
+
+
 def _sync_db(*scalar_returns):
-    """Build a MagicMock sync Session whose execute() returns results in order."""
+    """Build a MagicMock sync Session whose execute() returns results in order.
+
+    Wrap a value in :class:`_FirstResult` to have it consumed via ``.first()``
+    (the #984 credential_groups tier) instead of ``.scalar_one_or_none()``.
+    """
     db = MagicMock()
     side_effects = []
     for val in scalar_returns:
         result = MagicMock()
-        result.scalar_one_or_none.return_value = val
+        if isinstance(val, _FirstResult):
+            result.first.return_value = val.value
+        else:
+            result.scalar_one_or_none.return_value = val
         side_effects.append(result)
     if len(side_effects) == 1:
         db.execute.return_value = side_effects[0]
@@ -85,7 +101,7 @@ def test_sync_group_credential_fk():
     cred = _credential(kind="ssh_key", username="guser", secret_plain="KEYBLOB")
     group = _group(name="prod", credential_id=cred.id)
     node = _node()
-    db = _sync_db(group)
+    db = _sync_db(_FirstResult(None), group)  # cred-group tier (no assoc row), legacy group query
     db.get.return_value = cred
 
     result = resolve_node_credentials_sync(node, db)
@@ -101,7 +117,9 @@ def test_sync_global_fallback():
 
     node = _node()
     encrypted_pw = _fernet().encrypt(b"secretpass").decode()
-    db = _sync_db(None, _platform_row("deploy"), _platform_row(encrypted_pw, is_encrypted=True))
+    db = _sync_db(
+        _FirstResult(None), None, _platform_row("deploy"), _platform_row(encrypted_pw, is_encrypted=True)
+    )  # cred-group tier, legacy group, SSH_USERNAME, SSH_PASSWORD
     result = resolve_node_credentials_sync(node, db)
     assert result["credential_source"] == "global"
     assert result["ssh_user"] == "deploy"
@@ -117,7 +135,7 @@ def test_sync_node_fk_empty_secret_falls_through_to_group():
     group_cred = _credential(kind="username_password", username="guser", secret_plain="gpw")
     group = _group(name="prod", credential_id=group_cred.id)
     node = _node(credential_id=empty_node_cred.id)
-    db = _sync_db(group)
+    db = _sync_db(_FirstResult(None), group)  # cred-group tier (no assoc row), legacy group query
     db.get.side_effect = lambda _model, ident: empty_node_cred if ident == empty_node_cred.id else group_cred
 
     result = resolve_node_credentials_sync(node, db)

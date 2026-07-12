@@ -23,13 +23,29 @@ from fleet_platform.services.platform_settings_svc import _fernet, encrypt_secre
 # ---------------------------------------------------------------------------
 
 
+class _FirstResult:
+    """Marks a value that should be returned via ``.first()`` instead of
+    ``.scalar_one_or_none()`` (#984 — the credential_groups tier calls ``.first()``
+    on its query result, unlike the row-returning legacy queries)."""
+
+    def __init__(self, value):
+        self.value = value
+
+
 def _make_db(*scalar_returns):
-    """Build an AsyncMock db whose execute() returns results in order."""
+    """Build an AsyncMock db whose execute() returns results in order.
+
+    Wrap a value in :class:`_FirstResult` to have it consumed via ``.first()``
+    (the #984 credential_groups tier) instead of ``.scalar_one_or_none()``.
+    """
     db = AsyncMock(spec=AsyncSession)
     side_effects = []
     for val in scalar_returns:
         result = MagicMock()
-        result.scalar_one_or_none.return_value = val
+        if isinstance(val, _FirstResult):
+            result.first.return_value = val.value
+        else:
+            result.scalar_one_or_none.return_value = val
         side_effects.append(result)
     if len(side_effects) == 1:
         db.execute.return_value = side_effects[0]
@@ -121,7 +137,7 @@ async def test_node_credential_secret_decrypt_failure_swallowed():
     cred.secret_enc = "not-valid-fernet-data"
     cred.last_used_at = None
     node = _node(credential_id=cred.id)
-    db = _make_db(None, None, None)  # group query + 2 global settings
+    db = _make_db(_FirstResult(None), None, None, None)  # cred-group tier, group query, 2 global settings
     db.get.return_value = cred
 
     result = await resolve_node_credentials(node, db)
@@ -134,7 +150,7 @@ async def test_node_fk_dangling_falls_through_to_global():
     """A dangling node FK (credential row gone) no longer falls back to inline
     columns (#748) — it falls all the way through to the global tier."""
     node = _node(credential_id=uuid.uuid4())
-    db = _make_db(None, None, None)
+    db = _make_db(_FirstResult(None), None, None, None)  # cred-group tier, group query, 2 global settings
     db.get.return_value = None  # credential deleted out from under the FK
 
     result = await resolve_node_credentials(node, db)
@@ -152,7 +168,7 @@ async def test_group_credential_fk():
     cred = _credential(kind="username_password", username="guser", secret_plain="gpw")
     group = _group(name="prod", credential_id=cred.id)
     node = _node()
-    db = _make_db(group)
+    db = _make_db(_FirstResult(None), group)  # cred-group tier (no assoc row), legacy group query
     db.get = AsyncMock(return_value=cred)
 
     result = await resolve_node_credentials(node, db)
@@ -166,7 +182,7 @@ async def test_group_credential_fk_ssh_key():
     cred = _credential(kind="ssh_key", username="guser", secret_plain="GROUP_KEY")
     group = _group(name="prod", credential_id=cred.id)
     node = _node()
-    db = _make_db(group)
+    db = _make_db(_FirstResult(None), group)  # cred-group tier (no assoc row), legacy group query
     db.get = AsyncMock(return_value=cred)
 
     result = await resolve_node_credentials(node, db)
@@ -195,7 +211,7 @@ async def test_node_fk_empty_secret_falls_through_to_group():
     group_cred = _credential(kind="username_password", username="guser", secret_plain="gpw")
     group = _group(name="prod", credential_id=group_cred.id)
     node = _node(credential_id=empty_node_cred.id)
-    db = _make_db(group)
+    db = _make_db(_FirstResult(None), group)  # cred-group tier (no assoc row), legacy group query
 
     async def _get(_model, ident):
         return empty_node_cred if ident == empty_node_cred.id else group_cred
@@ -213,7 +229,7 @@ async def test_node_fk_empty_secret_falls_through_to_global():
     """An empty node FK with no group falls all the way through to global."""
     empty_node_cred = _credential(kind="username_password", username="nuser", secret_plain=None)
     node = _node(credential_id=empty_node_cred.id)
-    db = _make_db(None, None, None)  # group query (None), SSH_USERNAME, SSH_PASSWORD
+    db = _make_db(_FirstResult(None), None, None, None)  # cred-group tier, group query, SSH_USERNAME, SSH_PASSWORD
     db.get = AsyncMock(return_value=empty_node_cred)
 
     result = await resolve_node_credentials(node, db)
@@ -229,7 +245,9 @@ async def test_node_fk_empty_secret_falls_through_to_global():
 async def test_controller_key_tier():
     """Bootstrapped node (ssh_host_key set), no credential -> controller key."""
     node = _node(ssh_host_key="ecdsa-sha2-nistp256 AAAA...")
-    db = _make_db(None, None)  # group query (None), SSH_USERNAME for controller user
+    db = _make_db(
+        _FirstResult(None), None, None
+    )  # cred-group tier, legacy group query (None), SSH_USERNAME for controller user
 
     with patch(
         "fleet_platform.services.credential_resolver._read_controller_key",
@@ -249,7 +267,7 @@ async def test_controller_key_tier():
 
 async def test_global_fallback_no_settings():
     node = _node()
-    db = _make_db(None, None, None)  # group, SSH_USERNAME, SSH_PASSWORD all None
+    db = _make_db(_FirstResult(None), None, None, None)  # cred-group, group, SSH_USERNAME, SSH_PASSWORD all None
 
     result = await resolve_node_credentials(node, db)
 
@@ -262,7 +280,7 @@ async def test_global_fallback_no_settings():
 
 async def test_global_fallback_with_setting():
     node = _node()
-    db = _make_db(None, _platform_row("deploy", is_encrypted=False), None)
+    db = _make_db(_FirstResult(None), None, _platform_row("deploy", is_encrypted=False), None)
 
     result = await resolve_node_credentials(node, db)
 
@@ -275,7 +293,7 @@ async def test_global_fallback_with_encrypted_password():
     encrypted_pw = _fernet().encrypt(b"secretpass").decode()
     user_row = _platform_row("admin", is_encrypted=False)
     pw_row = _platform_row(encrypted_pw, is_encrypted=True)
-    db = _make_db(None, user_row, pw_row)
+    db = _make_db(_FirstResult(None), None, user_row, pw_row)
 
     result = await resolve_node_credentials(node, db)
 
@@ -289,7 +307,7 @@ async def test_global_fallback_decrypt_failure_returns_empty():
     node = _node()
     user_row = _platform_row("admin", is_encrypted=False)
     pw_row = _platform_row("not-valid-fernet-ciphertext", is_encrypted=True)
-    db = _make_db(None, user_row, pw_row)
+    db = _make_db(_FirstResult(None), None, user_row, pw_row)
 
     result = await resolve_node_credentials(node, db)
 
