@@ -131,6 +131,9 @@ def test_bootstrap_node_uses_resolver_not_inline_helpers():
 
     with (
         patch("fleet_platform.workers.ansible_tasks.get_sync_db", new=_sync_db),
+        # #968 added OTLP get_setting_sync reads inside bootstrap_node; stub them
+        # so they don't consume the positional db.execute mock sequence.
+        patch("fleet_platform.services.platform_settings_svc.get_setting_sync", return_value=None),
         patch("fleet_platform.workers.ansible_tasks._get_bootstrap_settings", return_value=("admin", "pw", "pubkey")),
         patch(
             "fleet_platform.workers.ansible_tasks.resolve_node_credentials_sync",
@@ -180,6 +183,9 @@ def test_per_run_ssh_username_overrides_resolved_user():
 
     with (
         patch("fleet_platform.workers.ansible_tasks.get_sync_db", new=_sync_db),
+        # #968 added OTLP get_setting_sync reads inside bootstrap_node; stub them
+        # so they don't consume the positional db.execute mock sequence.
+        patch("fleet_platform.services.platform_settings_svc.get_setting_sync", return_value=None),
         patch("fleet_platform.workers.ansible_tasks._get_bootstrap_settings", return_value=("admin", "pw", "pubkey")),
         patch(
             "fleet_platform.workers.ansible_tasks.resolve_node_credentials_sync",
@@ -227,6 +233,9 @@ def test_missing_credentials_sets_failed_and_returns_error():
 
     with (
         patch("fleet_platform.workers.ansible_tasks.get_sync_db", new=_sync_db),
+        # #968 added OTLP get_setting_sync reads inside bootstrap_node; stub them
+        # so they don't consume the positional db.execute mock sequence.
+        patch("fleet_platform.services.platform_settings_svc.get_setting_sync", return_value=None),
         patch("fleet_platform.workers.ansible_tasks._get_bootstrap_settings", return_value=("admin", "", "pubkey")),
         patch(
             "fleet_platform.workers.ansible_tasks.resolve_node_credentials_sync",
@@ -277,6 +286,9 @@ def test_key_auth_resolver_result_written_to_key_file():
 
     with (
         patch("fleet_platform.workers.ansible_tasks.get_sync_db", new=_sync_db),
+        # #968 added OTLP get_setting_sync reads inside bootstrap_node; stub them
+        # so they don't consume the positional db.execute mock sequence.
+        patch("fleet_platform.services.platform_settings_svc.get_setting_sync", return_value=None),
         patch("fleet_platform.workers.ansible_tasks._get_bootstrap_settings", return_value=("admin", "", "pubkey")),
         patch(
             "fleet_platform.workers.ansible_tasks.resolve_node_credentials_sync",
