@@ -754,6 +754,36 @@ def _resolve_master_ssh_creds(master, db) -> dict:
     return {"ssh_user": ssh_user, "ssh_password": ssh_password, "ssh_key": ssh_key}
 
 
+def _ensure_master_api_creds(master) -> str:
+    """Return the master's salt-api password, generating + persisting creds on the
+    record when absent (#976).
+
+    provision passes this password to api_user.yml, which creates the ``krisalt``
+    PAM user with it, and kri's salt_api_client later authenticates with the same
+    stored password. A master promoted from a node (or created without api creds)
+    has no password — without this it would be provisioned with an EMPTY password
+    and every salt-api call would 401 (degrading the Minion Keys page + the
+    pending-count notification badge to empty). The caller commits the session.
+    """
+    from fleet_platform.services.platform_settings_svc import decrypt_secret, encrypt_secret
+
+    api_password = ""
+    if master.api_password_enc:
+        try:
+            api_password = decrypt_secret(master.api_password_enc)
+        except Exception as _e:  # pragma: no cover - defensive
+            logger.warning("_ensure_master_api_creds: cannot decrypt api_password_enc: %s", _e)
+
+    if not api_password:
+        import secrets as _secrets
+
+        api_password = _secrets.token_urlsafe(24)
+        master.api_password_enc = encrypt_secret(api_password)
+    if not master.api_user:
+        master.api_user = "krisalt"
+    return api_password
+
+
 @celery_app.task(
     name="fleet_platform.workers.ansible_tasks.provision_master",
     bind=True,
@@ -807,17 +837,9 @@ def provision_master(self, salt_master_id: str, action: str = "install") -> dict
             db.commit()
             return {"status": "error", "reason": _err}
 
-        # Decrypt salt-api password (krisalt user)
-        api_password: str = ""
-        if master.api_password_enc:
-            try:
-                api_password = decrypt_secret(master.api_password_enc)
-            except Exception as _e:
-                logger.warning(
-                    "provision_master: cannot decrypt api_password_enc for master_id=%s: %s",
-                    salt_master_id,
-                    _e,
-                )
+        # Resolve — or generate + persist — the salt-api credentials (#976).
+        # Persisted by the db.commit() below when flipping provision_status.
+        api_password: str = _ensure_master_api_creds(master)
 
         # ------------------------------------------------------------------
         # 2. Create MasterProvisionRun + flip provision_status → provisioning
