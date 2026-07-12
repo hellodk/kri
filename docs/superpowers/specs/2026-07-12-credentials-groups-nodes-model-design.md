@@ -53,12 +53,15 @@ key / global settings remain **last-resort only**. `Node.credential_id` and
 
 1. New table `credential_groups(credential_id, group_id, UNIQUE(group_id))`.
 2. **Backfill**: for every current `Group.credential_id`, insert a
-   `credential_groups` row. For every `Node.credential_id` with no group covering
-   it, create (or reuse) a single-node group named `node:<minion_id>` mapped to
-   that credential, and add the node to it — preserving today's effective login.
-3. Any node with **no group** after backfill → add to a new **"Unassigned"** group
-   (no credential; it cannot bootstrap until moved — the correct safe default).
-4. Drop `Group.credential_id` and `Node.credential_id`.
+   `credential_groups` row (group-based creds preserved).
+3. Create a **"default" group** and a **default Credential** built from the global
+   bootstrap SSH settings (`ssh_bootstrap_username`/`ssh_bootstrap_password`);
+   map the default credential to the default group.
+4. Any node **not** already in a credential-bearing group (including nodes that
+   only had a per-node `credential_id`) → add to the **default group** so it
+   resolves the default credentials. Operators re-map specific nodes to the right
+   group afterward. *(Decision: simplicity over per-node preservation.)*
+5. Drop `Group.credential_id` and `Node.credential_id`.
 
 ## API / UI changes
 

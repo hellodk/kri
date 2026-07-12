@@ -5,6 +5,7 @@ from fleet_platform.models.audit import AuditEvent
 from fleet_platform.models.base import Base, TimestampMixin
 from fleet_platform.models.bootstrap_run import BootstrapRun
 from fleet_platform.models.credential import Credential
+from fleet_platform.models.credential_group import CredentialGroup
 from fleet_platform.models.drift import DesiredStateBaseline, DriftRecord
 from fleet_platform.models.execution import ExecutionJob, ExecutionResult
 from fleet_platform.models.facts import NodeFact
@@ -58,6 +59,7 @@ __all__ = [
     "PlaybookFavorite",
     "AnsibleJob",
     "Credential",
+    "CredentialGroup",
     "NodeSecret",
     "GroupSecret",
     "LLMEndpoint",
