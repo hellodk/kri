@@ -54,7 +54,7 @@ sudo chown kri:kri /etc/kri/kri.env
 Adjust paths for macOS:
 - `WORKER_SSH_DIR=/opt/kri/deploy/ssh`
 - `PILLAR_DIR=/opt/kri/srv/salt/pillar` (macOS ships no `/srv` by convention)
-- `KRI_API_URL=http://YOUR_MAC_MINI_IP:8000` (or the Tailscale name)
+- `KRI_API_URL=http://YOUR_MAC_MINI_IP:8000` (LAN IP or hostname)
 
 ### 4. Install the LaunchDaemons
 

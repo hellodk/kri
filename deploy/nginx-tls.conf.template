@@ -57,13 +57,12 @@ server {
         proxy_read_timeout 3600s;
     }
 
-    # Prometheus metrics — proxied to the API, restricted to private/Tailscale nets (#356/#419).
+    # Prometheus metrics — proxied to the API, restricted to loopback + private LAN nets (#356/#419).
     location = /metrics {
         allow 127.0.0.0/8;
         allow 10.0.0.0/8;
         allow 172.16.0.0/12;
         allow 192.168.0.0/16;
-        allow 100.64.0.0/10;
         deny all;
         set $api_upstream http://api:8000;
         proxy_pass $api_upstream;

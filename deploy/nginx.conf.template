@@ -55,16 +55,15 @@ server {
         proxy_send_timeout 60s;
     }
 
-    # Prometheus metrics — proxied to the API and restricted to private/Tailscale
-    # source networks so a scraper (compose, on-host k0s, or standalone) can reach
-    # /metrics while it is never world-readable. The API itself serves no secrets
-    # here, but minion IDs/counts shouldn't leak publicly (#356/#419).
+    # Prometheus metrics — proxied to the API and restricted to loopback + private
+    # LAN source networks so a scraper (compose, on-host k0s, or standalone) can
+    # reach /metrics while it is never world-readable. The API itself serves no
+    # secrets here, but minion IDs/counts shouldn't leak publicly (#356/#419).
     location = /metrics {
         allow 127.0.0.0/8;       # loopback
         allow 10.0.0.0/8;        # RFC1918
         allow 172.16.0.0/12;     # RFC1918
         allow 192.168.0.0/16;    # RFC1918 / LAN
-        allow 100.64.0.0/10;     # Tailscale CGNAT range
         deny all;
         set $api_upstream http://api:8000;
         proxy_pass $api_upstream;

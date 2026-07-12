@@ -12,9 +12,10 @@ otel_collector_install_dir: /usr/local/bin
 otel_collector_config_path: /etc/otelcol-contrib/config.yaml
 
 # --- OTLP push target (kri Settings → Bootstrap; passed as extravars) ---
-# Default OTLP target = cluster otel-gateway NodePort (HTTP). Operator overrides
-# via bootstrap extravars / kri Settings. Verified running: monitoring/otel-gateway.
-otlp_endpoint: "http://100.89.50.27:30318"
+# Default is a loopback placeholder — the OTLP gateway/collector NodePort is
+# exposed at :30318 (HTTP). The operator sets the real host per-deployment via
+# bootstrap extravars / kri Settings (kri passes otlp_endpoint from PlatformSettings).
+otlp_endpoint: "http://127.0.0.1:30318"
 otlp_protocol: "http"
 otlp_headers: ""
 

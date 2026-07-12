@@ -1,27 +1,15 @@
 ---
 # playbooks/roles/node_exporter/tasks/install.yml
-# Version-gated download + install of the node_exporter binary. Shared by Linux and
+# Version-gated, AIR-GAPPED install of the node_exporter binary. Shared by Linux and
 # macOS — ne_os/ne_arch are set by tasks/main.yml before this is included. Mirrors
-# playbooks/tasks/bootstrap/node_exporter_{linux,macos}.yml so both flows stay
-# drift-free.
+# the salt_minion air-gap (#966): the pinned tarball + its .sha256 are bundled under
+# playbooks/files/ and COPIED to the target — nothing is downloaded at runtime. The
+# bundled checksum is validated against the copied tarball before install.
+# Only the darwin/arm64 tarball is bundled today; other os/arch is a follow-up (#696).
 
 - name: Set node_exporter tarball name
   ansible.builtin.set_fact:
     ne_tarball: "node_exporter-{{ node_exporter_version }}.{{ ne_os }}-{{ ne_arch }}.tar.gz"
-
-# Resolution precedence: node_exporter_url_override > artifactory_binary_url +
-# artifactory_node_exporter_path > node_exporter_official_base.
-- name: Resolve node_exporter download URL
-  ansible.builtin.set_fact:
-    ne_download_url: >-
-      {%- if node_exporter_url_override -%}{{ node_exporter_url_override }}
-      {%- elif artifactory_binary_url -%}{{ artifactory_binary_url.rstrip('/') }}/{{ artifactory_node_exporter_path }}/{{ ne_tarball }}
-      {%- else -%}{{ node_exporter_official_base }}/{{ ne_tarball }}
-      {%- endif -%}
-
-- name: Resolve node_exporter checksum manifest URL
-  ansible.builtin.set_fact:
-    ne_checksum_url: "https://github.com/prometheus/node_exporter/releases/download/v{{ node_exporter_version }}/sha256sums"
 
 - name: Check existing node_exporter version
   ansible.builtin.shell: /usr/local/bin/node_exporter --version 2>&1 | head -1 | awk '{print $3}'
@@ -30,13 +18,33 @@
   changed_when: false
   become: false
 
-- name: Download node_exporter tarball (checksum-verified)
-  ansible.builtin.get_url:
-    url: "{{ ne_download_url }}"
-    dest: "/tmp/{{ ne_tarball }}"
-    checksum: "sha256:{{ ne_checksum_url }}"
+# Copy the bundled tarball + checksum from playbooks/files/ (air-gap; no download).
+- name: Copy bundled node_exporter checksum to target
+  ansible.builtin.copy:
+    src: "{{ playbook_dir }}/files/{{ ne_tarball }}.sha256"
+    dest: "/tmp/{{ ne_tarball }}.sha256"
     mode: "0644"
   become: false
+  when: ne_installed_version.stdout.strip() != node_exporter_version
+
+- name: Copy bundled node_exporter tarball to target
+  ansible.builtin.copy:
+    src: "{{ playbook_dir }}/files/{{ ne_tarball }}"
+    dest: "/tmp/{{ ne_tarball }}"
+    mode: "0644"
+  become: false
+  when: ne_installed_version.stdout.strip() != node_exporter_version
+
+- name: Verify node_exporter tarball checksum
+  ansible.builtin.shell: |
+    EXPECTED=$(cat /tmp/{{ ne_tarball }}.sha256 | awk '{print $1}')
+    ACTUAL=$(shasum -a 256 /tmp/{{ ne_tarball }} | awk '{print $1}')
+    if [ "$EXPECTED" != "$ACTUAL" ]; then
+      echo "CHECKSUM MISMATCH: expected $EXPECTED got $ACTUAL" >&2
+      exit 1
+    fi
+    echo "Checksum OK: $ACTUAL"
+  changed_when: false
   when: ne_installed_version.stdout.strip() != node_exporter_version
 
 - name: Extract and install node_exporter binary

@@ -121,7 +121,21 @@ def test_old_weak_task_files_removed():
     assert not (ROLE_DIR / "tasks" / "macos.yml").exists()
 
 
-def test_deploy_node_exporter_playbook_still_uses_role_name():
-    playbook = (REPO_ROOT / "playbooks" / "deploy_node_exporter.yml").read_text()
-    assert "node_exporter" in playbook
-    assert "gather_facts: true" in playbook
+# deploy_node_exporter.yml was removed (#968) — bootstrap Play 1 always installs
+# node_exporter, so the standalone playbook + its test are obsolete.
+
+
+def test_node_exporter_install_is_air_gapped_no_download():
+    """#696 air-gap: install.yml must copy the bundled tarball from playbooks/files/,
+    never download it."""
+    install = (ROLE_DIR / "tasks" / "install.yml").read_text()
+    assert "get_url" not in install, "node_exporter install must not download — copy from files/"
+    assert "ansible.builtin.copy" in install
+    assert "files/{{ ne_tarball }}" in install
+    assert "shasum -a 256" in install  # bundled-checksum validation retained
+
+
+def test_node_exporter_tarball_bundled_in_files():
+    files_dir = REPO_ROOT / "playbooks" / "files"
+    assert (files_dir / "node_exporter-1.8.2.darwin-arm64.tar.gz").exists()
+    assert (files_dir / "node_exporter-1.8.2.darwin-arm64.tar.gz.sha256").exists()

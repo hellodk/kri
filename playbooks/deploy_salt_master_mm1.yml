@@ -8,9 +8,9 @@
 #     -e "kri_salt_api_password=<secure-password>"
 #
 # After running:
-#   1. Update .env.docker: SALT_API_URL=https://100.102.68.75:4507
+#   1. Update .env.docker: SALT_API_URL=https://127.0.0.1:4507
 #   2. Restart kri: docker compose -f deploy/docker-compose.yml up -d
-#   3. Minion configs already set salt_master_address=100.102.68.75
+#   3. Minion configs already set salt_master_address=127.0.0.1
 
 - name: Deploy salt-master (native install)
   hosts: all  # kri sets targets via inventory; use all to run on selected nodes
@@ -46,7 +46,7 @@
           Then restart kri workers:
             cd deploy && docker compose -f docker-compose.yml up -d api worker beat
 
-          Minion salt_master_address is already set to 100.102.68.75 via
+          Minion salt_master_address is already set to 127.0.0.1 via
           playbooks/group_vars/all.yml. Re-run bootstrap_node.yml on
           any node that hasn't connected yet.
           ============================================================

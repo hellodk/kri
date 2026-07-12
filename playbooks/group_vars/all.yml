@@ -35,9 +35,9 @@ salt_rpm_repo_baseurl: "https://packages.broadcom.com/artifactory/saltproject-rp
 salt_rpm_gpg_url: "https://packages.broadcom.com/artifactory/api/security/keypair/SaltProjectKey/public"
 
 # ── Salt master ───────────────────────────────────────────────────────────────
-# salt-master runs natively on mm1 (100.102.68.75) — NOT in Docker.
+# salt-master runs natively on the master host — NOT in Docker.
 # This eliminates PKI key rotation on every kri deploy.
-salt_master_address: "100.102.68.75"   # mm1 Tailscale IP
+salt_master_address: "127.0.0.1"   # override per-deployment (kri passes the real address via extravars)
 # salt_master_pub_key: set in host_vars/ or passed via -e at runtime
 # contents of /etc/salt/pki/master/master.pub on mm1 after role apply
 #   -----BEGIN PUBLIC KEY-----

@@ -287,10 +287,10 @@ services:
           memory: 2G
     logging: *default-logging
 
-  # salt-master removed from Docker — runs natively on mm1 (100.102.68.75).
+  # salt-master removed from Docker — runs natively on mm1 (127.0.0.1).
   # See playbooks/roles/salt_master and playbooks/setup_salt_master.yml.
   # This eliminates the PKI key rotation issue caused by container restarts.
-  # Configure SALT_API_URL=http://100.102.68.75:8080 in .env.docker.
+  # Configure SALT_API_URL=http://127.0.0.1:8080 in .env.docker.
 
   beat:
     build:

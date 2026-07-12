@@ -6,13 +6,13 @@
 # Usage:
 #   ansible-playbook playbooks/setup_salt_master.yml \
 #     -i playbooks/inventory/inventory.ini \
-#     -e "ansible_host=100.102.68.75" \
+#     -e "ansible_host=127.0.0.1" \
 #     -e "kri_salt_api_password=<secure-password>"
 #
 # After running:
 #   1. Update .env.docker with SALT_API_URL, SALT_API_USER, SALT_API_PASSWORD
 #   2. Run: docker compose up -d (docker-compose no longer has salt-master)
-#   3. Update minion configs to point to mm1: salt_master_address: 100.102.68.75
+#   3. Update minion configs to point to mm1: salt_master_address: 127.0.0.1
 #   4. Minions reconnect automatically (PKI was transferred)
 
 - name: Export pillar data from Docker salt-master volume
@@ -47,13 +47,13 @@
   hosts: salt_master
   gather_facts: false
   vars:
-    # MM1 Tailscale IP — salt-master binds here so all fleet nodes can reach it
-    ansible_host: "{{ salt_master_ip | default('100.102.68.75') }}"
+    # Salt-master bind address — override per-deployment so all fleet nodes can reach it
+    ansible_host: "{{ salt_master_ip | default('127.0.0.1') }}"
     ansible_user: "{{ ansible_ssh_user | default('dk') }}"
     ansible_become_method: sudo
 
     # Override defaults here or pass via -e on the command line
-    kri_ingest_base_url: "http://100.89.50.27/api/v1/ingest"
+    kri_ingest_base_url: "http://127.0.0.1/api/v1/ingest"
 
   roles:
     - salt_master
@@ -65,7 +65,7 @@
           ============================================================
           Salt-master installed on mm1. Update .env.docker:
 
-          SALT_API_URL=http://100.102.68.75:{{ salt_api_port }}
+          SALT_API_URL=http://127.0.0.1:{{ salt_api_port }}
           SALT_API_USER={{ salt_api_user }}
           SALT_API_PASSWORD=<the password you set in kri_salt_api_password>
 
@@ -78,5 +78,5 @@
         msg: |
           Minion configs (bootstrap_node.yml) already set salt_master_address.
           Update playbooks/group_vars/all.yml:
-            salt_master_address: "100.102.68.75"
+            salt_master_address: "127.0.0.1"
           Then re-run bootstrap or update /etc/salt/minion on each node.

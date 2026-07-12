@@ -3,12 +3,12 @@
 # Bootstraps a fleet node (macOS or Linux) into the kri fleet.
 #
 # Required variables (set in host_vars or pass -e):
-#   salt_masters           — List of Salt master addresses (Tailscale IP / hostname).
+#   salt_masters           — List of Salt master addresses (LAN IP / hostname).
 #                            Must contain at least one entry. When multiple are supplied
 #                            the minion is configured for HA failover (master_type: failover).
 #   salt_master_pub_key    — Contents of deploy/salt-pki/master.pub (never changes)
 #   minion_id              — Salt minion ID (e.g. mm1)
-#   ingest_url             — kri ingest API base (e.g. http://100.89.50.27/api/v1/ingest)
+#   ingest_url             — kri ingest API base (e.g. http://127.0.0.1/api/v1/ingest)
 #   node_token             — Per-node token from kri Settings → Nodes
 #
 # Optional:

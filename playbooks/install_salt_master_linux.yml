@@ -97,12 +97,12 @@
       -o ServerAliveInterval=30
       -o ServerAliveCountMax=6
 
-    # Salt-master listens on all interfaces — Tailscale overlay provides the security layer
+    # Salt-master listens on all interfaces — restrict access at the network/firewall layer
     salt_master_interface: "0.0.0.0"
 
-    # kri ingest URL: the kri API container's Tailscale IP
+    # kri ingest URL: the kri API host address (override per-deployment)
     # Override with -e kri_ingest_base_url=http://<kri-server>/api/v1/ingest
-    kri_ingest_base_url: "http://100.89.50.27/api/v1/ingest"
+    kri_ingest_base_url: "http://127.0.0.1/api/v1/ingest"
 
   roles:
     - salt_master

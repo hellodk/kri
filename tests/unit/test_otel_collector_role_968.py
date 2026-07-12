@@ -192,3 +192,26 @@ def test_otel_collector_wired_into_bootstrap_monitoring_play():
             break
     assert monitoring_play is not None, "no play runs node_exporter"
     assert monitoring_play == ["node_exporter", "otel_collector"]
+
+
+# ── air-gap: copy bundled tarball, no download (#696) ────────────────────────
+
+
+def test_otel_install_is_air_gapped_no_download():
+    install = (ROLE_DIR / "tasks" / "install.yml").read_text()
+    assert "get_url" not in install, "otel install must not download — copy from files/"
+    assert "ansible.builtin.copy" in install
+    assert "files/{{ otel_tarball }}" in install
+    assert "shasum -a 256" in install  # bundled-checksum validation retained
+
+
+def test_otel_tarball_bundled_in_files():
+    files_dir = REPO_ROOT / "playbooks" / "files"
+    assert (files_dir / "otelcol-contrib_0.119.0_darwin_arm64.tar.gz").exists()
+    assert (files_dir / "otelcol-contrib_0.119.0_darwin_arm64.tar.gz.sha256").exists()
+
+
+def test_otel_default_endpoint_has_no_tailscale_ip():
+    defaults = (ROLE_DIR / "defaults" / "main.yml").read_text()
+    assert "100.89.50.27" not in defaults and "100.102.68.75" not in defaults
+    assert "127.0.0.1" in defaults
