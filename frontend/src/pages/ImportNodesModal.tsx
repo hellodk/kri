@@ -149,6 +149,7 @@ export function ImportNodesModal({ onClose }: { onClose: () => void }) {
   const [sshPassword, setSshPassword] = useState('')
   const [sshKey, setSshKey] = useState('')
   const [autoBootstrap, setAutoBootstrap] = useState(false)
+  const [asMaster, setAsMaster] = useState(false)
 
   // Inline group creation
   const [showNewGroup, setShowNewGroup] = useState(false)
@@ -258,6 +259,7 @@ export function ImportNodesModal({ onClose }: { onClose: () => void }) {
         ssh_password: sshAuthMode === 'password' ? (sshPassword || undefined) : undefined,
         ssh_key: sshAuthMode === 'key' ? (sshKey.trim() || undefined) : undefined,
         auto_bootstrap: autoBootstrap,
+        as_master: autoBootstrap && asMaster,
       }),
     onSuccess: (data) => {
       qc.invalidateQueries({ queryKey: ['nodes'] })
@@ -550,6 +552,29 @@ export function ImportNodesModal({ onClose }: { onClose: () => void }) {
                 <p className="text-xs text-gray-400 ml-6">
                   Only nodes with an IP address will be bootstrapped.
                 </p>
+              )}
+              {/* Bootstrap as salt-master — only usable when auto-bootstrap is on (#981) */}
+              {autoBootstrap && (
+                <div className="ml-6 mt-2 pl-3 border-l-2 border-blue-200 space-y-1">
+                  <label className="flex items-center gap-2 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={asMaster}
+                      onChange={e => setAsMaster(e.target.checked)}
+                      className="rounded border-gray-300 text-brand-600 focus:ring-brand-500"
+                    />
+                    <span className="text-sm font-medium text-gray-700">Bootstrap as salt-master</span>
+                  </label>
+                  <p className="text-xs text-gray-400 ml-6">
+                    Each bootstrapped node also installs salt-master + salt-api and registers as a provisioned master.
+                  </p>
+                  {asMaster && (
+                    <p className="text-xs text-amber-700 ml-6 p-2 bg-amber-50 border border-amber-200 rounded">
+                      Heads-up: this makes <span className="font-semibold">every</span> node in the list a master —
+                      intended for one or a few hosts. For a large batch, leave this off and promote specific nodes later.
+                    </p>
+                  )}
+                </div>
               )}
             </div>
           </div>
