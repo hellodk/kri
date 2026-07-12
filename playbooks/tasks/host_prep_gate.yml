@@ -1,19 +1,48 @@
 ---
 # playbooks/tasks/host_prep_gate.yml
-# Node-vantage master reachability gate (#536, epic #537). Checks that THIS
-# NODE can reach each configured salt-master on ports 4505 (publish) and 4506
-# (return) before the salt_minion role writes any minion config. A
-# worker-side probe (salt_master_probe.py) tests control-plane reachability;
-# this tests MINION-vantage reachability, which is what actually matters for
-# Salt to function. Fails only when NONE of the masters are reachable on
-# either port (same semantics as the previous per-master nc loops).
+# Node-vantage master reachability gate (#536, epic #537; self-master fix #971).
+# Checks that THIS NODE can reach each configured salt-master on ports 4505
+# (publish) and 4506 (return) before the salt_minion role writes any minion
+# config. A worker-side probe (salt_master_probe.py) tests control-plane
+# reachability; this tests MINION-vantage reachability, which is what
+# actually matters for Salt to function. Fails only when NONE of the masters
+# are reachable on either port (same semantics as the previous per-master nc
+# loops).
+#
+# #971: when a node's own address is listed as a salt_master (e.g. the node
+# IS the master, salt_masters: ['192.168.1.64'] on 192.168.1.64 itself), a
+# self-probe to the node's own LAN IP can false-negative even though the
+# service is up and reachable from every OTHER host. Self-addressed masters
+# are probed via 127.0.0.1 instead of the LAN IP. The master list is also
+# deduped before probing/reporting to avoid double-counting
+# ("Masters probed: 192.168.1.64, 192.168.1.64").
+
+- name: Dedupe configured salt_masters
+  ansible.builtin.set_fact:
+    _gate_masters: "{{ salt_masters | unique | list }}"
+
+- name: Determine this node's own addresses (for self-master loopback substitution)
+  ansible.builtin.set_fact:
+    _gate_self_addresses: >-
+      {{
+        (
+          (ansible_all_ipv4_addresses | default([]))
+          + [ansible_default_ipv4.address | default('')]
+          + ['127.0.0.1', 'localhost']
+          + [ansible_hostname | default('')]
+          + [ansible_fqdn | default('')]
+        )
+        | select('string')
+        | reject('equalto', '')
+        | list
+      }}
 
 - name: Check TCP reachability to each salt-master on 4505/4506
   ansible.builtin.wait_for:
-    host: "{{ item.0 }}"
+    host: "{{ '127.0.0.1' if item.0 in _gate_self_addresses else item.0 }}"
     port: "{{ item.1 }}"
     timeout: 3
-  loop: "{{ salt_masters | product([4505, 4506]) | list }}"
+  loop: "{{ _gate_masters | product([4505, 4506]) | list }}"
   loop_control:
     label: "{{ item.0 }}:{{ item.1 }}"
   register: master_port_results
@@ -23,7 +52,10 @@
 
 - name: Log master reachability from this node
   ansible.builtin.debug:
-    msg: "Master {{ item.item.0 }} port {{ item.item.1 }}: {{ 'reachable' if not item.failed else 'UNREACHABLE' }}"
+    msg: >-
+      Master {{ item.item.0 }}
+      (probed via {{ '127.0.0.1' if item.item.0 in _gate_self_addresses else item.item.0 }})
+      port {{ item.item.1 }}: {{ 'reachable' if not item.failed else 'UNREACHABLE' }}
   loop: "{{ master_port_results.results }}"
   loop_control:
     label: "{{ item.item.0 }}:{{ item.item.1 }}"
@@ -32,5 +64,5 @@
   ansible.builtin.fail:
     msg: >-
       Target cannot reach any salt-master on 4505/4506 — check network/firewall.
-      Masters probed: {{ salt_masters | join(', ') }}
+      Masters probed: {{ _gate_masters | join(', ') }}
   when: master_port_results.results | selectattr('failed') | list | length == master_port_results.results | length
