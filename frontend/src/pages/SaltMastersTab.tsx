@@ -5,9 +5,11 @@
  * Provision / Reconfigure button + live LogPane added in #558 (master-lifecycle epic phase 3).
  */
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { Link2 } from 'lucide-react'
 import { saltMastersApi, type SaltMaster, type SaltMasterCreate, type SaltMasterUpdate, type MasterMinionItem } from '../api/saltMasters'
+import { fleetApi } from '../api/fleet'
 import { saltMasterBadge } from '../lib/saltMasterHelpers'
 import { provisionRefetchInterval } from '../lib/provisionPolling'
 import { LogPane } from '../lib/LogPane'
@@ -494,6 +496,159 @@ function MasterMinionsSection({ masterId }: MasterMinionsSectionProps) {
 }
 
 // ---------------------------------------------------------------------------
+// Attach minions modal (#978) — multi-select of candidate fleet nodes,
+// wired to the additive-HA backend at POST .../attach-minions (#977).
+// ---------------------------------------------------------------------------
+
+interface AttachMinionsModalProps {
+  master: SaltMaster
+  onClose: () => void
+}
+
+function AttachMinionsModal({ master, onClose }: AttachMinionsModalProps) {
+  const qc = useQueryClient()
+  const toast = useToastStore((s) => s.add)
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
+  const [defaultsApplied, setDefaultsApplied] = useState(false)
+
+  // Candidate pool: reuse the same fleet-nodes list the Nodes/Bootstrap pages use.
+  const { data: allNodes, isLoading: nodesLoading } = useQuery({
+    queryKey: ['all-nodes-for-attach'],
+    queryFn: () => fleetApi.nodes({ per_page: 200 }),
+    staleTime: 30_000,
+  })
+
+  // This master's current minions — used to exclude already-attached nodes
+  // from the default selection (shares the cache key with MasterMinionsSection).
+  const { data: currentMinions, isLoading: minionsLoading } = useQuery({
+    queryKey: ['master-minions', master.id],
+    queryFn: () => saltMastersApi.minions(master.id),
+    staleTime: 30_000,
+  })
+
+  // A candidate is a bootstrapped node — i.e. it has a minion_id.
+  const candidates = (allNodes?.items ?? []).filter((n) => !!n.minion_id)
+  const attachedIds = new Set((currentMinions ?? []).map((m) => m.id))
+
+  // Default-select candidates NOT already on this master, once both queries land.
+  useEffect(() => {
+    if (allNodes && currentMinions && !defaultsApplied) {
+      setSelectedIds(new Set(candidates.filter((n) => !attachedIds.has(n.id)).map((n) => n.id)))
+      setDefaultsApplied(true)
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [allNodes, currentMinions, defaultsApplied])
+
+  const attachMutation = useMutation({
+    mutationFn: (nodeIds: string[]) => saltMastersApi.attachMinions(master.id, nodeIds),
+    onSuccess: (data) => {
+      toast(`Re-pointing ${data.count} minion(s) — running in the background`, 'success')
+      qc.invalidateQueries({ queryKey: ['master-minions', master.id] })
+      onClose()
+    },
+    onError: (err: Error) => {
+      toast(`Attach failed: ${err.message}`, 'error')
+    },
+  })
+
+  const isLoading = nodesLoading || minionsLoading
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/40"
+      onClick={(e) => { if (e.target === e.currentTarget) onClose() }}
+    >
+      <div className="bg-white rounded-xl border border-gray-200 shadow-xl w-full max-w-lg mx-4 max-h-[90vh] overflow-y-auto flex flex-col">
+        {/* Header */}
+        <div className="flex items-start justify-between gap-4 px-6 py-4 border-b border-gray-200 sticky top-0 bg-white z-10">
+          <div>
+            <h2 className="text-base font-semibold text-gray-900">Attach minions to {master.name}</h2>
+            <p className="text-xs text-gray-500 mt-0.5">
+              Selected minions will also report to this master (additive HA).
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            className="shrink-0 text-gray-400 hover:text-gray-600 text-xl leading-none"
+            aria-label="Close"
+          >
+            ×
+          </button>
+        </div>
+
+        {/* Candidate list */}
+        <div className="px-6 py-4">
+          {isLoading ? (
+            <p className="px-3 py-4 text-sm text-gray-400 text-center">Loading nodes…</p>
+          ) : candidates.length === 0 ? (
+            <p className="px-3 py-4 text-sm text-gray-400 text-center">No bootstrapped nodes available.</p>
+          ) : (
+            <div className="border border-gray-200 rounded-lg max-h-80 overflow-y-auto divide-y divide-gray-100">
+              {candidates.map((n) => {
+                const checked = selectedIds.has(n.id)
+                const alreadyAttached = attachedIds.has(n.id)
+                return (
+                  <label
+                    key={n.id}
+                    className="flex items-center gap-3 px-3 py-2 hover:bg-gray-50 cursor-pointer"
+                  >
+                    <input
+                      type="checkbox"
+                      checked={checked}
+                      onChange={(e) => {
+                        const next = new Set(selectedIds)
+                        if (e.target.checked) { next.add(n.id) } else { next.delete(n.id) }
+                        setSelectedIds(next)
+                      }}
+                      className="rounded border-gray-300 text-brand-600 focus:ring-brand-600"
+                    />
+                    <div className="flex-1 min-w-0">
+                      <span className="text-sm font-medium text-gray-900 truncate block">
+                        {n.hostname ?? n.minion_id}
+                      </span>
+                      <span className="text-xs text-gray-400 font-mono truncate block">
+                        {n.ip_address ?? '—'}
+                      </span>
+                    </div>
+                    {alreadyAttached && (
+                      <span className="shrink-0 px-2 py-0.5 rounded-full text-xs font-medium bg-brand-100 text-brand-700 border border-brand-200">
+                        On this master
+                      </span>
+                    )}
+                  </label>
+                )
+              })}
+            </div>
+          )}
+        </div>
+
+        {/* Footer */}
+        <div className="flex justify-end gap-3 px-6 py-4 border-t border-gray-200 sticky bottom-0 bg-white">
+          <button
+            type="button"
+            onClick={onClose}
+            className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+          >
+            Cancel
+          </button>
+          <button
+            type="button"
+            disabled={selectedIds.size === 0 || attachMutation.isPending}
+            onClick={() => attachMutation.mutate(Array.from(selectedIds))}
+            className="px-4 py-2 text-sm font-medium text-white bg-brand-600 hover:bg-brand-700 rounded-lg transition-colors disabled:opacity-50"
+          >
+            {attachMutation.isPending
+              ? 'Attaching…'
+              : `Attach ${selectedIds.size} minion${selectedIds.size !== 1 ? 's' : ''}`}
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// ---------------------------------------------------------------------------
 // Per-master provision panel (LogPane + polling)
 // ---------------------------------------------------------------------------
 
@@ -589,6 +744,7 @@ export function SaltMastersTab() {
   const [showCreate, setShowCreate] = useState(false)
   const [editMaster, setEditMaster] = useState<SaltMaster | null>(null)
   const [deleteMaster, setDeleteMaster] = useState<SaltMaster | null>(null)
+  const [attachMaster, setAttachMaster] = useState<SaltMaster | null>(null)
   const [formError, setFormError] = useState<string | null>(null)
   // Provision panel: which master has the LogPane open
   const [provisionPanelId, setProvisionPanelId] = useState<string | null>(null)
@@ -848,6 +1004,16 @@ export function SaltMastersTab() {
                   >
                     {isPending ? 'Testing…' : 'Test connection'}
                   </button>
+                  {/* Attach minions — admin only (backend enforces) (#978) */}
+                  <button
+                    type="button"
+                    onClick={() => setAttachMaster(master)}
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
+                    title="Re-point selected fleet nodes at this master (additive HA)"
+                  >
+                    <Link2 size={14} />
+                    Attach minions
+                  </button>
                   {/* Provision / Reconfigure button — admin only (backend enforces) */}
                   <button
                     type="button"
@@ -1020,6 +1186,14 @@ export function SaltMastersTab() {
           error={formError}
           onSubmit={handleUpdate}
           onClose={() => { setEditMaster(null); setFormError(null) }}
+        />
+      )}
+
+      {/* Attach minions modal (#978) */}
+      {attachMaster && (
+        <AttachMinionsModal
+          master={attachMaster}
+          onClose={() => setAttachMaster(null)}
         />
       )}
 

@@ -180,4 +180,11 @@ export const saltMastersApi = {
    */
   minions: (masterId: string) =>
     api.get<MasterMinionItem[]>(`/api/v1/salt/masters/${masterId}/minions`),
+  /**
+   * Re-point the given fleet nodes at this master (additive HA). Admin only.
+   * Added in #978 (master-promotion Phase C, backend #977).
+   */
+  attachMinions: (masterId: string, nodeIds: string[]) =>
+    api.post<{ status: string; master_id: string; count: number }>(
+      `/api/v1/salt/masters/${masterId}/attach-minions`, { node_ids: nodeIds }),
 }
