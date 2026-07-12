@@ -30,7 +30,7 @@ def test_passwords_passed_via_extravars():
 
 
 def test_bootstrap_db_session_count_low():
-    """bootstrap_node must use ≤ 9 get_sync_db() opens total.
+    """bootstrap_node must use ≤ 10 get_sync_db() opens total.
 
     Session breakdown (all error-path sessions are guarded, not on every run):
       1. Load node + mark bootstrapping (always)
@@ -42,6 +42,7 @@ def test_bootstrap_db_session_count_low():
       7. SoftTimeLimitExceeded handler (error path only)
       8. except Exception handler (#509 — record terminal status on unexpected crash)
       9. finally orphan-reaper (#445 Part A — only when step 6 did not complete)
+      10. as_master registration + provision enqueue (#980 — only when as_master=True and bootstrap succeeded)
 
     Sessions 2 and 3 are mutually exclusive (probe runs only once per bootstrap).
     The maximum on any single execution path is ≤ 7 (gate-probe path hits 2+4+5+6+9 = 5 max).
@@ -52,4 +53,4 @@ def test_bootstrap_db_session_count_low():
     next_fn = SRC.find("\ndef ", task_start + 20)
     task_body = SRC[task_start : next_fn if next_fn > 0 else task_start + 12000]
     count = task_body.count("get_sync_db()")
-    assert count <= 9, f"bootstrap_node opens {count} DB sessions, expected ≤ 9"
+    assert count <= 10, f"bootstrap_node opens {count} DB sessions, expected ≤ 10"

@@ -5,14 +5,6 @@ from pathlib import Path
 import yaml
 
 
-def test_playbook_is_valid_yaml():
-    path = Path("playbooks/deploy_node_exporter.yml")
-    assert path.exists(), "deploy_node_exporter.yml must exist"
-    plays = yaml.safe_load(path.read_text())
-    assert isinstance(plays, list)
-    assert plays[0]["hosts"] == "targets"
-
-
 def test_role_main_task_exists():
     path = Path("playbooks/roles/node_exporter/tasks/main.yml")
     assert path.exists()

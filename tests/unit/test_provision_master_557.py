@@ -109,6 +109,17 @@ class TestOsDetectPlaybookSelection:
             patch.object(mod, "get_sync_db", return_value=db),
             patch.object(mod, "_get_bootstrap_settings", return_value=("admin", "", "")),
             patch.object(mod, "_detect_os_family", return_value=uname_output),
+            patch.object(
+                mod,
+                "resolve_node_credentials_sync",
+                return_value={
+                    "ssh_user": "admin",
+                    "ssh_password": "pw",
+                    "ssh_key": "",
+                    "auth_mode": "password",
+                    "credential_source": "group:test",
+                },
+            ),
             patch("ansible_runner.run_async", side_effect=_fake_run_async),
             patch(
                 "fleet_platform.services.salt_master_probe.run_probe",
@@ -169,6 +180,17 @@ class TestSshUnreachable:
             patch.object(mod, "get_sync_db", return_value=db),
             patch.object(mod, "_get_bootstrap_settings", return_value=("admin", "", "")),
             patch.object(mod, "_detect_os_family", return_value=None),  # None = unreachable
+            patch.object(
+                mod,
+                "resolve_node_credentials_sync",
+                return_value={
+                    "ssh_user": "admin",
+                    "ssh_password": "pw",
+                    "ssh_key": "",
+                    "auth_mode": "password",
+                    "credential_source": "group:test",
+                },
+            ),
             patch("ansible_runner.run_async", side_effect=_trap_run_async),
         ):
             result = mod.provision_master(str(master.id), action="install")
@@ -198,6 +220,17 @@ class TestSshUnreachable:
             patch.object(mod, "get_sync_db", return_value=db),
             patch.object(mod, "_get_bootstrap_settings", return_value=("admin", "", "")),
             patch.object(mod, "_detect_os_family", return_value=None),
+            patch.object(
+                mod,
+                "resolve_node_credentials_sync",
+                return_value={
+                    "ssh_user": "admin",
+                    "ssh_password": "pw",
+                    "ssh_key": "",
+                    "auth_mode": "password",
+                    "credential_source": "group:test",
+                },
+            ),
             patch("ansible_runner.run_async", side_effect=AssertionError("must not be called")),
         ):
             mod.provision_master(str(master.id), action="install")
@@ -254,6 +287,17 @@ class TestSuccessfulProvision:
             patch.object(mod, "get_sync_db", return_value=db),
             patch.object(mod, "_get_bootstrap_settings", return_value=("admin", "", "")),
             patch.object(mod, "_detect_os_family", return_value="Linux"),
+            patch.object(
+                mod,
+                "resolve_node_credentials_sync",
+                return_value={
+                    "ssh_user": "admin",
+                    "ssh_password": "pw",
+                    "ssh_key": "",
+                    "auth_mode": "password",
+                    "credential_source": "group:test",
+                },
+            ),
             patch("ansible_runner.run_async", return_value=(fake_thread, fake_runner)),
             patch("fleet_platform.services.salt_master_probe.run_probe", side_effect=_fake_probe),
         ):
@@ -309,6 +353,17 @@ class TestSuccessfulProvision:
             patch.object(mod, "get_sync_db", return_value=db),
             patch.object(mod, "_get_bootstrap_settings", return_value=("admin", "", "")),
             patch.object(mod, "_detect_os_family", return_value="Darwin"),
+            patch.object(
+                mod,
+                "resolve_node_credentials_sync",
+                return_value={
+                    "ssh_user": "admin",
+                    "ssh_password": "pw",
+                    "ssh_key": "",
+                    "auth_mode": "password",
+                    "credential_source": "group:test",
+                },
+            ),
             patch("ansible_runner.run_async", return_value=(fake_thread, fake_runner)),
             patch("fleet_platform.services.salt_master_probe.run_probe", side_effect=_fake_probe),
         ):
@@ -369,6 +424,17 @@ class TestSuccessfulProvision:
             patch.object(mod, "get_sync_db", return_value=db),
             patch.object(mod, "_get_bootstrap_settings", return_value=("admin", "", "")),
             patch.object(mod, "_detect_os_family", return_value="Linux"),
+            patch.object(
+                mod,
+                "resolve_node_credentials_sync",
+                return_value={
+                    "ssh_user": "admin",
+                    "ssh_password": "pw",
+                    "ssh_key": "",
+                    "auth_mode": "password",
+                    "credential_source": "group:test",
+                },
+            ),
             patch("ansible_runner.run_async", return_value=(fake_thread, fake_runner)),
             patch("fleet_platform.services.salt_master_probe.run_probe", side_effect=_fake_probe),
         ):
@@ -413,6 +479,17 @@ class TestExceptionHandling:
             patch.object(mod, "get_sync_db", return_value=db),
             patch.object(mod, "_get_bootstrap_settings", return_value=("admin", "", "")),
             patch.object(mod, "_detect_os_family", return_value="Linux"),
+            patch.object(
+                mod,
+                "resolve_node_credentials_sync",
+                return_value={
+                    "ssh_user": "admin",
+                    "ssh_password": "pw",
+                    "ssh_key": "",
+                    "auth_mode": "password",
+                    "credential_source": "group:test",
+                },
+            ),
             patch("ansible_runner.run_async", side_effect=_exploding_run_async),
         ):
             try:
@@ -462,6 +539,17 @@ class TestExceptionHandling:
             patch.object(mod, "get_sync_db", return_value=db),
             patch.object(mod, "_get_bootstrap_settings", return_value=("admin", "", "")),
             patch.object(mod, "_detect_os_family", return_value="Linux"),
+            patch.object(
+                mod,
+                "resolve_node_credentials_sync",
+                return_value={
+                    "ssh_user": "admin",
+                    "ssh_password": "pw",
+                    "ssh_key": "",
+                    "auth_mode": "password",
+                    "credential_source": "group:test",
+                },
+            ),
             patch("ansible_runner.run_async", side_effect=_exploding_run_async),
         ):
             try:

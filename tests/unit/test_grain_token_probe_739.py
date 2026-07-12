@@ -298,6 +298,16 @@ def _run_provision_master_with_logging(master_uuid):
         patch("fleet_platform.workers.ansible_tasks.ansible_runner") as mock_ar,
         patch("fleet_platform.workers.ansible_tasks._detect_os_family", return_value="Linux"),
         patch("fleet_platform.workers.ansible_tasks._get_bootstrap_settings", return_value=("admin", None, None)),
+        patch(
+            "fleet_platform.workers.ansible_tasks.resolve_node_credentials_sync",
+            return_value={
+                "ssh_user": "admin",
+                "ssh_password": "pw",
+                "ssh_key": "",
+                "auth_mode": "password",
+                "credential_source": "group:test",
+            },
+        ),
         patch("fleet_platform.services.salt_master_probe.run_probe", side_effect=fake_run_probe),
     ):
         mock_ar.run_async.return_value = (mock_thread, mock_runner)
