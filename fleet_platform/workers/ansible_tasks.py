@@ -371,6 +371,12 @@ def bootstrap_node(
                 "controller_pubkey": controller_pubkey,
                 "ingest_url": ingest_url,
                 "node_token": raw_token,
+                # Self-master bootstrap (#993): tell the playbook this node will
+                # become its own master so host_prep_gate.yml does not hard-fail on
+                # a master that isn't up yet — the master is provisioned in the
+                # as_master block after a successful bootstrap, and the already-
+                # configured minion connects on its next schedule cycle.
+                "as_master": as_master,
                 **password_extravars,
                 **runtime_extravars,
             }
