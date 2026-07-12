@@ -37,9 +37,10 @@ def _make_db_no_group_no_global():
     db = MagicMock()
     # scalar_one_or_none() returns None for the platform setting query
     db.execute.return_value.scalar_one_or_none.return_value = None
-    # first() returns None for the credential_groups tier (same fixed
-    # return_value mock is reused across every db.execute() call here).
-    db.execute.return_value.first.return_value = None
+    # all() returns [] for the credential_groups tier (#1004 C2 — the resolver
+    # now iterates ALL credential-bearing groups; same fixed return_value mock
+    # is reused across every db.execute() call here).
+    db.execute.return_value.all.return_value = []
     return db
 
 
@@ -102,7 +103,7 @@ def test_sync_resolver_bootstrapped_node_with_credential_group_wins_over_control
     node = _make_node(ssh_host_key="ecdsa-sha2-nistp256 AAAA...")
     db = MagicMock()
     cg_result = MagicMock()
-    cg_result.first.return_value = (cred, "prod")
+    cg_result.all.return_value = [(cred, "prod")]
     db.execute.return_value = cg_result
 
     with patch(
@@ -156,7 +157,7 @@ def test_async_resolver_bootstrapped_node_uses_controller_key():
         async def _fake_execute(stmt):
             result = MagicMock()
             result.scalar_one_or_none.return_value = None
-            result.first.return_value = None  # #984 credential_groups tier
+            result.all.return_value = []  # #984/#1004 credential_groups tier
             return result
 
         db.execute.side_effect = _fake_execute
@@ -188,7 +189,7 @@ def test_async_resolver_bootstrapped_node_key_missing_falls_to_none():
         async def _fake_execute(stmt):
             result = MagicMock()
             result.scalar_one_or_none.return_value = None
-            result.first.return_value = None  # #984 credential_groups tier
+            result.all.return_value = []  # #984/#1004 credential_groups tier
             return result
 
         db.execute.side_effect = _fake_execute

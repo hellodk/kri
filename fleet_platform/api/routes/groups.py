@@ -177,15 +177,16 @@ async def delete_group(
     group = await _get_group_or_404(group_id, db)
 
     # Invariant (#508): a node must always belong to ≥1 group.
-    # Find members of this group whose ONLY group membership is this one.
-    members_result = await db.execute(select(GroupMember).where(GroupMember.group_id == group_id))
-    members = members_result.scalars().all()
-
-    orphaned_node_ids: list[uuid.UUID] = []
-    for m in members:
-        count_result = await db.execute(select(func.count()).where(GroupMember.node_id == m.node_id))
-        if count_result.scalar_one() <= 1:
-            orphaned_node_ids.append(m.node_id)
+    # Single aggregate query (#1004 A6 — replaces one COUNT per member): for
+    # every node that is a member of this group, compute its TOTAL
+    # group-membership count (across all groups) in one round trip, mirroring
+    # the GROUP BY fix already used by list_groups above.
+    membership_totals = await db.execute(
+        select(GroupMember.node_id, func.count(GroupMember.node_id).label("total"))
+        .where(GroupMember.node_id.in_(select(GroupMember.node_id).where(GroupMember.group_id == group_id)))
+        .group_by(GroupMember.node_id)
+    )
+    orphaned_node_ids: list[uuid.UUID] = [row.node_id for row in membership_totals if row.total <= 1]
 
     if orphaned_node_ids:
         n = len(orphaned_node_ids)
@@ -351,7 +352,17 @@ async def update_group_credentials(
     if payload.session_retention_days is not None:
         group.session_retention_days = payload.session_retention_days
 
-    await db.commit()
+    # #1004 C6: two concurrent PATCHes can both delete-then-insert into
+    # credential_groups (UNIQUE(group_id)) and race on the insert, raising
+    # IntegrityError. Surface that as a 409 (retryable) instead of a 500.
+    try:
+        await db.commit()
+    except IntegrityError:
+        await db.rollback()
+        raise HTTPException(
+            status_code=409,
+            detail="credential mapping changed concurrently; retry",
+        )
     effective_credential_id = await get_group_credential_id(db, group.id)
     has_password, has_key = await owner_secret_flags(
         db,
@@ -366,6 +377,58 @@ async def update_group_credentials(
         "ssh_auth_mode": "key" if has_key else "password",
         "session_max_mins": group.session_max_mins,
         "session_retention_days": group.session_retention_days,
+    }
+
+
+class GroupCredentialAssociate(BaseModel):
+    # None detaches the group's credential (the picker's "— none —" option).
+    credential_id: uuid.UUID | None = None
+
+
+@router.put("/{group_id}/credential", response_model=dict)
+async def associate_group_credential(
+    group_id: uuid.UUID,
+    payload: GroupCredentialAssociate,
+    db: AsyncSession = Depends(get_db),
+    claims: dict = Depends(require_role("operator", "admin")),
+):
+    """Associate an existing Credential with a group (#1004).
+
+    Unlike ``PATCH /{group_id}/credentials`` (which upserts a NEW Credential
+    from raw ssh_* fields), this maps an EXISTING Credential row — picked from
+    the credentials store — onto the group via the ``credential_groups``
+    association (one credential per group, ``UNIQUE(group_id)``). Never
+    returns a secret.
+    """
+    group = await _get_group_or_404(group_id, db)
+
+    # credential_id=None detaches the group's credential; otherwise the credential must exist.
+    if payload.credential_id is not None:
+        credential = await db.get(Credential, payload.credential_id)
+        if credential is None:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Credential not found")
+
+    await set_group_credential(db, group.id, payload.credential_id)
+    # Same 409-on-race handling as update_group_credentials (#1004 C6).
+    try:
+        await db.commit()
+    except IntegrityError:
+        await db.rollback()
+        raise HTTPException(
+            status_code=409,
+            detail="credential mapping changed concurrently; retry",
+        )
+
+    effective_credential_id = await get_group_credential_id(db, group.id)
+    has_password, has_key = await owner_secret_flags(db, credential_id=effective_credential_id)
+    cred = await db.get(Credential, effective_credential_id) if effective_credential_id else None
+    return {
+        "group_id": str(group_id),
+        "credential_id": str(effective_credential_id) if effective_credential_id else None,
+        "ssh_username": cred.username if cred else None,
+        "has_ssh_password": has_password,
+        "has_ssh_key": has_key,
+        "ssh_auth_mode": "key" if has_key else "password",
     }
 
 

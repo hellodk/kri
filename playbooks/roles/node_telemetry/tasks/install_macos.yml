@@ -5,6 +5,19 @@
 # Homebrew tasks run as brew_user (never root, per the common role's brew_user
 # fact) so they land in a writable location regardless of how Homebrew/python3
 # is managed on the host.
+#
+# AIR-GAP ARTIFACT STAGING (#1003) -------------------------------------------
+# When node_telemetry_airgap: true, stage the following under playbooks/files/
+# BEFORE running this role:
+#   playbooks/files/psutil-wheels/psutil-<version>-cp3<X>-cp3<X>-macosx_11_0_arm64.whl
+#   playbooks/files/psutil-wheels/psutil-<version>-cp3<X>-cp3<X>-macosx_10_9_x86_64.whl
+#     (one wheel per python minor version / arch combo actually in the fleet;
+#     pip --no-index --find-links auto-selects the matching wheel)
+#   playbooks/files/macmon-{{ node_telemetry_macmon_version }}-macos-arm64
+#     (prebuilt macmon binary — macmon is Apple-Silicon-only, so only the
+#     arm64 build needs staging; download from the vladkens/macmon GitHub
+#     releases page on a machine with internet access)
+# -----------------------------------------------------------------------------
 
 - name: Check for python3 psutil (macOS)
   ansible.builtin.shell: python3 -c "import psutil" 2>/dev/null
@@ -18,7 +31,7 @@
     HOME: "/Users/{{ brew_user }}"
   when: ansible_os_family == 'Darwin'
 
-- name: Install python3 psutil via pip --user (macOS)
+- name: Install python3 psutil via pip --user (macOS, online)
   ansible.builtin.shell: python3 -m pip install --user --upgrade psutil
   register: psutil_install_macos
   changed_when: "'Successfully installed' in psutil_install_macos.stdout"
@@ -28,12 +41,40 @@
   environment:
     PATH: "{{ brew_prefix }}/bin:/usr/local/bin:/usr/bin:/bin"
     HOME: "/Users/{{ brew_user }}"
-  when: ansible_os_family == 'Darwin' and psutil_check_macos.rc != 0
+  when: >
+    ansible_os_family == 'Darwin' and psutil_check_macos.rc != 0
+    and not (node_telemetry_airgap | default(false) | bool)
+
+# ── Air-gapped path: bundled wheel dir, no PyPI network access ─────────────
+- name: Copy bundled psutil wheel directory to target (air-gapped, macOS)
+  ansible.builtin.copy:
+    src: "{{ playbook_dir }}/files/psutil-wheels/"
+    dest: "/tmp/psutil-wheels/"
+    mode: "0644"
+  become: false
+  become_user: "{{ brew_user }}"
+  when: >
+    ansible_os_family == 'Darwin' and psutil_check_macos.rc != 0
+    and (node_telemetry_airgap | default(false) | bool)
+
+- name: Install python3 psutil from bundled wheel, no PyPI (air-gapped, macOS)
+  ansible.builtin.shell: python3 -m pip install --user --no-index --find-links=/tmp/psutil-wheels psutil
+  register: psutil_install_macos_airgap
+  changed_when: "'Successfully installed' in psutil_install_macos_airgap.stdout"
+  failed_when: false
+  become: false
+  become_user: "{{ brew_user }}"
+  environment:
+    PATH: "{{ brew_prefix }}/bin:/usr/local/bin:/usr/bin:/bin"
+    HOME: "/Users/{{ brew_user }}"
+  when: >
+    ansible_os_family == 'Darwin' and psutil_check_macos.rc != 0
+    and (node_telemetry_airgap | default(false) | bool)
 
 # ── macmon: §9 #9 — guarded `shell` (NOT
 # community.general.homebrew — that collection is not vendored), made
 # idempotent via `creates` on the installed binary. ──────────────────────────
-- name: Install macmon via Homebrew (macOS)
+- name: Install macmon via Homebrew (macOS, online)
   # item.formula is the brew formula; item.bin is the
   # installed binary name used for the `creates` idempotency guard.
   ansible.builtin.shell: "{{ brew_prefix }}/bin/brew install {{ item.formula }}"
@@ -48,4 +89,17 @@
     PATH: "{{ brew_prefix }}/bin:/usr/local/bin:/usr/bin:/bin"
     HOME: "/Users/{{ brew_user }}"
   loop: "{{ node_telemetry_brew_packages }}"
-  when: ansible_os_family == 'Darwin'
+  when: ansible_os_family == 'Darwin' and not (node_telemetry_airgap | default(false) | bool)
+
+# ── Air-gapped path: bundled prebuilt binary, no Homebrew network access ───
+- name: Copy bundled macmon binary to target (air-gapped, macOS)
+  ansible.builtin.copy:
+    src: "{{ playbook_dir }}/files/macmon-{{ node_telemetry_macmon_version }}-macos-arm64"
+    dest: "{{ brew_prefix }}/bin/macmon"
+    mode: "0755"
+  become: false
+  become_user: "{{ brew_user }}"
+  when:
+    - ansible_os_family == 'Darwin'
+    - cpu_arch == 'arm64'
+    - node_telemetry_airgap | default(false) | bool

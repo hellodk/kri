@@ -4,6 +4,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { groupsApi, type GroupCredentials } from '../api/groups'
 import { fleetApi } from '../api/fleet'
 import { groupSecretsApi } from '../api/groupSecrets'
+import { credentialsApi } from '../api/credentials'
 import { StatusBadge } from '../components/StatusBadge'
 import { DriftBadge } from '../components/DriftBadge'
 import { Skeleton } from '../components/Skeleton'
@@ -11,7 +12,6 @@ import { ErrorState } from '../components/ErrorState'
 import { Pagination } from '../components/Pagination'
 import { ConfirmDialog } from '../components/ConfirmDialog'
 import { useToastStore } from '../stores/toastStore'
-import { SecretInput } from '../components/SecretInput'
 import { formatDistanceToNow } from 'date-fns'
 import { formatLocalDateTime } from '../utils/time'
 
@@ -26,11 +26,7 @@ export function GroupDetail() {
   const qc = useQueryClient()
   const toast = useToastStore((s) => s.add)
 
-  // SSH credentials form state
-  const [sshUsername, setSshUsername] = useState('')
-  const [sshPassword, setSshPassword] = useState('')
-  const [sshAuthMode, setSshAuthMode] = useState<'password' | 'key'>('password')
-  const [sshKey, setSshKey] = useState('')
+  // Session settings form state
   const [sessionMaxMins, setSessionMaxMins] = useState('')
   const [sessionRetentionDays, setSessionRetentionDays] = useState('')
   const [credFormInit, setCredFormInit] = useState(false)
@@ -72,12 +68,18 @@ export function GroupDetail() {
 
   // Initialise form from fetched creds (run once when data arrives)
   if (creds && !credFormInit) {
-    setSshUsername(creds.ssh_username ?? '')
-    setSshAuthMode((creds.ssh_auth_mode as 'password' | 'key') ?? 'password')
     setSessionMaxMins(String(creds.session_max_mins ?? 60))
     setSessionRetentionDays(String(creds.session_retention_days ?? 30))
     setCredFormInit(true)
   }
+
+  // All stored credentials, for the "This group uses credential" picker.
+  const { data: allCredentials, isLoading: credListLoading } = useQuery({
+    queryKey: ['credentials'],
+    queryFn: credentialsApi.list,
+    enabled: !!groupId && activeTab === 'SSH',
+    staleTime: 30_000,
+  })
 
   // For the add-node selector: fetch all nodes to pick from
   const { data: allNodes } = useQuery({
@@ -112,18 +114,23 @@ export function GroupDetail() {
   const credsMutation = useMutation({
     mutationFn: () =>
       groupsApi.updateCredentials(groupId!, {
-        ssh_username: sshUsername || null,
-        ssh_password: sshPassword || null,
-        ssh_auth_mode: sshAuthMode,
-        ssh_key: sshKey || null,
         session_max_mins: sessionMaxMins ? parseInt(sessionMaxMins) : null,
         session_retention_days: sessionRetentionDays ? parseInt(sessionRetentionDays) : null,
       }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['group-credentials', groupId] })
-      setSshPassword('')
-      setSshKey('')
-      toast('SSH credentials saved')
+      toast('Session settings saved')
+    },
+    onError: (e: Error) => toast(e.message, 'error'),
+  })
+
+  // Associates (or clears, with null) the group's credential via the
+  // credential_groups link (#1002) — replaces the old inline ssh_* upsert.
+  const associateCredentialMutation = useMutation({
+    mutationFn: (credentialId: string | null) => groupsApi.associateCredential(groupId!, credentialId),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['group-credentials', groupId] })
+      toast('Group credential updated')
     },
     onError: (e: Error) => toast(e.message, 'error'),
   })
@@ -187,14 +194,14 @@ export function GroupDetail() {
 
       {group.description && <p className="text-gray-600">{group.description}</p>}
 
-      {/* Warning: no SSH credentials configured */}
-      {!credsLoading && !creds?.ssh_username && (
+      {/* Warning: no credential configured */}
+      {!credsLoading && !creds?.credential_id && (
         <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 flex items-start gap-3">
           <span className="text-amber-500 text-lg mt-0.5">⚠</span>
           <div>
-            <p className="text-sm font-semibold text-amber-800">No SSH credentials configured</p>
+            <p className="text-sm font-semibold text-amber-800">No credential configured</p>
             <p className="text-sm text-amber-700 mt-0.5">
-              Nodes in this group cannot be bootstrapped until SSH credentials are set below.
+              Nodes in this group cannot be bootstrapped until a credential is selected below.
             </p>
           </div>
         </div>
@@ -283,12 +290,12 @@ export function GroupDetail() {
         </div>
       )}
 
-      {/* SSH Credentials card */}
+      {/* Credential card */}
       {activeTab === 'SSH' && <div className="bg-white rounded-xl border border-gray-200 shadow-xs overflow-hidden">
         <div className="px-4 py-3 border-b border-gray-200">
-          <p className="text-sm font-semibold text-gray-700">SSH Credentials</p>
+          <p className="text-sm font-semibold text-gray-700">Credential</p>
           <p className="text-xs text-gray-400 mt-0.5">
-            All nodes in this group inherit these credentials unless overridden at the node level.
+            All nodes in this group inherit this credential unless overridden at the node level.
           </p>
         </div>
 
@@ -300,96 +307,56 @@ export function GroupDetail() {
             {creds && (
               <div className="flex flex-wrap gap-3 text-xs">
                 <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full font-medium border ${
-                  creds.ssh_username
+                  creds.credential_id
                     ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
                     : 'bg-gray-100 text-gray-500 border-gray-200'
                 }`}>
-                  {creds.ssh_username ? `User: ${creds.ssh_username}` : 'No username set'}
+                  {creds.credential_id
+                    ? creds.ssh_username
+                      ? `User: ${creds.ssh_username}`
+                      : 'Credential attached'
+                    : 'No credential attached'}
                 </span>
-                <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full font-medium border ${
-                  creds.has_ssh_password
-                    ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
-                    : 'bg-gray-100 text-gray-500 border-gray-200'
-                }`}>
-                  Password: {creds.has_ssh_password ? 'configured' : 'not set'}
-                </span>
-                <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full font-medium border ${
-                  creds.has_ssh_key
-                    ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
-                    : 'bg-gray-100 text-gray-500 border-gray-200'
-                }`}>
-                  SSH Key: {creds.has_ssh_key ? 'configured' : 'not set'}
-                </span>
+                {creds.credential_id && (
+                  <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full font-medium border ${
+                    creds.has_ssh_key
+                      ? 'bg-purple-50 text-purple-700 border-purple-200'
+                      : 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                  }`}>
+                    {creds.has_ssh_key ? 'SSH key auth' : 'Password auth'}
+                  </span>
+                )}
               </div>
             )}
 
-            {/* Auth mode toggle */}
-            <div className="space-y-1">
-              <p className="text-sm font-medium text-gray-700">Authentication Mode</p>
-              <div className="flex gap-4">
-                {(['password', 'key'] as const).map((mode) => (
-                  <label key={mode} className="flex items-center gap-2 text-sm cursor-pointer">
-                    <input
-                      type="radio"
-                      name="groupAuthMode"
-                      value={mode}
-                      checked={sshAuthMode === mode}
-                      onChange={() => setSshAuthMode(mode)}
-                      className="accent-brand-600"
-                    />
-                    {mode === 'password' ? 'Password auth' : 'SSH key auth'}
-                  </label>
-                ))}
-              </div>
-            </div>
-
-            {/* Username */}
+            {/* Credential picker */}
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">SSH Username</label>
-              <input
-                value={sshUsername}
-                onChange={(e) => setSshUsername(e.target.value)}
-                placeholder="admin"
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm text-gray-900 focus:outline-hidden focus:border-brand-600"
-              />
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                This group uses credential
+              </label>
+              <div className="flex gap-2">
+                <select
+                  value={creds?.credential_id ?? ''}
+                  onChange={(e) => associateCredentialMutation.mutate(e.target.value || null)}
+                  disabled={credListLoading || associateCredentialMutation.isPending}
+                  className="flex-1 text-sm bg-white border border-gray-300 text-gray-900 rounded-lg px-3 py-2 focus:outline-hidden focus:border-brand-600 disabled:opacity-50"
+                >
+                  <option value="">— None selected —</option>
+                  {(allCredentials ?? []).map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {c.name} ({c.kind === 'ssh_key' ? 'SSH Key' : c.kind === 'username_password' ? 'Username + Password' : c.kind})
+                    </option>
+                  ))}
+                </select>
+                <Link
+                  to="/credentials"
+                  title="Create a new credential"
+                  className="px-3 py-2 text-sm font-medium text-brand-600 border border-brand-200 rounded-lg hover:bg-brand-50 whitespace-nowrap"
+                >
+                  + Create new
+                </Link>
+              </div>
             </div>
-
-            {/* Password or Key */}
-            {sshAuthMode === 'password' ? (
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Password{' '}
-                  {creds?.has_ssh_password && (
-                    <span className="text-gray-400 font-normal">(saved — leave blank to keep)</span>
-                  )}
-                </label>
-                <SecretInput
-                  value={sshPassword}
-                  onChange={setSshPassword}
-                  placeholder={creds?.has_ssh_password ? '••••••••' : 'Enter password'}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm text-gray-900 focus:outline-hidden focus:border-brand-600"
-                />
-              </div>
-            ) : (
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Private Key{' '}
-                  {creds?.has_ssh_key && (
-                    <span className="text-gray-400 font-normal">(saved — paste to replace)</span>
-                  )}
-                </label>
-                <textarea
-                  rows={6}
-                  value={sshKey}
-                  onChange={(e) => setSshKey(e.target.value)}
-                  placeholder={'-----BEGIN OPENSSH PRIVATE KEY-----\n...'}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm font-mono text-gray-900 focus:outline-hidden focus:border-brand-600 resize-none"
-                />
-                <p className="text-xs text-gray-400 mt-1">
-                  Paste the private key. The public key will be authorized on the node automatically during bootstrap.
-                </p>
-              </div>
-            )}
 
             {/* Session settings */}
             <div className="border-t border-gray-100 pt-4 space-y-3">
@@ -431,7 +398,7 @@ export function GroupDetail() {
                 onClick={() => credsMutation.mutate()}
                 className="px-5 py-2 bg-brand-600 text-white text-sm font-medium rounded-lg hover:bg-brand-700 disabled:opacity-50"
               >
-                {credsMutation.isPending ? 'Saving…' : 'Save Credentials'}
+                {credsMutation.isPending ? 'Saving…' : 'Save Session Settings'}
               </button>
             </div>
           </div>

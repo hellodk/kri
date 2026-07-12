@@ -147,8 +147,13 @@ async def delete_credential(
     """Delete a credential by ID.
 
     Guarded (#726): if nodes or groups still reference the credential, returns
-    409 unless ``?force=true`` is passed. ``ON DELETE SET NULL`` then nulls the
-    referencing FKs. Always writes an audit record.
+    409 unless ``?force=true`` is passed. The ``credential_groups`` FK is
+    ``ON DELETE CASCADE`` (not SET NULL) — deleting the credential removes its
+    ``credential_groups`` row(s) outright, so every group that pointed at it
+    becomes unmapped and its member nodes fall back to the controller-key tier
+    (or the credential-less 'none' tier) on next resolution (#1004 C3). There
+    is no per-node credential FK to null anymore (#989). Always writes an
+    audit record.
     """
     result = await db.execute(select(Credential).where(Credential.id == credential_id))
     credential = result.scalar_one_or_none()

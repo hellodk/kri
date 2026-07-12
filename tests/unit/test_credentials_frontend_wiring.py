@@ -24,6 +24,10 @@ def test_credentials_ts_exists_and_has_no_secret_field():
         if in_credential_interface:
             if stripped == "}":
                 break
+            # Skip comments and the `has_secret?: boolean` presence flag (like the
+            # backend's has_ssh_password) — neither exposes the raw secret (#1002).
+            if stripped.startswith("//") or stripped.startswith("has_secret"):
+                continue
             assert "secret" not in stripped, f"Credential interface must not expose secret field, found: {line!r}"
 
 

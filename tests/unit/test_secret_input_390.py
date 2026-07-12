@@ -13,7 +13,9 @@ SECRET_INPUT = (FRONTEND_SRC / "components" / "SecretInput.tsx").read_text()
 # Files that must have been migrated away from raw type="password"
 MIGRATED_FILES = [
     FRONTEND_SRC / "components" / "LLMEndpointForm.tsx",
-    FRONTEND_SRC / "pages" / "GroupDetail.tsx",
+    # GroupDetail.tsx no longer uses SecretInput (#1002): the inline SSH form was
+    # replaced by a Credential picker; the credential's secret lives on the
+    # Credentials page instead.
     FRONTEND_SRC / "pages" / "FleetDashboard.tsx",
     FRONTEND_SRC / "pages" / "SettingsPage.tsx",
 ]

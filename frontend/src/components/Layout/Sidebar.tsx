@@ -1,5 +1,5 @@
 import { NavLink, useLocation } from 'react-router-dom'
-import { type LucideIcon, LayoutDashboard, ShieldCheck, Workflow, ClipboardCheck, Settings, Sparkles } from 'lucide-react'
+import { type LucideIcon, LayoutDashboard, ShieldCheck, Workflow, ClipboardCheck, Settings, Sparkles, KeyRound } from 'lucide-react'
 import { useFilterStore } from '../../stores/filterStore'
 import { useSaltKeysStore } from '../../stores/saltKeysStore'
 
@@ -14,6 +14,7 @@ const HUB_LINKS = [
 const SYSTEM_LINKS = [
   { to: '/audit',           label: 'Audit',           icon: ClipboardCheck },
   { to: '/recommendations', label: 'Recommendations', icon: Sparkles },
+  { to: '/credentials',     label: 'Credentials',     icon: KeyRound },
   { to: '/settings',        label: 'Settings',        icon: Settings },
 ] as const
 

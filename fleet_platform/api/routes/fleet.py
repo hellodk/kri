@@ -1,6 +1,7 @@
 # fleet_platform/api/routes/fleet.py
 import asyncio
 import json
+import logging
 import re
 import secrets
 import uuid
@@ -41,6 +42,7 @@ from fleet_platform.services.node_import import (
 )
 
 router = APIRouter(prefix="/api/v1/fleet")
+logger = logging.getLogger(__name__)
 
 _OVERVIEW_CACHE_KEY = "fleet:overview"
 _OVERVIEW_TTL = 15  # seconds
@@ -315,16 +317,44 @@ async def import_commit(
             _grp = await _get_or_create_default_group(db)
 
         if _grp is not None:
+            _prior_credential_id = await get_group_credential_id(db, _grp.id)
             _cred_id = await upsert_owner_ssh_credential(
                 db,
                 owner_name=f"group:{_grp.name}",
-                current_credential_id=await get_group_credential_id(db, _grp.id),
+                current_credential_id=_prior_credential_id,
                 ssh_username=payload.ssh_username,
                 ssh_password=_ssh_pw,
                 ssh_key=_ssh_key,
                 ssh_auth_mode=payload.ssh_auth_mode or ("key" if (_ssh_key and not _ssh_pw) else "password"),
             )
             if _cred_id is not None:
+                # S5 (#1004): the group ALREADY had a shared credential — this
+                # upsert rotates it for every EXISTING member, not just the
+                # nodes created by this import batch. Surface that loudly via
+                # a log warning (the additive response field this would
+                # otherwise use lives in ImportCommitResponse, which is out of
+                # scope for this fix's touched-file set).
+                if _prior_credential_id is not None:
+                    from fleet_platform.models.group import GroupMember
+
+                    _created_node_ids = {n.id for n in created_nodes}
+                    _existing_count_stmt = (
+                        select(func.count()).select_from(GroupMember).where(GroupMember.group_id == _grp.id)
+                    )
+                    if _created_node_ids:
+                        _existing_count_stmt = _existing_count_stmt.where(
+                            GroupMember.node_id.notin_(_created_node_ids)
+                        )
+                    _existing_member_count = (await db.execute(_existing_count_stmt)).scalar_one()
+                    if _existing_member_count > 0:
+                        logger.warning(
+                            "import_commit rotated shared SSH credential for group %s (%s): "
+                            "%d existing node(s) already in this group will use the new "
+                            "credential on next resolution",
+                            _grp.name,
+                            _grp.id,
+                            _existing_member_count,
+                        )
                 await set_group_credential(db, _grp.id, _cred_id)
 
     await audit(

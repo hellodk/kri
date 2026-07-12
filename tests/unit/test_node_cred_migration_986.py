@@ -143,7 +143,7 @@ def _credential(username="groupuser", secret_plain="grouppw"):
 
 
 class _Row:
-    """Mimics a SQLAlchemy (Credential, group_name) Row for .first()."""
+    """Mimics a SQLAlchemy (Credential, group_name) Row for .all()."""
 
     def __init__(self, cred, name):
         self._t = (cred, name)
@@ -161,7 +161,7 @@ async def test_resolved_credential_comes_from_group_not_node():
 
     db = AsyncMock(spec=AsyncSession)
     cg_result = MagicMock()
-    cg_result.first.return_value = _Row(group_cred, "default")
+    cg_result.all.return_value = [_Row(group_cred, "default")]
     db.execute.side_effect = [cg_result]
 
     creds = await resolve_node_credentials(node, db)
@@ -179,7 +179,7 @@ async def test_node_level_credential_id_no_longer_populated_by_new_writers():
 
     db = AsyncMock(spec=AsyncSession)
     cg_result = MagicMock()
-    cg_result.first.return_value = _Row(group_cred, "default")
+    cg_result.all.return_value = [_Row(group_cred, "default")]
     db.execute.side_effect = [cg_result]
 
     creds = await resolve_node_credentials(node, db)

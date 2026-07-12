@@ -128,11 +128,16 @@ def _credential_to_creds(cred: Credential, source: str) -> dict:
 
 
 def _credential_group_stmt(node_id):
-    """Member group whose credential comes via ``credential_groups`` (#984).
+    """All of a node's credential-bearing groups, ordered by priority (#984, #1004).
 
     This is the ONLY group/node credential source (#989 — group-only contract).
-    Tiebreak when a node belongs to 2+ credential-bearing groups: highest
-    ``credential_priority`` then name. Returns ``(Credential, group_name)`` rows.
+    Returns ``(Credential, group_name)`` rows for every credential-bearing group
+    the node belongs to, ordered by highest ``credential_priority`` then name.
+    Callers must walk the rows and pick the first one whose credential is
+    actually usable (``has_usable_secret``) — the top-priority group's
+    credential may fail to decrypt or be empty, in which case the next
+    credential-bearing group should be tried (#1004 C2). Do NOT ``.limit(1)``
+    this statement.
     """
     return (
         select(Credential, Group.name)
@@ -142,7 +147,6 @@ def _credential_group_stmt(node_id):
         .join(Credential, Credential.id == CredentialGroup.credential_id)
         .where(GroupMember.node_id == node_id)
         .order_by(Group.credential_priority.desc(), Group.name.asc())
-        .limit(1)
     )
 
 
@@ -169,10 +173,11 @@ async def resolve_node_credentials(node: Node, db: AsyncSession) -> dict:
     credential_source ('group:<name>' | 'controller' | 'none')
     """
     # 1. Group credential via credential_groups association (#984/#989) — the
-    #    ONLY per-node secret source.
-    _cg_row = (await db.execute(_credential_group_stmt(node.id))).first()
-    if _cg_row is not None:
-        _cred, _gname = _cg_row
+    #    ONLY per-node secret source. Walk ALL credential-bearing groups
+    #    (highest priority first) and return the first one with a USABLE
+    #    secret (#1004 C2) — a top-priority group whose credential fails to
+    #    decrypt must not block a lower-priority group's usable credential.
+    for _cred, _gname in (await db.execute(_credential_group_stmt(node.id))).all():
         creds = _credential_to_creds(_cred, f"group:{_gname}")
         if has_usable_secret(creds):
             return creds
@@ -205,10 +210,10 @@ def resolve_node_credentials_sync(node: Node, db) -> dict:
     #989).
     """
     # 1. Group credential via credential_groups association (#984/#989) — the
-    #    ONLY per-node secret source.
-    _cg_row = db.execute(_credential_group_stmt(node.id)).first()
-    if _cg_row is not None:
-        _cred, _gname = _cg_row
+    #    ONLY per-node secret source. Walk ALL credential-bearing groups
+    #    (highest priority first) and return the first one with a USABLE
+    #    secret (#1004 C2).
+    for _cred, _gname in db.execute(_credential_group_stmt(node.id)).all():
         creds = _credential_to_creds(_cred, f"group:{_gname}")
         if has_usable_secret(creds):
             return creds
@@ -299,12 +304,13 @@ async def node_has_group(node_id, db: AsyncSession) -> bool:
 async def nodes_using_credential(credential_id, db: AsyncSession) -> list[tuple[Node, str]]:
     """Return ``(node, source)`` for every node whose *resolved* credential is ``credential_id`` (#700, #989).
 
-    Resolution-aware: a node counts only if its credential-groups tier
-    (highest ``credential_priority``, then name) resolves to a USABLE secret
-    pointing at ``credential_id``. Group-only model (#989) — there is no
-    node-level or legacy ``Group.credential_id`` tier anymore. This is the
-    read-only audit/rotation view; it deliberately ignores the controller/none
-    tiers (not Credential rows).
+    Resolution-aware: a node counts only if the FIRST USABLE credential-bearing
+    group it belongs to (highest ``credential_priority``, then name; skipping
+    any group whose credential fails to decrypt/is empty — #1004 C2) resolves
+    to ``credential_id``. Group-only model (#989) — there is no node-level or
+    legacy ``Group.credential_id`` tier anymore. This is the read-only
+    audit/rotation view; it deliberately ignores the controller/none tiers
+    (not Credential rows).
     """
     results: list[tuple[Node, str]] = []
 
@@ -323,14 +329,17 @@ async def nodes_using_credential(credential_id, db: AsyncSession) -> list[tuple[
         .all()
     )
     for n in candidates:
-        _cg_row = (await db.execute(_credential_group_stmt(n.id))).first()
-        if _cg_row is None:
+        _winner = None
+        for _cred, _gname in (await db.execute(_credential_group_stmt(n.id))).all():
+            if has_usable_secret(_credential_to_creds(_cred, f"group:{_gname}")):
+                _winner = (_cred, _gname)
+                break
+        if _winner is None:
             continue
-        _cred, _gname = _cg_row
+        _cred, _gname = _winner
         if _cred.id != credential_id:
-            # A higher-priority group won the tiebreak with a different credential.
+            # A higher-priority group won with a different, usable credential.
             continue
-        if has_usable_secret(_credential_to_creds(_cred, f"group:{_gname}")):
-            results.append((n, f"group:{_gname}"))
+        results.append((n, f"group:{_gname}"))
 
     return results

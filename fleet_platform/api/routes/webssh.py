@@ -88,6 +88,10 @@ class SSHProxySession:
         self._chunk_index = 0
         self._alert_count = 0
         self._owns_connection = True  # False when connection comes from cache
+        # Strong reference to the long-lived SSH-stdout pump task (A5, #1005).
+        # asyncio only holds a weak ref to tasks — without this, the task can
+        # be garbage-collected mid-session, silently killing terminal output.
+        self._read_task: asyncio.Task | None = None
 
     async def send_to_browser(self, data: bytes) -> None:
         """Send terminal output to browser and record it."""
@@ -175,6 +179,8 @@ class SSHProxySession:
                 self._ssh_conn.close()
             except Exception as e:
                 logger.debug("close: SSH connection close failed: %s", e)
+        if self._read_task and not self._read_task.done():
+            self._read_task.cancel()
         # Update session end
         async with AsyncSessionLocal() as db:
             session = await db.get(SSHSession, self.session_id)
@@ -394,7 +400,17 @@ async def webssh_session(
             except Exception as e:
                 logger.debug("read_ssh: SSH stdout pump ended: %s", e)
 
-        asyncio.create_task(read_ssh())
+        # Store the task reference on the session-lifetime `proxy` object so
+        # asyncio's weak ref to the Task cannot GC it mid-session (A5, #1005).
+        # Follows the ws_task/vnc_task pattern in vnc.py:258-259.
+        proxy._read_task = asyncio.create_task(read_ssh())
+
+        def _read_task_done(t: asyncio.Task) -> None:
+            proxy._read_task = None
+            if not t.cancelled() and t.exception() is not None:
+                logger.debug("read_ssh task ended with exception: %s", t.exception())
+
+        proxy._read_task.add_done_callback(_read_task_done)
 
         # Session timeout
         loop = asyncio.get_running_loop()
