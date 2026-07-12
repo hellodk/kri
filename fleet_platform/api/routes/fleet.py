@@ -38,7 +38,6 @@ from fleet_platform.services.node_import import (
     parse_paste,
     validate_row,
 )
-from fleet_platform.services.ssh_credential_link import upsert_owner_ssh_credential
 
 router = APIRouter(prefix="/api/v1/fleet")
 
@@ -207,7 +206,8 @@ async def import_commit(
 
     When ``auto_bootstrap`` is set, each newly created node is queued for bootstrap
     through the same path as the dedicated bootstrap endpoint (group enforcement,
-    credential persistence, audit, and Celery dispatch with the node's target IP).
+    audit, and Celery dispatch with the node's target IP). Credentials resolve
+    from the node's group (credential_groups) — no longer persisted per-node.
     """
     # Bootstrap requires group membership; a single import applies one group to all
     # rows, so demand the group up front rather than failing per-node in the worker.
@@ -218,11 +218,12 @@ async def import_commit(
             "requires the node to belong to a group with SSH credentials.",
         )
 
-    # Resolve the global SSH auth mode once (per-row ssh_user can still override the
-    # username below). Secrets stay bound to locals — never sent to the broker (#495).
+    # Secrets stay bound to locals — never sent to the broker (#495). These are
+    # only forwarded to queue_node_bootstrap below (auto_bootstrap); they are no
+    # longer persisted as a per-node Credential (#986 — credentials are
+    # group-scoped via credential_groups).
     _ssh_pw = payload.ssh_password or None
     _ssh_key = payload.ssh_key or None
-    _auth_mode = payload.ssh_auth_mode or ("key" if (_ssh_key and not _ssh_pw) else "password")
 
     # Commit only acts on rows the validate step marked "new". Re-check the
     # minion_id format defensively here too: a client could POST status="new"
@@ -248,22 +249,11 @@ async def import_commit(
         created_ids.append(str(node.id))
         created_nodes.append(node)
 
-        # SSH credentials (#725): persist username/password/key into the node's
-        # dedicated Credential row + FK instead of the deprecated inline columns.
-        _ssh_user = payload.ssh_username or r.ssh_user or None
-        if _ssh_user or _ssh_pw or _ssh_key:
-            _cred_id = await upsert_owner_ssh_credential(
-                db,
-                owner_name=f"node:{node.minion_id}",
-                current_credential_id=None,
-                ssh_username=_ssh_user,
-                ssh_password=_ssh_pw,
-                ssh_key=_ssh_key,
-                ssh_auth_mode=_auth_mode if (_ssh_pw or _ssh_key) else None,
-            )
-            if _cred_id is not None:
-                node.credential_id = _cred_id
-
+        # Credentials now reach a node via its group's credential_groups
+        # association (#986 Phase 2c) — per-node Credential rows are no longer
+        # created here. payload.ssh_username/password/key remain accepted on the
+        # request (UI removal is Phase 3) but are intentionally not persisted as
+        # a per-node credential.
         if payload.group_id:
             from fleet_platform.models.group import GroupMember
 
@@ -274,6 +264,23 @@ async def import_commit(
                     added_at=datetime.now(UTC),
                 )
             )
+        else:
+            # No explicit group: fall back to the seeded "default" group
+            # (migration 065) so the node still resolves a credential via
+            # credential_groups. Skip silently if it's missing rather than crash.
+            from fleet_platform.models.group import Group, GroupMember
+
+            _default_group = (
+                await db.execute(select(Group).where(Group.name == "default"))
+            ).scalar_one_or_none()
+            if _default_group is not None:
+                db.add(
+                    GroupMember(
+                        group_id=_default_group.id,
+                        node_id=node.id,
+                        added_at=datetime.now(UTC),
+                    )
+                )
 
     await audit(
         db,

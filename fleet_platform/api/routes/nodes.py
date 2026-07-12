@@ -14,7 +14,6 @@ from sqlalchemy.orm import selectinload
 from fleet_platform.api.deps import get_db
 from fleet_platform.core.audit import audit
 from fleet_platform.core.auth import get_current_user, hash_password, require_role
-from fleet_platform.models.credential import Credential
 from fleet_platform.models.facts import NodeFact
 from fleet_platform.models.node import Node, Tag
 from fleet_platform.models.process_stat import NodeProcessStat
@@ -28,8 +27,8 @@ from fleet_platform.schemas.fleet import (
 from fleet_platform.schemas.node import NodeRegisterRequest, NodeRegisterResponse
 from fleet_platform.schemas.process_stat import ProcessStatOut
 from fleet_platform.schemas.tag import TagCreate, TagResponse
+from fleet_platform.services.credential_resolver import resolve_node_credentials
 from fleet_platform.services.platform_settings_svc import encrypt_secret
-from fleet_platform.services.ssh_credential_link import owner_secret_flags, upsert_owner_ssh_credential
 
 router = APIRouter(prefix="/api/v1/nodes")
 
@@ -161,26 +160,11 @@ async def update_node(
         old_value["os_version"] = node.os_version
         node.os_version = payload.os_version
 
-    # SSH credentials (#725). An explicit credential_id attaches an existing
-    # Credential by FK; otherwise inline ssh_* input is upserted into the node's
-    # dedicated Credential row (never the deprecated inline columns).
-    if payload.credential_id is not None:
-        cred = await db.get(Credential, payload.credential_id)
-        if cred is None:
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Credential not found")
-        node.credential_id = payload.credential_id
-    else:
-        cred_id = await upsert_owner_ssh_credential(
-            db,
-            owner_name=f"node:{node.minion_id}",
-            current_credential_id=node.credential_id,
-            ssh_username=payload.ssh_username,
-            ssh_password=payload.ssh_password,
-            ssh_key=payload.ssh_key,
-            ssh_auth_mode=payload.ssh_auth_mode,
-        )
-        if cred_id is not None:
-            node.credential_id = cred_id
+    # Credentials are group-scoped now (#986 Phase 2c) — a node's SSH credential
+    # is no longer set per-node. payload.credential_id / ssh_username / ssh_password
+    # / ssh_key / ssh_auth_mode are accepted (schema compatibility, Phase 3 removes
+    # the UI) but are no longer written to node.credential_id or upserted into a
+    # per-node Credential row.
     # VNC credential update
     if payload.vnc_password is not None:
         node.vnc_password_enc = encrypt_secret(payload.vnc_password) if payload.vnc_password else None
@@ -198,17 +182,15 @@ async def update_node(
     # Re-query after commit so all columns (including encrypted ones) are fresh
     result2 = await db.execute(select(Node).options(selectinload(Node.tags)).where(Node.id == node_id))
     node = result2.scalar_one()
-    has_password, has_key = await owner_secret_flags(
-        db,
-        credential_id=node.credential_id,
-    )
-    cred = await db.get(Credential, node.credential_id) if node.credential_id else None
+    # Display the *resolved* credential (node -> credential_groups -> group ->
+    # controller -> global), not a per-node one (#986 Phase 2c).
+    creds = await resolve_node_credentials(node, db)
     return NodeDetailResponse.model_validate(node).model_copy(
         update={
-            "ssh_username": cred.username if cred else None,
-            "ssh_auth_mode": "key" if has_key else "password",
-            "has_ssh_password": has_password,
-            "has_ssh_key": has_key,
+            "ssh_username": creds["ssh_user"] or None,
+            "ssh_auth_mode": creds["auth_mode"],
+            "has_ssh_password": bool(creds["ssh_password"]),
+            "has_ssh_key": bool(creds["ssh_key"]),
             "has_vnc_password": bool(node.vnc_password_enc),
         }
     )
@@ -374,22 +356,20 @@ async def get_node(
     node = result.scalar_one_or_none()
     if not node:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Node not found")
-    has_password, has_key = await owner_secret_flags(
-        db,
-        credential_id=node.credential_id,
-    )
     from fleet_platform.models.salt_master import SaltMaster
 
     master_status = (
         await db.execute(select(SaltMaster.status).where(SaltMaster.node_id == node.id).limit(1))
     ).scalar_one_or_none()
-    cred = await db.get(Credential, node.credential_id) if node.credential_id else None
+    # Display the *resolved* credential (node -> credential_groups -> group ->
+    # controller -> global), not a per-node one (#986 Phase 2c).
+    creds = await resolve_node_credentials(node, db)
     return NodeDetailResponse.model_validate(node).model_copy(
         update={
-            "ssh_username": cred.username if cred else None,
-            "ssh_auth_mode": "key" if has_key else "password",
-            "has_ssh_password": has_password,
-            "has_ssh_key": has_key,
+            "ssh_username": creds["ssh_user"] or None,
+            "ssh_auth_mode": creds["auth_mode"],
+            "has_ssh_password": bool(creds["ssh_password"]),
+            "has_ssh_key": bool(creds["ssh_key"]),
             "is_master": master_status is not None,
             "master_status": master_status,
         }
@@ -466,8 +446,9 @@ async def get_node_resolved_credential(
     Never returns secrets. Surfaces which credential a node will actually use and
     warns when 2+ member groups carry credentials so the winner is explicit.
     """
+    from fleet_platform.models.credential_group import CredentialGroup
     from fleet_platform.models.group import Group, GroupMember
-    from fleet_platform.services.credential_resolver import has_usable_secret, resolve_node_credentials
+    from fleet_platform.services.credential_resolver import has_usable_secret
 
     result = await db.execute(select(Node).where(Node.id == node_id))
     node = result.scalar_one_or_none()
@@ -476,14 +457,16 @@ async def get_node_resolved_credential(
 
     creds = await resolve_node_credentials(node, db)
 
-    # Member groups that carry a credential (FK), in resolution order.
+    # Member groups that carry a credential via the credential_groups association
+    # (#984/#986 — preferred over the legacy Group.credential_id column), in
+    # resolution order.
     cred_groups = (
         (
             await db.execute(
                 select(Group)
                 .join(GroupMember, GroupMember.group_id == Group.id)
+                .join(CredentialGroup, CredentialGroup.group_id == Group.id)
                 .where(GroupMember.node_id == node_id)
-                .where(Group.credential_id.isnot(None))
                 .order_by(Group.credential_priority.desc(), Group.name.asc())
             )
         )
@@ -498,6 +481,8 @@ async def get_node_resolved_credential(
         "ssh_user": creds["ssh_user"],
         "auth_mode": creds["auth_mode"],
         "has_usable_secret": has_usable_secret(creds),
+        # Deprecated: per-node credentials are retired (#986 Phase 2c). Retained
+        # in the response for backward compatibility, always null going forward.
         "node_credential_id": str(node.credential_id) if node.credential_id else None,
         "multi_group_conflict": len(cred_groups) >= 2 and creds["credential_source"].startswith("group:"),
         "credential_bearing_groups": conflict_groups,
