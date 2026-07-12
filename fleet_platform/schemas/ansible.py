@@ -84,6 +84,11 @@ class PlatformSettingsUpdate(BaseModel):
     # RAG embedding
     llm_embed_base_url: str | None = None
     llm_include_node_ips: bool | None = None
+    # Monitoring
+    prometheus_url: str | None = None
+    otlp_endpoint: str | None = None
+    otlp_protocol: str | None = None
+    otlp_headers: str | None = None
 
 
 class PlatformSettingsResponse(BaseModel):
@@ -120,3 +125,8 @@ class PlatformSettingsResponse(BaseModel):
     # RAG embedding
     llm_embed_base_url: str | None = None
     llm_include_node_ips: bool = True
+    # Monitoring
+    prometheus_url: str | None = None
+    otlp_endpoint: str | None = None
+    otlp_protocol: str | None = None
+    otlp_headers: str | None = None

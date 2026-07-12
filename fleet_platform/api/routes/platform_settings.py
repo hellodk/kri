@@ -30,8 +30,12 @@ from fleet_platform.services.platform_settings_svc import (
     OIDC_ENABLED,
     OIDC_ISSUER_URL,
     OIDC_ROLE_PREFIX,
+    OTLP_ENDPOINT,
+    OTLP_HEADERS,
+    OTLP_PROTOCOL,
     PILLAR_DIR,
     PLAYBOOKS_DIR,
+    PROMETHEUS_URL,
     SALT_ALLOWED_FUNCTIONS,
     SALT_DENIED_FUNCTIONS,
     SALT_MASTER,
@@ -201,6 +205,10 @@ async def get_settings(
             DIGEST_RECIPIENTS,
             LLM_EMBED_BASE_URL,
             LLM_INCLUDE_NODE_IPS,
+            PROMETHEUS_URL,
+            OTLP_ENDPOINT,
+            OTLP_PROTOCOL,
+            OTLP_HEADERS,
         ],
     )
     return PlatformSettingsResponse(
@@ -228,6 +236,10 @@ async def get_settings(
         salt_denied_functions=_parse_salt_denylist(s[SALT_DENIED_FUNCTIONS]),
         llm_embed_base_url=s[LLM_EMBED_BASE_URL],
         llm_include_node_ips=(s[LLM_INCLUDE_NODE_IPS] or "true") != "false",
+        prometheus_url=s[PROMETHEUS_URL],
+        otlp_endpoint=s[OTLP_ENDPOINT],
+        otlp_protocol=s[OTLP_PROTOCOL],
+        otlp_headers=s[OTLP_HEADERS],
     )
 
 
@@ -308,6 +320,14 @@ async def update_settings(
         await set_setting(db, LLM_EMBED_BASE_URL, payload.llm_embed_base_url)
     if payload.llm_include_node_ips is not None:
         await set_setting(db, LLM_INCLUDE_NODE_IPS, "true" if payload.llm_include_node_ips else "false")
+    if payload.prometheus_url is not None:
+        await set_setting(db, PROMETHEUS_URL, payload.prometheus_url)
+    if payload.otlp_endpoint is not None:
+        await set_setting(db, OTLP_ENDPOINT, payload.otlp_endpoint)
+    if payload.otlp_protocol is not None:
+        await set_setting(db, OTLP_PROTOCOL, payload.otlp_protocol)
+    if payload.otlp_headers is not None:
+        await set_setting(db, OTLP_HEADERS, payload.otlp_headers)
     await audit(
         db,
         actor=claims["email"],
@@ -345,4 +365,8 @@ async def update_settings(
         salt_denied_functions=_parse_salt_denylist(await get_setting(db, SALT_DENIED_FUNCTIONS)),
         llm_embed_base_url=await get_setting(db, LLM_EMBED_BASE_URL),
         llm_include_node_ips=((await get_setting(db, LLM_INCLUDE_NODE_IPS)) or "true") != "false",
+        prometheus_url=await get_setting(db, PROMETHEUS_URL),
+        otlp_endpoint=await get_setting(db, OTLP_ENDPOINT),
+        otlp_protocol=await get_setting(db, OTLP_PROTOCOL),
+        otlp_headers=await get_setting(db, OTLP_HEADERS),
     )

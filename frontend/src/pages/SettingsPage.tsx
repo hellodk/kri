@@ -72,6 +72,10 @@ export function SettingsPage() {
   const [testEmailResult, setTestEmailResult] = useState<{ ok: boolean; message: string } | null>(null)
   const [llmEmbedBaseUrl, setLlmEmbedBaseUrl] = useState('')
   const [llmIncludeNodeIps, setLlmIncludeNodeIps] = useState(true)
+  const [prometheusUrl, setPrometheusUrl] = useState('')
+  const [otlpEndpoint, setOtlpEndpoint] = useState('')
+  const [otlpProtocol, setOtlpProtocol] = useState('http')
+  const [otlpHeaders, setOtlpHeaders] = useState('')
   const [embedUrlStatus, setEmbedUrlStatus] = useState<{ ok: boolean; latency_ms: number | null; error?: string } | null>(null)
   const [embedUrlChecking, setEmbedUrlChecking] = useState(false)
   const embedDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -113,6 +117,10 @@ export function SettingsPage() {
       if (data.digest_recipients) setDigestRecipients(data.digest_recipients)
       if (data.llm_embed_base_url) setLlmEmbedBaseUrl(data.llm_embed_base_url)
       setLlmIncludeNodeIps(data.llm_include_node_ips ?? true)
+      if (data.prometheus_url) setPrometheusUrl(data.prometheus_url)
+      if (data.otlp_endpoint) setOtlpEndpoint(data.otlp_endpoint)
+      if (data.otlp_protocol) setOtlpProtocol(data.otlp_protocol)
+      if (data.otlp_headers) setOtlpHeaders(data.otlp_headers)
       if (data.ansible_endpoint_url) checkAnsible(data.ansible_endpoint_url)
       if (data.sonarqube_url) checkSonar(data.sonarqube_url)
       if (data.cxone_url) checkCxone(data.cxone_url)
@@ -221,6 +229,10 @@ export function SettingsPage() {
       jenkins_ingest_secret: jenkinsSecret || undefined,
       llm_embed_base_url: llmEmbedBaseUrl || undefined,
       llm_include_node_ips: llmIncludeNodeIps,
+      prometheus_url: prometheusUrl || undefined,
+      otlp_endpoint: otlpEndpoint || undefined,
+      otlp_protocol: otlpProtocol || undefined,
+      otlp_headers: otlpHeaders || undefined,
     }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['settings'] })
@@ -695,6 +707,45 @@ export function SettingsPage() {
               </label>
               <SecretInput value={ansibleToken} onChange={setAnsibleToken}
                 placeholder="Leave blank to keep existing" className={inputClass} />
+            </div>
+          </div>
+
+          {/* Monitoring */}
+          <div className="bg-white rounded-xl border border-gray-200 shadow-xs p-6 space-y-4">
+            <div>
+              <h2 className="text-base font-semibold text-gray-900">Monitoring</h2>
+              <p className="text-sm text-gray-500 mt-1">
+                Configure the Prometheus base URL and OTLP export target used for node metrics and traces.
+              </p>
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Prometheus URL</label>
+                <input type="text" value={prometheusUrl} onChange={(e) => setPrometheusUrl(e.target.value)}
+                  placeholder="http://prometheus-operated.monitoring.svc:9090"
+                  className={inputClass} />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">OTLP Endpoint</label>
+                <input type="text" value={otlpEndpoint} onChange={(e) => setOtlpEndpoint(e.target.value)}
+                  placeholder="http://<gateway-host>:30318"
+                  className={inputClass} />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">OTLP Protocol</label>
+                <select value={otlpProtocol} onChange={(e) => setOtlpProtocol(e.target.value)} className={inputClass}>
+                  <option value="http">http</option>
+                  <option value="grpc">grpc</option>
+                </select>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  OTLP Headers <span className="text-xs text-gray-400 font-normal">(optional)</span>
+                </label>
+                <input type="text" value={otlpHeaders} onChange={(e) => setOtlpHeaders(e.target.value)}
+                  placeholder="authorization=Bearer …"
+                  className={inputClass} />
+              </div>
             </div>
           </div>
         </div>

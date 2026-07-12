@@ -32,6 +32,11 @@ export interface PlatformSettings {
   // RAG embedding
   llm_embed_base_url: string | null
   llm_include_node_ips: boolean
+  // Monitoring
+  prometheus_url: string | null
+  otlp_endpoint: string | null
+  otlp_protocol: string | null
+  otlp_headers: string | null
 }
 
 export interface BootstrapResponse {
@@ -138,6 +143,11 @@ export const ansibleApi = {
     // RAG embedding
     llm_embed_base_url?: string
     llm_include_node_ips?: boolean
+    // Monitoring
+    prometheus_url?: string
+    otlp_endpoint?: string
+    otlp_protocol?: string
+    otlp_headers?: string
   }) => api.put<PlatformSettings>('/api/v1/settings', payload),
   bootstrap: (
     minion_id: string,

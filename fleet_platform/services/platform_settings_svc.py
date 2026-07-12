@@ -64,6 +64,9 @@ SALT_ALLOWED_FUNCTIONS = "salt_allowed_functions"  # JSON array of allowed funct
 SALT_DENIED_FUNCTIONS = "salt_denied_functions"  # JSON array of denied function names
 
 PROMETHEUS_URL = "prometheus_url"
+OTLP_ENDPOINT = "otlp_endpoint"
+OTLP_PROTOCOL = "otlp_protocol"
+OTLP_HEADERS = "otlp_headers"
 
 # Default set of Salt functions that may be executed via the ad-hoc command API.
 # Mirrors the original hardcoded frozenset in salt_tasks.py.
