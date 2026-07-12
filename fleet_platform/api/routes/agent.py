@@ -17,6 +17,7 @@ email, so the agent can never act as a confused deputy.
 
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
 import time
@@ -329,7 +330,7 @@ async def diff_artifact(
     live_content: str | None = None
     if target:
         playbooks_dir = await get_playbooks_dir(db)
-        roots = [d.resolve() for d in get_all_playbook_dirs(None, playbooks_dir)]
+        roots = [d.resolve() for d in await asyncio.to_thread(get_all_playbook_dirs, None, playbooks_dir)]
         candidate = (Path(playbooks_dir) / target).resolve()
         if any(candidate.is_relative_to(r) for r in roots) and candidate.is_file():
             live_content = candidate.read_text(errors="replace")
@@ -482,7 +483,7 @@ async def promote_artifact(
         raise HTTPException(status_code=404, detail=str(exc)) from exc
 
     playbooks_dir = await get_playbooks_dir(db)
-    roots = [d.resolve() for d in get_all_playbook_dirs(None, playbooks_dir)]
+    roots = [d.resolve() for d in await asyncio.to_thread(get_all_playbook_dirs, None, playbooks_dir)]
     dest = (Path(playbooks_dir) / target).resolve()
     # Promotion target must stay inside an allowed playbook root.
     if not any(dest.is_relative_to(r) for r in roots):

@@ -1,6 +1,7 @@
 # fleet_platform/api/routes/ansible/files.py
 """Playbook file management routes: /files/..."""
 
+import asyncio
 from pathlib import Path
 
 from fastapi import Body, Depends, HTTPException, Query
@@ -72,7 +73,7 @@ async def get_playbook_file(
     setting = result.scalar_one_or_none()
     sources_json = setting.value if setting else None
 
-    all_dirs = get_all_playbook_dirs(sources_json, _PLAYBOOKS_DIR)
+    all_dirs = await asyncio.to_thread(get_all_playbook_dirs, sources_json, _PLAYBOOKS_DIR)
     allowed_roots = [str(d.resolve()) for d in all_dirs]
 
     # Resolve: if path is relative, use source_dir or builtin dir as base
@@ -107,7 +108,7 @@ async def update_playbook_file(
     setting = result.scalar_one_or_none()
     sources_json = setting.value if setting else None
 
-    all_dirs = get_all_playbook_dirs(sources_json, _PLAYBOOKS_DIR)
+    all_dirs = await asyncio.to_thread(get_all_playbook_dirs, sources_json, _PLAYBOOKS_DIR)
     allowed_roots = [str(d.resolve()) for d in all_dirs]
 
     # Resolve: if path is relative, use source_dir or builtin dir as base
