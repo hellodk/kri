@@ -125,6 +125,16 @@ def bootstrap_node(
 
         *_, controller_pubkey = _get_bootstrap_settings(db)
 
+        # OTLP push settings (#968) — read while the db session is open, injected
+        # below as extravars so the otel_collector role targets the operator-
+        # configured endpoint instead of its placeholder default. Unset settings
+        # are omitted so the role's defaults apply.
+        from fleet_platform.services.platform_settings_svc import get_setting_sync
+
+        _otlp_endpoint = get_setting_sync(db, "otlp_endpoint")
+        _otlp_protocol = get_setting_sync(db, "otlp_protocol")
+        _otlp_headers = get_setting_sync(db, "otlp_headers")
+
         # A) Resolve the multi-master list (#534, epic #537).
         # If salt_master_ids given → load exactly those rows.
         # Otherwise → all enabled SaltMaster rows (HA: every master gets listed).
@@ -336,6 +346,13 @@ def bootstrap_node(
                 runtime_extravars["node_exporter_listen_address"] = node_exporter_listen_address
             if node_exporter_url_override is not None:
                 runtime_extravars["node_exporter_url_override"] = node_exporter_url_override
+            # OTLP push target for the otel_collector role (#968).
+            if _otlp_endpoint:
+                runtime_extravars["otlp_endpoint"] = _otlp_endpoint
+            if _otlp_protocol:
+                runtime_extravars["otlp_protocol"] = _otlp_protocol
+            if _otlp_headers:
+                runtime_extravars["otlp_headers"] = _otlp_headers
 
             _bootstrap_playbook = str(_PLAYBOOKS_DIR / "bootstrap_node.yml")
             _extravars = {

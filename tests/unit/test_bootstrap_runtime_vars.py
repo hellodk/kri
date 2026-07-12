@@ -197,3 +197,27 @@ def test_bootstrap_node_extravars_include_runtime_overrides():
     assert "node_exporter_url_override" in sig
     # bootstrap_full was removed in the unified-bootstrap change
     assert "bootstrap_full" not in sig
+
+
+# ── 4. bootstrap_node injects OTLP push settings into extravars (#968) ─────────
+
+
+def test_bootstrap_node_wires_otlp_settings_into_extravars():
+    """OTLP push settings (from PlatformSettings) are read while the db session is
+    open and conditionally merged into runtime_extravars, so the otel_collector
+    role targets the operator-configured endpoint. Source-inspection style,
+    consistent with the node_exporter runtime-override tests above.
+    """
+    from pathlib import Path
+
+    src = Path("fleet_platform/workers/ansible_tasks.py").read_text()
+
+    # Read all three OTLP settings from PlatformSettings.
+    assert "get_setting_sync(db, \"otlp_endpoint\")" in src
+    assert "get_setting_sync(db, \"otlp_protocol\")" in src
+    assert "get_setting_sync(db, \"otlp_headers\")" in src
+
+    # Conditionally inject into runtime_extravars (omitted when unset → role defaults).
+    assert 'runtime_extravars["otlp_endpoint"]' in src
+    assert 'runtime_extravars["otlp_protocol"]' in src
+    assert 'runtime_extravars["otlp_headers"]' in src
