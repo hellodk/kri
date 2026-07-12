@@ -50,7 +50,8 @@ export const ResourcesTab = memo(function ResourcesTab({
           <p className="text-sm font-medium text-amber-800">Metrics not available</p>
           <p className="text-xs text-amber-600 mt-1">{metricsData?.reason ?? 'Unknown reason'}</p>
           <p className="text-xs text-gray-500 mt-2">
-            Deploy node_exporter via the Overview tab → Deploy Monitoring button.
+            Monitoring is installed automatically during bootstrap. If metrics are
+            missing, re-run bootstrap for this node to reinstall node_exporter.
           </p>
         </div>
       ) : (

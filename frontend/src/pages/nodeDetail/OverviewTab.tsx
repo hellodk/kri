@@ -3,7 +3,6 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { Link } from 'react-router-dom'
 import { fleetApi } from '../../api/fleet'
 import { ansibleApi } from '../../api/ansible'
-import { playbooksApi } from '../../api/playbooks'
 import { api } from '../../api/client'
 import { saltOpsApi } from '../../api/saltOps'
 import { saltMasterBadge } from '../../lib/saltMasterHelpers'
@@ -46,7 +45,6 @@ export const OverviewTab = memo(function OverviewTab({
   const [rebootstrapping, setRebootstrapping] = useState(false)
   const [actionResult, setActionResult] = useState<string | null>(null)
   const [runningAction, setRunningAction] = useState(false)
-  const [deployingMonitoring, setDeployingMonitoring] = useState(false)
   const [rebootConfirm, setRebootConfirm] = useState(false)
   const [hardenConfirm, setHardenConfirm] = useState(false)
   const [hardeningAction, setHardeningAction] = useState(false)
@@ -129,19 +127,6 @@ export const OverviewTab = memo(function OverviewTab({
       toast(msg, 'error')
     } finally {
       setRunningAction(false)
-    }
-  }
-
-  async function deployNodeExporter() {
-    if (!node || !nodeId) return
-    setDeployingMonitoring(true)
-    try {
-      await playbooksApi.run('deploy_node_exporter.yml', 'node', nodeId, {})
-      toast('node_exporter deployment queued')
-    } catch (e: unknown) {
-      toast(e instanceof Error ? e.message : 'Deploy failed', 'error')
-    } finally {
-      setDeployingMonitoring(false)
     }
   }
 
@@ -588,14 +573,6 @@ export const OverviewTab = memo(function OverviewTab({
             title="Re-enable everything Harden disabled and restore Spotlight indexing"
           >
             Unharden
-          </button>
-          <button
-            onClick={deployNodeExporter}
-            disabled={deployingMonitoring}
-            className="px-3 py-1.5 text-xs font-medium bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg disabled:opacity-50 transition-colors"
-            title="Install and start Prometheus node_exporter on this node"
-          >
-            {deployingMonitoring ? 'Deploying…' : 'Deploy Monitoring'}
           </button>
         </div>
         {rebootConfirm && (

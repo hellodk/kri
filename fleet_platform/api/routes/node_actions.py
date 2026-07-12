@@ -332,7 +332,10 @@ async def get_node_metrics(
     total_points = sum(len(v) for v in results["series"].values())
     if total_points == 0:
         results["available"] = False
-        results["reason"] = f"No metrics for {instance} — is node_exporter running? Deploy it via the Overview tab."
+        results["reason"] = (
+            f"No metrics for {instance} — is node_exporter running? "
+            "Monitoring installs during bootstrap; re-run bootstrap for this node if it is missing."
+        )
 
     return results
 
