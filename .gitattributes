@@ -1,3 +1,4 @@
 playbooks/files/*.pkg filter=lfs diff=lfs merge=lfs -text
 playbooks/files/*.dmg filter=lfs diff=lfs merge=lfs -text
 playbooks/files/*.tar.gz filter=lfs diff=lfs merge=lfs -text
+playbooks/files/*.tar.xz filter=lfs diff=lfs merge=lfs -text

@@ -1,0 +1,147 @@
+---
+# playbooks/roles/salt_minion/tasks/install_linux_onedir.yml
+# Install salt-minion from the bundled Linux onedir tarball (AIR-GAPPED).
+#
+# Shared by install_debian.yml and install_redhat.yml (#970) — Linux minions no
+# longer need apt/dnf repo access. The pinned onedir tarball + its .sha256 are
+# bundled under playbooks/files/ and copied straight to the target — nothing is
+# downloaded from Artifactory or the internet. Mirrors the salt_master role's
+# install_linux_onedir.yml (#970) and the macOS air-gap pattern (#966).
+#
+# The onedir tarball expands to /opt/saltstack/salt/ which puts all Salt
+# binaries under /opt/saltstack/salt/bin/. A symlink pass puts salt-minion and
+# salt-call on PATH under /usr/local/bin. Since no package manager installs the
+# systemd unit for a onedir install, this task also writes one.
+#
+# NEEDS LIVE-ENVIRONMENT VALIDATION — no Linux node available to confirm:
+#   - That the onedir salt-minion binary runs correctly as a systemd Type=simple
+#     service (foreground, no daemonize flag) the way the packaged binary does.
+#   - Service start/enable/restart behaviour under tasks/service.yml.
+#
+# Only linux-x86_64 is bundled today; other arches are a follow-up.
+
+- name: Set Linux onedir tarball facts (minion)
+  set_fact:
+    salt_linux_tarball: "salt-{{ salt_version }}-onedir-linux-{{ salt_linux_arch | default('x86_64') }}.tar.xz"
+    salt_linux_tarball_local_path: "{{ playbook_dir }}/files/salt-{{ salt_version }}-onedir-linux-{{ salt_linux_arch | default('x86_64') }}.tar.xz"
+
+- name: Check if salt onedir is already installed at target version (minion)
+  shell: |
+    if [ -f /opt/saltstack/salt/bin/salt-minion ]; then
+      /opt/saltstack/salt/bin/salt-call --version 2>/dev/null | awk '{print $2}'
+    fi
+  register: installed_onedir_minion_version
+  changed_when: false
+  failed_when: false
+  become: false
+
+- name: Show installed onedir version (minion)
+  debug:
+    msg: >-
+      salt onedir {{ installed_onedir_minion_version.stdout | trim or 'not installed' }}
+      — target: {{ salt_version }}
+      — will install: {{ installed_onedir_minion_version.stdout | trim != salt_version }}
+
+# ── Deploy bundled tarball to target (air-gap; no download) ──────────────────
+
+- name: Copy bundled salt onedir tarball to target (minion)
+  copy:
+    src: "{{ salt_linux_tarball_local_path }}"
+    dest: "/tmp/{{ salt_linux_tarball }}"
+    mode: "0644"
+  become: false
+  when: installed_onedir_minion_version.stdout | trim != salt_version
+  timeout: 300
+
+- name: Copy bundled salt onedir tarball sha256 to target (minion)
+  copy:
+    src: "{{ salt_linux_tarball_local_path }}.sha256"
+    dest: "/tmp/{{ salt_linux_tarball }}.sha256"
+    mode: "0644"
+  become: false
+  when: installed_onedir_minion_version.stdout | trim != salt_version
+
+- name: Verify tarball sha256 before extract (minion)
+  shell: |
+    EXPECTED=$(awk '{print $1}' /tmp/{{ salt_linux_tarball }}.sha256)
+    ACTUAL=$(shasum -a 256 /tmp/{{ salt_linux_tarball }} | awk '{print $1}')
+    if [ "$EXPECTED" != "$ACTUAL" ]; then
+      echo "CHECKSUM MISMATCH: expected $EXPECTED got $ACTUAL" >&2; exit 1
+    fi
+    echo "Checksum OK: $ACTUAL"
+  when: installed_onedir_minion_version.stdout | trim != salt_version
+  changed_when: false
+
+- name: Create onedir install directory (minion)
+  file:
+    path: /opt/saltstack
+    state: directory
+    mode: "0755"
+  become: true
+  when: installed_onedir_minion_version.stdout | trim != salt_version
+
+- name: Extract salt onedir tarball (minion)
+  shell: tar -xJf /tmp/{{ salt_linux_tarball }} -C /opt/saltstack
+  become: true
+  when: installed_onedir_minion_version.stdout | trim != salt_version
+
+- name: Create /usr/local/bin symlinks for salt binaries (minion)
+  file:
+    src: "/opt/saltstack/salt/bin/{{ item }}"
+    dest: "/usr/local/bin/{{ item }}"
+    state: link
+    force: true
+  become: true
+  loop:
+    - salt-minion
+    - salt-call
+  when: installed_onedir_minion_version.stdout | trim != salt_version
+
+# No package manager involved in a onedir install, so the systemd unit that
+# ships inside the apt/dnf salt-minion package does not exist here — write it.
+# Idempotent: re-running with identical content reports no change.
+- name: Write systemd unit for onedir salt-minion
+  copy:
+    dest: /etc/systemd/system/salt-minion.service
+    mode: "0644"
+    content: |
+      [Unit]
+      Description=The Salt Minion
+      After=network.target
+
+      [Service]
+      Type=simple
+      ExecStart=/opt/saltstack/salt/bin/salt-minion
+      Restart=always
+      RestartSec=5
+
+      [Install]
+      WantedBy=multi-user.target
+  become: true
+  register: salt_minion_onedir_unit
+
+- name: Reload systemd after writing onedir unit
+  systemd:
+    daemon_reload: true
+  become: true
+  when: salt_minion_onedir_unit.changed
+
+- name: Clean up tmp files (minion)
+  shell: "rm -f /tmp/{{ salt_linux_tarball }} /tmp/{{ salt_linux_tarball }}.sha256"
+  become: false
+  changed_when: false
+  when: installed_onedir_minion_version.stdout | trim != salt_version
+
+- name: Confirm salt onedir installed at target version (minion)
+  shell: /opt/saltstack/salt/bin/salt-call --version 2>/dev/null | awk '{print $2}'
+  register: post_install_onedir_minion_version
+  changed_when: false
+  failed_when: salt_version not in (post_install_onedir_minion_version.stdout | default(''))
+  when: installed_onedir_minion_version.stdout | trim != salt_version
+
+- name: Show installed onedir version (minion)
+  debug:
+    msg: "salt onedir {{ post_install_onedir_minion_version.stdout | trim }} installed"
+  when:
+    - installed_onedir_minion_version.stdout | trim != salt_version
+    - post_install_onedir_minion_version is defined

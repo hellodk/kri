@@ -1,32 +1,8 @@
 ---
 # playbooks/roles/salt_minion/tasks/install_debian.yml
-# Install salt-minion via apt (Debian/Ubuntu). Dispatched only when
-# ansible_os_family == 'Debian' (see tasks/main.yml).
+# Install salt-minion on Debian/Ubuntu from the bundled onedir tarball
+# (AIR-GAPPED, #970) — no apt repo / internet access required on the target.
+# Dispatched only when ansible_os_family == 'Debian' (see tasks/main.yml).
 
-- name: Ensure keyrings dir exists (Debian)
-  file:
-    path: /etc/apt/keyrings
-    state: directory
-    mode: "0755"
-  become: true
-
-- name: Add Salt project repo key (Debian)
-  get_url:
-    url: "{{ salt_deb_gpg_url }}"
-    dest: /etc/apt/keyrings/salt-archive-keyring.pgp
-    mode: "0644"
-  become: true
-
-- name: Add Salt apt source (Debian)
-  apt_repository:
-    repo: "deb [signed-by=/etc/apt/keyrings/salt-archive-keyring.pgp] {{ salt_deb_repo_url }} stable main"
-    filename: salt
-    state: present
-  become: true
-
-- name: Install salt-minion (Debian/Ubuntu)
-  apt:
-    name: "salt-minion={{ salt_version }}*"
-    update_cache: true
-    state: present
-  become: true
+- name: Install salt-minion from bundled onedir tarball (Debian/Ubuntu)
+  include_tasks: install_linux_onedir.yml

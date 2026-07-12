@@ -34,9 +34,9 @@ salt_linux_airgap: false
 salt_linux_arch: "x86_64"
 
 # Tarball filename — assembled from version and arch.
-# Format: salt-<version>-onedir-linux-<arch>.tar.gz
+# Format: salt-<version>-onedir-linux-<arch>.tar.xz
 # Source: https://packages.broadcom.com/artifactory/saltproject-generic/onedir/<version>/
-salt_linux_tarball_name: "salt-{{ salt_version }}-onedir-linux-{{ salt_linux_arch }}.tar.gz"
+salt_linux_tarball_name: "salt-{{ salt_version }}-onedir-linux-{{ salt_linux_arch }}.tar.xz"
 
 # Official base URL for Linux onedir tarballs (used as last resort when
 # Artifactory mirror and local bundle are both unavailable).

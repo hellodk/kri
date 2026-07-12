@@ -1,29 +1,21 @@
 ---
-# tasks/install_linux_onedir.yml — install salt-master from a Linux onedir tarball
+# tasks/install_linux_onedir.yml — install salt-master from the bundled Linux
+# onedir tarball (AIR-GAPPED).
 #
-# Used when salt_linux_airgap=true (no internet on the target host).
-# Mirrors install_macos.yml: the controller downloads/uses the tarball and
-# copies it to the target via SSH — the target never needs internet access.
-#
-# Download priority:
-#   1. Artifactory mirror (artifactory_binary_url set) — fastest
-#   2. Local bundle  (playbooks/files/<salt_linux_tarball>)  — air-gapped fallback
-#   3. Official URL  (salt_linux_onedir_official_base)       — requires internet on controller
+# The pinned onedir tarball + its .sha256 are bundled under playbooks/files/
+# and copied straight to the target — nothing is downloaded from Artifactory
+# or the internet (#970, mirrors the macOS air-gap pattern from #966).
 #
 # The onedir tarball expands to /opt/saltstack/salt/ which puts all Salt
-# binaries under /opt/saltstack/salt/bin/.  A symlink pass puts salt-master,
+# binaries under /opt/saltstack/salt/bin/. A symlink pass puts salt-master,
 # salt-key, and salt-api on PATH under /usr/local/bin.
 #
-# Needs live-environment validation before first use:
-#   - Verify the tarball URL / checksum against packages.broadcom.com
-#   - Confirm the onedir layout is stable across point releases
-#   - Test service startup with the generated systemd unit
+# Only linux-x86_64 is bundled today; other arches are a follow-up.
 
 - name: Set Linux onedir tarball facts
   set_fact:
     salt_linux_tarball: "{{ salt_linux_tarball_name }}"
     salt_linux_tarball_local_path: "{{ playbook_dir }}/files/{{ salt_linux_tarball_name }}"
-    salt_linux_tarball_tmp: "/tmp/kri-{{ salt_linux_tarball_name }}"
 
 - name: Check if salt onedir is already installed at target version
   shell: |
@@ -42,111 +34,33 @@
       — target: {{ salt_version }}
       — will install: {{ installed_onedir_version.stdout | trim != salt_version }}
 
-# ── Source 1: Artifactory ─────────────────────────────────────────────────────
+# ── Deploy bundled tarball to target (air-gap; no download) ──────────────────
 
-- name: Download salt onedir tarball from Artifactory
-  get_url:
-    url: "{{ artifactory_binary_url }}/{{ salt_linux_tarball }}"
-    dest: "{{ salt_linux_tarball_tmp }}"
-    mode: "0644"
-    timeout: 120
-    validate_certs: false
-  delegate_to: localhost
-  become: false
-  register: artifactory_linux_download
-  when:
-    - installed_onedir_version.stdout | trim != salt_version
-    - artifactory_binary_url | length > 0
-  ignore_errors: true
-
-# ── Source 2: Local bundle (air-gapped fallback) ──────────────────────────────
-
-- name: Check if local Linux onedir bundle exists on controller
-  local_action: stat path="{{ salt_linux_tarball_local_path }}"
-  register: linux_pkg_stat
-  become: false
-  when:
-    - installed_onedir_version.stdout | trim != salt_version
-    - artifactory_linux_download is skipped or artifactory_linux_download is failed
-
-- name: Use local Linux onedir bundle (copy to tmp on controller)
+- name: Copy bundled salt onedir tarball to target
   copy:
     src: "{{ salt_linux_tarball_local_path }}"
-    dest: "{{ salt_linux_tarball_tmp }}"
-    mode: "0644"
-  delegate_to: localhost
-  become: false
-  when:
-    - installed_onedir_version.stdout | trim != salt_version
-    - artifactory_linux_download is skipped or artifactory_linux_download is failed
-    - linux_pkg_stat.stat is defined and linux_pkg_stat.stat.exists
-
-# ── Source 3: Official URL (requires internet on controller) ──────────────────
-
-- name: Download salt onedir tarball from official URL (last resort)
-  get_url:
-    url: "{{ salt_linux_onedir_official_base }}/{{ salt_linux_tarball }}"
-    dest: "{{ salt_linux_tarball_tmp }}"
-    mode: "0644"
-    timeout: 180
-  delegate_to: localhost
-  become: false
-  when:
-    - installed_onedir_version.stdout | trim != salt_version
-    - artifactory_linux_download is skipped or artifactory_linux_download is failed
-    - linux_pkg_stat.stat is not defined or not linux_pkg_stat.stat.exists
-
-# ── Verify tarball is ready ───────────────────────────────────────────────────
-
-- name: Verify Linux onedir tarball exists on controller before copying
-  local_action: stat path="{{ salt_linux_tarball_tmp }}"
-  register: linux_tarball_ready
-  become: false
-  failed_when: not linux_tarball_ready.stat.exists
-  when: installed_onedir_version.stdout | trim != salt_version
-
-# ── Optional sha512 checksum verify ──────────────────────────────────────────
-
-- name: Copy sha512 checksum file to controller tmp (if present locally)
-  copy:
-    src: "{{ salt_linux_tarball_local_path }}.sha512"
-    dest: "{{ salt_linux_tarball_tmp }}.sha512"
-    mode: "0644"
-  delegate_to: localhost
-  become: false
-  when: installed_onedir_version.stdout | trim != salt_version
-  failed_when: false
-
-# ── Deploy to target ──────────────────────────────────────────────────────────
-
-- name: Copy salt onedir tarball to target via SSH
-  copy:
-    src: "{{ salt_linux_tarball_tmp }}"
     dest: "/tmp/{{ salt_linux_tarball }}"
     mode: "0644"
   become: false
   when: installed_onedir_version.stdout | trim != salt_version
   timeout: 300
 
-- name: Copy sha512 checksum to target (if present)
+- name: Copy bundled salt onedir tarball sha256 to target
   copy:
-    src: "{{ salt_linux_tarball_tmp }}.sha512"
-    dest: "/tmp/{{ salt_linux_tarball }}.sha512"
+    src: "{{ salt_linux_tarball_local_path }}.sha256"
+    dest: "/tmp/{{ salt_linux_tarball }}.sha256"
     mode: "0644"
   become: false
   when: installed_onedir_version.stdout | trim != salt_version
-  failed_when: false
 
-- name: Verify tarball sha512 before extract
+- name: Verify tarball sha256 before extract
   shell: |
-    if [ -f /tmp/{{ salt_linux_tarball }}.sha512 ]; then
-      EXPECTED=$(awk '{print $1}' /tmp/{{ salt_linux_tarball }}.sha512)
-      ACTUAL=$(sha512sum /tmp/{{ salt_linux_tarball }} | awk '{print $1}')
-      if [ "$EXPECTED" != "$ACTUAL" ]; then
-        echo "CHECKSUM MISMATCH" >&2; exit 1
-      fi
+    EXPECTED=$(awk '{print $1}' /tmp/{{ salt_linux_tarball }}.sha256)
+    ACTUAL=$(shasum -a 256 /tmp/{{ salt_linux_tarball }} | awk '{print $1}')
+    if [ "$EXPECTED" != "$ACTUAL" ]; then
+      echo "CHECKSUM MISMATCH: expected $EXPECTED got $ACTUAL" >&2; exit 1
     fi
-    echo "ok"
+    echo "Checksum OK: $ACTUAL"
   when: installed_onedir_version.stdout | trim != salt_version
   changed_when: false
 
@@ -159,12 +73,7 @@
   when: installed_onedir_version.stdout | trim != salt_version
 
 - name: Extract salt onedir tarball
-  unarchive:
-    src: "/tmp/{{ salt_linux_tarball }}"
-    dest: /opt/saltstack
-    remote_src: true
-    extra_opts:
-      - "--strip-components=0"
+  shell: tar -xJf /tmp/{{ salt_linux_tarball }} -C /opt/saltstack
   become: true
   when: installed_onedir_version.stdout | trim != salt_version
 
@@ -185,10 +94,7 @@
   when: installed_onedir_version.stdout | trim != salt_version
 
 - name: Clean up tmp files
-  shell: >-
-    rm -f /tmp/{{ salt_linux_tarball }} /tmp/{{ salt_linux_tarball }}.sha512
-    {{ salt_linux_tarball_tmp }} {{ salt_linux_tarball_tmp }}.sha512
-  delegate_to: localhost
+  shell: "rm -f /tmp/{{ salt_linux_tarball }} /tmp/{{ salt_linux_tarball }}.sha256"
   become: false
   changed_when: false
   when: installed_onedir_version.stdout | trim != salt_version
