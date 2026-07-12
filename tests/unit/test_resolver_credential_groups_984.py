@@ -54,13 +54,15 @@ class _Row:
 
 def _make_async_db(first_results, scalar_results=None):
     """AsyncMock db.execute() side_effect: the first call is consumed via
-    ``.first()`` (the credential_groups tier); remaining calls consume from
-    ``scalar_results`` in order (e.g. the SSH_USERNAME global setting)."""
+    ``.all()`` (the credential_groups tier, #1004 C2 — iterates ALL
+    credential-bearing groups rather than taking just ``.first()``); remaining
+    calls consume from ``scalar_results`` in order (e.g. the SSH_USERNAME
+    global setting)."""
     db = AsyncMock(spec=AsyncSession)
     results = []
 
     r0 = MagicMock()
-    r0.first.return_value = first_results
+    r0.all.return_value = [first_results] if first_results is not None else []
     results.append(r0)
 
     for val in scalar_results or []:
@@ -77,7 +79,7 @@ def _make_sync_db(first_results, scalar_results=None):
     results = []
 
     r0 = MagicMock()
-    r0.first.return_value = first_results
+    r0.all.return_value = [first_results] if first_results is not None else []
     results.append(r0)
 
     for val in scalar_results or []:
@@ -122,15 +124,15 @@ async def test_async_credential_groups_tier_ssh_key():
 
 
 async def test_async_credential_groups_priority_ordering_handled_by_query():
-    """The priority tiebreak (Group.credential_priority DESC, name ASC) is
-    enforced by the ORDER BY + LIMIT 1 in _credential_group_stmt itself — the
-    resolver just takes whatever .first() returns. This test confirms the
-    resolver surfaces exactly that single winning row rather than re-deriving
-    priority itself."""
+    """The priority ordering (Group.credential_priority DESC, name ASC) is
+    enforced by the ORDER BY in _credential_group_stmt itself — the resolver
+    walks the ordered rows via ``.all()`` and returns the first USABLE one
+    (#1004 C2). This test confirms the resolver surfaces the winning row when
+    it is the only (and therefore first-usable) row returned."""
     winner_cred = _credential(kind="username_password", username="highpriority", secret_plain="hp-pw")
     node = _node()
     # Simulate the DB having already applied ORDER BY credential_priority DESC,
-    # name ASC, LIMIT 1 — .first() returns only the winning row.
+    # name ASC — .all() returns the winning row first.
     db = _make_async_db(_Row(winner_cred, "prod-high"))
 
     result = await resolve_node_credentials(node, db)

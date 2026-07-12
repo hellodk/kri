@@ -10,6 +10,9 @@ export interface GroupCredentials {
   session_max_mins: number
   session_retention_days: number
   credential_source: string
+  // The credential currently associated with this group via credential_groups
+  // (#1002); null when unmapped. Only present on GET, not the PATCH response.
+  credential_id?: string | null
 }
 
 export const groupsApi = {
@@ -35,6 +38,9 @@ export const groupsApi = {
     api.delete(`/api/v1/groups/${groupId}/members/${nodeId}`),
   getCredentials: (groupId: string) =>
     api.get<GroupCredentials>(`/api/v1/groups/${groupId}/credentials`),
+  // Associate (or clear, with null) an existing credential to a group (#1002).
+  associateCredential: (groupId: string, credentialId: string | null) =>
+    api.put<GroupCredentials>(`/api/v1/groups/${groupId}/credential`, { credential_id: credentialId }),
   updateCredentials: (
     groupId: string,
     payload: {

@@ -1,21 +1,55 @@
 ---
 # playbooks/roles/node_telemetry/tasks/install_linux.yml
-# psutil via the distro package manager. macmon has no Linux equivalent
+# psutil via the distro package manager (online, default) or a bundled wheel
+# (air-gapped, node_telemetry_airgap: true). macmon has no Linux equivalent
 # (Homebrew-only, Apple-Silicon-only tooling).
+#
+# AIR-GAP ARTIFACT STAGING (#1003) -------------------------------------------
+# When node_telemetry_airgap: true, stage the following under
+# playbooks/files/psutil-wheels/ BEFORE running this role:
+#   playbooks/files/psutil-wheels/psutil-<version>-cp3<X>-cp3<X>-manylinux_2_17_x86_64.manylinux2014_x86_64.whl
+#   playbooks/files/psutil-wheels/psutil-<version>-cp3<X>-cp3<X>-manylinux_2_17_aarch64.manylinux2014_aarch64.whl
+# One wheel per (python minor version, arch) combination actually present in
+# the fleet is enough — `pip --no-index --find-links` auto-selects the
+# matching wheel for the target's interpreter/arch; unmatched wheels are
+# simply ignored. Source wheels from a mirrored PyPI or `pip download` on a
+# machine with internet access, then copy the .whl files into that directory.
+# -----------------------------------------------------------------------------
 
-- name: Install python3-psutil (Debian/Ubuntu)
+- name: Install python3-psutil (Debian/Ubuntu, online)
   ansible.builtin.apt:
     name: "{{ node_telemetry_psutil_package_apt }}"
     state: present
     update_cache: true
   become: true
   failed_when: false
-  when: ansible_os_family == 'Debian'
+  when: ansible_os_family == 'Debian' and not (node_telemetry_airgap | default(false) | bool)
 
-- name: Install python3-psutil (RHEL/Rocky)
+- name: Install python3-psutil (RHEL/Rocky, online)
   ansible.builtin.dnf:
     name: "{{ node_telemetry_psutil_package_dnf }}"
     state: present
   become: true
   failed_when: false
-  when: ansible_os_family == 'RedHat'
+  when: ansible_os_family == 'RedHat' and not (node_telemetry_airgap | default(false) | bool)
+
+# ── Air-gapped path: bundled wheel dir, no apt/dnf/PyPI network access ──────
+- name: Copy bundled psutil wheel directory to target (air-gapped, Linux)
+  ansible.builtin.copy:
+    src: "{{ playbook_dir }}/files/psutil-wheels/"
+    dest: "/tmp/psutil-wheels/"
+    mode: "0644"
+  become: false
+  when:
+    - ansible_os_family in ['Debian', 'RedHat']
+    - node_telemetry_airgap | default(false) | bool
+
+- name: Install psutil from bundled wheel, no PyPI (air-gapped, Linux)
+  ansible.builtin.shell: python3 -m pip install --no-index --find-links=/tmp/psutil-wheels psutil
+  register: node_telemetry_psutil_airgap_install
+  changed_when: "'Successfully installed' in node_telemetry_psutil_airgap_install.stdout"
+  failed_when: false
+  become: false
+  when:
+    - ansible_os_family in ['Debian', 'RedHat']
+    - node_telemetry_airgap | default(false) | bool

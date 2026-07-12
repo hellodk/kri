@@ -38,12 +38,13 @@ from fleet_platform.services.platform_settings_svc import encrypt_secret
 
 
 def _make_db(cg_result, *scalar_returns):
-    """AsyncMock db: first execute() is consumed via ``.first()`` (credential_groups
-    tier); remaining calls via ``.scalar_one_or_none()`` (e.g. SSH_USERNAME)."""
+    """AsyncMock db: first execute() is consumed via ``.all()`` (credential_groups
+    tier, #1004 C2 — the resolver iterates ALL credential-bearing groups);
+    remaining calls via ``.scalar_one_or_none()`` (e.g. SSH_USERNAME)."""
     db = AsyncMock(spec=AsyncSession)
     results = []
     r0 = MagicMock()
-    r0.first.return_value = cg_result
+    r0.all.return_value = [cg_result] if cg_result is not None else []
     results.append(r0)
     for val in scalar_returns:
         r = MagicMock()
@@ -57,7 +58,7 @@ def _sync_db(cg_result, *scalar_returns):
     db = MagicMock()
     results = []
     r0 = MagicMock()
-    r0.first.return_value = cg_result
+    r0.all.return_value = [cg_result] if cg_result is not None else []
     results.append(r0)
     for val in scalar_returns:
         r = MagicMock()

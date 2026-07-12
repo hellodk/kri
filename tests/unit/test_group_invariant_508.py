@@ -256,17 +256,16 @@ async def test_delete_group_with_sole_member_node_raises_409():
     group = _make_group()
     group.id = group_id
 
-    # Build a mock member row with .node_id attribute
+    # A6 (#1004): delete_group now runs ONE aggregate query returning
+    # (node_id, total-membership-count) rows, iterated directly — not a members
+    # list + per-member COUNT.
     member_row = MagicMock()
     member_row.node_id = node_id
+    member_row.total = 1  # sole membership → would be orphaned
 
-    # execute call 1: _get_group_or_404
-    # execute call 2: fetch all GroupMember rows for this group → [member_row]
-    # execute call 3: count of node_id's total memberships → 1  (only this group)
     db = _db_with_execute_sequence(
         _scalar_one_or_none_result(group),  # _get_group_or_404
-        _scalars_all_result([member_row]),  # members of this group
-        _scalar_result(1),  # membership count for node_id
+        [member_row],  # membership_totals aggregate rows
     )
 
     claims = {"sub": str(uuid.uuid4()), "email": "admin@example.com", "role": "admin"}
@@ -292,18 +291,18 @@ async def test_delete_group_blocked_lists_affected_count():
     group = _make_group()
     group.id = group_id
 
-    # Two nodes, each belonging only to this group
+    # Two nodes, each belonging only to this group (total == 1 → both orphaned)
     member_a = MagicMock()
     member_a.node_id = node_id_a
+    member_a.total = 1
     member_b = MagicMock()
     member_b.node_id = node_id_b
+    member_b.total = 1
 
-    # execute sequence: get_group, members list, count for a, count for b
+    # A6 (#1004): single aggregate query returns both (node_id, total) rows.
     db = _db_with_execute_sequence(
         _scalar_one_or_none_result(group),
-        _scalars_all_result([member_a, member_b]),
-        _scalar_result(1),  # node_a has 1 membership
-        _scalar_result(1),  # node_b has 1 membership
+        [member_a, member_b],  # membership_totals aggregate rows
     )
 
     claims = {"sub": str(uuid.uuid4()), "email": "admin@example.com", "role": "admin"}

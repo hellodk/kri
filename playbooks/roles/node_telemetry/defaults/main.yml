@@ -10,3 +10,13 @@ node_telemetry_brew_packages:
 # Linux distro package names for the psutil python3 module.
 node_telemetry_psutil_package_apt: python3-psutil
 node_telemetry_psutil_package_dnf: python3-psutil
+
+# Air-gap toggle (#1003): when true, psutil/macmon are installed from bundled
+# artifacts under playbooks/files/ instead of apt/dnf/PyPI/Homebrew. See the
+# artifact-staging comment blocks at the top of install_linux.yml /
+# install_macos.yml for exactly which files must be staged.
+node_telemetry_airgap: false
+
+# Version tag of the bundled macmon binary (must match the staged filename
+# playbooks/files/macmon-<version>-macos-arm64 when node_telemetry_airgap: true).
+node_telemetry_macmon_version: "0.4.1"

@@ -327,11 +327,13 @@ class TestAutoAcceptOnBootstrap:
 class TestSaltMasterModelDefaults:
     """The ORM model must declare the right Python-level defaults."""
 
-    def test_tls_verify_default_is_false(self):
+    def test_tls_verify_default_is_true(self):
+        # #1005 S3: default flipped False→True so salt-api TLS is verified by
+        # default (MITM-safe); operators opt OUT per master if needed.
         from fleet_platform.models.salt_master import SaltMaster
 
         col = SaltMaster.__table__.c["tls_verify"]
-        assert col.default.arg is False
+        assert col.default.arg is True
 
     def test_auto_accept_default_is_true(self):
         from fleet_platform.models.salt_master import SaltMaster

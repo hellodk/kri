@@ -49,7 +49,9 @@ class SaltMaster(Base, TimestampMixin):
     token_delivery: Mapped[str] = mapped_column(String(50), nullable=False, default="ingest")
 
     # TLS + key-acceptance flags (#555)
-    tls_verify: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    # Default changed True (S3, #1005): verifying TLS by default prevents
+    # MITM on a hostile LAN; operators must now opt OUT rather than opt in.
+    tls_verify: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
     auto_accept: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
 
     # Health tracking

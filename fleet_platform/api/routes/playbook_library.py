@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import json
 import uuid
 from pathlib import Path
@@ -51,17 +52,20 @@ def _parse_sources(sources_json: str | None) -> list[dict]:
         return []
 
 
-def _dir_source_pairs(sources_json: str | None) -> list[tuple[Path, str, str]]:
+async def _dir_source_pairs(sources_json: str | None) -> list[tuple[Path, str, str]]:
     """Return list of (directory, source_key, source_label) for all present sources.
 
     Built-in dir is always first. Each configured source is paired with its
     key/label directly from the source config — no index arithmetic so absent
     directories never shift mappings (Fix #446).
+
+    ``get_all_playbook_dirs`` can perform a blocking git clone/fetch, so it is
+    run off the event loop via ``asyncio.to_thread`` (#999 follow-up, #1005).
     """
     from fleet_platform.services.playbook_sources import get_all_playbook_dirs  # local import to avoid circularity
 
     sources = _parse_sources(sources_json)
-    all_dirs = get_all_playbook_dirs(sources_json, _PLAYBOOKS_DIR)
+    all_dirs = await asyncio.to_thread(get_all_playbook_dirs, sources_json, _PLAYBOOKS_DIR)
 
     pairs: list[tuple[Path, str, str]] = []
     # The built-in dir (index 0 from get_all_playbook_dirs) is always _PLAYBOOKS_DIR if it exists.
@@ -121,7 +125,7 @@ async def list_library(
     catalog_map = await get_library(db)
 
     results: list[PlaybookLibraryEntryResponse] = []
-    for d, source_key, source_label in _dir_source_pairs(sources_json):
+    for d, source_key, source_label in await _dir_source_pairs(sources_json):
         for entry in discover_all(d):
             catalog_info = catalog_map.get((source_key, entry.filename), {})
             results.append(
@@ -219,7 +223,7 @@ async def enable_source_entries(
     discovered: list[dict] = []
     source_label = payload.source_key.split("/")[-1].replace(".git", "")
 
-    for d, sk, sl in _dir_source_pairs(sources_json):
+    for d, sk, sl in await _dir_source_pairs(sources_json):
         if sk == payload.source_key:
             source_label = sl
             for entry in discover_all(d):

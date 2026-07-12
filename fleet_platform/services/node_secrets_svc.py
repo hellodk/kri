@@ -1,6 +1,7 @@
 # fleet_platform/services/node_secrets_svc.py
 """Service layer for per-node Salt pillar secrets."""
 
+import asyncio
 import fcntl
 import uuid
 from pathlib import Path
@@ -81,20 +82,8 @@ async def get_decrypted_secrets(db: AsyncSession, node_id: uuid.UUID) -> dict[st
     return out
 
 
-async def write_node_pillar(node_id: uuid.UUID, minion_id: str, db: AsyncSession) -> None:
-    """Merge all node secrets into /srv/salt/pillar/{minion_id}.sls.
-
-    Reads existing pillar content, merges in the new secrets, and writes back.
-    The fleet_platform block (node_token, ingest_url) is preserved.
-    """
-    pillar_dir = await _get_pillar_dir(db)
-    sls_path = pillar_dir / f"{minion_id}.sls"
-    lock_path = sls_path.with_suffix(".lock")
-
-    # Fetch all decrypted secrets for this node before acquiring the lock so
-    # we hold the lock for the shortest possible time (DB I/O is outside it).
-    decrypted = await get_decrypted_secrets(db, node_id)
-
+def _write_node_pillar_sync(pillar_dir: Path, sls_path: Path, lock_path: Path, decrypted: dict[str, str]) -> None:
+    """Blocking flock + read-merge-write body for write_node_pillar — run via asyncio.to_thread."""
     pillar_dir.mkdir(parents=True, exist_ok=True)
     with open(lock_path, "w") as lock_fh:
         fcntl.flock(lock_fh, fcntl.LOCK_EX)
@@ -116,3 +105,23 @@ async def write_node_pillar(node_id: uuid.UUID, minion_id: str, db: AsyncSession
             + yaml.dump(merged, default_flow_style=False, allow_unicode=True)
         )
         # flock releases automatically when the `with` block exits
+
+
+async def write_node_pillar(node_id: uuid.UUID, minion_id: str, db: AsyncSession) -> None:
+    """Merge all node secrets into /srv/salt/pillar/{minion_id}.sls.
+
+    Reads existing pillar content, merges in the new secrets, and writes back.
+    The fleet_platform block (node_token, ingest_url) is preserved.
+    """
+    pillar_dir = await _get_pillar_dir(db)
+    sls_path = pillar_dir / f"{minion_id}.sls"
+    lock_path = sls_path.with_suffix(".lock")
+
+    # Fetch all decrypted secrets for this node before acquiring the lock so
+    # we hold the lock for the shortest possible time (DB I/O is outside it).
+    decrypted = await get_decrypted_secrets(db, node_id)
+
+    # The blocking fcntl.flock + read-merge-write must not run directly in
+    # the coroutine — it would freeze the event loop for every concurrent
+    # request. Offload to a worker thread (A4, #1005).
+    await asyncio.to_thread(_write_node_pillar_sync, pillar_dir, sls_path, lock_path, decrypted)

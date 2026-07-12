@@ -1075,6 +1075,10 @@ def provision_master(self, salt_master_id: str, action: str = "install") -> dict
                 "target_host": ssh_host,
                 "ansible_user": ssh_user,
                 "kri_salt_api_password": api_password,
+                # Air-gapped Linux install: bundled onedir tarball, no apt/dnf
+                # internet fetch (salt_master role tasks/main.yml gates this on
+                # _salt_os != 'macos', so it is a no-op on Darwin masters).
+                "salt_linux_airgap": True,
                 **password_extravars,
             }
             # Emit the full effective command (secrets masked) at the top of the log (#960).
@@ -1311,7 +1315,12 @@ def reconfigure_minions(self, master_id: str, node_ids: list[str]) -> dict:
     failed: list[str] = []
 
     for node_id in node_ids:
-        node_uuid = _uuid.UUID(node_id)
+        try:
+            node_uuid = _uuid.UUID(node_id)
+        except (ValueError, AttributeError, TypeError):
+            logger.warning("reconfigure_minions: invalid node_id=%r — skipping", node_id)
+            failed.append(node_id)
+            continue
 
         # 1. Load node + target master + node's current master, all in-session,
         # capturing scalars before the session closes (avoid DetachedInstanceError).

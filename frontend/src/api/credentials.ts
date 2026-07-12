@@ -8,6 +8,12 @@ export interface Credential {
   description: string | null
   created_at: string
   last_used_at: string | null
+  // Reference counts / secret presence — populated by the backend when
+  // available (#1002); treated as optional so the UI degrades gracefully
+  // if a given API version doesn't return them yet.
+  has_secret?: boolean
+  node_count?: number
+  group_count?: number
 }
 
 export interface CredentialCreate {

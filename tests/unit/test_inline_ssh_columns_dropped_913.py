@@ -129,7 +129,7 @@ def test_resolve_node_credentials_sync_via_store():
 
     db = MagicMock()
     cg_result = MagicMock()
-    cg_result.first.return_value = (cred, "prod")  # credential_groups tier resolves
+    cg_result.all.return_value = [(cred, "prod")]  # credential_groups tier resolves
     db.execute.return_value = cg_result
 
     result = resolve_node_credentials_sync(node, db)
@@ -154,7 +154,7 @@ def test_resolve_node_credentials_sync_falls_through_to_none():
     setting_row.is_encrypted = False
 
     execute_result = MagicMock()
-    execute_result.first.return_value = None  # credential_groups tier (#984) → no mapping
+    execute_result.all.return_value = []  # credential_groups tier (#984) → no mapping
     execute_result.scalar_one_or_none.side_effect = [
         setting_row,  # SSH_USERNAME global setting (login user only, never a password)
     ]

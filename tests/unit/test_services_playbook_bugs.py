@@ -197,7 +197,7 @@ def test_source_index_no_arithmetic():
 # ---------------------------------------------------------------------------
 
 
-def test_dir_source_pairs_source_key_correct_when_first_source_absent():
+async def test_dir_source_pairs_source_key_correct_when_first_source_absent():
     """_dir_source_pairs must assign the correct source_key to a git source even when
     the built-in /app/playbooks dir is absent (only the git clone dir exists).
 
@@ -230,7 +230,7 @@ def test_dir_source_pairs_source_key_correct_when_first_source_absent():
     ):
         from fleet_platform.api.routes.playbook_library import _dir_source_pairs
 
-        pairs = _dir_source_pairs(sources_json)
+        pairs = await _dir_source_pairs(sources_json)
 
     # Must find exactly one pair, and its source_key must be the git URL
     assert len(pairs) == 1, f"expected 1 pair, got {len(pairs)}: {pairs}"

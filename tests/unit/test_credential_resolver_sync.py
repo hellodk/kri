@@ -14,7 +14,7 @@ from fleet_platform.services.platform_settings_svc import encrypt_secret
 
 
 class _Row:
-    """Mimics a SQLAlchemy (Credential, group_name) Row consumed via ``.first()``."""
+    """Mimics a SQLAlchemy (Credential, group_name) Row consumed via ``.all()``."""
 
     def __init__(self, cred, name):
         self._t = (cred, name)
@@ -26,15 +26,16 @@ class _Row:
 def _sync_db(cg_result, *scalar_returns):
     """Build a MagicMock sync Session.
 
-    ``cg_result`` is what the credential_groups tier's ``.first()`` call
-    returns. Any further ``scalar_returns`` are consumed in order via
+    ``cg_result`` is what the credential_groups tier's ``.all()`` call
+    returns (a single row, wrapped in a list — or ``[]`` for no rows). Any
+    further ``scalar_returns`` are consumed in order via
     ``.scalar_one_or_none()`` by subsequent calls (e.g. SSH_USERNAME).
     """
     db = MagicMock()
     results = []
 
     r0 = MagicMock()
-    r0.first.return_value = cg_result
+    r0.all.return_value = [cg_result] if cg_result is not None else []
     results.append(r0)
 
     for val in scalar_returns:

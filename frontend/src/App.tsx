@@ -35,6 +35,7 @@ const SBOMExplorer = lazy(() => import('./pages/SBOMExplorer').then((m) => ({ de
 const LicensePage = lazy(() => import('./pages/LicensePage').then((m) => ({ default: m.LicensePage })))
 const GroupExplorer = lazy(() => import('./pages/GroupExplorer').then((m) => ({ default: m.GroupExplorer })))
 const GroupDetail = lazy(() => import('./pages/GroupDetail').then((m) => ({ default: m.GroupDetail })))
+const CredentialsPage = lazy(() => import('./pages/CredentialsPage').then((m) => ({ default: m.CredentialsPage })))
 const ExecutionHistory = lazy(() => import('./pages/ExecutionHistory').then((m) => ({ default: m.ExecutionHistory })))
 const JobDetail = lazy(() => import('./pages/JobDetail').then((m) => ({ default: m.JobDetail })))
 const PlaybookJobDetail = lazy(() => import('./pages/PlaybookJobDetail').then((m) => ({ default: m.PlaybookJobDetail })))
@@ -165,6 +166,7 @@ export default function App() {
             <Route path="/licenses" element={<LicensePage />} />
             <Route path="/groups" element={<GroupExplorer />} />
             <Route path="/groups/:groupId" element={<GroupDetail />} />
+            <Route path="/credentials" element={<CredentialsPage />} />
             <Route path="/executions" element={<ExecutionHistory />} />
             <Route path="/executions/:jobId" element={<JobDetail />} />
             <Route path="/playbook-job/:jobId" element={<PlaybookJobDetail />} />

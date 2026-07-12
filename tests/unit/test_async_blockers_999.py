@@ -99,13 +99,12 @@ def test_ios_tracking_svc_check_jenkins_agent_still_async():
     assert "async def check_jenkins_agent(" in text
 
 
-def test_playbook_library_call_site_intentionally_not_wrapped():
-    """fleet_platform/api/routes/playbook_library.py line ~64 sits inside the
-    sync helper `_dir_source_pairs` (a plain `def`, not `async def`), so it
-    cannot be awaited without first making that helper async — out of scope
-    for this fix. Document that it remains unwrapped."""
+def test_playbook_library_call_site_now_wrapped():
+    """The #999 follow-up (#1005): _dir_source_pairs was made async so the
+    get_all_playbook_dirs git-clone is offloaded via asyncio.to_thread instead
+    of blocking the event loop."""
     path = REPO_ROOT / "fleet_platform" / "api" / "routes" / "playbook_library.py"
     text = _text(path)
-    assert "def _dir_source_pairs(" in text
-    assert "async def _dir_source_pairs(" not in text
-    assert "all_dirs = get_all_playbook_dirs(sources_json, _PLAYBOOKS_DIR)" in text
+    assert "async def _dir_source_pairs(" in text
+    assert "asyncio.to_thread(get_all_playbook_dirs" in text
+    assert "async def _dir_source_pairs(" in text
