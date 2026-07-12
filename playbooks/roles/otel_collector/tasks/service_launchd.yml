@@ -1,0 +1,20 @@
+---
+# playbooks/roles/otel_collector/tasks/service_launchd.yml
+# launchd plist + load/start for otelcol-contrib (macOS only).
+
+- name: Install otelcol-contrib launchd plist
+  ansible.builtin.template:
+    src: com.otelcol.contrib.plist.j2
+    dest: /Library/LaunchDaemons/com.otelcol.contrib.plist
+    owner: root
+    group: wheel
+    mode: "0644"
+  become: true
+  notify: Restart otelcol (launchd)
+
+- name: Load and start otelcol-contrib via launchd
+  ansible.builtin.shell: |
+    launchctl load -w /Library/LaunchDaemons/com.otelcol.contrib.plist 2>/dev/null || true
+    launchctl start com.otelcol.contrib 2>/dev/null || true
+  become: true
+  changed_when: false

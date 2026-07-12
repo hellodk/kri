@@ -1,0 +1,21 @@
+---
+# playbooks/roles/otel_collector/tasks/service_systemd.yml
+# systemd unit for otelcol-contrib (Linux only). Runs as root — the collector
+# needs to reach the local node_exporter over loopback and push out over the
+# network; no dedicated system user is created (unlike node_exporter).
+
+- name: Install otelcol-contrib systemd unit
+  ansible.builtin.template:
+    src: otelcol.service.j2
+    dest: /etc/systemd/system/otelcol-contrib.service
+    mode: "0644"
+  become: true
+  notify: Restart otelcol (systemd)
+
+- name: Enable and start otelcol-contrib via systemd
+  ansible.builtin.systemd:
+    name: otelcol-contrib
+    enabled: true
+    state: started
+    daemon_reload: true
+  become: true

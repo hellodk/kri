@@ -100,8 +100,8 @@ def test_salt_play_roles_list_is_exact():
     )
 
 
-def test_monitoring_play_runs_only_node_exporter():
-    assert _play_role_names(_monitoring_play()) == ["node_exporter"]
+def test_monitoring_play_runs_node_exporter_and_otel():
+    assert _play_role_names(_monitoring_play()) == ["node_exporter", "otel_collector"]
 
 
 def test_node_exporter_play_is_not_gated_on_salt_reachability():

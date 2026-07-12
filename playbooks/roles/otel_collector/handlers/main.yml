@@ -1,0 +1,16 @@
+---
+# playbooks/roles/otel_collector/handlers/main.yml
+# Restart handlers, notified only on config/unit/plist change — the main service
+# tasks use `state: started`, never a forced `state: restarted`.
+
+- name: Restart otelcol (systemd)
+  ansible.builtin.systemd:
+    name: otelcol-contrib
+    state: restarted
+  become: true
+  when: ansible_system == "Linux"
+
+- name: Restart otelcol (launchd)
+  ansible.builtin.command: launchctl kickstart -k system/com.otelcol.contrib
+  become: true
+  when: ansible_system == "Darwin"

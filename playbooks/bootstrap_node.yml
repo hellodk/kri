@@ -14,6 +14,9 @@
 # Optional:
 #   artifactory_binary_url — Artifactory mirror base URL (air-gap mode)
 #   controller_pubkey      — SSH public key to add to authorized_keys
+#   otlp_endpoint          — OTLP push target for otel_collector (default: cluster otel-gateway)
+#   otlp_protocol          — 'http' or 'grpc' (default: 'http')
+#   otlp_headers           — Optional OTLP exporter headers (default: empty)
 #
 # Version pins: see group_vars/all.yml
 #
@@ -27,6 +30,8 @@
 #   playbooks/roles/salt_minion         — salt-minion install/config/service
 #   playbooks/roles/node_telemetry      — psutil/macmon
 #   playbooks/roles/node_exporter       — Prometheus node_exporter (Salt-independent)
+#   playbooks/roles/otel_collector      — otelcol-contrib: scrapes node_exporter,
+#                                          pushes OTLP metrics (Salt-independent, #968)
 #   playbooks/roles/kri_enroll          — Salt schedules + grains push
 
 # ── Play 1: node monitoring — independent of Salt ─────────────────────────────
@@ -47,6 +52,7 @@
 
   roles:
     - node_exporter
+    - otel_collector
 
 # ── Play 2: Salt enrolment + telemetry — gated on salt-master reachability ─────
 - name: Enrol fleet node into kri Salt fleet

@@ -1,0 +1,48 @@
+---
+# playbooks/roles/otel_collector/tasks/install.yml
+# Version-gated download + install of the otelcol-contrib binary. Shared by Linux
+# and macOS — otel_os/otel_arch are set by tasks/main.yml before this is included.
+# Mirrors playbooks/roles/node_exporter/tasks/install.yml so both Salt-independent
+# monitoring roles stay drift-free.
+#
+# NOTE (air-gap): the pinned otelcol-contrib binary is downloaded from GitHub
+# releases here. Bundling it under playbooks/files/ for air-gapped bootstrap is a
+# follow-up, the same way the salt pkg bundling is pending (see defaults/main.yml).
+
+- name: Set otelcol-contrib tarball name
+  ansible.builtin.set_fact:
+    otel_tarball: "otelcol-contrib_{{ otel_collector_version }}_{{ otel_os }}_{{ otel_arch }}.tar.gz"
+
+# Resolution precedence: otel_collector_url_override > artifactory_binary_url +
+# artifactory_otel_collector_path > otel_collector_official_base.
+- name: Resolve otelcol-contrib download URL
+  ansible.builtin.set_fact:
+    otel_download_url: >-
+      {%- if otel_collector_url_override -%}{{ otel_collector_url_override }}
+      {%- elif artifactory_binary_url -%}{{ artifactory_binary_url.rstrip('/') }}/{{ artifactory_otel_collector_path }}/{{ otel_tarball }}
+      {%- else -%}{{ otel_collector_official_base }}/{{ otel_tarball }}
+      {%- endif -%}
+
+- name: Check existing otelcol-contrib version
+  ansible.builtin.shell: "{{ otel_collector_install_dir }}/otelcol-contrib --version 2>&1 | awk '{print $NF}'"
+  register: otel_installed_version
+  failed_when: false
+  changed_when: false
+  become: false
+
+- name: Download otelcol-contrib tarball
+  ansible.builtin.get_url:
+    url: "{{ otel_download_url }}"
+    dest: "/tmp/{{ otel_tarball }}"
+    mode: "0644"
+  become: false
+  when: otel_installed_version.stdout.strip() != otel_collector_version
+
+- name: Extract and install otelcol-contrib binary
+  ansible.builtin.shell: |
+    mkdir -p /tmp/otelcol-contrib-{{ otel_collector_version }}
+    tar -xzf /tmp/{{ otel_tarball }} -C /tmp/otelcol-contrib-{{ otel_collector_version }}
+    cp /tmp/otelcol-contrib-{{ otel_collector_version }}/otelcol-contrib {{ otel_collector_install_dir }}/otelcol-contrib
+    chmod 0755 {{ otel_collector_install_dir }}/otelcol-contrib
+  become: true
+  when: otel_installed_version.stdout.strip() != otel_collector_version

@@ -1,0 +1,41 @@
+---
+# playbooks/roles/otel_collector/defaults/main.yml
+# Canonical otel_collector role defaults. Mirrors the variable scheme used by
+# playbooks/roles/node_exporter so the two Salt-independent monitoring roles
+# stay drift-free.
+
+# NOTE: pin verified against the official opentelemetry-collector-releases
+# GitHub release list. Confirm before relying on it in an air-gapped bundle.
+otel_collector_version: "0.119.0"
+
+otel_collector_install_dir: /usr/local/bin
+otel_collector_config_path: /etc/otelcol-contrib/config.yaml
+
+# --- OTLP push target (kri Settings → Bootstrap; passed as extravars) ---
+# Default OTLP target = cluster otel-gateway NodePort (HTTP). Operator overrides
+# via bootstrap extravars / kri Settings. Verified running: monitoring/otel-gateway.
+otlp_endpoint: "http://100.89.50.27:30318"
+otlp_protocol: "http"
+otlp_headers: ""
+
+# --- Download source resolution ---
+# Precedence: otel_collector_url_override > artifactory_binary_url +
+# artifactory_otel_collector_path > otel_collector_official_base.
+# NOTE (air-gap): unlike node_exporter this is not yet bundled under
+# playbooks/files/ — that is a follow-up, same as the pending salt pkg bundling.
+otel_collector_url_override: ""
+artifactory_binary_url: ""
+artifactory_otel_collector_path: "otel-collector/{{ otel_collector_version }}"
+otel_collector_official_base: "https://github.com/open-telemetry/opentelemetry-collector-releases/releases/download/v{{ otel_collector_version }}"
+
+_kri_var_descriptions:
+  otel_collector_version: "otelcol-contrib release version to install (without leading v)."
+  otel_collector_install_dir: "Directory the otelcol-contrib binary is installed into."
+  otel_collector_config_path: "Path to the rendered otelcol-contrib config.yaml."
+  otlp_endpoint: "OTLP push target (http(s)://host:port). Passed as an extravar from kri Settings."
+  otlp_protocol: "OTLP wire protocol: 'http' (otlphttp exporter) or 'grpc' (otlp exporter)."
+  otlp_headers: "Optional OTLP exporter headers block (YAML mapping text), e.g. auth headers. Empty by default."
+  otel_collector_url_override: "Full URL override for the otelcol-contrib tarball. Takes precedence over artifactory/official resolution."
+  artifactory_binary_url: "Base URL of an Artifactory (or similar) binary mirror. Leave blank to use the official GitHub release URL."
+  artifactory_otel_collector_path: "Path segment under artifactory_binary_url where otelcol-contrib tarballs live."
+  otel_collector_official_base: "Official upstream GitHub release base URL, used when no artifactory/override is set."

@@ -1,0 +1,48 @@
+---
+# playbooks/roles/otel_collector/tasks/main.yml
+# Canonical otel_collector role. Derives OS/arch facts itself (no dependency on a
+# `common` role) then installs the binary and configures the OS-appropriate service.
+#
+# IMPORTANT: this role runs in Play 1 of bootstrap_node.yml (decoupled from Salt,
+# #967/#968). It must NEVER short-circuit the play early on a per-host basis —
+# doing so aborts the whole play, not just this host.
+
+- name: Set otel_collector OS/arch facts (Linux)
+  ansible.builtin.set_fact:
+    otel_os: "linux"
+    otel_arch: "{{ 'arm64' if ansible_architecture in ['arm64', 'aarch64'] else 'amd64' }}"
+  when: ansible_system == "Linux"
+
+- name: Set otel_collector OS/arch facts (macOS)
+  ansible.builtin.set_fact:
+    otel_os: "darwin"
+    otel_arch: "{{ 'arm64' if ansible_architecture in ['arm64', 'aarch64'] else 'amd64' }}"
+  when: ansible_system == "Darwin"
+
+- name: Install otelcol-contrib binary
+  ansible.builtin.include_tasks: install.yml
+
+- name: Ensure otelcol-contrib config directory exists
+  ansible.builtin.file:
+    path: "{{ otel_collector_config_path | dirname }}"
+    state: directory
+    mode: "0755"
+  become: true
+
+- name: Render otelcol config
+  ansible.builtin.template:
+    src: otelcol-config.yaml.j2
+    dest: "{{ otel_collector_config_path }}"
+    mode: "0644"
+  become: true
+  notify:
+    - Restart otelcol (launchd)
+    - Restart otelcol (systemd)
+
+- name: Configure otelcol launchd service (macOS)
+  ansible.builtin.include_tasks: service_launchd.yml
+  when: ansible_system == "Darwin"
+
+- name: Configure otelcol systemd service (Linux)
+  ansible.builtin.include_tasks: service_systemd.yml
+  when: ansible_system == "Linux"

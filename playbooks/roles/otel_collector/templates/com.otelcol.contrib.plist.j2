@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>com.otelcol.contrib</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>{{ otel_collector_install_dir }}/otelcol-contrib</string>
+    <string>--config</string>
+    <string>{{ otel_collector_config_path }}</string>
+  </array>
+  <key>RunAtLoad</key>
+  <true/>
+  <key>KeepAlive</key>
+  <true/>
+  <key>StandardOutPath</key>
+  <string>/var/log/otelcol-contrib.log</string>
+  <key>StandardErrorPath</key>
+  <string>/var/log/otelcol-contrib.log</string>
+</dict>
+</plist>
