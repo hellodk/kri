@@ -64,7 +64,11 @@
 - name: Verify tarball sha256 before extract (minion)
   shell: |
     EXPECTED=$(awk '{print $1}' /tmp/{{ salt_linux_tarball }}.sha256)
-    ACTUAL=$(shasum -a 256 /tmp/{{ salt_linux_tarball }} | awk '{print $1}')
+    if command -v sha256sum >/dev/null 2>&1; then
+      ACTUAL=$(sha256sum /tmp/{{ salt_linux_tarball }} | awk '{print $1}')
+    else
+      ACTUAL=$(shasum -a 256 /tmp/{{ salt_linux_tarball }} | awk '{print $1}')
+    fi
     if [ "$EXPECTED" != "$ACTUAL" ]; then
       echo "CHECKSUM MISMATCH: expected $EXPECTED got $ACTUAL" >&2; exit 1
     fi
@@ -111,7 +115,7 @@
 
       [Service]
       Type=simple
-      ExecStart=/opt/saltstack/salt/bin/salt-minion
+      ExecStart=/opt/saltstack/salt/bin/salt-minion --config-dir=/etc/salt
       Restart=always
       RestartSec=5
 

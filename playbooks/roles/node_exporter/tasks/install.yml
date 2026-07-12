@@ -38,7 +38,11 @@
 - name: Verify node_exporter tarball checksum
   ansible.builtin.shell: |
     EXPECTED=$(cat /tmp/{{ ne_tarball }}.sha256 | awk '{print $1}')
-    ACTUAL=$(shasum -a 256 /tmp/{{ ne_tarball }} | awk '{print $1}')
+    if command -v sha256sum >/dev/null 2>&1; then
+      ACTUAL=$(sha256sum /tmp/{{ ne_tarball }} | awk '{print $1}')
+    else
+      ACTUAL=$(shasum -a 256 /tmp/{{ ne_tarball }} | awk '{print $1}')
+    fi
     if [ "$EXPECTED" != "$ACTUAL" ]; then
       echo "CHECKSUM MISMATCH: expected $EXPECTED got $ACTUAL" >&2
       exit 1
