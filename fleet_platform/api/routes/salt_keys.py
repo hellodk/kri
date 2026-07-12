@@ -4,6 +4,7 @@ Removes PKI-filesystem reads; all key operations are routed through the
 default SaltMaster's salt-api (rest_cherrypy) using the wheel client.
 """
 
+import asyncio
 import re
 from typing import Any
 
@@ -74,7 +75,7 @@ async def list_keys(
         return _DEGRADED_NO_MASTER
 
     try:
-        data = run_wheel(master, "key.list_all")
+        data = await asyncio.to_thread(run_wheel, master, "key.list_all")
     except SaltApiError as exc:
         return _empty_degraded(exc.reason)
 
@@ -103,7 +104,7 @@ async def accept_key(
         raise HTTPException(status_code=503, detail="No salt-master configured")
 
     try:
-        run_wheel(master, "key.accept", match=minion_id)
+        await asyncio.to_thread(run_wheel, master, "key.accept", match=minion_id)
     except SaltApiError as exc:
         raise HTTPException(status_code=502, detail=exc.reason) from exc
 
@@ -132,7 +133,7 @@ async def reject_key(
         raise HTTPException(status_code=503, detail="No salt-master configured")
 
     try:
-        run_wheel(master, "key.reject", match=minion_id)
+        await asyncio.to_thread(run_wheel, master, "key.reject", match=minion_id)
     except SaltApiError as exc:
         raise HTTPException(status_code=502, detail=exc.reason) from exc
 
@@ -161,7 +162,7 @@ async def delete_key(
         raise HTTPException(status_code=503, detail="No salt-master configured")
 
     try:
-        run_wheel(master, "key.delete", match=minion_id)
+        await asyncio.to_thread(run_wheel, master, "key.delete", match=minion_id)
     except SaltApiError as exc:
         raise HTTPException(status_code=502, detail=exc.reason) from exc
 

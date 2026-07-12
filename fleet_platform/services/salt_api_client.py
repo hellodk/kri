@@ -12,7 +12,7 @@ import requests
 from fleet_platform.models.salt_master import SaltMaster
 from fleet_platform.services.platform_settings_svc import decrypt_secret
 
-_API_TIMEOUT = 10  # seconds
+_API_TIMEOUT = 4  # seconds (kept low: blocking probe runs via asyncio.to_thread, #990)
 
 
 class SaltApiError(Exception):
