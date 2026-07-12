@@ -42,12 +42,19 @@ def test_fleet_import_commit_does_not_write_node_credential_id():
     )
 
 
-def test_fleet_import_commit_does_not_upsert_owner_ssh_credential():
+def test_fleet_import_commit_does_not_set_per_node_credential():
     src = _FLEET_PY.read_text()
-    assert "upsert_owner_ssh_credential" not in src, (
-        "fleet.py must no longer call upsert_owner_ssh_credential to create a "
-        "per-node Credential during import (#986)."
+    assert "node.credential_id =" not in src, (
+        "fleet.py import must not write a per-node credential (#986)."
     )
+
+
+def test_fleet_import_routes_creds_to_group_credential():
+    src = _FLEET_PY.read_text()
+    # Import-supplied SSH creds create/update the TARGET GROUP's credential (#988),
+    # not a per-node one — restoring the workflow within the group-scoped model.
+    assert "set_group_credential" in src
+    assert "upsert_owner_ssh_credential" in src
 
 
 def test_fleet_import_commit_falls_back_to_default_group():

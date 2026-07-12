@@ -401,12 +401,20 @@ async def nodes_using_credential(credential_id, db: AsyncSession) -> list[tuple[
     for n in candidates:
         if n.id in seen:
             continue
+        # Mirror the resolver exactly (#988/C1): tier-1b (credential_groups) wins
+        # only when its credential has a USABLE secret; a secret-less winner (e.g.
+        # the seeded default-bootstrap with no global password) is skipped just as
+        # the resolver skips it. When tier-1b has a usable winner, the resolver
+        # stops there — so the legacy Group.credential_id tier is consulted ONLY
+        # when tier-1b produced no usable winner (else we'd mis-attribute).
         _cg_row = (await db.execute(_credential_group_stmt(n.id))).first()
         if _cg_row is not None:
             _cred, _gname = _cg_row
-            if _cred.id == credential_id:
-                results.append((n, f"group:{_gname}"))
-                seen.add(n.id)
+            if has_usable_secret(_credential_to_creds(_cred, f"group:{_gname}")):
+                if _cred.id == credential_id:
+                    results.append((n, f"group:{_gname}"))
+                    seen.add(n.id)
+                # Usable winner resolved — do not fall through to the legacy tier.
                 continue
         group = (await db.execute(_primary_group_stmt(n.id))).scalar_one_or_none()
         if group is not None and group.credential_id == credential_id:

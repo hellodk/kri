@@ -282,6 +282,40 @@ async def import_commit(
                     )
                 )
 
+    # Import-supplied SSH creds become the TARGET GROUP's credential (new model,
+    # #988): create/update a Credential from the inline creds and map it to the
+    # group via credential_groups, so every imported node in that group resolves
+    # it. This restores the "type creds during import" workflow inside the
+    # group-scoped model (Phase 3 will replace the raw fields with a picker).
+    if payload.ssh_username or _ssh_pw or _ssh_key:
+        from fleet_platform.models.group import Group
+        from fleet_platform.services.credential_group_svc import (
+            get_group_credential_id,
+            set_group_credential,
+        )
+        from fleet_platform.services.ssh_credential_link import upsert_owner_ssh_credential
+
+        _target_group_id: uuid.UUID | None = None
+        if payload.group_id:
+            _target_group_id = uuid.UUID(payload.group_id)
+        else:
+            _dg = (await db.execute(select(Group).where(Group.name == "default"))).scalar_one_or_none()
+            _target_group_id = _dg.id if _dg is not None else None
+
+        if _target_group_id is not None:
+            _grp = await db.get(Group, _target_group_id)
+            _cred_id = await upsert_owner_ssh_credential(
+                db,
+                owner_name=f"group:{_grp.name}",
+                current_credential_id=await get_group_credential_id(db, _target_group_id),
+                ssh_username=payload.ssh_username,
+                ssh_password=_ssh_pw,
+                ssh_key=_ssh_key,
+                ssh_auth_mode=payload.ssh_auth_mode or ("key" if (_ssh_key and not _ssh_pw) else "password"),
+            )
+            if _cred_id is not None:
+                await set_group_credential(db, _target_group_id, _cred_id)
+
     await audit(
         db,
         actor=claims["email"],
