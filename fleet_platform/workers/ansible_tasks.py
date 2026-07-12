@@ -53,11 +53,13 @@ _TRUNCATION_SENTINEL = "\n\n[output truncated at 2 MB — full log not retained]
 def _mask_extravar(key: str, value: object) -> str:
     """Render an extravar value for display, masking secrets (#960).
 
-    Any key hinting at a credential (pass/password/token/secret/credential, or
-    ending in _key) is redacted to ****; long non-secret values are truncated.
+    Any key hinting at a credential (pass/password/token/secret/credential,
+    HTTP auth headers like otlp_headers/authorization/bearer, or ending in _key)
+    is redacted to ****; long non-secret values are truncated (#960, #991 S1).
     """
     kl = key.lower()
-    if any(h in kl for h in ("pass", "token", "secret", "credential")) or kl.endswith("_key"):
+    _secret_hints = ("pass", "token", "secret", "credential", "header", "authorization", "bearer")
+    if any(h in kl for h in _secret_hints) or kl.endswith("_key"):
         return "****"
     s = str(value)
     return s if len(s) <= 120 else s[:117] + "..."
@@ -375,7 +377,9 @@ def bootstrap_node(
                 **runtime_extravars,
             }
             # Emit the full effective command (secrets masked) at the top of the log (#960).
-            _append_capped(stdout_lines, _format_ansible_cmdline(_bootstrap_playbook, str(inv_path), _extravars), _trunc_ref)
+            _append_capped(
+                stdout_lines, _format_ansible_cmdline(_bootstrap_playbook, str(inv_path), _extravars), _trunc_ref
+            )
 
             thread, runner = ansible_runner.run_async(
                 private_data_dir=tmpdir,
@@ -556,9 +560,7 @@ def bootstrap_node(
                             candidate_name,
                         )
             except Exception:
-                logger.exception(
-                    "bootstrap_node: as_master registration/provisioning failed node_id=%s", node_id
-                )
+                logger.exception("bootstrap_node: as_master registration/provisioning failed node_id=%s", node_id)
 
         # 6a. (#555) Auto-accept minion key on each master that has auto_accept=True.
         # Runs only on successful bootstrap; never blocks or fails the overall task.
@@ -1045,7 +1047,9 @@ def provision_master(self, salt_master_id: str, action: str = "install") -> dict
                 **password_extravars,
             }
             # Emit the full effective command (secrets masked) at the top of the log (#960).
-            _append_capped(stdout_lines, _format_ansible_cmdline(_provision_playbook, str(inv_path), _extravars), _trunc_ref)
+            _append_capped(
+                stdout_lines, _format_ansible_cmdline(_provision_playbook, str(inv_path), _extravars), _trunc_ref
+            )
 
             thread, runner = ansible_runner.run_async(
                 private_data_dir=tmpdir,
@@ -1417,9 +1421,7 @@ def reconfigure_minions(self, master_id: str, node_ids: list[str]) -> dict:
                 exc.reason,
             )
         except Exception as exc:  # noqa: BLE001
-            logger.warning(
-                "reconfigure_minions: key.accept unexpected error minion_id=%s: %s", minion_id, exc
-            )
+            logger.warning("reconfigure_minions: key.accept unexpected error minion_id=%s: %s", minion_id, exc)
 
         # 5. Re-point ownership: the target master now owns this node in kri.
         with get_sync_db() as db:

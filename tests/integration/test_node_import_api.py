@@ -17,9 +17,9 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_asyn
 from fleet_platform.core.auth import create_access_token, hash_password
 from fleet_platform.core.config import settings
 from fleet_platform.models import Base, User
-from fleet_platform.models.credential import Credential
 from fleet_platform.models.group import Group, GroupMember
 from fleet_platform.models.node import Node
+from fleet_platform.services.credential_resolver import resolve_node_credentials
 
 # ─── Fixtures ──────────────────────────────────────────────────────────────────
 
@@ -386,7 +386,11 @@ async def test_commit_persists_ssh_password_credential(
     operator_client: AsyncClient,
     test_engine,
 ):
-    """SSH password supplied at import is persisted to the node's credential (#dead-field fix)."""
+    """SSH password supplied at import resolves via the node's GROUP credential.
+
+    Credentials are group-scoped now (#986/#989): the import-supplied SSH creds
+    are stored on the target group's credential (#988), not a per-node FK — so we
+    assert resolution through the group, not node.credential_id (#991 C7)."""
     rows = [
         {
             "minion_id": "commit-cred-node-1",
@@ -410,11 +414,11 @@ async def test_commit_persists_ssh_password_credential(
     TestSession = async_sessionmaker(test_engine, expire_on_commit=False)
     async with TestSession() as session:
         node = await session.get(Node, node_id)
-        assert node.credential_id is not None
-        cred = await session.get(Credential, node.credential_id)
-        assert cred.kind == "username_password"
-        assert cred.username == "deploy"
-        assert cred.secret_enc  # password was encrypted + stored, not dropped
+        assert node is not None
+        creds = await resolve_node_credentials(node, session)
+        assert creds["ssh_user"] == "deploy"
+        assert creds["ssh_password"] == "s3cret-pw"
+        assert creds["credential_source"].startswith("group:")
 
 
 async def test_commit_auto_bootstrap_requires_group(operator_client: AsyncClient):
