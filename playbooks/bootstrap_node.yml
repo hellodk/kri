@@ -41,7 +41,7 @@
   hosts: targets
   gather_facts: true
   vars:
-    ansible_ssh_common_args: '-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null'
+    ansible_ssh_common_args: '-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o ServerAliveInterval=15 -o ServerAliveCountMax=4'
     ansible_become: true
     ansible_become_method: sudo
 
@@ -59,7 +59,7 @@
   hosts: targets
   gather_facts: true
   vars:
-    ansible_ssh_common_args: '-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null'
+    ansible_ssh_common_args: '-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o ServerAliveInterval=15 -o ServerAliveCountMax=4'
     ansible_become: true
     ansible_become_method: sudo
 
