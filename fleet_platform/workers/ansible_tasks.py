@@ -12,7 +12,7 @@ from pathlib import Path
 
 import ansible_runner
 from celery.exceptions import SoftTimeLimitExceeded
-from sqlalchemy import select
+from sqlalchemy import func, select
 
 from fleet_platform.core.auth import hash_password
 from fleet_platform.db.session import get_sync_db
@@ -93,12 +93,18 @@ def bootstrap_node(
     node_exporter_version: str | None = None,
     node_exporter_listen_address: str | None = None,
     node_exporter_url_override: str | None = None,
+    as_master: bool = False,
 ) -> dict:
     """Run bootstrap_node.yml against a fleet node (macOS or Linux).
 
     salt_master_ids — optional list of SaltMaster UUIDs to use for this bootstrap.
     When None (default), all *enabled* SaltMaster rows are used (HA failover).
     An empty resolved list is a hard failure; an unreachable master is a warning only.
+
+    as_master — Phase A master-promotion (#980). When True and the bootstrap
+    succeeds, this node is auto-registered as a SaltMaster and provisioning is
+    enqueued (mirrors ``promote_node_to_master`` in salt_masters.py, but
+    synchronous). Never fails the overall bootstrap on error.
     """
     node_uuid = _uuid.UUID(node_id)
     logger.info("bootstrap_node starting: node_id=%s target_ip=%s", node_id, target_ip)
@@ -477,6 +483,82 @@ def bootstrap_node(
 
             db.commit()
             publish_job_event("bootstrap", node_id, node.bootstrap_status)
+
+            # Capture while still in-session (avoids DetachedInstanceError once this
+            # `with` block closes) — needed by the as_master registration below (#980).
+            _node_bootstrap_ip = node.bootstrap_ip
+            _node_hostname = node.hostname
+
+        # 6a2. (#980) Phase A: auto-register + provision this node as a salt-master
+        # when the bootstrap request opted in with as_master=True. Mirrors
+        # promote_node_to_master (fleet_platform/api/routes/salt_masters.py) but
+        # synchronous, and always swallows errors so a master-registration hiccup
+        # never fails the (already-successful) bootstrap.
+        if _bootstrap_succeeded and as_master:
+            try:
+                with get_sync_db() as db:
+                    existing_master = db.execute(
+                        select(SaltMaster).where(SaltMaster.node_id == node_uuid)
+                    ).scalar_one_or_none()
+                    if existing_master is not None:
+                        logger.info(
+                            "bootstrap_node: as_master requested but a SaltMaster already exists "
+                            "for node_id=%s master_id=%s — skipping",
+                            node_id,
+                            existing_master.id,
+                        )
+                    elif not _node_bootstrap_ip:
+                        logger.warning(
+                            "bootstrap_node: as_master requested but node has no bootstrap_ip node_id=%s",
+                            node_id,
+                        )
+                    else:
+                        base_name = (_node_hostname or node_minion_id)[:255]
+                        candidate_name = base_name
+                        suffix = 1
+                        while True:
+                            conflict = db.execute(
+                                select(SaltMaster).where(SaltMaster.name == candidate_name)
+                            ).scalar_one_or_none()
+                            if conflict is None:
+                                break
+                            candidate_name = f"{base_name}-{suffix}"[:255]
+                            suffix += 1
+
+                        is_first = db.execute(select(func.count()).select_from(SaltMaster)).scalar_one() == 0
+
+                        new_master = SaltMaster(
+                            name=candidate_name,
+                            address=_node_bootstrap_ip,
+                            enabled=True,
+                            is_default=is_first,
+                            api_url=f"https://{_node_bootstrap_ip}:4507",
+                            api_eauth="pam",
+                            provision_status="provisioning",
+                            node_id=node_uuid,
+                        )
+                        db.add(new_master)
+                        db.commit()
+                        db.refresh(new_master)
+
+                        from fleet_platform.workers.celery_app import celery_app
+
+                        celery_app.send_task(
+                            "fleet_platform.workers.ansible_tasks.provision_master",
+                            args=[str(new_master.id), "install"],
+                            queue="ansible",
+                        )
+                        logger.info(
+                            "bootstrap_node: as_master registered node_id=%s as SaltMaster "
+                            "master_id=%s name=%s — provisioning enqueued",
+                            node_id,
+                            new_master.id,
+                            candidate_name,
+                        )
+            except Exception:
+                logger.exception(
+                    "bootstrap_node: as_master registration/provisioning failed node_id=%s", node_id
+                )
 
         # 6a. (#555) Auto-accept minion key on each master that has auto_accept=True.
         # Runs only on successful bootstrap; never blocks or fails the overall task.

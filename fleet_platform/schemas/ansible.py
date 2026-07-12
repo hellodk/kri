@@ -23,6 +23,8 @@ class BootstrapRequest(BaseModel):
     node_exporter_version: str | None = None
     node_exporter_listen_address: str | None = None
     node_exporter_url_override: str | None = None
+    # Also stand this node up as a salt-master (installs salt-master + salt-api after bootstrap).
+    as_master: bool = False
 
     @field_validator("node_exporter_version")
     @classmethod

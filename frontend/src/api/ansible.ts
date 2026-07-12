@@ -159,6 +159,7 @@ export const ansibleApi = {
       nodeExporterVersion?: string
       nodeExporterListenAddress?: string
       nodeExporterUrlOverride?: string
+      asMaster?: boolean
     },
   ) =>
     api.post<BootstrapResponse>('/api/v1/ansible/bootstrap', {
@@ -170,6 +171,7 @@ export const ansibleApi = {
       ...(options?.nodeExporterVersion ? { node_exporter_version: options.nodeExporterVersion } : {}),
       ...(options?.nodeExporterListenAddress ? { node_exporter_listen_address: options.nodeExporterListenAddress } : {}),
       ...(options?.nodeExporterUrlOverride ? { node_exporter_url_override: options.nodeExporterUrlOverride } : {}),
+      as_master: options?.asMaster ?? false,
     }),
   bootstrapStatus: (nodeId: string) =>
     api.get<BootstrapStatus>(`/api/v1/ansible/bootstrap/${nodeId}/status`),
