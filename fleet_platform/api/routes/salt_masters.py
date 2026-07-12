@@ -522,6 +522,22 @@ async def promote_node_to_master(
     db.add(master)
     await db.commit()
     await db.refresh(master)
+
+    # Phase B (#979): auto-provision on promote. A promoted master is useless
+    # until salt-master + salt-api are installed, so enqueue provisioning
+    # immediately and flip status to 'provisioning' so the UI reflects it. SSH
+    # creds resolve from the linked node (#965); salt-api creds are generated
+    # during provisioning (#976).
+    from fleet_platform.workers.celery_app import celery_app
+
+    celery_app.send_task(
+        "fleet_platform.workers.ansible_tasks.provision_master",
+        args=[str(master.id), "install"],
+        queue="ansible",
+    )
+    master.provision_status = "provisioning"
+    await db.commit()
+    await db.refresh(master)
     return SaltMasterResponse.model_validate(master)
 
 

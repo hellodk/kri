@@ -127,7 +127,7 @@ export function NodeDetail() {
     mutationFn: () => saltMastersApi.promoteFromNode(nodeId!),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['salt-masters'] })
-      toast('Node promoted to salt-master. Go to Overview → Salt Masters to provision it.', 'success')
+      toast('Promoted to salt-master — provisioning now. Once it is up, use “Attach minions” on the Salt Masters tab to re-point minions to it.', 'success')
     },
     onError: (e: Error) => toast(e.message, 'error'),
   })
