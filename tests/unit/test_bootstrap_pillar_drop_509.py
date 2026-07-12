@@ -162,6 +162,8 @@ def test_bootstrap_status_is_terminal_when_ansible_raises(tmp_path):
                 "credential_source": "node",
             },
         ),
+        patch("fleet_platform.services.platform_settings_svc.get_setting_sync", return_value=None),
+        patch("fleet_platform.workers.ansible_tasks.publish_job_event"),
         patch(
             "fleet_platform.workers.ansible_tasks.ansible_runner.run_async",
             side_effect=RuntimeError("simulated crash"),
@@ -232,6 +234,8 @@ def test_bootstrap_error_is_set_when_ansible_raises(tmp_path):
                 "credential_source": "node",
             },
         ),
+        patch("fleet_platform.services.platform_settings_svc.get_setting_sync", return_value=None),
+        patch("fleet_platform.workers.ansible_tasks.publish_job_event"),
         patch(
             "fleet_platform.workers.ansible_tasks.ansible_runner.run_async",
             side_effect=OSError("simulated IO error"),
@@ -296,6 +300,8 @@ def test_no_permission_error_when_pillar_dir_missing():
                 "credential_source": "node",
             },
         ),
+        patch("fleet_platform.services.platform_settings_svc.get_setting_sync", return_value=None),
+        patch("fleet_platform.workers.ansible_tasks.publish_job_event"),
         patch(
             "fleet_platform.workers.ansible_tasks.ansible_runner.run_async",
             return_value=(fake_thread, fake_runner),

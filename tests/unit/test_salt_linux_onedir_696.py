@@ -95,7 +95,9 @@ def _onedir_src() -> str:
 
 def test_onedir_task_extracts_tarball():
     src = _onedir_src()
-    assert "unarchive" in src, "install_linux_onedir.yml must use unarchive to extract the tarball"
+    # Air-gapped rewrite (#970/#973) extracts the bundled tarball via `tar -xJf`
+    # in a shell task rather than the unarchive module.
+    assert "tar -xJf" in src, "install_linux_onedir.yml must extract the tarball (tar -xJf)"
 
 
 def test_onedir_task_creates_symlinks():
@@ -105,24 +107,29 @@ def test_onedir_task_creates_symlinks():
     assert "salt-key" in src, "install_linux_onedir.yml must create salt-key symlink"
 
 
-def test_onedir_task_has_artifactory_source():
+def test_onedir_task_copies_bundled_tarball():
+    # #970/#973 made the Linux onedir install fully air-gapped: the pinned tarball
+    # is bundled and copied to the target — no Artifactory/official-URL download.
     src = _onedir_src()
-    assert "artifactory_binary_url" in src, "install_linux_onedir.yml must try Artifactory download first"
+    assert "copy:" in src, "install_linux_onedir.yml must copy the bundled tarball to the target"
 
 
 def test_onedir_task_has_local_bundle_source():
     src = _onedir_src()
-    assert "salt_linux_tarball_local_path" in src, "install_linux_onedir.yml must fall back to a local bundle"
+    assert "salt_linux_tarball_local_path" in src, "install_linux_onedir.yml must use the local bundle path"
 
 
-def test_onedir_task_has_official_url_source():
+def test_onedir_task_is_airgapped_no_download():
     src = _onedir_src()
-    assert "salt_linux_onedir_official_base" in src, "install_linux_onedir.yml must fall back to official URL download"
+    # Air-gapped: no network-fetch modules in the install task (the word
+    # "Artifactory" appears only in a comment explaining what is NOT done).
+    assert "get_url" not in src, "install_linux_onedir.yml must not download (air-gapped)"
+    assert "ansible.builtin.uri" not in src, "install_linux_onedir.yml must not fetch over HTTP (air-gapped)"
 
 
 def test_onedir_task_verifies_checksum():
     src = _onedir_src()
-    assert "sha512" in src.lower(), "install_linux_onedir.yml must verify sha512 checksum before extract"
+    assert "sha256" in src.lower(), "install_linux_onedir.yml must verify the sha256 checksum before extract"
 
 
 # ---------------------------------------------------------------------------

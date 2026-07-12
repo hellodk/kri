@@ -31,6 +31,7 @@ def _make_node(minion_id: str = "mm1") -> MagicMock:
     n.node_token_hash = None
     n.salt_master_id = None
     n.ssh_host_key = None
+    n.hostname = "test-host.local"
     return n
 
 
@@ -126,6 +127,7 @@ def test_two_masters_extravar_is_list_and_failover():
                 "credential_source": "node",
             },
         ),
+        patch("fleet_platform.services.platform_settings_svc.get_setting_sync", return_value=None),
         patch("ansible_runner.run_async", side_effect=_fake_run_async),
     ):
         from fleet_platform.workers.ansible_tasks import bootstrap_node
@@ -179,6 +181,7 @@ def test_zero_masters_refuses_bootstrap():
                 "credential_source": "node",
             },
         ),
+        patch("fleet_platform.services.platform_settings_svc.get_setting_sync", return_value=None),
         patch("ansible_runner.run_async") as mock_run_async,
     ):
         from fleet_platform.workers.ansible_tasks import bootstrap_node
@@ -242,6 +245,7 @@ def test_unreachable_master_logs_warning_and_proceeds():
                 "credential_source": "node",
             },
         ),
+        patch("fleet_platform.services.platform_settings_svc.get_setting_sync", return_value=None),
         patch("ansible_runner.run_async", side_effect=_fake_run_async),
         patch("fleet_platform.workers.ansible_tasks.logger") as mock_logger,
     ):

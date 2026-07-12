@@ -20,4 +20,6 @@ def test_metrics_route_is_access_restricted():
     for conf in CONFS:
         block = conf.read_text().split("location = /metrics", 1)[1].split("}", 1)[0]
         assert "deny all" in block, f"{conf.name}: /metrics not restricted (deny all missing)"
-        assert "100.64.0.0/10" in block, f"{conf.name}: Tailscale range not allowed"
+        # #969 purged the Tailscale (100.64.0.0/10) range — LAN/private-net only.
+        assert "10.0.0.0/8" in block, f"{conf.name}: private RFC1918 range not allowed"
+        assert "100.64.0.0/10" not in block, f"{conf.name}: Tailscale range must be purged (#969)"

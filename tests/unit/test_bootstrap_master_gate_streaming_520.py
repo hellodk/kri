@@ -144,6 +144,8 @@ def test_master_resolution_single_enabled_master():
         patch("fleet_platform.workers.ansible_tasks.ansible_runner.run_async", side_effect=fake_run_async),
         patch("fleet_platform.workers.ansible_tasks.secrets.token_urlsafe", return_value="TOKEN"),
         patch("fleet_platform.workers.ansible_tasks.hash_password", return_value="hashed"),
+        patch("fleet_platform.services.platform_settings_svc.get_setting_sync", return_value=None),
+        patch("fleet_platform.workers.ansible_tasks.publish_job_event"),
     ):
         bootstrap_node(node_id=str(node_id), target_ip="10.0.0.1")
 
@@ -199,6 +201,8 @@ def test_master_resolution_two_enabled_masters():
         patch("fleet_platform.workers.ansible_tasks.ansible_runner.run_async", side_effect=fake_run_async),
         patch("fleet_platform.workers.ansible_tasks.secrets.token_urlsafe", return_value="TOKEN"),
         patch("fleet_platform.workers.ansible_tasks.hash_password", return_value="hashed"),
+        patch("fleet_platform.services.platform_settings_svc.get_setting_sync", return_value=None),
+        patch("fleet_platform.workers.ansible_tasks.publish_job_event"),
     ):
         bootstrap_node(node_id=str(node_id), target_ip="10.0.0.1")
 
@@ -245,6 +249,8 @@ def test_master_resolution_no_masters_fails():
         ),
         patch("fleet_platform.workers.ansible_tasks.secrets.token_urlsafe", return_value="TOKEN"),
         patch("fleet_platform.workers.ansible_tasks.hash_password", return_value="hashed"),
+        patch("fleet_platform.services.platform_settings_svc.get_setting_sync", return_value=None),
+        patch("fleet_platform.workers.ansible_tasks.publish_job_event"),
     ):
         result = bootstrap_node(node_id=str(node_id), target_ip="10.0.0.1")
 
@@ -299,6 +305,8 @@ def test_gate_unreachable_master_warns_but_proceeds():
         patch("fleet_platform.workers.ansible_tasks.ansible_runner.run_async", side_effect=fake_run_async),
         patch("fleet_platform.workers.ansible_tasks.secrets.token_urlsafe", return_value="TOKEN"),
         patch("fleet_platform.workers.ansible_tasks.hash_password", return_value="hashed"),
+        patch("fleet_platform.services.platform_settings_svc.get_setting_sync", return_value=None),
+        patch("fleet_platform.workers.ansible_tasks.publish_job_event"),
         patch("fleet_platform.workers.ansible_tasks.logger") as mock_logger,
     ):
         bootstrap_node(node_id=str(node_id), target_ip="10.0.0.1")
@@ -347,6 +355,8 @@ def test_gate_unknown_master_triggers_probe_then_proceeds():
         patch("fleet_platform.workers.ansible_tasks.ansible_runner.run_async", side_effect=fake_run_async),
         patch("fleet_platform.workers.ansible_tasks.secrets.token_urlsafe", return_value="TOKEN"),
         patch("fleet_platform.workers.ansible_tasks.hash_password", return_value="hashed"),
+        patch("fleet_platform.services.platform_settings_svc.get_setting_sync", return_value=None),
+        patch("fleet_platform.workers.ansible_tasks.publish_job_event"),
     ):
         bootstrap_node(node_id=str(node_id), target_ip="10.0.0.1")
 
@@ -395,6 +405,8 @@ def test_gate_unknown_master_probe_returns_unreachable_blocks_ansible():
         ),
         patch("fleet_platform.workers.ansible_tasks.secrets.token_urlsafe", return_value="TOKEN"),
         patch("fleet_platform.workers.ansible_tasks.hash_password", return_value="hashed"),
+        patch("fleet_platform.services.platform_settings_svc.get_setting_sync", return_value=None),
+        patch("fleet_platform.workers.ansible_tasks.publish_job_event"),
     ):
         bootstrap_node(node_id=str(node_id), target_ip="10.0.0.1")
 
@@ -439,6 +451,8 @@ def test_gate_skipped_when_no_master_row():
         ),
         patch("fleet_platform.workers.ansible_tasks.secrets.token_urlsafe", return_value="TOKEN"),
         patch("fleet_platform.workers.ansible_tasks.hash_password", return_value="hashed"),
+        patch("fleet_platform.services.platform_settings_svc.get_setting_sync", return_value=None),
+        patch("fleet_platform.workers.ansible_tasks.publish_job_event"),
     ):
         result = bootstrap_node(node_id=str(node_id), target_ip="10.0.0.1")
 
@@ -512,6 +526,8 @@ def test_streaming_logs_flushed_during_run():
         patch("fleet_platform.workers.ansible_tasks.ansible_runner.run_async", side_effect=fake_run_async),
         patch("fleet_platform.workers.ansible_tasks.secrets.token_urlsafe", return_value="TOKEN"),
         patch("fleet_platform.workers.ansible_tasks.hash_password", return_value="hashed"),
+        patch("fleet_platform.services.platform_settings_svc.get_setting_sync", return_value=None),
+        patch("fleet_platform.workers.ansible_tasks.publish_job_event"),
         patch("fleet_platform.workers.ansible_tasks.time.time", side_effect=fake_time),
         patch("fleet_platform.workers.ansible_tasks.time.sleep"),  # suppress real sleep
     ):
@@ -569,6 +585,8 @@ def test_stdout_cap_honoured():
         patch("fleet_platform.workers.ansible_tasks.ansible_runner.run_async", side_effect=fake_run_async),
         patch("fleet_platform.workers.ansible_tasks.secrets.token_urlsafe", return_value="TOKEN"),
         patch("fleet_platform.workers.ansible_tasks.hash_password", return_value="hashed"),
+        patch("fleet_platform.services.platform_settings_svc.get_setting_sync", return_value=None),
+        patch("fleet_platform.workers.ansible_tasks.publish_job_event"),
         patch("fleet_platform.workers.ansible_tasks.time.sleep"),
     ):
         bootstrap_node(node_id=str(node_id), target_ip="10.0.0.1")
@@ -628,6 +646,8 @@ def test_ansi_codes_preserved_in_stored_logs():
         patch("fleet_platform.workers.ansible_tasks.ansible_runner.run_async", side_effect=fake_run_async),
         patch("fleet_platform.workers.ansible_tasks.secrets.token_urlsafe", return_value="TOKEN"),
         patch("fleet_platform.workers.ansible_tasks.hash_password", return_value="hashed"),
+        patch("fleet_platform.services.platform_settings_svc.get_setting_sync", return_value=None),
+        patch("fleet_platform.workers.ansible_tasks.publish_job_event"),
         patch("fleet_platform.workers.ansible_tasks.time.sleep"),
     ):
         bootstrap_node(node_id=str(node_id), target_ip="10.0.0.1")
@@ -677,6 +697,8 @@ def test_successful_run_sets_completed_status():
         ),
         patch("fleet_platform.workers.ansible_tasks.secrets.token_urlsafe", return_value="TOKEN"),
         patch("fleet_platform.workers.ansible_tasks.hash_password", return_value="hashed"),
+        patch("fleet_platform.services.platform_settings_svc.get_setting_sync", return_value=None),
+        patch("fleet_platform.workers.ansible_tasks.publish_job_event"),
         patch("fleet_platform.workers.ansible_tasks.time.sleep"),
     ):
         bootstrap_node(node_id=str(node_id), target_ip="10.0.0.1")
@@ -720,6 +742,8 @@ def test_exception_hits_finally_and_sets_failed():
         ),
         patch("fleet_platform.workers.ansible_tasks.secrets.token_urlsafe", return_value="TOKEN"),
         patch("fleet_platform.workers.ansible_tasks.hash_password", return_value="hashed"),
+        patch("fleet_platform.services.platform_settings_svc.get_setting_sync", return_value=None),
+        patch("fleet_platform.workers.ansible_tasks.publish_job_event"),
     ):
         try:
             bootstrap_node(node_id=str(node_id), target_ip="10.0.0.1")
