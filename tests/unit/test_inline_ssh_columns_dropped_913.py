@@ -142,8 +142,9 @@ def test_resolve_node_credentials_sync_falls_through_to_global():
     setting_row.is_encrypted = False
 
     execute_result = MagicMock()
+    execute_result.first.return_value = None  # credential_groups tier (#984) → no mapping
     execute_result.scalar_one_or_none.side_effect = [
-        None,  # group query
+        None,  # legacy group query
         setting_row,  # SSH_USERNAME global setting
         None,  # SSH_PASSWORD global setting
     ]

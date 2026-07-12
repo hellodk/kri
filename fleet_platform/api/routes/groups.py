@@ -17,6 +17,7 @@ from fleet_platform.models.node import Node
 from fleet_platform.schemas.common import PaginatedResponse
 from fleet_platform.schemas.fleet import NodeListItem
 from fleet_platform.schemas.group import GroupCreate, GroupMemberAdd, GroupResponse, GroupUpdate
+from fleet_platform.services.credential_group_svc import get_group_credential_id, set_group_credential
 from fleet_platform.services.group_resolver import resolve_dynamic_group, validate_predicate
 from fleet_platform.services.ssh_credential_link import owner_secret_flags, upsert_owner_ssh_credential
 
@@ -330,28 +331,34 @@ async def update_group_credentials(
 
     # SSH credential updates (#725): inline ssh_* input is upserted into the
     # group's dedicated Credential row instead of the deprecated inline columns.
+    # #985 Phase 2b: the group<->credential link is now read/written via the
+    # credential_groups association (fleet_platform.services.credential_group_svc)
+    # instead of the legacy Group.credential_id column — the column is kept
+    # (unwritten) for expand-contract safety.
+    current_credential_id = await get_group_credential_id(db, group.id)
     cred_id = await upsert_owner_ssh_credential(
         db,
         owner_name=f"group:{group.name}",
-        current_credential_id=group.credential_id,
+        current_credential_id=current_credential_id,
         ssh_username=payload.ssh_username,
         ssh_password=payload.ssh_password,
         ssh_key=payload.ssh_key,
         ssh_auth_mode=payload.ssh_auth_mode,
     )
     if cred_id is not None:
-        group.credential_id = cred_id
+        await set_group_credential(db, group.id, cred_id)
     if payload.session_max_mins is not None:
         group.session_max_mins = payload.session_max_mins
     if payload.session_retention_days is not None:
         group.session_retention_days = payload.session_retention_days
 
     await db.commit()
+    effective_credential_id = await get_group_credential_id(db, group.id)
     has_password, has_key = await owner_secret_flags(
         db,
-        credential_id=group.credential_id,
+        credential_id=effective_credential_id,
     )
-    cred = await db.get(Credential, group.credential_id) if group.credential_id else None
+    cred = await db.get(Credential, effective_credential_id) if effective_credential_id else None
     return {
         "group_id": str(group_id),
         "ssh_username": cred.username if cred else None,
@@ -374,11 +381,14 @@ async def get_group_credentials(
     group = result.scalar_one_or_none()
     if not group:
         raise HTTPException(status_code=404, detail="Group not found")
+    # #985 Phase 2b: read the effective credential via credential_groups (the
+    # PATCH handler above no longer writes Group.credential_id).
+    effective_credential_id = await get_group_credential_id(db, group.id)
     has_password, has_key = await owner_secret_flags(
         db,
-        credential_id=group.credential_id,
+        credential_id=effective_credential_id,
     )
-    cred = await db.get(Credential, group.credential_id) if group.credential_id else None
+    cred = await db.get(Credential, effective_credential_id) if effective_credential_id else None
     return {
         "group_id": str(group_id),
         "ssh_username": cred.username if cred else None,
@@ -388,5 +398,5 @@ async def get_group_credentials(
         "session_max_mins": group.session_max_mins,
         "session_retention_days": group.session_retention_days,
         "credential_source": "group",
-        "credential_id": str(group.credential_id) if group.credential_id else None,
+        "credential_id": str(effective_credential_id) if effective_credential_id else None,
     }

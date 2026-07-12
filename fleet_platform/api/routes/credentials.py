@@ -3,7 +3,7 @@
 import uuid
 
 from fastapi import APIRouter, Depends, HTTPException, Query
-from sqlalchemy import func, select
+from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -11,12 +11,14 @@ from fleet_platform.api.deps import get_db
 from fleet_platform.core.audit import audit
 from fleet_platform.core.auth import require_role
 from fleet_platform.models.credential import Credential
-from fleet_platform.models.group import Group
-from fleet_platform.models.node import Node
 from fleet_platform.schemas.credential import (
     CredentialCreate,
     CredentialResponse,
     CredentialUpdate,
+)
+from fleet_platform.services.credential_group_svc import (
+    count_groups_for_credential,
+    count_nodes_for_credential,
 )
 from fleet_platform.services.credential_resolver import nodes_using_credential
 from fleet_platform.services.platform_settings_svc import encrypt_secret
@@ -25,14 +27,15 @@ router = APIRouter(prefix="/api/v1/credentials")
 
 
 async def _reference_counts(credential_id: uuid.UUID, db: AsyncSession) -> tuple[int, int]:
-    """Return ``(node_fk_count, group_fk_count)`` of direct FK references."""
-    node_count = (
-        await db.execute(select(func.count()).select_from(Node).where(Node.credential_id == credential_id))
-    ).scalar_one()
-    group_count = (
-        await db.execute(select(func.count()).select_from(Group).where(Group.credential_id == credential_id))
-    ).scalar_one()
-    return node_count, group_count
+    """Return ``(node_count, group_count)`` of references.
+
+    #985 Phase 2b: group references, and the nodes covered by them, are counted
+    via the ``credential_groups`` association — the source of truth for group
+    credential links — rather than the legacy ``Group.credential_id`` column.
+    """
+    group_fk_count = await count_groups_for_credential(db, credential_id)
+    node_fk_count = await count_nodes_for_credential(db, credential_id)
+    return node_fk_count, group_fk_count
 
 
 @router.get("", response_model=list[CredentialResponse])
