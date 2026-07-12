@@ -1,6 +1,7 @@
 # fleet_platform/api/routes/ansible/playbooks.py
 """Playbook routes: /playbooks/..."""
 
+import asyncio
 import uuid
 from pathlib import Path
 
@@ -62,7 +63,7 @@ async def list_playbooks(
         # rows but all disabled" (catalog_total > 0, enabled empty).
         # Previously guarded by catalog_total == 0 which silently returned []
         # when all entries were disabled — fixed by always falling back here.
-        all_dirs_legacy = get_all_playbook_dirs(sources_json, _PLAYBOOKS_DIR)
+        all_dirs_legacy = await asyncio.to_thread(get_all_playbook_dirs, sources_json, _PLAYBOOKS_DIR)
         legacy_entries = []
         for d in all_dirs_legacy:
             for e in discover_all(d):
@@ -206,7 +207,7 @@ async def get_playbook_tree(
     if source_dir:
         playbooks_dir = Path(source_dir)
     else:
-        all_dirs = get_all_playbook_dirs(sources_json, _PLAYBOOKS_DIR)
+        all_dirs = await asyncio.to_thread(get_all_playbook_dirs, sources_json, _PLAYBOOKS_DIR)
         playbooks_dir = next(
             (d for d in all_dirs if (d / filename).exists() or (d / "roles" / filename.replace("roles/", "")).is_dir()),
             _PLAYBOOKS_DIR,
@@ -364,7 +365,7 @@ async def run_playbook_endpoint(
     _sources_setting = await db.execute(select(PlatformSetting).where(PlatformSetting.key == "playbook_sources"))
     _sources_row = _sources_setting.scalar_one_or_none()
     _sources_json = _sources_row.value if _sources_row else None
-    _all_dirs = get_all_playbook_dirs(_sources_json, _PLAYBOOKS_DIR)
+    _all_dirs = await asyncio.to_thread(get_all_playbook_dirs, _sources_json, _PLAYBOOKS_DIR)
     entry = None
     for _dir in _all_dirs:
         _found = next((e for e in discover_all(_dir) if e.filename == payload.playbook), None)

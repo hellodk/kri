@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import json
 import urllib.request
 import uuid
@@ -49,9 +50,13 @@ async def check_jenkins_agent(agent_id: uuid.UUID, db: AsyncSession) -> None:
 
     try:
         url = f"{agent.jenkins_url.rstrip('/')}/computer/{agent.agent_name}/api/json?tree=offline"
-        req = urllib.request.Request(url, method="GET")
-        with urllib.request.urlopen(req, timeout=5) as resp:  # nosec B310
-            data = json.loads(resp.read())
+
+        def _fetch() -> dict:
+            req = urllib.request.Request(url, method="GET")
+            with urllib.request.urlopen(req, timeout=5) as resp:  # nosec B310
+                return json.loads(resp.read())
+
+        data = await asyncio.to_thread(_fetch)
         if data.get("offline") is False:
             agent.status = "online"
         else:
