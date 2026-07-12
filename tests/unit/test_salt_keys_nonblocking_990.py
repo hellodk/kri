@@ -14,15 +14,11 @@ _SRC = (
 ).read_text()
 
 
-def test_run_wheel_never_called_bare_in_async_routes():
-    # No bare `run_wheel(` call — every one is wrapped in asyncio.to_thread(run_wheel, ...).
-    import re
-
-    bare = re.findall(r"(?<!to_thread\()\brun_wheel\(", _SRC)
-    # The import line `import ... run_wheel` is not a call; only calls end with '('.
-    calls = [m for m in re.findall(r"\brun_wheel\(", _SRC)]
-    wrapped = _SRC.count("to_thread(run_wheel")
-    assert wrapped == len(calls), f"all run_wheel calls must be to_thread-wrapped: {wrapped}/{len(calls)}"
+def test_run_wheel_only_via_to_thread():
+    # A bare `run_wheel(` call is the blocking bug. Every use must be
+    # `asyncio.to_thread(run_wheel, ...)` (which reads as `run_wheel,` — no paren).
+    assert "run_wheel(" not in _SRC, "run_wheel (blocking) must only be called via asyncio.to_thread"
+    assert _SRC.count("to_thread(run_wheel") == 4, "all four key ops must be to_thread-wrapped"
 
 
 def test_salt_api_timeout_is_low():
