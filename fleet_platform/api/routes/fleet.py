@@ -389,7 +389,6 @@ async def import_commit(
                     ssh_username=payload.ssh_username or None,
                     ssh_password=_ssh_pw,
                     ssh_key=_ssh_key,
-                    as_master=payload.as_master,
                 )
                 bootstrap_queued += 1
             except BootstrapGroupRequired:

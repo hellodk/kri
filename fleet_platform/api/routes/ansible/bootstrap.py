@@ -77,7 +77,6 @@ async def bootstrap(
             node_exporter_version=payload.node_exporter_version,
             node_exporter_listen_address=payload.node_exporter_listen_address,
             node_exporter_url_override=payload.node_exporter_url_override,
-            as_master=payload.as_master,
         )
     except BootstrapGroupRequired as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc

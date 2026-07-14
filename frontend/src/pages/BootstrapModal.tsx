@@ -56,7 +56,6 @@ function SingleMode({ onClose }: { onClose: () => void }) {
   const [neVersion, setNeVersion] = useState('1.8.2')
   const [neListenAddress, setNeListenAddress] = useState(':9100')
   const [neUrlOverride, setNeUrlOverride] = useState('')
-  const [asMaster, setAsMaster] = useState(false)
 
   const toast = useToastStore((s) => s.add)
   const qc = useQueryClient()
@@ -176,7 +175,6 @@ function SingleMode({ onClose }: { onClose: () => void }) {
         nodeExporterVersion: neVersion !== '1.8.2' ? neVersion : undefined,
         nodeExporterListenAddress: neListenAddress !== ':9100' ? neListenAddress : undefined,
         nodeExporterUrlOverride: neUrlOverride || undefined,
-        asMaster,
       },
     ),
     onMutate: () => { setLocalLogs('') },
@@ -666,22 +664,6 @@ function SingleMode({ onClose }: { onClose: () => void }) {
               Warning: one or more selected masters are unreachable. Bootstrap will proceed — the minion will failover to reachable masters.
             </p>
           )}
-        </div>
-
-        {/* Master promotion Phase A (#980) */}
-        <div className="border border-gray-200 rounded-xl px-3 py-2">
-          <label className="flex items-center gap-3 cursor-pointer">
-            <input
-              type="checkbox"
-              checked={asMaster}
-              onChange={(e) => setAsMaster(e.target.checked)}
-              className="rounded"
-            />
-            <span className="text-sm font-medium text-gray-900">Also make this node a salt-master</span>
-          </label>
-          <p className="mt-1 pl-7 text-xs text-gray-500">
-            Installs salt-master + salt-api here and registers it as a master.
-          </p>
         </div>
 
         <p className="text-xs text-gray-500 bg-amber-50 border border-amber-200 rounded-lg p-3">

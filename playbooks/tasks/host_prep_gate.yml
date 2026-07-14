@@ -60,23 +60,10 @@
   loop_control:
     label: "{{ item.item.0 }}:{{ item.item.1 }}"
 
-- name: Note deferred master reachability (self-master bootstrap)
-  ansible.builtin.debug:
-    msg: >-
-      as_master=true — this node will become its own salt-master, provisioned
-      after bootstrap. Not failing on unreachable master ({{ _gate_masters | join(', ') }})
-      here; the minion connects once the master is up (#993).
-  when:
-    - as_master | default(false) | bool
-    - master_port_results.results | selectattr('failed') | list | length == master_port_results.results | length
-
 - name: Fail if no salt-master is reachable from this node
   ansible.builtin.fail:
     msg: >-
       Target cannot reach any salt-master on 4505/4506 — check network/firewall.
       Masters probed: {{ _gate_masters | join(', ') }}
   when:
-    # Self-master nodes (#993) install their master AFTER bootstrap, so skip the
-    # hard gate for them — a normal node still fails fast on an unreachable master.
-    - not (as_master | default(false) | bool)
     - master_port_results.results | selectattr('failed') | list | length == master_port_results.results | length

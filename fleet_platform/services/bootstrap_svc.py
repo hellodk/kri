@@ -37,7 +37,6 @@ async def queue_node_bootstrap(
     node_exporter_version: str | None = None,
     node_exporter_listen_address: str | None = None,
     node_exporter_url_override: str | None = None,
-    as_master: bool = False,
 ):
     """Mark the node pending, audit, commit, and queue bootstrap.
 
@@ -91,5 +90,4 @@ async def queue_node_bootstrap(
         node_exporter_version=node_exporter_version,
         node_exporter_listen_address=node_exporter_listen_address,
         node_exporter_url_override=node_exporter_url_override,
-        as_master=as_master,
     )

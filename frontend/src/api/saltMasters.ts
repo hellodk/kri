@@ -167,13 +167,6 @@ export const saltMastersApi = {
   provisionStatus: (id: string) =>
     api.get<MasterProvisionRunResponse | null>(`/api/v1/salt/masters/${id}/provision-status`),
   /**
-   * Promote an existing fleet node to also act as a salt-master (admin only).
-   * Returns the newly created SaltMaster. 409 if already promoted; 422 if no IP.
-   * Added in #560 (master-lifecycle epic phase 5).
-   */
-  promoteFromNode: (nodeId: string) =>
-    api.post<SaltMaster>(`/api/v1/salt/masters/from-node/${nodeId}`, {}),
-  /**
    * Return the list of nodes (minions) assigned to this master.
    * Returns [] when none are assigned. 404 if master unknown. Viewer-accessible.
    * Added in #560 (master-lifecycle epic phase 5).
