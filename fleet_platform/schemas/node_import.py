@@ -42,9 +42,6 @@ class ImportCommitRequest(BaseModel):
     ssh_key: str | None = None
     ssh_auth_mode: str | None = None  # "password" | "key"; inferred when omitted
     auto_bootstrap: bool = False
-    # Phase A (#981): when auto_bootstrap is set, also stand each node up as a
-    # salt-master (installs salt-master + salt-api and registers it as a master).
-    as_master: bool = False
 
 
 class ImportCommitResponse(BaseModel):

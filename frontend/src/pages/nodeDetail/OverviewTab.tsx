@@ -20,20 +20,12 @@ export const OverviewTab = memo(function OverviewTab({
   nodeId,
   nodeMaster,
   canManage,
-  showRebootstrap,
-  setShowRebootstrap,
-  rebootstrapIp,
-  setRebootstrapIp,
   refetchNode,
 }: {
   node: NodeDetailData
   nodeId: string
   nodeMaster: SaltMaster | undefined
   canManage: boolean
-  showRebootstrap: boolean
-  setShowRebootstrap: (v: boolean) => void
-  rebootstrapIp: string
-  setRebootstrapIp: (v: string) => void
   refetchNode: () => void
 }) {
   const qc = useQueryClient()
@@ -42,7 +34,6 @@ export const OverviewTab = memo(function OverviewTab({
   const [tagValue, setTagValue] = useState('')
   const [collectingGrains, setCollectingGrains] = useState(false)
   const [grainTaskId, setGrainTaskId] = useState<string | null>(null)
-  const [rebootstrapping, setRebootstrapping] = useState(false)
   const [actionResult, setActionResult] = useState<string | null>(null)
   const [runningAction, setRunningAction] = useState(false)
   const [rebootConfirm, setRebootConfirm] = useState(false)
@@ -167,25 +158,6 @@ export const OverviewTab = memo(function OverviewTab({
     }
   }
 
-  async function rebootstrap() {
-    if (!node || !rebootstrapIp.trim()) return
-    setRebootstrapping(true)
-    try {
-      await api.post('/api/v1/ansible/bootstrap', {
-        minion_id: node.minion_id,
-        target_ip: rebootstrapIp.trim(),
-      })
-      toast('Re-bootstrap queued')
-      setShowRebootstrap(false)
-      setTimeout(() => refetchNode(), 3000)
-    } catch (e: unknown) {
-      const msg = e instanceof Error ? e.message : 'Re-bootstrap failed'
-      toast(msg, 'error')
-    } finally {
-      setRebootstrapping(false)
-    }
-  }
-
   return (
     <div role="tabpanel" id="tabpanel-overview" aria-labelledby="tab-overview" className="grid grid-cols-1 md:grid-cols-2 gap-6">
       {/* Salt-master panel — only shown when this node runs a master */}
@@ -277,40 +249,6 @@ export const OverviewTab = memo(function OverviewTab({
           ))}
         </dl>
       </div>
-      {/* Bootstrap / re-bootstrap form. Rendered at the grid top level so it is
-          available for any node regardless of bootstrap_status — including
-          freshly-imported "unregistered" nodes whose Bootstrap Status card is
-          hidden. The header Bootstrap button only flips showRebootstrap, so this
-          must not be nested inside the status card or it never appears. */}
-      {showRebootstrap && (
-        <div className="md:col-span-2 p-4 bg-amber-50 border border-amber-200 rounded-lg space-y-2">
-          <p className="text-xs text-amber-700 font-medium">
-            {node.bootstrap_status === 'unregistered'
-              ? 'This will run the bootstrap playbook on this node.'
-              : 'This will re-run the bootstrap playbook. Existing node data is preserved.'}
-          </p>
-          <div className="flex gap-2">
-            <input
-              type="text"
-              value={rebootstrapIp}
-              onChange={(e) => setRebootstrapIp(e.target.value)}
-              placeholder="Target IP address"
-              className="flex-1 text-sm border border-amber-300 rounded px-2 py-1 bg-white focus:outline-hidden focus:ring-2 focus:ring-amber-400"
-            />
-            <button
-              onClick={rebootstrap}
-              disabled={rebootstrapping || !rebootstrapIp.trim()}
-              className="px-3 py-1 text-sm bg-amber-600 text-white rounded hover:bg-amber-700 disabled:opacity-50"
-            >
-              {rebootstrapping ? 'Queuing…' : 'Confirm'}
-            </button>
-            <button onClick={() => setShowRebootstrap(false)} className="px-3 py-1 text-sm border border-gray-300 rounded hover:bg-gray-50">
-              Cancel
-            </button>
-          </div>
-        </div>
-      )}
-
       {/* Bootstrap status — only show if node has been bootstrapped or is bootstrapping */}
       {node.bootstrap_status !== 'unregistered' && (
         <div className="bg-white rounded-lg border border-gray-200 p-4 md:col-span-2 space-y-3">
@@ -318,28 +256,12 @@ export const OverviewTab = memo(function OverviewTab({
             <h3 className="font-semibold text-gray-700">Bootstrap Status</h3>
             <div className="flex items-center gap-2">
               {node.bootstrap_status === 'completed' && (
-                <>
-                  <button
-                    onClick={() => collectGrains()}
-                    disabled={collectingGrains}
-                    className="px-3 py-1.5 bg-brand-600 hover:bg-brand-700 text-white text-sm rounded-lg disabled:opacity-50"
-                  >
-                    {collectingGrains ? 'Collecting…' : 'Collect Grains Now'}
-                  </button>
-                  <button
-                    onClick={() => { setRebootstrapIp(node.bootstrap_ip ?? node.ip_address ?? ''); setShowRebootstrap(true) }}
-                    className="px-3 py-1.5 text-sm rounded-lg border border-amber-300 bg-amber-50 text-amber-700 hover:bg-amber-100"
-                  >
-                    Re-bootstrap
-                  </button>
-                </>
-              )}
-              {(node.bootstrap_status === 'failed') && (
                 <button
-                  onClick={() => { setRebootstrapIp(node.bootstrap_ip ?? node.ip_address ?? ''); setShowRebootstrap(true) }}
-                  className="px-3 py-1.5 text-sm rounded-lg border border-amber-300 bg-amber-50 text-amber-700 hover:bg-amber-100"
+                  onClick={() => collectGrains()}
+                  disabled={collectingGrains}
+                  className="px-3 py-1.5 bg-brand-600 hover:bg-brand-700 text-white text-sm rounded-lg disabled:opacity-50"
                 >
-                  Retry bootstrap
+                  {collectingGrains ? 'Collecting…' : 'Collect Grains Now'}
                 </button>
               )}
               {(node.bootstrap_status === 'bootstrapping' || node.bootstrap_status === 'pending') && (

@@ -5,7 +5,7 @@ SSoT api_url derivation added in #562: api_url is computed from address + salt_a
 use_tls on every create/update.  Client-supplied api_url is always ignored.
 provision_master trigger route added in #557 (master-lifecycle epic).
 provision-status read endpoint added in #558 (master-lifecycle epic phase 3).
-promote-from-node + minions topology endpoints added in #560 (master-lifecycle epic phase 5).
+minions topology endpoint added in #560 (master-lifecycle epic phase 5).
 
 Endpoints:
     GET    /api/v1/salt/masters                              — list all masters (viewer+).
@@ -16,7 +16,6 @@ Endpoints:
     GET    /api/v1/salt/masters/{master_id}/health           — cached health (viewer+).
     POST   /api/v1/salt/masters/{master_id}/provision        — trigger provision task (admin only).
     GET    /api/v1/salt/masters/{master_id}/provision-status — latest provision run (viewer+).
-    POST   /api/v1/salt/masters/from-node/{node_id}          — promote node to master (admin only).
     GET    /api/v1/salt/masters/{master_id}/minions          — nodes using this master (viewer+).
     POST   /api/v1/salt/masters/{master_id}/attach-minions   — re-point minions at this master, additively (admin only).
 
@@ -445,100 +444,6 @@ async def get_provision_status(
     if run is None:
         return None
     return MasterProvisionRunResponse.model_validate(run)
-
-
-@router.post("/masters/from-node/{node_id}", response_model=SaltMasterResponse, status_code=201)
-async def promote_node_to_master(
-    node_id: uuid.UUID,
-    db: AsyncSession = Depends(get_db),
-    _: dict = Depends(require_role("admin")),
-) -> SaltMasterResponse:
-    """Promote an existing fleet node to also act as a salt-master.
-
-    Looks up the node; creates a SaltMaster linked via ``node_id``.
-    ``address`` is taken from ``node.bootstrap_ip`` (the reachable IP — 422 if absent).
-    ``name`` defaults to ``node.hostname or node.minion_id``, uniquified with a
-    numeric suffix if another master already uses that name.
-    ``is_default`` is set to True only if this is the very first master in the DB.
-    ``provision_status`` defaults to 'unprovisioned' — the operator triggers
-    provisioning separately (#558).
-
-    Returns 404 if the node does not exist.
-    Returns 422 if the node has no bootstrap_ip.
-    Returns 409 if a SaltMaster already exists for that node.
-    Requires admin role.
-    Added in #560 (master-lifecycle epic phase 5).
-    """
-    # Look up the node.
-    node_result = await db.execute(select(Node).where(Node.id == node_id))
-    node = node_result.scalar_one_or_none()
-    if node is None:
-        raise HTTPException(status_code=404, detail=f"Node {node_id} not found")
-
-    # Reject if no reachable IP.
-    if not node.bootstrap_ip:
-        raise HTTPException(
-            status_code=422,
-            detail=f"Node {node_id} has no bootstrap_ip — bootstrap the node first to obtain a reachable IP.",
-        )
-
-    # Reject if a master already exists for this node.
-    existing_result = await db.execute(select(SaltMaster).where(SaltMaster.node_id == node_id))
-    if existing_result.scalar_one_or_none() is not None:
-        raise HTTPException(
-            status_code=409,
-            detail=f"A SaltMaster already exists for node {node_id}.",
-        )
-
-    # Derive a unique name from hostname or minion_id.
-    base_name = (node.hostname or node.minion_id)[:255]
-    candidate_name = base_name
-    suffix = 1
-    while True:
-        conflict_result = await db.execute(select(SaltMaster).where(SaltMaster.name == candidate_name))
-        if conflict_result.scalar_one_or_none() is None:
-            break
-        candidate_name = f"{base_name}-{suffix}"[:255]
-        suffix += 1
-
-    # Set is_default=True only when this would be the first master.
-    count_result = await db.execute(select(func.count()).select_from(SaltMaster))
-    is_first = count_result.scalar_one() == 0
-
-    # Derive api_url from defaults.
-    derived_api_url = _derive_api_url(node.bootstrap_ip, 4507, True)
-
-    master = SaltMaster(
-        name=candidate_name,
-        address=node.bootstrap_ip,
-        enabled=True,
-        is_default=is_first,
-        # Ports / flags — all ORM defaults; operator adjusts via PATCH if needed.
-        api_url=derived_api_url,
-        api_eauth="pam",
-        provision_status="unprovisioned",
-        node_id=node.id,
-    )
-    db.add(master)
-    await db.commit()
-    await db.refresh(master)
-
-    # Phase B (#979): auto-provision on promote. A promoted master is useless
-    # until salt-master + salt-api are installed, so enqueue provisioning
-    # immediately and flip status to 'provisioning' so the UI reflects it. SSH
-    # creds resolve from the linked node (#965); salt-api creds are generated
-    # during provisioning (#976).
-    from fleet_platform.workers.celery_app import celery_app
-
-    celery_app.send_task(
-        "fleet_platform.workers.ansible_tasks.provision_master",
-        args=[str(master.id), "install"],
-        queue="ansible",
-    )
-    master.provision_status = "provisioning"
-    await db.commit()
-    await db.refresh(master)
-    return SaltMasterResponse.model_validate(master)
 
 
 @router.get("/masters/{master_id}/minions", response_model=List[NodeListItem])

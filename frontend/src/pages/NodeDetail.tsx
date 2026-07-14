@@ -17,7 +17,7 @@ import { formatDistanceToNow } from 'date-fns'
 import { useToastStore } from '../stores/toastStore'
 import { useAuthStore } from '../stores/authStore'
 import { useJobEventStream } from '../hooks/useJobEventStream'
-import { Wrench, Rocket, SquareTerminal, Monitor, Crown } from 'lucide-react'
+import { Wrench, SquareTerminal, Monitor } from 'lucide-react'
 import { isMacOSNode, type Tab } from './nodeDetail/utils'
 import { OverviewTab } from './nodeDetail/OverviewTab'
 import { DriftTab } from './nodeDetail/DriftTab'
@@ -39,8 +39,6 @@ const IOSTabPanel = lazy(() => import('./nodeDetail/IOSTabPanel'))
 export function NodeDetail() {
   const { nodeId } = useParams<{ nodeId: string }>()
   const [tab, setTab] = useState<Tab>('overview')
-  const [showRebootstrap, setShowRebootstrap] = useState(false)
-  const [rebootstrapIp, setRebootstrapIp] = useState('')
   const [showSSH, setShowSSH] = useState(false)
   const [sshTabs, setSshTabs] = useState<SshTab[]>([])
   const [activeSshTabId, setActiveSshTabId] = useState<string>('')
@@ -53,7 +51,6 @@ export function NodeDetail() {
   const qc = useQueryClient()
   const toast = useToastStore((s) => s.add)
   const currentUser = useAuthStore((s) => s.user)
-  const isAdmin = currentUser?.role === 'admin'
   const canManage = currentUser?.role === 'admin' || currentUser?.role === 'operator'
 
   // Live push: bootstrap transitions are pushed over SSE and invalidate the
@@ -118,16 +115,6 @@ export function NodeDetail() {
       qc.invalidateQueries({ queryKey: ['ios-node-detail', nodeId] })
       setShowJenkinsConfigure(false)
       toast('Jenkins agent saved')
-    },
-    onError: (e: Error) => toast(e.message, 'error'),
-  })
-
-  // #560 — promote this node to salt-master
-  const promoteMutation = useMutation({
-    mutationFn: () => saltMastersApi.promoteFromNode(nodeId!),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['salt-masters'] })
-      toast('Promoted to salt-master — provisioning now. Once it is up, use “Attach minions” on the Salt Masters tab to re-point minions to it.', 'success')
     },
     onError: (e: Error) => toast(e.message, 'error'),
   })
@@ -214,17 +201,6 @@ export function NodeDetail() {
           </button>
           <button
             onClick={() => {
-              setRebootstrapIp(node.bootstrap_ip ?? node.ip_address ?? '')
-              setShowRebootstrap(true)
-            }}
-            className="px-4 py-2 bg-brand-600 text-white text-sm font-medium rounded-lg hover:bg-brand-700 shadow-xs transition-colors inline-flex items-center gap-1.5"
-            title="Run Ansible bootstrap playbook on this node"
-          >
-            <Rocket size={16} />
-            Bootstrap
-          </button>
-          <button
-            onClick={() => {
               const firstTab: SshTab = {
                 id: crypto.randomUUID(),
                 nodeId: node.id,
@@ -251,21 +227,6 @@ export function NodeDetail() {
             >
               <Monitor size={16} />
               VNC
-            </button>
-          )}
-          {/* #560 — Promote to salt-master (admin only; hidden when already a master) */}
-          {isAdmin && !nodeMaster && (
-            <button
-              onClick={() => promoteMutation.mutate()}
-              disabled={promoteMutation.isPending || !node.bootstrap_ip}
-              title={
-                !node.bootstrap_ip
-                  ? 'Bootstrap the node first to obtain a reachable IP'
-                  : 'Promote this node to also act as a salt-master'
-              }
-              className="px-3 py-2 text-sm font-medium rounded-lg border border-indigo-300 bg-indigo-50 text-indigo-700 hover:bg-indigo-100 disabled:opacity-40 shadow-xs transition-colors inline-flex items-center gap-1.5"
-            >
-              {promoteMutation.isPending ? 'Promoting…' : (<><Crown size={16} />Promote to Master</>)}
             </button>
           )}
           <Link to="/fleet" className="text-sm text-brand-600 hover:underline">← Fleet</Link>
@@ -316,10 +277,6 @@ export function NodeDetail() {
           nodeId={nodeId!}
           nodeMaster={nodeMaster}
           canManage={canManage}
-          showRebootstrap={showRebootstrap}
-          setShowRebootstrap={setShowRebootstrap}
-          rebootstrapIp={rebootstrapIp}
-          setRebootstrapIp={setRebootstrapIp}
           refetchNode={refetch}
         />
       )}
