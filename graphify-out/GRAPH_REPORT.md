@@ -1,16 +1,16 @@
-# Graph Report - kri  (2026-07-12)
+# Graph Report - kri  (2026-07-14)
 
 ## Corpus Check
-- 1064 files · ~747,176 words
+- 1091 files · ~766,126 words
 - Verdict: corpus is large enough that graph structure adds value.
 
 ## Summary
-- 17128 nodes · 33059 edges · 1024 communities (873 shown, 151 thin omitted)
-- Extraction: 91% EXTRACTED · 9% INFERRED · 0% AMBIGUOUS · INFERRED: 2948 edges (avg confidence: 0.56)
+- 17739 nodes · 33895 edges · 1039 communities (880 shown, 159 thin omitted)
+- Extraction: 91% EXTRACTED · 9% INFERRED · 0% AMBIGUOUS · INFERRED: 2977 edges (avg confidence: 0.56)
 - Token cost: 0 input · 0 output
 
 ## Graph Freshness
-- Built from commit: `56c5d075`
+- Built from commit: `28ae5611`
 - Run `git rev-parse HEAD` and compare to check if the graph is stale.
 - Run `graphify update .` after code changes (no API cost).
 
@@ -946,18 +946,32 @@
 - [[_COMMUNITY_Community 1021|Community 1021]]
 - [[_COMMUNITY_Community 1022|Community 1022]]
 - [[_COMMUNITY_Community 1023|Community 1023]]
+- [[_COMMUNITY_Community 1025|Community 1025]]
+- [[_COMMUNITY_Community 1026|Community 1026]]
+- [[_COMMUNITY_Community 1027|Community 1027]]
+- [[_COMMUNITY_Community 1028|Community 1028]]
+- [[_COMMUNITY_Community 1029|Community 1029]]
+- [[_COMMUNITY_Community 1030|Community 1030]]
+- [[_COMMUNITY_Community 1031|Community 1031]]
+- [[_COMMUNITY_Community 1032|Community 1032]]
+- [[_COMMUNITY_Community 1033|Community 1033]]
+- [[_COMMUNITY_Community 1034|Community 1034]]
+- [[_COMMUNITY_Community 1035|Community 1035]]
+- [[_COMMUNITY_Community 1036|Community 1036]]
+- [[_COMMUNITY_Community 1037|Community 1037]]
+- [[_COMMUNITY_Community 1038|Community 1038]]
 
 ## God Nodes (most connected - your core abstractions)
-1. `Node` - 357 edges
+1. `Node` - 360 edges
 2. `datetime` - 184 edges
-3. `HTTPException` - 135 edges
+3. `HTTPException` - 137 edges
 4. `HTTPException` - 129 edges
 5. `Base` - 105 edges
 6. `GroupMemberAdd` - 103 edges
 7. `PlatformSettings` - 103 edges
 8. `ToolCtx` - 99 edges
-9. `audit()` - 98 edges
-10. `PendingAction` - 95 edges
+9. `useToastStore` - 99 edges
+10. `audit()` - 98 edges
 
 ## Surprising Connections (you probably didn't know these)
 - `FERNET_SECRET_KEY missing from .env.docker.example; CI uses a different name` --conceptually_related_to--> `Salt Stack Onboarding Guide`  [INFERRED]
@@ -982,35 +996,35 @@
 - **Iterative LLM Fleet Assistant Development Chain** — plans_llm_integration, plans_llm_rag_improvements, plans_llm_model_selector [INFERRED 0.75]
 - **Salt-Master Install/Consolidation Surface (Role, Refactor Plan, CLI)** — playbooks_salt_master_readme, plans_ansible_roles_refactor, scripts_kri_cli [INFERRED 0.65]
 
-## Communities (1024 total, 151 thin omitted)
+## Communities (1039 total, 159 thin omitted)
 
 ### Community 0 - "Alert & Event System"
-Cohesion: 0.05
-Nodes (39): AuditEvent, datetime, DeclarativeBase, UUID, health_tasks, Integration tests for the RAG pipeline — requires real PostgreSQL with pgvector., BM25 should find a chunk with matching keywords., test_bm25_retrieval_finds_inserted_chunk() (+31 more)
+Cohesion: 0.06
+Nodes (54): AgentStatus, runAgentStream(), AsyncSession, int, Request, str, Redis, Request (+46 more)
 
 ### Community 1 - "kri CLI & Deployment"
-Cohesion: 0.10
-Nodes (37): _create_pending_action(), _enable_agent_surface(), _make_default_endpoint(), _mock_openai_compat(), _parse_sse(), Integration tests for the agent run + approval HTTP paths (#795, #803).  #795: P, When no default LLM endpoint exists the route must return 422., Happy-path: streaming run emits correct SSE event sequence and persists rows. (+29 more)
+Cohesion: 0.06
+Nodes (59): Verify that the incoming request is authorised to scrape /metrics.      Raises H, verify_metrics_request(), TokenExpiredError, TokenInvalidError, str, AsyncSession, Request, AsyncSession (+51 more)
 
 ### Community 2 - "Ansible Schemas & Groups"
-Cohesion: 0.04
-Nodes (115): run_playbook_endpoint(), audit(), Write an audit event. Must be called before db.commit() to share the transaction, AsyncSession, float, int, str, UUID (+107 more)
+Cohesion: 0.07
+Nodes (50): int, str, _budget_inputs(), call_anthropic(), call_anthropic_tools(), call_openai_compat_tools(), normalize_openai_base_url(), Truncate the MIDDLE of the system prompt, never the grounding-rules tail (#575). (+42 more)
 
 ### Community 3 - "Auth & Salt API Routes"
-Cohesion: 0.09
-Nodes (35): AsyncMock, _make_event(), _make_rule(), _mock_db_returning_webhooks(), Behavioral tests for #104: alert webhook dispatch on event fire.  These exercise, _deliver_alert must be called in each event check function., SSRF protection must validate webhook URLs., _deliver_alert must filter to enabled webhooks in its query. (+27 more)
+Cohesion: 0.08
+Nodes (37): AsyncMock, _make_event(), _make_rule(), _mock_db_returning_webhooks(), Behavioral tests for #104: alert webhook dispatch on event fire.  These exercise, _deliver_alert must be called in each event check function., SSRF protection must validate webhook URLs., _deliver_alert must filter to enabled webhooks in its query. (+29 more)
 
 ### Community 4 - "iOS Tracking & Certs"
-Cohesion: 0.03
-Nodes (98): Replace values of sensitive keys with [redacted] before persisting., _scrub(), AsyncSession, Path, str, AsyncSession, int, str (+90 more)
+Cohesion: 0.07
+Nodes (35): BaselineUpdate, _get_query_bounds(), Unit tests for API code quality fixes (issues #107, #111, #113, #134, #135)., Extract ge and le values from a FastAPI Query metadata list., list_sessions limit parameter has ge=1 and le=500 bounds., list_security_events limit parameter has ge=1 and le=500 bounds., list_events limit parameter has ge=1 and le=500 bounds., GroupMember.__table_args__ includes the idx_group_members_node_id index. (+27 more)
 
 ### Community 5 - "Digest & Build Events"
-Cohesion: 0.04
-Nodes (55): code:block1 (fleet_platform/), code:python (# tests/integration/test_fleet_overview.py), code:bash (source .venv/bin/activate && pytest tests/integration/test_f), code:python (# fleet_platform/api/routes/fleet.py), code:python (from fleet_platform.api.routes import health, auth, nodes, i), code:python (from fleet_platform.api.routes import health, auth, nodes, i), code:python (app.include_router(fleet.router, tags=["fleet"])), code:bash (source .venv/bin/activate && pytest tests/integration/test_f) (+47 more)
+Cohesion: 0.05
+Nodes (24): Any, Probe a salt-master's prerequisites and return per-check results.      Runs all, Probe a salt-master's prerequisites and return per-check results.      Runs all, Probe a salt-master's prerequisites and return per-check results.      Runs all, test_salt_master(), MasterProvisionRunResponse, Pydantic schemas for the SaltMaster entity (#516, epic #523).  Response schema n, Accept either None, a list, or a dict (legacy) for the checks field. (+16 more)
 
 ### Community 6 - "Fleet Health Monitoring"
-Cohesion: 0.06
-Nodes (81): Base, Shared field validators for Pydantic schemas (#752).  A single authoritative def, Pydantic-compatible validator for ``minion_id`` fields.      Raises ``ValueError, validate_minion_id(), ExecutionIngestPayload, AsyncSession, bool, datetime (+73 more)
+Cohesion: 0.08
+Nodes (26): code:tsx (const { data: executions } = useQuery({), code:tsx (const { data: executions } = useQuery({), code:typescript (// frontend/src/api/executions.ts), code:bash (cd /home/dk/Documents/git/kri/frontend && npx tsc --noEmit), code:bash (cd /home/dk/Documents/git/kri), Task 3: Per-node execution filter in NodeDetail (L13), code:bash (grep -rn "Fleet\|Nodes\|Dashboard\|href.*nodes" frontend/src), code:typescript (// frontend/src/api/fleetHealth.ts) (+18 more)
 
 ### Community 7 - "Integration Tests"
 Cohesion: 0.11
@@ -1021,120 +1035,120 @@ Cohesion: 0.05
 Nodes (48): # NOTE:, sanity_check(), Respawn an ansible module to using the first interpreter in     SYSTEM_PYTHON_IN, respawn_module(), LooseVersion, Version numbering for anal retentives and software idealists.     Implements the, Version numbering for anarchists and software realists.     Implements the stand, Abstract base class for version numbering classes.  Just provides     constructo (+40 more)
 
 ### Community 9 - "SBOM & Baselines"
-Cohesion: 0.13
-Nodes (34): Return duration statistics for the last 5 completed runs of a playbook., executionsApi, AnsibleJob, PlaybookEntry, PlaybookRunResponse, playbooksApi, PlaybookStats, PlaybookRunModal (+26 more)
+Cohesion: 0.07
+Nodes (51): call_openai_compat(), Call an OpenAI-compatible /chat/completions endpoint.     Returns (content, inpu, Call an OpenAI-compatible /chat/completions endpoint.     Returns (content, inpu, str, _mock_chat_client(), A stream with no content deltas and 0 completion tokens raises LLMCallError (#84, Chat template tokens are stripped; good content underneath is returned., Yield fake SSE lines for the given content chunks. (+43 more)
 
 ### Community 10 - "Fleet Nodes & Audit"
-Cohesion: 0.08
-Nodes (58): auditApi, AuditListParams, AuditListResponse, driftApi, DriftPackageState, fleetApi, GroupCredentials, groupsApi (+50 more)
+Cohesion: 0.06
+Nodes (36): ansible_tasks, Unit tests for the masked ansible command line emitted into bootstrap/provision, test_cmdline_includes_playbook_inventory_and_masks_secrets(), test_mask_passes_normal_values(), test_mask_redacts_credential_keys(), test_mask_truncates_long_nonsecret(), Regression tests for #992: bootstrap gate failures mislabeled as SSH unreachable, The regression case for #992: SSH worked, only the salt-master gate failed. (+28 more)
 
 ### Community 11 - "Salt Allowlist & Cache"
-Cohesion: 0.11
-Nodes (19): code:python (import re), code:python (with get_sync_db() as db:), code:python (def _write_pillar_file(pillar_dir: str, minion_id: str, inge), code:python (import re), code:python (if job.target_type == "node" and hosts:), code:python (safe_name = payload.playbook.lstrip("/").replace("..", "")), code:python (# Resolve and verify the path is inside playbooks_dir), code:python (@router.post("/bootstrap", response_model=BootstrapResponse,) (+11 more)
+Cohesion: 0.06
+Nodes (29): code:python (# tests/unit/test_celery_app.py), code:bash (pytest tests/unit/test_celery_app.py -v), code:python (# fleet_platform/workers/__init__.py), code:python (# fleet_platform/workers/celery_app.py), code:bash (pytest tests/unit/test_celery_app.py -v), code:block20 (PASSED tests/unit/test_celery_app.py::test_celery_app_is_con), code:bash (git add fleet_platform/workers/ tests/unit/test_celery_app.p), Task 3: Celery app setup (+21 more)
 
 ### Community 12 - "Node Ingest & Grains"
-Cohesion: 0.02
-Nodes (195): TokenExpiredError, TokenInvalidError, DesiredStateBaseline, ExecutionJob, ExecutionJobResponse, str, AsyncSession, int (+187 more)
+Cohesion: 0.09
+Nodes (17): MagicMock, _make_master(), Build a SaltMaster-like SimpleNamespace without hitting the DB., All checks pass → aggregate healthy., When salt_api_auth fails → aggregate must be unreachable, no exception raised., run_probe must never raise regardless of network failures., key_store fail (permission) with auth passing → degraded, not unreachable., Empty keystore check must be pass; permission-denied check must be fail. (+9 more)
 
 ### Community 13 - "Bootstrap & Ansible Tasks"
 Cohesion: 0.05
-Nodes (65): Any, AsyncSession, bool, float, int, str, upsert_chunks must re-embed when chunk_text changes., RRF fusion must never return duplicate ids. (+57 more)
+Nodes (44): str, _validate_minion_ids(), _validate_state_name(), Unit tests for security fixes introduced in issue #578.  Covers: - webssh get_cu, _validate_state_name raises HTTPException for path-traversal attempts., _validate_state_name does not raise for a normal dotted state name., _validate_minion_ids raises HTTPException for glob/wildcard minion IDs., _validate_minion_ids raises HTTPException for minion IDs containing commas. (+36 more)
 
 ### Community 14 - "React App Shell"
-Cohesion: 0.05
-Nodes (65): bool, int, str, Any, int, Node, str, probe_node_ssh() (+57 more)
+Cohesion: 0.09
+Nodes (36): Any, str, bool, MagicMock, str, _creds(), _FakeSocket, _make_node() (+28 more)
 
 ### Community 15 - "Community 15"
-Cohesion: 0.04
-Nodes (91): _bootstrap_node(), bootstrap(), bootstrap_logs(), bootstrap_run_detail(), bootstrap_status(), cancel_bootstrap(), Reset a stuck bootstrap job so the node can be re-bootstrapped., Return full logs for a specific bootstrap run. (+83 more)
+Cohesion: 0.06
+Nodes (41): create_salt_master(), delete_salt_master(), Partially update a SaltMaster.      Only fields explicitly provided (non-None) a, Partially update a SaltMaster.      Only fields explicitly provided (non-None) a, Partially update a SaltMaster.      Only fields explicitly provided (non-None) a, Delete a SaltMaster.      Nodes assigned to the deleted master are automatically, Delete a SaltMaster.      Nodes assigned to the deleted master are automatically, Delete a SaltMaster.      Nodes assigned to the deleted master are automatically (+33 more)
 
 ### Community 16 - "Community 16"
-Cohesion: 0.06
-Nodes (59): delete_group(), remove_group_member(), bool, MagicMock, str, UUID, _ctx(), _ExecResult (+51 more)
+Cohesion: 0.15
+Nodes (32): remove_group_member(), MagicMock, str, UUID, _db_with_execute_sequence(), _make_group(), _make_member(), Verify db.delete is never called when the 409 guard fires. (+24 more)
 
 ### Community 17 - "Community 17"
-Cohesion: 0.15
-Nodes (23): audit_tool_dispatch(), _is_sensitive_key(), Audit hook for the executor (#711 / #714).  Every tool dispatch is written to th, Persist one audit row per dispatch. Best-effort: never breaks the run., Redact sensitive fields from tool-call args before audit logging (#781).      De, _redact(), ToolResult, bool (+15 more)
+Cohesion: 0.18
+Nodes (14): ToolCtx, _ctx(), Tests for #776: _run_salt_cmd must constrain the LLM-controlled args list.  Cons, grains.get with a sensitive key must be rejected before any Salt call., The OpenAI/tool schema for run_salt_cmd must advertise arg limits., Exactly 10 args should pass the count gate., test_run_salt_cmd_accepts_max_args(), test_run_salt_cmd_accepts_max_length_arg() (+6 more)
 
 ### Community 18 - "Community 18"
 Cohesion: 0.10
 Nodes (18): str, _extract_json_objects(), parse_tool_calls_from_content(), Extract tool calls embedded inline in *content* (the critical exo path).      ex, Remove model-specific special tokens and <think> blocks., Scan *text* for balanced `{...}` objects and return each as a raw string.      U, _strip_markers(), ToolCall (+10 more)
 
 ### Community 19 - "Community 19"
-Cohesion: 0.05
-Nodes (78): AsyncSession, int, PlaybookCatalog, str, UUID, PlaybookCatalog, PlaybookFavorite, add_favorite() (+70 more)
+Cohesion: 0.08
+Nodes (41): str, _delete_key(), Remove a PlatformSetting row if it exists, so each test starts clean., test_encrypt_decrypt_secret_roundtrip(), test_get_setting_returns_none_when_absent(), test_seed_settings_from_env_does_not_overwrite_embed_base_url(), test_seed_settings_from_env_does_not_overwrite_existing(), test_seed_settings_from_env_inserts_when_absent() (+33 more)
 
 ### Community 20 - "Community 20"
 Cohesion: 0.04
-Nodes (72): BootstrapStatus, DriftComparePackage, DriftCompareResult, ImportCommitResponse, NodeResolvedCredential, ProcessStatRow, ProcessStatsResponse, SshTestResponse (+64 more)
+Nodes (92): api, fleetApi, ImportCommitResponse, NodeResolvedCredential, ProcessStatRow, ProcessStatsResponse, SshTestResponse, AddCertBody (+84 more)
 
 ### Community 21 - "Community 21"
-Cohesion: 0.08
-Nodes (27): Raise ValueError if the webhook URL is unsafe (SSRF protection).      Enforces:, _validate_webhook_url(), HTTPS to private IPs is allowed (always secure)., HTTPS to loopback is allowed., HTTPS to link-local IPs is allowed., test_validate_webhook_url_dns_failure(), test_validate_webhook_url_https_link_local_allowed(), test_validate_webhook_url_https_loopback_allowed() (+19 more)
+Cohesion: 0.07
+Nodes (29): Raise ValueError if the webhook URL is unsafe (SSRF protection).      Enforces:, _validate_webhook_url(), HTTPS to private IPs is allowed (always secure)., HTTPS to loopback is allowed., HTTPS to link-local IPs is allowed., test_check_key_pending_no_dir(), test_evaluate_alerts_no_rules(), test_validate_webhook_url_dns_failure() (+21 more)
 
 ### Community 22 - "Community 22"
-Cohesion: 0.04
-Nodes (57): code:tsx (import { useState, useRef } from 'react'), Task 4: Frontend — AuditPage component, code:typescript (import { api } from './client'), code:tsx (import { useState } from 'react'), code:tsx ({ id: 'llm', label: 'LLM' },), code:tsx (import LLMSettingsTab from '../components/llm/LLMSettingsTab), code:tsx (import { useState } from 'react'), code:bash (cd frontend && npm run build 2>&1 | grep -E "error TS|✓ buil) (+49 more)
+Cohesion: 0.03
+Nodes (62): code:bash (cd frontend && npm run build 2>&1 | grep -E "error TS|✓ buil), Checklist, code:python (# fleet_platform/services/user_seeding.py), code:python (@asynccontextmanager), code:bash (python -m pytest tests/unit/test_user_seeding.py -v 2>&1 | t), code:toml ("authlib>=1.3",), code:bash (source .venv/bin/activate && uv sync), code:python (oidc_enabled: bool = False) (+54 more)
 
 ### Community 23 - "Community 23"
-Cohesion: 0.16
-Nodes (40): add_source(), import_sources_csv(), list_sources(), Add a new playbook source (local directory or git repository)., List configured extra playbook sources., Remove a playbook source by its index., Force-sync all configured git playbook sources (runs git pull in a thread)., Bulk-import playbook sources from CSV text.      Format (one entry per line): (+32 more)
+Cohesion: 0.11
+Nodes (36): get_playbook_file(), Return the content of a file in any configured playbooks directory., Return the content of a file in any configured playbooks directory., PlatformSettings, AsyncSession, str, bytes, Path (+28 more)
 
 ### Community 24 - "Community 24"
-Cohesion: 0.15
-Nodes (16): code:bash (source .venv/bin/activate), code:python (# Resolve __auto__ sentinel), code:python (try:), code:bash (source .venv/bin/activate), code:bash (git add fleet_platform/api/routes/node_actions.py), code:bash (source .venv/bin/activate), code:bash (cd frontend && npm run build 2>&1 | tail -5), LLM Model Selector Implementation Plan (+8 more)
+Cohesion: 0.12
+Nodes (20): code:bash (source .venv/bin/activate), code:python (# Resolve __auto__ sentinel), code:python (try:), code:bash (source .venv/bin/activate), code:bash (git add fleet_platform/api/routes/node_actions.py), code:bash (source .venv/bin/activate), code:bash (cd frontend && npm run build 2>&1 | tail -5), code:tsx (import { useState, useRef, useEffect, useCallback } from 're) (+12 more)
 
 ### Community 25 - "Community 25"
-Cohesion: 0.07
-Nodes (36): str, BootstrapRequest, Tests for #830 — runtime node_exporter/minion vars in bootstrap request.  TDD: t, :http is invalid — port must be numeric., bootstrap_full was removed (unified bootstrap); extra fields are ignored., queue_node_bootstrap signature accepts all four new optional runtime params., queue_node_bootstrap passes runtime vars to bootstrap_node.delay()., bootstrap_node builds runtime_extravars and merges them into ansible-runner extr (+28 more)
+Cohesion: 0.06
+Nodes (65): baselinesApi, BaselineCreate, AsyncSession, int, UUID, AsyncSession, int, str (+57 more)
 
 ### Community 26 - "Community 26"
-Cohesion: 0.07
-Nodes (50): Any, AsyncSession, Path, SaltMaster, str, accept_key(), delete_key(), _dirs() (+42 more)
+Cohesion: 0.06
+Nodes (64): Any, AsyncSession, Path, SaltMaster, str, accept_key(), delete_key(), _dirs() (+56 more)
 
 ### Community 27 - "Community 27"
-Cohesion: 0.10
-Nodes (38): Any, Path, str, _clone_git_source(), _default_clone_path(), get_all_playbook_dirs(), _pull_git_source(), Manage external playbook sources (extra dirs + git repos). (+30 more)
+Cohesion: 0.24
+Nodes (12): Privilege rank of a role: viewer=0 < operator=1 < admin=2.      Unknown / None r, True iff ``actual`` is ranked at or above a known ``required`` role., role_rank(), role_satisfies(), int, #710 Phase A — centralized role-rank helper.  Single source of truth for viewer, test_hierarchy_is_strictly_increasing(), test_known_roles_rank_in_order() (+4 more)
 
 ### Community 28 - "Community 28"
 Cohesion: 0.05
-Nodes (54): Resolve '__auto__' to a concrete model id at query dispatch time.      For non-a, _resolve_model(), RouteResult, str, MagicMock, _make_endpoint(), Unit tests for _resolve_model() in fleet_platform/api/routes/llm.py., test_auto_no_healthy_raises_503() (+46 more)
+Nodes (53): Resolve '__auto__' to a concrete model id at query dispatch time.      For non-a, _resolve_model(), RouteResult, str, _make_endpoint(), Unit tests for _resolve_model() in fleet_platform/api/routes/llm.py., test_auto_no_healthy_raises_503(), test_auto_null_latency_sorts_last() (+45 more)
 
 ### Community 29 - "Community 29"
-Cohesion: 0.09
-Nodes (42): AgentStatus, runAgentStream(), AsyncSession, int, Request, str, bool, str (+34 more)
+Cohesion: 0.10
+Nodes (35): AsyncSession, MobileconfigProfileCreate, str, UUID, MobileconfigProfile, MobileconfigProfile, ProfileDeploymentLog, ProfileGroupAssignment (+27 more)
 
 ### Community 30 - "Community 30"
-Cohesion: 0.10
-Nodes (35): LLMPlanner, Escape/strip HTML that could execute in the browser if rendered naively (#782)., Planner that asks an LLM endpoint which tool to call next.      ``tool_mode`` se, Pick the first role-permitted tool call, else a plain-text final answer., Recursively sanitize string leaves in a tool result value (#770)., Compact a ToolResult into a single sanitized observation line (#770).      Strin, sanitize_llm_output(), _sanitize_value() (+27 more)
+Cohesion: 0.09
+Nodes (36): LLMPlanner, LLM-backed planner for the agent loop (#711, #651).  The :class:`AgentLoop` depe, Escape/strip HTML that could execute in the browser if rendered naively (#782)., Planner that asks an LLM endpoint which tool to call next.      ``tool_mode`` se, Pick the first role-permitted tool call, else a plain-text final answer., Recursively sanitize string leaves in a tool result value (#770)., Compact a ToolResult into a single sanitized observation line (#770).      Strin, sanitize_llm_output() (+28 more)
 
 ### Community 31 - "Community 31"
-Cohesion: 0.08
-Nodes (49): bool, str, AsyncSession, bool, int, PendingAction, str, UUID (+41 more)
+Cohesion: 0.04
+Nodes (88): bool, str, AsyncSession, bool, int, PendingAction, str, UUID (+80 more)
 
 ### Community 32 - "Community 32"
-Cohesion: 0.03
-Nodes (78): code:bash (source .venv/bin/activate && python -m pytest tests/ -q --no), code:bash (cd /home/dk/Documents/git/kri/frontend && npx tsc --noEmit &), Task 8: Full test suite verification, Audit Fix Plan 9 — Missing Features: User Management, Node Decommission, Audit Log API, code:bash (source .venv/bin/activate), code:bash (cd /home/dk/Documents/git/kri/frontend && npx tsc --noEmit), Self-Review, Task 4: Full Test Suite Verification (+70 more)
+Cohesion: 0.04
+Nodes (157): DesiredStateBaseline, ExecutionJob, ExecutionJobResponse, str, Group, Redis, str, AsyncSession (+149 more)
 
 ### Community 33 - "Community 33"
-Cohesion: 0.04
-Nodes (64): code:python (# tests/unit/test_my_service.py), code:python (# tests/integration/test_my_route.py), Integration test skeleton, Unit test skeleton, Writing a New Test, code:python (# tests/integration/test_health.py), code:python (# tests/conftest.py), code:bash (pytest tests/integration/test_health.py -v) (+56 more)
+Cohesion: 0.13
+Nodes (21): AsyncSession, Request, Response, FleetRecommendationResponse, generate_recommendations(), get_recommendations(), Return the latest stored fleet recommendation, or 204 if none exist yet., Generate a fresh fleet-wide recommendation set on demand. (+13 more)
 
 ### Community 34 - "Community 34"
-Cohesion: 0.16
-Nodes (24): ConnectionMock, FakePluginLoader, get(), ModuleLoaderMock, PlayContextMock, A wrapper for mocking out synchronize environments, SharedLoaderMock, StdinMock (+16 more)
+Cohesion: 0.07
+Nodes (35): ActionModule, ActionModule, Some vars are substituted into the modules.  Have to make sure         that thos, generates params and passes them on to the rsync module, # TODO: have to add in the rest of the become methods here, formats rsync rsh target, escaping ipv6 addresses if needed, :arg host: hostname for the path         :arg path: file path         :arg user:, ConnectionMock (+27 more)
 
 ### Community 35 - "Community 35"
-Cohesion: 0.06
-Nodes (32): code:python (# fleet_platform/services/__init__.py), code:python (# fleet_platform/services/node_status.py), code:bash (pytest tests/unit/test_node_status.py -v), code:block13 (PASSED tests/unit/test_node_status.py::test_classify_online_), code:bash (git add fleet_platform/services/ tests/unit/test_node_status), code:python (# tests/unit/test_node_status.py), code:bash (pytest tests/unit/test_node_status.py -v), Task 2: node_status service (+24 more)
+Cohesion: 0.20
+Nodes (10): code:python (# tests/integration/test_health.py), code:python (# tests/conftest.py), code:python (# platform/schemas/common.py), code:python (# platform/api/routes/health.py), code:python (# platform/api/deps.py), code:python (# platform/api/main.py), code:bash (pytest tests/integration/test_health.py -v), code:block66 (PASSED tests/integration/test_health.py::test_health_returns) (+2 more)
 
 ### Community 36 - "Community 36"
-Cohesion: 0.05
-Nodes (42): code:python (async def test_grain_ingest_bad_ip_does_not_crash(client: As), code:bash (source .venv/bin/activate && pytest tests/integration/test_i), code:python (import ipaddress), code:bash (source .venv/bin/activate && pytest tests/integration/test_i), code:bash (git add fleet_platform/api/routes/ingest.py tests/integratio), Task 5: IP address validation in grain ingest (C7), code:python (# tests/unit/test_llm_schemas.py), code:bash (pytest tests/unit/test_llm_schemas.py -v 2>&1 | grep -E "PAS) (+34 more)
+Cohesion: 0.04
+Nodes (57): code:python (async def test_grain_ingest_bad_ip_does_not_crash(client: As), code:bash (source .venv/bin/activate && pytest tests/integration/test_i), code:python (import ipaddress), code:bash (source .venv/bin/activate && pytest tests/integration/test_i), code:bash (git add fleet_platform/api/routes/ingest.py tests/integratio), Task 5: IP address validation in grain ingest (C7), code:tsx (import { useState, useRef } from 'react'), Task 4: Frontend — AuditPage component (+49 more)
 
 ### Community 37 - "Community 37"
-Cohesion: 0.11
-Nodes (30): Return the 8-byte DES key used by VNC RFB auth.      VNC uses standard DES with, _vnc_des_key(), bytes, int, str, _build_type1_server(), _build_type2_server_with_challenge(), _compute_expected_response() (+22 more)
+Cohesion: 0.10
+Nodes (37): bool, bytes, str, Return the 8-byte DES key used by VNC RFB auth.      VNC uses standard DES with, Perform the RFB handshake server-side.      Supports:       - Security type 1 (N, _rfb_auth(), _vnc_des_key(), StreamReader (+29 more)
 
 ### Community 38 - "Community 38"
 Cohesion: 0.17
@@ -1142,51 +1156,51 @@ Nodes (5): Tests for frontend/src/lib/masterNodes.ts — issue #559, epic master
 
 ### Community 39 - "Community 39"
 Cohesion: 0.07
-Nodes (35): BaselineUpdate, _get_query_bounds(), Unit tests for API code quality fixes (issues #107, #111, #113, #134, #135)., Extract ge and le values from a FastAPI Query metadata list., list_sessions limit parameter has ge=1 and le=500 bounds., list_security_events limit parameter has ge=1 and le=500 bounds., list_events limit parameter has ge=1 and le=500 bounds., GroupMember.__table_args__ includes the idx_group_members_node_id index. (+27 more)
+Nodes (41): MasterMinionItem, SaltMaster, SaltMasterCreate, saltMastersApi, SaltMasterUpdate, searchApi, pickMaster(), SaltMasterStatus() (+33 more)
 
 ### Community 40 - "Community 40"
-Cohesion: 0.18
-Nodes (24): _CachedConn, bool, MagicMock, test_ssh_connection_cache_b44, _make_conn(), Tests for #166: SSH connection cache., test_cache_evict_node_function(), test_cache_has_eviction() (+16 more)
+Cohesion: 0.07
+Nodes (52): webssh, ssh_connection_cache, bool, int, str, cache_stats(), _CachedConn, _credential_fingerprint() (+44 more)
 
 ### Community 41 - "Community 41"
-Cohesion: 0.05
-Nodes (59): str, ImportValidateRequest, ImportValidateResponse, _import_from_salt(), import_validate(), Pull accepted minions from the Salt master, if available., Dry-run: parse and classify rows from the given source without writing to the DB, dedup_rows() (+51 more)
+Cohesion: 0.03
+Nodes (96): hash_password(), node_with_drift(), test_drift_requires_auth(), test_get_node_drift_history(), test_get_node_drift_latest(), test_list_drift_filter_by_severity(), test_list_drift_returns_nodes(), test_trigger_compute_requires_operator() (+88 more)
 
 ### Community 42 - "Community 42"
 Cohesion: 0.04
 Nodes (55): code:python (# fleet_platform/models/webhook.py), code:bash (source .venv/bin/activate && pytest tests/unit/test_platform), code:python (# fleet_platform/services/platform_settings_svc.py), code:python (# fleet_platform/services/ssh_keypair.py), code:bash (source .venv/bin/activate && pytest tests/unit/test_platform), code:bash (git add fleet_platform/services/platform_settings_svc.py \), code:python (# tests/unit/test_platform_settings.py), Task 2: Platform Settings Service + SSH Keypair Management (+47 more)
 
 ### Community 43 - "Community 43"
-Cohesion: 0.07
-Nodes (22): Return a valid known_hosts token ``<alg> <base64>`` from a stored key value., to_known_hosts_token(), str, _make_legacy_key(), _make_native_key(), Tests for #840: bootstrap SSH TOFU — known_hosts token normalisation.  WebSSH st, export_public_key("openssh") sometimes appends a newline — must still parse., Legacy base64-wrapped stored key must match its native decoded form (#840). (+14 more)
+Cohesion: 0.08
+Nodes (18): Return a valid known_hosts token ``<alg> <base64>`` from a stored key value., to_known_hosts_token(), str, _make_legacy_key(), _make_native_key(), Tests for #840: bootstrap SSH TOFU — known_hosts token normalisation.  WebSSH st, export_public_key("openssh") sometimes appends a newline — must still parse., Legacy base64-wrapped stored key must match its native decoded form (#840). (+10 more)
 
 ### Community 44 - "Community 44"
-Cohesion: 0.09
-Nodes (25): searchApi, ErrorBoundary, Props, State, AnsiText(), AnsiSpan, ansiToSpans(), FG (+17 more)
+Cohesion: 0.07
+Nodes (25): Recursively scrub sensitive keys from extravars (flat dict, nested dict, or list, _scrub_extravars(), _make_cancel_db(), Tests for ansible.py route fixes., bootstrap_node.delay() must never forward ssh_password — plaintext on Redis brok, Return an AsyncMock db with execute() resolving to a MagicMock result., cancel_playbook_job must resolve the actor from the 'email' JWT claim (#342)., audit() must be awaited before db.commit() in cancel_playbook_job (#342). (+17 more)
 
 ### Community 45 - "Community 45"
-Cohesion: 0.17
-Nodes (12): int, _get_sync_redis(), Simple Redis-based task deduplication using SETNX., Decorator that skips task execution if a lock with the same key exists.      Usa, unique_task(), Unit tests for #153 — Redis task deduplication., _get_sync_redis must instantiate a connection using settings.redis_url (coverage, test_get_sync_redis_uses_settings_url() (+4 more)
+Cohesion: 0.05
+Nodes (34): 10. Inline model imports inside functions, 11. Missing `TimestampMixin` on some models, 12. Worker session fragmentation, 1. `_resolve_label()` in executions.py, 2. `nodes_using_credential()` in credential_resolver.py, 3. Fleet overview double-scan, 4. Async/sync credential resolution duplication, 5. No shared CRUD helpers (+26 more)
 
 ### Community 46 - "Community 46"
 Cohesion: 0.05
 Nodes (66): Adding a New Node, Architecture, Bulk registration script, code:block1 (Mac Mini (Salt Minion)), code:yaml (# /etc/salt/master.d/kri.conf — append these lines), code:bash (# Linux), code:bash (SALT_API_URL=http://<salt-master-ip>:8080), code:bash (docker compose -f deploy/docker-compose.yml restart api work) (+58 more)
 
 ### Community 47 - "Community 47"
-Cohesion: 0.12
-Nodes (31): SecurityPage, EVENT_SEVERITY_COLORS, IntegrationBar(), IntegrationStatus, LIC_RISK_COLORS, LicenseFinding, NodeDetail, NodeSecurityDrawer() (+23 more)
+Cohesion: 0.04
+Nodes (44): code:block1 (fleet_platform/), code:python (# fleet_platform/services/__init__.py), code:python (# fleet_platform/services/node_status.py), code:bash (pytest tests/unit/test_node_status.py -v), code:block13 (PASSED tests/unit/test_node_status.py::test_classify_online_), code:bash (git add fleet_platform/services/ tests/unit/test_node_status), code:python (# tests/unit/test_sync_session.py), code:python (# tests/unit/test_maintenance_task.py) (+36 more)
 
 ### Community 48 - "Community 48"
 Cohesion: 0.03
-Nodes (73): code:bash (source .venv/bin/activate), code:python (# tests/unit/test_maintenance_task.py), code:bash (pytest tests/unit/test_maintenance_task.py -v), code:python (# fleet_platform/workers/drift_tasks.py), code:python (# fleet_platform/workers/sbom_tasks.py), code:python (# fleet_platform/workers/maintenance.py), code:bash (pytest tests/unit/test_maintenance_task.py -v), code:block28 (PASSED tests/unit/test_maintenance_task.py::test_mark_stale_) (+65 more)
+Nodes (74): code:bash (source .venv/bin/activate), code:python (# tests/unit/test_drift_task.py), code:bash (source .venv/bin/activate && pytest tests/unit/test_drift_ta), code:python (# fleet_platform/workers/drift_tasks.py), code:bash (source .venv/bin/activate && pytest tests/unit/test_drift_ta), code:bash (git add fleet_platform/workers/drift_tasks.py tests/unit/tes), Task 4: Implement compute_drift Celery task, code:python (# fleet_platform/workers/sbom_tasks.py) (+66 more)
 
 ### Community 49 - "Community 49"
-Cohesion: 0.12
-Nodes (16): Backend API Reference (exact paths), code:block1 (frontend/), code:tsx (// frontend/src/pages/FleetDashboard.tsx), code:tsx (// frontend/src/pages/GroupExplorer.tsx), code:tsx (// frontend/src/pages/FleetDashboard.tsx), code:bash (source /home/dk/Documents/git/kri/.venv/bin/activate && uvic), code:bash (cd /home/dk/Documents/git/kri/frontend && npm run dev), code:bash (cd /home/dk/Documents/git/kri) (+8 more)
+Cohesion: 0.09
+Nodes (44): BreakPoint, Exception, Any, Path, str, _clone_git_source(), _default_clone_path(), get_all_playbook_dirs() (+36 more)
 
 ### Community 50 - "Community 50"
-Cohesion: 0.10
-Nodes (48): Session, str, get_allowed_salt_functions_sync, get_denied_salt_functions_sync, get_allowed_salt_functions_sync(), get_denied_salt_functions_sync(), Return the current denied Salt functions, reading from DB with 60-second cache., Return the current allowed Salt functions, reading from DB with 60-second cache. (+40 more)
+Cohesion: 0.06
+Nodes (68): AsyncSession, bool, Session, str, get_allowed_salt_functions_sync, get_denied_salt_functions_sync, get_allowed_salt_functions_sync(), get_denied_salt_functions_sync() (+60 more)
 
 ### Community 51 - "Community 51"
 Cohesion: 0.08
@@ -1201,20 +1215,20 @@ Cohesion: 0.07
 Nodes (44): int, str, Return base[from_byte:]; empty when from_byte is at/past the end., Split stdout into (append-only base, running-task name or None).      The worker, slice_from(), split_running_marker(), str, The base (pre-marker) must be identical regardless of which volatile     task ma (+36 more)
 
 ### Community 54 - "Community 54"
-Cohesion: 0.29
-Nodes (22): AgentLoop, PlanDecision, Either a final answer (``final`` set) or a batch of tool calls., ToolCall, _ctx(), _drain(), #711 Phase B — bounded agent loop event stream + hard limits., A planner that re-emits the SAME call every step must stall out fast, not     bu (+14 more)
+Cohesion: 0.15
+Nodes (38): Executor, Agent subsystem: typed tool registry, executor and bounded loop (#711).  Phase B, AgentEvent, AgentLoop, _call_signature(), PlanDecision, Planner, Bounded agent loop (#711).  Drives planner ↔ executor until the planner returns (+30 more)
 
 ### Community 55 - "Community 55"
 Cohesion: 0.06
-Nodes (31): code:python (# tests/unit/test_ingest_schemas.py), code:bash (pytest tests/unit/test_ingest_schemas.py -v), code:python (# fleet_platform/schemas/node.py), code:python (# fleet_platform/schemas/ingest.py), code:bash (pytest tests/unit/test_ingest_schemas.py -v), code:bash (git add fleet_platform/schemas/node.py fleet_platform/schema), Task 5: Schemas — NodeRegister + IngestPayloads, code:python (# fleet_platform/schemas/sbom.py) (+23 more)
+Nodes (54): HUB_LINKS, LinkDef, NAV_GROUPS, Sidebar(), SYSTEM_LINKS, DashboardPage, CARD_STYLES, CardVariant (+46 more)
 
 ### Community 56 - "Community 56"
-Cohesion: 0.07
-Nodes (32): build_static_context(), estimate_tokens(), Rough token count: 1 token ≈ 4 chars (adequate for budget gating)., Grounding rules must appear in final context regardless of chunk size., test_estimate_tokens_never_zero(), test_grounding_rules_never_truncated(), Grounding rules must survive even with a short context window., Grounding rules must appear after the RAG section (never truncatable). (+24 more)
+Cohesion: 0.05
+Nodes (49): build_static_context(), estimate_tokens(), _format_last_seen(), Rough token count: 1 token ≈ 4 chars (adequate for budget gating)., Grounding rules must appear in final context regardless of chunk size., test_estimate_tokens_never_zero(), test_grounding_rules_never_truncated(), Grounding rules must survive even with a short context window. (+41 more)
 
 ### Community 57 - "Community 57"
-Cohesion: 0.17
-Nodes (31): Certificate, ExpiringCertsResponse, IOSNode, IOSNodesResponse, JenkinsAgent, UpsertJenkinsBody, Certificate, AsyncSession (+23 more)
+Cohesion: 0.09
+Nodes (57): Certificate, ExpiringCertsResponse, IOSNode, IOSNodesResponse, JenkinsAgent, UpsertJenkinsBody, Certificate, AsyncSession (+49 more)
 
 ### Community 58 - "Community 58"
 Cohesion: 0.07
@@ -1230,19 +1244,19 @@ Nodes (22): ansible_accelerate_port, ansible_connection, ansible_current_hosts, 
 
 ### Community 61 - "Community 61"
 Cohesion: 0.09
-Nodes (22): ansible_accelerate_port, ansible_connection, ansible_current_hosts, ansible_docker_extra_args, ansible_failed_hosts, ansible_module_compression, ansible_pipelining, ansible_play_hosts (+14 more)
+Nodes (22): ansible_accelerate_port, ansible_connection, ansible_current_hosts, ansible_docker_extra_args, ansible_failed_hosts, ansible_host, ansible_module_compression, ansible_pipelining (+14 more)
 
 ### Community 62 - "Community 62"
 Cohesion: 0.09
-Nodes (22): ansible_accelerate_port, ansible_connection, ansible_current_hosts, ansible_docker_extra_args, ansible_failed_hosts, ansible_host, ansible_module_compression, ansible_pipelining (+14 more)
+Nodes (21): ansible_accelerate_port, ansible_connection, ansible_current_hosts, ansible_docker_extra_args, ansible_failed_hosts, ansible_host, ansible_module_compression, ansible_pipelining (+13 more)
 
 ### Community 63 - "Community 63"
-Cohesion: 0.10
-Nodes (16): MasterProvisionRun, MasterProvisionRun model — audit trail for salt-master provision operations.  Ea, NodeListItem, create_salt_master(), Create a new SaltMaster.      If ``api_password`` is provided it is encrypted at, SaltMasterCreate, SaltMasterResponse, str (+8 more)
+Cohesion: 0.17
+Nodes (24): bool, float, int, str, _Entry, evict(), get_healthy_models(), is_stale() (+16 more)
 
 ### Community 64 - "Community 64"
 Cohesion: 0.25
-Nodes (7): Tests for issue #592: Make AI Assistant widget draggable, translucent, fade in/o, Panel must use bg-white/90 (translucent white background)., addEventListener('resize', ...) must be present to re-clamp on window resize., A numeric threshold of 5 must be used to distinguish click from drag., test_click_drag_threshold_present(), test_panel_translucent_bg(), test_resize_listener_present()
+Nodes (7): Tests for issue #592: Make AI Assistant widget draggable, translucent, fade in/o, Panel must use bg-white/90 (translucent white background)., opacity-0 must be present (hidden/faded-out state)., addEventListener('resize', ...) must be present to re-clamp on window resize., test_fade_opacity_hidden(), test_panel_translucent_bg(), test_resize_listener_present()
 
 ### Community 65 - "Community 65"
 Cohesion: 0.09
@@ -1278,27 +1292,27 @@ Nodes (21): ansible_accelerate_port, ansible_connection, ansible_current_hosts, 
 
 ### Community 73 - "Community 73"
 Cohesion: 0.09
-Nodes (21): ansible_accelerate_port, ansible_connection, ansible_current_hosts, ansible_docker_extra_args, ansible_failed_hosts, ansible_host, ansible_module_compression, ansible_pipelining (+13 more)
+Nodes (21): ansible_accelerate_port, ansible_connection, ansible_current_hosts, ansible_docker_extra_args, ansible_failed_hosts, ansible_module_compression, ansible_pipelining, ansible_play_hosts (+13 more)
 
 ### Community 74 - "Community 74"
-Cohesion: 0.16
-Nodes (28): Executor, Any, AsyncSession, int, PendingAction, str, UUID, approve_proposal() (+20 more)
+Cohesion: 0.02
+Nodes (134): code:python (# tests/unit/test_my_service.py), code:python (# tests/integration/test_my_route.py), Integration test skeleton, Unit test skeleton, Writing a New Test, code:bash (pytest tests/integration/test_health.py -v), code:python (# tests/integration/test_node_registration.py), code:python (# tests/integration/conftest.py) (+126 more)
 
 ### Community 75 - "Community 75"
 Cohesion: 0.09
-Nodes (38): AsyncSession, str, get_alert_events_24h — alert log, get_alert_events_24h(), get_celery_queue_stats(), get_fleet_health_aggregates(), get_maintenance_heartbeat(), get_monitoring_summary() (+30 more)
+Nodes (39): AsyncSession, int, str, get_alert_events_24h — alert log, get_alert_events_24h(), get_celery_queue_stats(), get_fleet_health_aggregates(), get_maintenance_heartbeat() (+31 more)
 
 ### Community 76 - "Community 76"
-Cohesion: 0.04
-Nodes (96): get_redis(), create_access_token(), create_refresh_token(), decode_token(), get_current_user(), hash_password(), is_token_revoked(), _new_jti() (+88 more)
+Cohesion: 0.26
+Nodes (12): bool, Path, str, _check_guard(), Tests for P0 security fixes: #442 (pillar token leak) and #443 (path traversal)., Mirrors the fixed guard logic: returns True if path is safe., _scrub_token must redact a real-looking token from stdout., test_path_guard_accepts_nested_path() (+4 more)
 
 ### Community 77 - "Community 77"
-Cohesion: 0.04
-Nodes (75): AsyncSession, int, str, object, str, int, object, Session (+67 more)
+Cohesion: 0.08
+Nodes (40): AlertEvent, AlertEventsResponse, AlertRule, AlertRulesResponse, alertsApi, CreateRuleBody, CreateWebhookBody, WebhookConfig (+32 more)
 
 ### Community 78 - "Community 78"
-Cohesion: 0.06
-Nodes (24): str, _make_master(), _mock_db_context(), Unit tests for issue #557 — provision_master Celery task.  Tests cover: - OS det, Any non-Darwin uname output should use the Linux playbook., Return a MagicMock standing in for a SaltMaster ORM row., MasterProvisionRun.status should be 'completed' on success., An unexpected exception must not leave master.provision_status='provisioning'. (+16 more)
+Cohesion: 0.14
+Nodes (10): The /masters/{id}/provision POST route must be registered., The route must call provision_master.delay — not call the task directly., The route must enqueue provision_master via celery_app.send_task (not .delay())., The endpoint decorator must declare status_code=202., provision_master must appear in celery_app's registered tasks., The /masters/{id}/provision POST route must be registered., The route must enqueue provision_master via celery_app.send_task (not .delay())., The endpoint decorator must declare status_code=202. (+2 more)
 
 ### Community 79 - "Community 79"
 Cohesion: 0.10
@@ -1309,8 +1323,8 @@ Cohesion: 0.09
 Nodes (32): kri Platform Contract — Ansible & Salt Artifacts, Ansible Playbook Contract (kind: ansible_playbook), Salt State Contract (kind: salt_state), Universal Artifact Rules (size, YAML, dangerous patterns, encoding), ansible-playbook.schema.json (parsed playbook JSON Schema), salt-state.schema.json (parsed salt state JSON Schema), 10. Compliance checklist, 11. References (source of truth in the kri repo) (+24 more)
 
 ### Community 81 - "Community 81"
-Cohesion: 0.06
-Nodes (59): authApi, OidcConfig, api, ApiError, request(), tryRefresh(), wsAuthProtocols(), wsScheme() (+51 more)
+Cohesion: 0.10
+Nodes (33): authApi, OidcConfig, ApiError, request(), tryRefresh(), wsAuthProtocols(), wsScheme(), wsUrl() (+25 more)
 
 ### Community 82 - "Community 82"
 Cohesion: 0.10
@@ -1321,8 +1335,8 @@ Cohesion: 0.05
 Nodes (74): ansible_accelerate_port, ansible_connection, ansible_current_hosts, ansible_docker_extra_args, ansible_failed_hosts, ansible_host, ansible_module_compression, ansible_pipelining (+66 more)
 
 ### Community 84 - "Community 84"
-Cohesion: 0.07
-Nodes (46): SimpleNamespace, str, _ctx_factory_two_phase(), _make_db_with_master(), _make_db_with_masters(), _make_master(), _make_node(), Tests for salt minion presence sync (#254, #655).  Covers the DB-driven refactor (+38 more)
+Cohesion: 0.06
+Nodes (54): bool, int, str, SimpleNamespace, str, _ctx_factory_two_phase(), _make_db_with_master(), _make_db_with_masters() (+46 more)
 
 ### Community 85 - "Community 85"
 Cohesion: 0.10
@@ -1333,64 +1347,64 @@ Cohesion: 0.10
 Nodes (19): ansible_accelerate_port, ansible_connection, ansible_current_hosts, ansible_docker_extra_args, ansible_failed_hosts, ansible_host, ansible_module_compression, ansible_pipelining (+11 more)
 
 ### Community 87 - "Community 87"
-Cohesion: 0.04
-Nodes (52): BaseModel, Any, api singleton object, ApiError class, monitoringApi object, playbooksApi object, sbomApi object, SaltKeyWatcher component (+44 more)
+Cohesion: 0.07
+Nodes (31): code:python (# fleet_platform/services/drift_engine.py), code:bash (source .venv/bin/activate && pytest tests/unit/test_drift_en), code:bash (git add fleet_platform/services/drift_engine.py tests/unit/t), code:bash (cd /home/dk/Documents/git/kri && source .venv/bin/activate &), code:python (# tests/unit/test_baseline_loader.py), code:bash (source .venv/bin/activate && pytest tests/unit/test_baseline), code:python (# fleet_platform/services/baseline_loader.py), code:bash (mkdir -p baselines/roles) (+23 more)
 
 ### Community 88 - "Community 88"
 Cohesion: 0.07
 Nodes (45): actionApi, AgentAction, agentApi, AgentAwaitingApproval, AgentCallbacks, AgentDone, AgentErrorEvent, AgentEvent (+37 more)
 
 ### Community 89 - "Community 89"
-Cohesion: 0.09
-Nodes (36): build_fleet_context(), Fetch live fleet state and build a system prompt.      When query is provided an, Fetch live fleet state and build a system prompt.      Returns ``(system_prompt,, Fetch live fleet state and build a system prompt. Stays under ~1500 tokens., Return *context* with sensitive data selectively redacted.      When *include_ip, _redact_sensitive_data(), LLM_INCLUDE_NODE_IPS constant, Any (+28 more)
+Cohesion: 0.10
+Nodes (24): build_fleet_context(), Fetch live fleet state and build a system prompt.      When query is provided an, Fetch live fleet state and build a system prompt.      Returns ``(system_prompt,, Fetch live fleet state and build a system prompt. Stays under ~1500 tokens., LLM_INCLUDE_NODE_IPS constant, Any, MagicMock, _FakeSession (+16 more)
 
 ### Community 90 - "Community 90"
-Cohesion: 0.06
-Nodes (40): _make_db_mock(), _make_stale_job(), _patch_playbook_infra(), SoftTimeLimitExceeded must trigger runner.cancel() (#348)., SoftTimeLimitExceeded must trigger thread.join() (best-effort cleanup) (#348)., Migration 039_ansible_job_timeout.py must exist in the migrations/versions dir., run_playbook task must declare soft_time_limit=7200 as the absolute ceiling (#34, The timeout migration must add a timeout_seconds column to ansible_jobs.      Be (+32 more)
+Cohesion: 0.05
+Nodes (45): int, _make_db_mock(), _make_stale_job(), _patch_playbook_infra(), SoftTimeLimitExceeded must trigger runner.cancel() (#348)., SoftTimeLimitExceeded must trigger thread.join() (best-effort cleanup) (#348)., Migration 039_ansible_job_timeout.py must exist in the migrations/versions dir., run_playbook task must declare soft_time_limit=7200 as the absolute ceiling (#34 (+37 more)
 
 ### Community 91 - "Community 91"
-Cohesion: 0.10
-Nodes (41): bool, int, MagicMock, str, UUID, _make_db_factory(), _make_master(), _make_node() (+33 more)
+Cohesion: 0.05
+Nodes (50): buildsApi, JenkinsBuild, ChatHistoryMessage, llmApi, LLMEndpoint, LLMEndpointCreate, LLMEndpointTestResult, LLMEndpointUpdate (+42 more)
 
 ### Community 92 - "Community 92"
 Cohesion: 0.13
 Nodes (20): 16 GB is tight — the guardrails that make 14B-4bit safe, Adapting to different hardware, Agent Model Usage Guide, Cloud fallback (off by default), code:block1 (planner        → planner → general), code:bash (# 1. Stage pillar + state tops (one-time)), code:bash (salt 'mm1' service.stop ai.kri.mlx.planner   # take a planne), Deploying the models (+12 more)
 
 ### Community 93 - "Community 93"
-Cohesion: 0.13
-Nodes (32): _create_node(), _create_pending_action(), db(), _fake_request(), Expired token → status=expired, Salt never called., Reject → status=rejected, Salt never called, audit row written., If a protected target sneaks past request-time check, execution is refused., TOCTOU guard (#644): a second approve of the same token never re-dispatches. (+24 more)
+Cohesion: 0.10
+Nodes (39): _create_node(), _create_pending_action(), db(), _fake_request(), Expired token → status=expired, Salt never called., Reject → status=rejected, Salt never called, audit row written., If a protected target sneaks past request-time check, execution is refused., TOCTOU guard (#644): a second approve of the same token never re-dispatches. (+31 more)
 
 ### Community 94 - "Community 94"
-Cohesion: 0.03
-Nodes (70): code:python (# tests/integration/test_ingest_grains.py), code:bash (pytest tests/integration/test_ingest_grains.py -v), code:python (# fleet_platform/api/routes/ingest.py), code:python (from fleet_platform.api.routes import health, auth, nodes, i), code:python (app.include_router(ingest.router, tags=["ingest"])), code:bash (pytest tests/integration/test_ingest_grains.py -v), code:bash (git add fleet_platform/api/routes/ingest.py fleet_platform/a), Task 7: Grain ingest endpoint (+62 more)
+Cohesion: 0.05
+Nodes (82): Base, ExecutionIngestPayload, AsyncSession, bool, datetime, float, Node, object (+74 more)
 
 ### Community 95 - "Community 95"
-Cohesion: 0.10
-Nodes (20): Tests for node action dry_run mode (issue #617)., NodeActionRequest.dry_run can be set to True., dry_run=True must not short-circuit _validate_action_params — invalid pid must s, NodeActionRequest.dry_run can be explicitly set to False., dry_run=True on a non-existent node must return 404, not 202 dry_run., NodeActionRequest.dry_run works with params., NodeActionRequest must have dry_run field with default False., POSTing a dry_run=True action must return status='dry_run' without dispatching a (+12 more)
+Cohesion: 0.16
+Nodes (26): Raise ValueError if *state* is not a safe Salt state identifier (#775)., Any, str, ValidateState, _iter_task_modules(), Validation pipeline for agent-authored artifacts (#713).  Every playbook/state t, Yield module keys used across a list of Ansible tasks (best-effort)., _scan_dangerous() (+18 more)
 
 ### Community 96 - "Community 96"
-Cohesion: 0.08
-Nodes (25): AsyncSession, str, FleetRecommendation, FleetRecommendation, A single generated batch of fleet-wide AI recommendations.      Replaces the per, generate_fleet_recommendations(), get_latest_recommendation(), Return the newest stored recommendation, or None if none exist yet. (+17 more)
+Cohesion: 0.12
+Nodes (26): playbookSourcesApi, provisioningApi, SaltKeys, saltKeysApi, HubPage(), HubPageProps, HubTab, ToastContainer() (+18 more)
 
 ### Community 97 - "Community 97"
-Cohesion: 0.07
-Nodes (35): code:bash (cd /home/dk/Documents/git/kri), code:tsx (// frontend/src/components/StatusBadge.tsx), code:tsx (// frontend/src/components/DriftBadge.tsx), code:tsx (// frontend/src/components/Skeleton.tsx), code:tsx (// frontend/src/components/ErrorState.tsx), code:tsx (// frontend/src/components/Pagination.tsx), code:tsx (// frontend/src/components/AuthGuard.tsx), code:tsx (// frontend/src/components/Layout/Sidebar.tsx) (+27 more)
+Cohesion: 0.03
+Nodes (87): code:toml (# pyproject.toml), code:bash (# .env.example), code:gitignore (# .gitignore), code:ini (# pytest.ini), code:bash (mkdir -p platform/api/routes platform/core platform/models p), code:bash (cp .env.example .env), code:bash (git add pyproject.toml .env.example .gitignore pytest.ini pl), Task 1: Project scaffolding (+79 more)
 
 ### Community 98 - "Community 98"
-Cohesion: 0.08
-Nodes (54): PlatformSettings, AsyncSession, int, str, AsyncSession, bool, PlatformSettingsUpdate, _build_probe_url() (+46 more)
+Cohesion: 0.06
+Nodes (61): AsyncSession, int, str, PlatformSettingsUpdate, _build_probe_url(), check_connectivity(), ConnectivityCheckRequest, ConnectivityCheckResponse (+53 more)
 
 ### Community 100 - "Community 100"
 Cohesion: 0.13
 Nodes (21): derive_os_family(), Return a list of validation error strings. Empty = valid., Best-effort OS family inference from a Node row.      Node has no first-class os, validate_baseline(), test_load_baseline_yaml_from_file(), test_validate_baseline_invalid_target_type(), test_validate_baseline_missing_name(), test_validate_baseline_no_sections() (+13 more)
 
 ### Community 101 - "Community 101"
-Cohesion: 0.13
-Nodes (12): list_salt_masters(), Return all configured SaltMasters, default first then alphabetically by name., SimpleNamespace, _make_master(), Unit tests for GET /salt/masters list endpoint — issue #521, epic #523.  Tests v, Build a mock scalars result for AsyncSession.execute., Endpoint must use get_current_user — verify the dependency exists., The /masters GET route must be present on the router. (+4 more)
+Cohesion: 0.07
+Nodes (37): int, str, BootstrapRequest, Tests for #830 — runtime node_exporter/minion vars in bootstrap request.  TDD: t, :http is invalid — port must be numeric., bootstrap_full was removed (unified bootstrap); extra fields are ignored., queue_node_bootstrap signature accepts all four new optional runtime params., queue_node_bootstrap passes runtime vars to bootstrap_node.delay(). (+29 more)
 
 ### Community 102 - "Community 102"
-Cohesion: 0.04
-Nodes (106): baselinesApi, BaselineCreate, AsyncSession, datetime, int, str, AsyncSession, int (+98 more)
+Cohesion: 0.13
+Nodes (28): Any, AsyncSession, int, PendingAction, str, UUID, approve_proposal(), create_proposal() (+20 more)
 
 ### Community 103 - "Community 103"
 Cohesion: 0.09
@@ -1398,35 +1412,35 @@ Nodes (39): _make_dirs_mock(), _master_mock(), A pending key can be accepted and
 
 ### Community 104 - "Community 104"
 Cohesion: 0.10
-Nodes (32): close_redis(), init_redis(), lifespan(), configure_logging(), get_logger(), close_redis(), init_redis(), Shared async Redis client lifecycle.  Lives in ``core`` so that BOTH the API lay (+24 more)
+Nodes (31): close_redis(), init_redis(), lifespan(), configure_logging(), get_logger(), close_redis(), init_redis(), Shared async Redis client lifecycle.  Lives in ``core`` so that BOTH the API lay (+23 more)
 
 ### Community 105 - "Community 105"
 Cohesion: 0.07
-Nodes (43): _arg(), assert_live_action_allowed(), co_sign_required(), GuardError, Safety guards for agent live-apply tools (#714).  These run *before* a gated liv, Raised when a live action is refused by a safety guard., Refuse live actions against protected targets / protected nodes.      Raises Gua, True when an action hits more than the co-sign threshold of targets (#714). (+35 more)
+Nodes (58): create_access_token(), create_refresh_token(), decode_token(), get_current_user(), is_token_revoked(), _new_jti(), revoke_token(), _unauthorized() (+50 more)
 
 ### Community 106 - "Community 106"
-Cohesion: 0.10
-Nodes (21): _healthy_probe_result(), _make_master(), Unit tests for salt-master health polling — issue #519, epic #523.  All DB and r, poll_salt_masters updates status/checks/last_checked_at from probe result., poll_salt_masters sets last_error to the first failed check detail., An unreachable master checked recently (within backoff) is skipped., An unreachable master whose last_checked_at is past the backoff window IS polled, A disabled master is never polled (the query filter handles it,         but we v (+13 more)
+Cohesion: 0.09
+Nodes (25): get_salt_master_health(), Return the cached health status for a SaltMaster row.      Reads the persisted `, Return the cached health status for a SaltMaster row.      Reads the persisted `, Return the cached health status for a SaltMaster row.      Reads the persisted `, _healthy_probe_result(), _make_master(), Unit tests for salt-master health polling — issue #519, epic #523.  All DB and r, poll_salt_masters updates status/checks/last_checked_at from probe result. (+17 more)
 
 ### Community 107 - "Community 107"
 Cohesion: 0.07
 Nodes (32): 1. Prompt injection (via node fields, playbooks, tool results, user input), 2. Confused deputy (agent acts with more authority than the operator), 3. Privilege escalation via tools / fuzzing, 4. Destructive / control-plane actions, 5. Quarantine escape / promotion without review, 6. Runaway loops / resource exhaustion, 7. Unbounded cloud spend, 8. Audit tampering (+24 more)
 
 ### Community 108 - "Community 108"
-Cohesion: 0.16
-Nodes (14): ChatHistoryMessage, Tests for LLM conversation history (closes #282)., History entries are included as a messages array in the request (#282)., When history exceeds 6000-token budget, oldest turns are dropped first., Requests without history field are valid and produce empty history., History entries appear between system and user in the messages list., test_empty_history_backward_compat(), test_history_assembled_as_messages_array() (+6 more)
+Cohesion: 0.14
+Nodes (26): ps_empty_node(), ps_read_node(), GET /process_stats on an unknown UUID returns 404., GET /process_stats for a node with no rows returns 200 with empty processes., Only rows from the most recent collected_at are returned., Default sort is mem_rss_bytes DESC — first row has the highest value., sort=cpu_pct returns rows in descending CPU order., limit=1 returns at most 1 process regardless of how many exist. (+18 more)
 
 ### Community 109 - "Community 109"
-Cohesion: 0.07
-Nodes (11): _build_salt_invocation(), Map an approved action to (salt_function, args).      Raises HTTPException(400), Unit tests for _build_salt_invocation and service.disable allowlist — #614., TestBuildSaltInvocation, TestDefaultSaltFunctionsAllowlist, Unit tests for the guarded compute-harden / unharden node action — #675.  Covers, TestHardenClassification, TestHardenSaltMapping (+3 more)
+Cohesion: 0.15
+Nodes (5): _build_salt_invocation(), Map an approved action to (salt_function, args).      Raises HTTPException(400), Unit tests for _build_salt_invocation and service.disable allowlist — #614., TestBuildSaltInvocation, TestExistingMappingsStillHold
 
 ### Community 110 - "Community 110"
 Cohesion: 0.10
 Nodes (22): date, Any, bool, float, int, can_spend(), _CostState, Cloud-fallback cost tracking + daily cap (#715).  The local MLX cluster serves ~ (+14 more)
 
 ### Community 111 - "Community 111"
-Cohesion: 0.10
-Nodes (23): Unit tests for P1 audit #639 — llm_query_log retention + response truncation., _MAX_LOGGED_RESPONSE_CHARS must be defined in llm_svc., Pure truncation contract: a response longer than the limit is sliced to exactly, A response shorter than the limit must be stored unchanged., cleanup_old_llm_logs must return {"deleted": rowcount} from the DB result., None response must stay None — no AttributeError from slicing., create_query_log must store response truncated to _MAX_LOGGED_RESPONSE_CHARS., celery_app.py beat_schedule must contain cleanup-old-llm-logs on queue maintenan (+15 more)
+Cohesion: 0.20
+Nodes (18): _credential(), _node(), All credential-bearing groups are unusable AND the node is bootstrapped     -> f, A node whose top-priority group credential is unusable, but whose     second gro, Querying by the UNUSABLE top-priority credential's id must return no     results, Mimics a SQLAlchemy (Credential, group_name) Row consumed via ``.all()``., A credential whose ``secret_enc`` is garbage -> decrypts to '' -> unusable., #1004 C2: the statement must return ALL ordered rows, not just the     top-prior (+10 more)
 
 ### Community 112 - "Community 112"
 Cohesion: 0.09
@@ -1434,23 +1448,23 @@ Nodes (12): str, classify_git_error(), git_auth_env(), Hardened git subprocess e
 
 ### Community 113 - "Community 113"
 Cohesion: 0.05
-Nodes (51): API endpoints for telemetry, Backup and Restore, Backup and Restore Procedure, Bootstrap Telemetry, Bootstrap Troubleshooting, code:bash (sudo mkdir -p /srv/salt/pillar), code:bash (git checkout .env), code:bash (# All services status) (+43 more)
+Nodes (48): API endpoints for telemetry, Backup and Restore, Backup and Restore Procedure, Bootstrap Telemetry, Bootstrap Troubleshooting, code:bash (sudo mkdir -p /srv/salt/pillar), code:bash (git checkout .env), code:bash (# All services status) (+40 more)
 
 ### Community 114 - "Community 114"
 Cohesion: 0.12
 Nodes (35): int, str, collect_all_metrics(), parse_disk_usage(), parse_gpu_info(), parse_inode_usage(), parse_loadavg(), parse_powermetrics() (+27 more)
 
 ### Community 115 - "Community 115"
-Cohesion: 0.15
-Nodes (27): bool, float, int, str, clear(), evict(), get_healthy_models(), is_stale() (+19 more)
+Cohesion: 0.18
+Nodes (21): ProvisioningProfile, AsyncSession, bytes, str, UUID, ProvisioningProfile, delete_profile(), download_profile() (+13 more)
 
 ### Community 116 - "Community 116"
 Cohesion: 0.10
 Nodes (20): 12. API Design, code:json (// Success (list)), code:block43 (GET /api/v1/fleet/overview), code:block44 (GET /api/v1/nodes?status=online&group_id=uuid&tag=role:build), code:block45 (GET /api/v1/nodes/{node_id}), code:block46 (GET /api/v1/drift?severity=medium&group_id=uuid&from=2026-05), code:block47 (GET /api/v1/sbom/search?q=openssl&node_id=uuid&page=1&per_pa), code:block48 (GET /api/v1/groups) (+12 more)
 
 ### Community 117 - "Community 117"
-Cohesion: 0.09
-Nodes (26): str, _parse(), Unit tests for P1 backend bug fixes (#64, #105, #126).  Behavioral conversion (#, A missing webhook must 404 before any delivery is attempted., credential_resolver.py must log decryption failures., list_models must return the shared model catalog (its actual output)., security.py integration_status must not call blocking subprocess.run in async co, _decrypt_or_blank must log a warning and return "" when decrypt_secret raises. (+18 more)
+Cohesion: 0.08
+Nodes (32): str, _models_role_guard(), _parse(), Unit tests for P1 backend bug fixes (#64, #105, #126).  Behavioral conversion (#, A missing webhook must 404 before any delivery is attempted., Return the require_role dependency closure attached to GET /llm/models., The model catalog is read-only — a viewer claim must pass the auth guard., credential_resolver.py must log decryption failures. (+24 more)
 
 ### Community 118 - "Community 118"
 Cohesion: 0.10
@@ -1474,11 +1488,11 @@ Nodes (30): Bare-metal / local development, code:bash (sudo systemctl enable sal
 
 ### Community 123 - "Community 123"
 Cohesion: 0.06
-Nodes (32): main, int, approve_app(), _FakeResult, _FakeSession, _limit_windows(), Behavioral rate-limit tests for node action endpoints (issue #616).  Previously, The 21st POST to /api/v1/actions/{token}/approve within the window is rejected w (+24 more)
+Nodes (31): int, approve_app(), _FakeResult, _FakeSession, _limit_windows(), Behavioral rate-limit tests for node action endpoints (issue #616).  Previously, The 21st POST to /api/v1/actions/{token}/approve within the window is rejected w, Verify the node_actions module imports Request and limiter without errors. (+23 more)
 
 ### Community 124 - "Community 124"
-Cohesion: 0.18
-Nodes (35): _apply_salt_state(), _apply_salt_state_dry_run(), _author_artifact(), _dry_run_artifact(), _embed_text(), _enable_node(), _generate_ansible_playbook(), _generate_salt_state() (+27 more)
+Cohesion: 0.11
+Nodes (51): _apply_salt_state(), _apply_salt_state_dry_run(), _author_artifact(), _dry_run_artifact(), _embed_text(), _enable_node(), _generate_ansible_playbook(), _generate_salt_state() (+43 more)
 
 ### Community 125 - "Community 125"
 Cohesion: 0.09
@@ -1493,28 +1507,28 @@ Cohesion: 0.08
 Nodes (33): Path, str, _all_role_yaml_files(), _bootstrap_play(), _bootstrap_plays(), _bootstrap_text(), _monitoring_play(), _non_comment_text() (+25 more)
 
 ### Community 128 - "Community 128"
-Cohesion: 0.10
-Nodes (32): AsyncSession, Request, str, UUID, action_confirm_page(), approve_action(), ask_ai_about_node(), get_node_metrics() (+24 more)
+Cohesion: 0.22
+Nodes (22): playbook_tasks, Path, str, UUID, _commit_var_files(), _credential_source_banner(), _flush_stdout(), _get_bootstrap_settings import (+14 more)
 
 ### Community 129 - "Community 129"
-Cohesion: 0.08
-Nodes (27): 1. Spec coverage vs acceptance criteria, 2. Placeholder scan, 3. Type consistency, Self-Review, code:python (# fleet_platform/schemas/builds.py), code:python (# fleet_platform/api/routes/builds.py), code:python (from fleet_platform.api.routes.builds import router as build), code:python (app.include_router(builds_router, tags=["builds"])) (+19 more)
+Cohesion: 0.06
+Nodes (34): code:python (# fleet_platform/schemas/builds.py), code:python (# fleet_platform/api/routes/builds.py), code:python (from fleet_platform.api.routes.builds import router as build), code:python (app.include_router(builds_router, tags=["builds"])), code:bash (source .venv/bin/activate && pytest tests/integration/test_b), code:bash (git add fleet_platform/schemas/builds.py \), code:python (# Email digest + Jenkins settings), code:python (def get_setting_sync(db: "Session", key: str) -> str | None:) (+26 more)
 
 ### Community 130 - "Community 130"
-Cohesion: 0.06
-Nodes (33): code:python (# tests/unit/test_salt_maintenance_svc.py), code:python (from fleet_platform.models.node_health_snapshot import NodeH), code:python ("""Create node_health_snapshots table), code:bash (source /home/dk/Documents/git/kri/.venv/bin/activate && pyte), code:bash (git add fleet_platform/models/node_health_snapshot.py \), code:python (# tests/unit/test_health_tasks.py), code:bash (source /home/dk/Documents/git/kri/.venv/bin/activate && pyte), code:python ("collect-fleet-health": {) (+25 more)
+Cohesion: 0.05
+Nodes (41): 1. Spec coverage vs acceptance criteria, 2. Placeholder scan, 3. Type consistency, code:python (# tests/unit/test_salt_maintenance_svc.py), code:python (from fleet_platform.models.node_health_snapshot import NodeH), code:python ("""Create node_health_snapshots table), code:bash (source /home/dk/Documents/git/kri/.venv/bin/activate && pyte), code:bash (git add fleet_platform/models/node_health_snapshot.py \) (+33 more)
 
 ### Community 131 - "Community 131"
 Cohesion: 0.06
 Nodes (32): 0. Problem Statement, 1. What Already Exists, 2.1 Data Collection Strategy, 2.2 Backend Services, 2.3 New API Endpoints, 2.4 Recommendations Engine, 2. Proposed Architecture, 3.1 Node System Health Tab (in NodeDetail) (+24 more)
 
 ### Community 132 - "Community 132"
-Cohesion: 0.13
-Nodes (25): AlertEvent, CeleryQueues, FleetHealth, HttpRequest, MaintenanceHeartbeat, monitoringApi, MonitoringSummary, NodeCounts (+17 more)
+Cohesion: 0.07
+Nodes (27): code:block1 (fleet_platform/), code:python (# tests/integration/test_nodes_api.py), code:bash (source .venv/bin/activate && pytest tests/integration/test_n), code:python (import uuid), code:python (@router.get("", response_model=PaginatedResponse[NodeListIte), code:bash (source .venv/bin/activate && pytest tests/integration/test_n), code:python (_SORT_FIELDS = {"drift_score", "hostname", "status", "last_s), code:bash (git add fleet_platform/api/routes/nodes.py tests/integration) (+19 more)
 
 ### Community 133 - "Community 133"
-Cohesion: 0.13
-Nodes (29): AlertEvent, AlertRule, AlertEvent, AlertRule, AsyncSession, _check_cve_found(), _check_drift_threshold(), _check_key_pending() (+21 more)
+Cohesion: 0.05
+Nodes (85): collect_grains(), Trigger an Ansible run to collect grains from a live node and push to ingest., get_db(), fleetHealthApi, formatPower(), formatUptime(), NodeHealthSnapshot, thermalColor() (+77 more)
 
 ### Community 134 - "Community 134"
 Cohesion: 0.04
@@ -1533,8 +1547,8 @@ Cohesion: 0.10
 Nodes (23): str, classify_intent(), Heuristic intent classifier for the LLM Fleet Assistant.  Routes the user prompt, # IMPORTANT: explain must precede generation intents (#778, #670)., Return the intent string for the given prompt.      Checks rules in order: expla, Tests for LLM agent hardening: prompt/cost/output path fixes.  Covers:   #770 —, explain my ansible playbook' must route to explain, not ansible_playbook.     'l, TestIntentClassifier (+15 more)
 
 ### Community 138 - "Community 138"
-Cohesion: 0.12
-Nodes (28): bool, str, _has_stripped_unicode(), is_sensitive_key(), is_suspicious(), Prompt-injection sanitization for fleet-controlled strings (#710).  Node fields, Return True if *key* (case-insensitive) matches any sensitive pattern., True if the value carries a prompt-injection / control marker. (+20 more)
+Cohesion: 0.09
+Nodes (31): bool, object, str, _has_stripped_unicode(), is_suspicious(), Prompt-injection sanitization for fleet-controlled strings (#710).  Node fields, Recursively sanitize string leaf values in a tool result payload (#770).      Wa, True if the value carries a prompt-injection / control marker. (+23 more)
 
 ### Community 139 - "Community 139"
 Cohesion: 0.11
@@ -1545,28 +1559,28 @@ Cohesion: 0.10
 Nodes (26): Path, str, tests/unit/test_standalone_systemd_431.py  Validates that the standalone systemd, Worker must NOT run migrations — only the API does., Beat must NOT run migrations — only the API does., _read(), test_all_units_have_environment_file(), test_all_units_restart_on_failure() (+18 more)
 
 ### Community 141 - "Community 141"
-Cohesion: 0.21
-Nodes (14): str, _fake_metrics(), _make_node(), When online nodes are found, exactly 2 get_sync_db() calls must be made., When there are no online nodes, only 1 DB session is opened (early return)., Session 1 must be fully closed (exited) before Salt metric collection., test_collect_fleet_health_closes_session_before_salt_calls(), test_collect_fleet_health_no_nodes_uses_one_session() (+6 more)
+Cohesion: 0.10
+Nodes (26): Shared field validators for Pydantic schemas (#752).  A single authoritative def, Pydantic-compatible validator for ``minion_id`` fields.      Raises ``ValueError, validate_minion_id(), str, str, Property-based tests for pure helper functions (#808).  Covers: - fleet_platform, redact_cmdline must not raise for any string input., redact(redact(x)) == redact(x) for any input. (+18 more)
 
 ### Community 142 - "Community 142"
 Cohesion: 0.12
 Nodes (26): ismount(), Test whether a path is a mount point     This is a copy of the upstream version, _escape_fstab(), get_linux_mounts(), is_bind_mounted(), _is_same_mount_src(), main(), mount() (+18 more)
 
 ### Community 143 - "Community 143"
-Cohesion: 0.13
-Nodes (34): fleetHealthApi, formatPower(), formatUptime(), NodeHealthSnapshot, thermalColor(), AsyncSession, int, str (+26 more)
+Cohesion: 0.02
+Nodes (97): code:bash (source .venv/bin/activate && python -m pytest tests/ -q --no), code:bash (cd /home/dk/Documents/git/kri/frontend && npx tsc --noEmit &), Task 8: Full test suite verification, Audit Fix Plan 9 — Missing Features: User Management, Node Decommission, Audit Log API, code:bash (source .venv/bin/activate), code:bash (cd /home/dk/Documents/git/kri/frontend && npx tsc --noEmit), Self-Review, Task 4: Full Test Suite Verification (+89 more)
 
 ### Community 144 - "Community 144"
 Cohesion: 0.09
 Nodes (20): str, _FakeResult, _FakeRetrieveSession, _FakeUpsertSession, _load_golden(), _node_chunk(), Unit tests for the RAG overhaul (#573 reindex routing + true upsert/sweep, #574, Records add()/DELETE/commit; returns preset rows for the SELECT. (+12 more)
 
 ### Community 145 - "Community 145"
-Cohesion: 0.12
-Nodes (17): Empty processes list is accepted; rows == 0, dropped == 0., A Node with a known X-Node-Token, plus a client preconfigured with it., 401 when X-Node-Token header is absent., 404 when minion_id is not registered., 200 + correct row count for a valid authenticated request.      `registered_node, Empty processes list is accepted; rows == 0, dropped == 0., Payloads with >250 processes are capped; dropped count is returned., registered_node_client() (+9 more)
+Cohesion: 0.08
+Nodes (34): Empty processes list is accepted; rows == 0, dropped == 0., A Node with a known X-Node-Token, plus a client preconfigured with it., 401 when X-Node-Token header is absent., 404 when minion_id is not registered., 200 + correct row count for a valid authenticated request.      `registered_node, Empty processes list is accepted; rows == 0, dropped == 0., Payloads with >250 processes are capped; dropped count is returned., registered_node_client() (+26 more)
 
 ### Community 146 - "Community 146"
-Cohesion: 0.15
-Nodes (13): code:typescript (// frontend/src/api/client.ts), code:typescript (// frontend/src/api/auth.ts), code:typescript (// frontend/src/api/fleet.ts), code:typescript (// frontend/src/api/drift.ts), code:typescript (// frontend/src/api/sbom.ts), code:typescript (// frontend/src/api/groups.ts), code:typescript (// frontend/src/api/executions.ts), code:typescript (// frontend/src/api/search.ts) (+5 more)
+Cohesion: 0.05
+Nodes (73): Any, AsyncSession, bool, float, int, str, Integration tests for the RAG pipeline — requires real PostgreSQL with pgvector., upsert_chunks must re-embed when chunk_text changes. (+65 more)
 
 ### Community 147 - "Community 147"
 Cohesion: 0.06
@@ -1585,52 +1599,52 @@ Cohesion: 0.19
 Nodes (29): Any, float, int, object, Path, str, PathLike, assert_within_session() (+21 more)
 
 ### Community 151 - "Community 151"
-Cohesion: 0.13
-Nodes (15): bool, str, FakeAction, FakeDB, FakeResult, Unit tests for #772 — operators must not self-approve their own proposals.  An o, A second operator who is not the requester can approve without co-sign., Existing co-sign guard: first approver cannot also be the co-signer. (+7 more)
+Cohesion: 0.12
+Nodes (19): ApprovalError, Raised when an approval/co-sign transition is not permitted., str, bool, str, FakeAction, FakeDB, FakeResult (+11 more)
 
 ### Community 152 - "Community 152"
-Cohesion: 0.11
-Nodes (28): AsyncClient, admin_client(), admin_user(), anon_client(), auth_headers(), existing_node(), Unit tests for GET /api/v1/fleet/nodes/check-minion-id, A node already registered in the database. (+20 more)
+Cohesion: 0.10
+Nodes (30): AsyncClient, admin_client(), admin_user(), anon_client(), app_with_test_db(), auth_headers(), existing_node(), Unit tests for GET /api/v1/fleet/nodes/check-minion-id (+22 more)
 
 ### Community 153 - "Community 153"
 Cohesion: 0.07
 Nodes (19): collector(), _load_collector(), Unit tests for TLS-verification support in process_collector — GitHub issue #639, Verify that post() passes the right ssl context to urlopen based on env., With INGEST_TLS_VERIFY unset (default), context passed to urlopen is None., With INGEST_TLS_VERIFY=false, context passed to urlopen is an SSLContext., With INGEST_TLS_VERIFY=0, context is an SSLContext (falsy value)., With INGEST_TLS_VERIFY=no, context is an SSLContext (falsy value). (+11 more)
 
 ### Community 154 - "Community 154"
-Cohesion: 0.20
-Nodes (10): Accumulate fragmented ``tool_calls`` deltas from an OpenAI-style SSE stream., ToolCallAccumulator, int, str, Name in first chunk, arguments split across all three → one ToolCall., Two concurrent tool calls at index 0 and 1 → two ToolCalls in index order., Delta without tool_calls key (e.g. content delta) must be silently ignored., If concatenated fragments can't be parsed → arguments={}. (+2 more)
+Cohesion: 0.08
+Nodes (24): code:python (async def test_get_node_facts_no_grains_returns_empty(admin_), code:bash (source .venv/bin/activate && pytest tests/integration/test_n), code:python (from datetime import UTC, datetime), code:python (@router.get("/{node_id}/facts")), code:bash (source .venv/bin/activate && pytest tests/integration/test_n), code:bash (git add fleet_platform/api/routes/nodes.py tests/integration), Task 4: Node facts, packages, and tags endpoints, code:bash (TEST_DATABASE_URL=postgresql+psycopg://fleet:fleet@localhost) (+16 more)
 
 ### Community 155 - "Community 155"
-Cohesion: 0.12
-Nodes (4): TestSaltMasterResponseSchemaSecrets, api_url must be present in Response as a read-only derived field., TestSaltMasterResponseSchema, TestSaltMasterSchemas
+Cohesion: 0.09
+Nodes (21): Unit tests for P1 audit #639 — llm_query_log retention + response truncation., _MAX_LOGGED_RESPONSE_CHARS must be defined in llm_svc., Pure truncation contract: a response longer than the limit is sliced to exactly, A response shorter than the limit must be stored unchanged., cleanup_old_llm_logs must return {"deleted": rowcount} from the DB result., None response must stay None — no AttributeError from slicing., create_query_log must store response truncated to _MAX_LOGGED_RESPONSE_CHARS., celery_app.py beat_schedule must contain cleanup-old-llm-logs on queue maintenan (+13 more)
 
 ### Community 156 - "Community 156"
-Cohesion: 0.12
-Nodes (12): _FakeAction, _FakeSession, _FakeSessionReturnsNone, Unit tests for issue #621 — real execution outcome tracking via Celery callback., Minimal stand-in for a PendingAction ORM row., Minimal sync Session stub., TestFinalizeNodeAction, TestStatusFromSaltResult (+4 more)
+Cohesion: 0.17
+Nodes (9): _FakeAction, _FakeSession, _FakeSessionReturnsNone, Unit tests for issue #621 — real execution outcome tracking via Celery callback., Minimal stand-in for a PendingAction ORM row., Minimal sync Session stub., TestFinalizeNodeAction, finalize_node_action() (+1 more)
 
 ### Community 157 - "Community 157"
-Cohesion: 0.16
-Nodes (26): Raise ValueError if *state* is not a safe Salt state identifier (#775)., Any, str, ValidateState, _iter_task_modules(), Validation pipeline for agent-authored artifacts (#713).  Every playbook/state t, Yield module keys used across a list of Ansible tasks (best-effort)., _scan_dangerous() (+18 more)
+Cohesion: 0.08
+Nodes (31): str, _host(), Tests for #354: TOFU host-key verification in run_playbook.  ansible.cfg ships S, Even with no keyed hosts, known_hosts file must exist (0600) and be empty., Empty host list → empty file, all_have_keys=False., _host_entry must include 'ssh_host_key' from node.ssh_host_key., _host_entry must return ssh_host_key='' when node.ssh_host_key is None., _host_entry with manual override must still include ssh_host_key (empty when ove (+23 more)
 
 ### Community 158 - "Community 158"
-Cohesion: 0.09
-Nodes (19): Tests for cancel playbook job endpoint (#342) and timeout settings (#343)., ANSIBLE_TIMEOUT must be 10s so unreachable hosts fail within 5 min.     Moved fr, Cannot cancel a job that's already in a terminal state., Cannot cancel a job that already failed., Returns 404 when job_id does not exist., Successfully cancels a running job — status becomes 'cancelled'., 3 total SSH attempts (initial + 2 retries)., 3 total SSH attempts (initial + 2 retries).     Moved from envvars to playbooks/ (+11 more)
+Cohesion: 0.06
+Nodes (55): Typed tool registry for the agent (#711).  A `ToolSpec` is a frozen, self-descri, In-memory catalogue of ToolSpecs keyed by name., Enabled tools the role may call. Kill-switched tools are never returned., One agent capability. Frozen so a registered spec can't mutate under us., ToolRegistry, ToolSpec, AuditHook, ToolRegistry (+47 more)
 
 ### Community 159 - "Community 159"
 Cohesion: 0.06
-Nodes (55): Non-https URLs must be rejected., Non-https URLs must be rejected (unless loopback/private)., Full CRUD cycle: create a webhook, verify 201, then delete it, verify 204., Operators cannot create webhooks — only admins can., GET /events returns 200 with an items list (may be empty)., GET /rules returns 200 with an items list (may be empty)., POSTing to test-webhook with a non-existent ID returns 404., Operators cannot trigger webhook tests. (+47 more)
+Nodes (54): Non-https URLs must be rejected., Non-https URLs must be rejected (unless loopback/private)., Full CRUD cycle: create a webhook, verify 201, then delete it, verify 204., Operators cannot create webhooks — only admins can., GET /events returns 200 with an items list (may be empty)., GET /rules returns 200 with an items list (may be empty)., POSTing to test-webhook with a non-existent ID returns 404., Operators cannot trigger webhook tests. (+46 more)
 
 ### Community 160 - "Community 160"
 Cohesion: 0.10
 Nodes (17): auth_client(), auth_fake_redis(), _FakeRedis, Simple in-memory Redis stand-in that tracks setex/exists state., After logout with refresh_token, the refresh token must be rejected., Using a refresh token issues new access + new refresh; old refresh is revoked., Logout with no refresh_token body still returns 204., Module-scoped stateful Redis stand-in shared across auth tests. (+9 more)
 
 ### Community 161 - "Community 161"
-Cohesion: 0.09
-Nodes (35): AlertEvent, AlertEventsResponse, AlertRule, AlertRulesResponse, alertsApi, CreateRuleBody, CreateWebhookBody, WebhookConfig (+27 more)
+Cohesion: 0.08
+Nodes (55): auditApi, AuditListParams, AuditListResponse, driftApi, DriftComparePackage, DriftCompareResult, DriftPackageState, GroupCredentials (+47 more)
 
 ### Community 162 - "Community 162"
-Cohesion: 0.13
-Nodes (27): ps_empty_node(), ps_read_node(), GET /process_stats on an unknown UUID returns 404., GET /process_stats for a node with no rows returns 200 with empty processes., Only rows from the most recent collected_at are returned., Default sort is mem_rss_bytes DESC — first row has the highest value., sort=cpu_pct returns rows in descending CPU order., limit=1 returns at most 1 process regardless of how many exist. (+19 more)
+Cohesion: 0.10
+Nodes (26): int, MagicMock, str, UUID, _make_db_ctx(), _make_node(), _make_run_async(), Tests for #509 — drop vestigial local pillar write from bootstrap_node.  Two con (+18 more)
 
 ### Community 163 - "Community 163"
 Cohesion: 0.07
@@ -1641,8 +1655,8 @@ Cohesion: 0.09
 Nodes (40): _make_catalog_entry(), Integration tests for playbook library API., POST /disable sets enabled=False on the catalog row., POST /disable with unknown UUID returns 404., POST /disable returns id and enabled=False., POST /enable-source returns source_key and enabled_count., Insert a catalog row and return it., POST then DELETE /favorites/{id} round-trip. (+32 more)
 
 ### Community 165 - "Community 165"
-Cohesion: 0.12
-Nodes (12): AsyncSession, MonitoringSummarySchema, monitoring_summary(), Return aggregated monitoring stats: node counts, queue depths, alert events, HTT, NodeCountsSchema, object, Behavioral tests for #45: monitoring stats page.  Backend checks now import the, The monitoring summary route must be mounted on the real FastAPI app. (+4 more)
+Cohesion: 0.14
+Nodes (26): Return an error string if ``args`` violate ``schema``, else None., validate_args(), Per-tool input fuzzing — the schema validator must never crash, and must reject, test_missing_required_is_rejected(), test_oversized_string_rejected_when_maxlength_set(), test_validate_args_never_crashes_on_garbage(), _ctx(), #711 Phase B — executor dispatch: RBAC, validation, gates, idempotency, audit. (+18 more)
 
 ### Community 166 - "Community 166"
 Cohesion: 0.06
@@ -1653,24 +1667,24 @@ Cohesion: 0.11
 Nodes (27): str, _default_allowed(), _fake_db_ctx(), When no SaltMaster row exists, apply_salt_state returns a clear error (#562)., Return a context manager that yields a MagicMock db session., An allowlisted function triggers a POST to the salt-api /run endpoint., apply_salt_state sends state name and optional pillar to salt-api., A ConnectionError to salt-api returns a descriptive error dict. (+19 more)
 
 ### Community 168 - "Community 168"
-Cohesion: 0.08
-Nodes (31): str, _host(), Tests for #354: TOFU host-key verification in run_playbook.  ansible.cfg ships S, Even with no keyed hosts, known_hosts file must exist (0600) and be empty., Empty host list → empty file, all_have_keys=False., _host_entry must include 'ssh_host_key' from node.ssh_host_key., _host_entry must return ssh_host_key='' when node.ssh_host_key is None., _host_entry with manual override must still include ssh_host_key (empty when ove (+23 more)
+Cohesion: 0.13
+Nodes (25): AlertEvent, CeleryQueues, FleetHealth, HttpRequest, MaintenanceHeartbeat, monitoringApi, MonitoringSummary, NodeCounts (+17 more)
 
 ### Community 169 - "Community 169"
-Cohesion: 0.05
-Nodes (53): buildsApi, JenkinsBuild, ChatHistoryMessage, llmApi, LLMEndpoint, LLMEndpointCreate, LLMEndpointTestResult, LLMEndpointUpdate (+45 more)
+Cohesion: 0.07
+Nodes (17): list_salt_masters(), Return all configured SaltMasters, default first then alphabetically by name., Return all configured SaltMasters, default first then alphabetically by name., Return all configured SaltMasters, default first then alphabetically by name., SimpleNamespace, TestSaltMasterResponseSchemaSecrets, api_url must be present in Response as a read-only derived field., TestSaltMasterResponseSchema (+9 more)
 
 ### Community 170 - "Community 170"
-Cohesion: 0.21
-Nodes (17): test_add_tag_requires_operator(), test_add_tag_to_node(), test_delete_nonexistent_tag_returns_404(), test_delete_tag_from_node(), test_get_node_detail(), test_get_node_facts_returns_200(), test_get_node_not_found(), test_get_node_requires_auth() (+9 more)
+Cohesion: 0.08
+Nodes (42): AsyncSession, int, str, UUID, AsyncSession, int, str, UUID (+34 more)
 
 ### Community 171 - "Community 171"
-Cohesion: 0.13
-Nodes (24): discover_models_with_health(), Query provider for models and assess health. Populates the health cache.      Re, MagicMock, str, _make_client(), Unit tests for discover_models_with_health and health cache integration., Build an AsyncMock httpx client context manager., test_empty_on_unreachable_endpoint() (+16 more)
+Cohesion: 0.11
+Nodes (28): discover_models_with_health(), Query provider for models and assess health. Populates the health cache.      Re, clear(), Wipe the cache — for tests only., MagicMock, str, _make_client(), Unit tests for discover_models_with_health and health cache integration. (+20 more)
 
 ### Community 172 - "Community 172"
 Cohesion: 0.04
-Nodes (80): LLM-backed planner for the agent loop (#711, #651).  The :class:`AgentLoop` depe, int, str, bool, int, str, _budget_inputs(), call_anthropic() (+72 more)
+Nodes (106): AsyncSession, Path, str, UUID, AsyncSession, int, PlaybookCatalog, str (+98 more)
 
 ### Community 173 - "Community 173"
 Cohesion: 0.09
@@ -1681,16 +1695,16 @@ Cohesion: 0.09
 Nodes (26): ConfigParser, _parsed_cfg(), ANSIBLE_SSH_ARGS is a dynamic per-run security override (#354): must be present, ANSIBLE_TIMEOUT moved to ansible.cfg — must not be in envvars., ANSIBLE_SSH_RETRIES moved to ansible.cfg — must not be in envvars., ANSIBLE_TASK_TIMEOUT moved to ansible.cfg — must not be in envvars., ANSIBLE_FORCE_COLOR is dynamic/delivery-critical — must NOT be removed., ANSIBLE_COLLECTIONS_PATH is path-dependent per source — must stay in envvars. (+18 more)
 
 ### Community 175 - "Community 175"
-Cohesion: 0.14
-Nodes (12): Unit tests for #67 (OIDC exception logging) and #72 (login SSO error banner).  B, oidc_login must logger.exception(...) and 503 when discovery blows up., oidc_callback must logger.exception(...) and 503 when discovery blows up., An expired/invalid state must 400 before any discovery work — behavioral guard., All OIDC exception handlers must call logger.exception., The OIDC module must define a real module-level logger (#67)., _settings(), test_oidc_callback_logs_exception_on_discovery_failure() (+4 more)
+Cohesion: 0.16
+Nodes (4): _is_dangerous(), Return the matched pattern description if command is dangerous, else None., _is_dangerous returns the matched pattern or None., TestIsDangerous
 
 ### Community 176 - "Community 176"
-Cohesion: 0.09
-Nodes (29): Any, SaltMaster, str, _post(), Reusable synchronous salt-api client — epic #523, issue #518.  Wraps salt-api /r, POST *lowstate* to ``master.api_url/run`` and return ``return[0]``.      Injects, Call a salt wheel function via salt-api.      ``fun`` examples: ``"key.list_all", Call a salt runner function via salt-api.      ``fun`` examples: ``"test.ping"`` (+21 more)
+Cohesion: 0.10
+Nodes (26): Any, SaltMaster, str, _post(), Reusable synchronous salt-api client — epic #523, issue #518.  Wraps salt-api /r, POST *lowstate* to ``master.api_url/run`` and return ``return[0]``.      Injects, Call a salt wheel function via salt-api.      ``fun`` examples: ``"key.list_all", Call a salt runner function via salt-api.      ``fun`` examples: ``"test.ping"`` (+18 more)
 
 ### Community 177 - "Community 177"
-Cohesion: 0.15
-Nodes (13): bool, int, str, deriveApiUrl(), _derive_api_url(), Compute api_url from the SSoT fields — the single source of truth (#562)., TestDeriveApiUrl, Unit tests for Salt Masters SSoT api_url derivation — issue #562.  Tests cover: (+5 more)
+Cohesion: 0.07
+Nodes (30): code:python (# tests/unit/test_ingest_schemas.py), code:bash (pytest tests/unit/test_ingest_schemas.py -v), code:python (# fleet_platform/schemas/node.py), code:python (# fleet_platform/schemas/ingest.py), code:bash (pytest tests/unit/test_ingest_schemas.py -v), code:bash (git add fleet_platform/schemas/node.py fleet_platform/schema), Task 5: Schemas — NodeRegister + IngestPayloads, code:python (# tests/unit/test_fleet_schemas.py) (+22 more)
 
 ### Community 178 - "Community 178"
 Cohesion: 0.13
@@ -1705,8 +1719,8 @@ Cohesion: 0.10
 Nodes (24): int, str, _grains_via_salt_api(), _grains_via_ssh(), Fetch grains.items for one minion via the salt-api local client (#708).      The, Legacy fallback: SSH in via the controller key and run salt-call --local.      O, Path, _ctx_returning() (+16 more)
 
 ### Community 181 - "Community 181"
-Cohesion: 0.13
-Nodes (20): str, Property-based tests for pure helper functions (#808).  Covers: - fleet_platform, redact_cmdline must not raise for any string input., redact(redact(x)) == redact(x) for any input., Known sensitive flags/env vars must have their values replaced., Strings without sensitive flags must be returned unchanged., validate_minion_id must return the value unchanged for any valid ID., validate_minion_id must raise ValueError for any invalid ID. (+12 more)
+Cohesion: 0.11
+Nodes (22): get_redis(), get_redis(), Redis, AsyncSession, UUID, WebSocket, Redis, _close_session() (+14 more)
 
 ### Community 182 - "Community 182"
 Cohesion: 0.06
@@ -1725,20 +1739,20 @@ Cohesion: 0.07
 Nodes (31): Agent run endpoint has zero integration or E2E coverage, Salt-master silently absent from the Docker Compose stack, Onboarding Step 14 (manual Celery start) conflicts with Docker Compose path, LICENSE file is missing (badge and link 404), npm ci fails - frontend is managed with pnpm, Hardcoded developer home paths as docker-compose volume defaults, CONTRIBUTING.md references scripts/kri.sh which does not exist, CONTRIBUTING.md references a non-existent env file (+23 more)
 
 ### Community 186 - "Community 186"
-Cohesion: 0.07
-Nodes (31): code:python (# fleet_platform/services/drift_engine.py), code:bash (source .venv/bin/activate && pytest tests/unit/test_drift_en), code:bash (git add fleet_platform/services/drift_engine.py tests/unit/t), code:bash (cd /home/dk/Documents/git/kri && source .venv/bin/activate &), code:python (# tests/unit/test_baseline_loader.py), code:bash (source .venv/bin/activate && pytest tests/unit/test_baseline), code:python (# fleet_platform/services/baseline_loader.py), code:bash (mkdir -p baselines/roles) (+23 more)
+Cohesion: 0.11
+Nodes (13): str, gate_text(), Unit tests for issue #971 — self-master reachability false-negative fix.  playbo, Individual probe failures must not abort the play before the aggregate fail chec, salt_masters must be passed through the 'unique' filter before use., The wait_for probe loop must iterate over the deduped master list, not the raw o, Gate must compute a set of this node's own addresses from gathered facts., The wait_for host must resolve to 127.0.0.1 when the master is one of this node' (+5 more)
 
 ### Community 187 - "Community 187"
-Cohesion: 0.09
-Nodes (22): Audit Fix Plan 7 — Critical Bugs & Quick Wins, code:python (# tests/unit/test_config.py), code:python (from fastapi import APIRouter, Depends, HTTPException, Query), code:python (from fastapi import APIRouter, Depends, HTTPException, Query), code:python (from fastapi import APIRouter, Depends, HTTPException, Query), code:bash (source .venv/bin/activate && pytest tests/unit/test_config.p), code:python (from fastapi import APIRouter, Depends, HTTPException, Query), code:python (from fastapi import APIRouter, Depends, HTTPException, Query) (+14 more)
+Cohesion: 0.08
+Nodes (24): ImportRow, ImportValidateResponse, 2. Fleet Dashboard, Layout(), NoMasterBanner(), TopBar(), isMasterNode(), masterHealthSummary (+16 more)
 
 ### Community 188 - "Community 188"
 Cohesion: 0.12
-Nodes (26): str, int, MagicMock, str, _make_action(), _make_fake_action(), _make_update_result(), _patch_sync_db() (+18 more)
+Nodes (27): int, MagicMock, str, _make_action(), _make_fake_action(), _make_update_result(), _patch_sync_db(), Unit tests for #640 — finalize_node_action queue fix + reap_stuck_pending_action (+19 more)
 
 ### Community 189 - "Community 189"
-Cohesion: 0.21
-Nodes (22): AsyncSession, int, UUID, datetime, str, AlertEvent, AlertRule, WebhookConfig (+14 more)
+Cohesion: 0.12
+Nodes (21): Path, str, _ansible_tasks_source(), _copy_arg(), _load_yaml_tasks(), _provision_master_source(), Tests for #1003 — air-gapped installs (salt-master + node_telemetry) and the rec, The bad-id parse must be caught locally, not raise out of the loop.      Structu (+13 more)
 
 ### Community 190 - "Community 190"
 Cohesion: 0.11
@@ -1749,8 +1763,8 @@ Cohesion: 0.08
 Nodes (21): object, Path, str, _migration_assignments(), Tests for pending_actions FK and idempotent process_stats ingest (#672)., Adding the FK must not change the nullable semantics — node_id stays nullable., node_process_stats must declare a unique constraint on (node_id, collected_at, p, ingest_process_stats must use pg_insert with on_conflict_do_nothing. (+13 more)
 
 ### Community 192 - "Community 192"
-Cohesion: 0.11
-Nodes (24): int, MagicMock, str, UUID, _make_db_ctx(), _make_node(), _make_run_async(), Tests for #509 — drop vestigial local pillar write from bootstrap_node.  Two con (+16 more)
+Cohesion: 0.04
+Nodes (60): _default_key(), make_real_ip_key(), _rate_limiting_enabled(), Return a rate-limiter key function for the given trusted-proxy count., Lazy key function that reads trusted_proxy_count from settings at call time., Rate limiting is on everywhere except the automated E2E test stack.      The Pla, bool, int (+52 more)
 
 ### Community 193 - "Community 193"
 Cohesion: 0.08
@@ -1758,7 +1772,7 @@ Nodes (25): Source-contract tests for issue #691 — Linux salt-master/salt-api 
 
 ### Community 194 - "Community 194"
 Cohesion: 0.09
-Nodes (31): Phase 3 — otel_agent Role (No-Default Gateway Endpoint), A1 — NodeDetail Lazy-Loaded + Utility Dedupe, A2 — Integration + E2E Playwright in CI, B1 — k8s Health Probe Path Mismatch Fix, B2 — SSH Connection Cache HA Mitigation, Sprint Backlog — 2026-06, O1 — Real OpenTelemetry Tracing, P1 — LLM Streaming via SSE (+23 more)
+Nodes (30): A1 — NodeDetail Lazy-Loaded + Utility Dedupe, A2 — Integration + E2E Playwright in CI, B1 — k8s Health Probe Path Mismatch Fix, B2 — SSH Connection Cache HA Mitigation, Sprint Backlog — 2026-06, O1 — Real OpenTelemetry Tracing, P1 — LLM Streaming via SSE, P3 — OS-Aware Baselines (+22 more)
 
 ### Community 195 - "Community 195"
 Cohesion: 0.13
@@ -1769,8 +1783,8 @@ Cohesion: 0.10
 Nodes (30): method, path, status, method, path, status, method, path (+22 more)
 
 ### Community 197 - "Community 197"
-Cohesion: 0.09
-Nodes (8): _FakeResult, _FakeSession, Unit tests for non-destructive Salt dispatch and service_enable mapping — #628., Yield (client, send_task_mock, node) wired to a real app with mocked deps., Verify the non-destructive branch actually dispatches via Salt (not a placeholde, Minimal async session: returns the configured node for the lookup, swallows writ, TestNonDestructiveBranchDispatch, TestNonDestructiveBranchSourceContract
+Cohesion: 0.14
+Nodes (6): main, _FakeResult, _FakeSession, Unit tests for non-destructive Salt dispatch and service_enable mapping — #628., Minimal async session: returns the configured node for the lookup, swallows writ, TestServiceEnableMapping
 
 ### Community 198 - "Community 198"
 Cohesion: 0.14
@@ -1781,8 +1795,8 @@ Cohesion: 0.12
 Nodes (23): str, Guard tests for issue #581 — IST timestamps, WCAG contrast, a11y., DashboardPage.tsx: meaningful text must not use text-gray-400., SettingsPage OIDC CTA text must not be text-gray-400., SaltMastersTab 'Loading minions…' region must have role='status' and aria-live., SaltMastersTab close × button must have aria-label., NodeDetail secret 'last updated' must use formatIST, not raw toLocaleString., FleetHealthPage must not use bare date-fns format() for timestamps. (+15 more)
 
 ### Community 200 - "Community 200"
-Cohesion: 0.07
-Nodes (29): int, str, Tests for orphan reaper race fixes (#305)., Bug B fix: or_() clause catches both normal orphans and null started_at cases., Bug C fix: stdout is appended with func.coalesce, not overwritten., Bug A race fix: completed_at IS NULL guard prevents touching already-completed j, Task returns dict with 'reaped' key containing rowcount., test_reaper_query_appends_stdout() (+21 more)
+Cohesion: 0.17
+Nodes (10): int, str, _make_mock_db_with_jobs(), The 300-second buffer constant must appear in the compiled SQL., completed_at IS NULL guard from #305 must still be present., Return a mock db context manager whose execute() returns rowcount=jobs_to_update, Verify the generated UPDATE statement uses per-job timeout_seconds arithmetic., UPDATE WHERE clause must reference the column timeout_seconds (not a literal). (+2 more)
 
 ### Community 201 - "Community 201"
 Cohesion: 0.08
@@ -1817,36 +1831,36 @@ Cohesion: 0.06
 Nodes (56): ansible_accelerate_port, ansible_check_mode, ansible_connection, ansible_current_hosts, ansible_docker_extra_args, ansible_failed_hosts, ansible_host, ansible_module_compression (+48 more)
 
 ### Community 209 - "Community 209"
-Cohesion: 0.18
-Nodes (12): noEvents, table, _cache, E2E_PW, getToken(), isFresh(), loginAndCache(), LoginCache (+4 more)
+Cohesion: 0.17
+Nodes (14): noEvents, table, _cache, E2E_PW, getToken(), isFresh(), loginAndCache(), LoginCache (+6 more)
 
 ### Community 210 - "Community 210"
 Cohesion: 0.06
-Nodes (44): Any, bool, int, SaltMaster, str, encrypt_secret(), Encrypt a secret string for storage., Encrypt a secret string for storage. (+36 more)
+Nodes (34): _make_credential(), resolve_node_credentials_sync resolves creds from the Credential store without a, resolve_node_credentials_sync resolves creds from the Credential store via     a, With no credential_id and no host key, resolver falls through to global settings, With no credential_groups mapping and no host key, resolver falls through     to, owner_secret_flags must no longer accept inline_password_enc/inline_key_enc., owner_secret_flags must no longer accept inline_password_enc/inline_key_enc., owner_secret_flags must no longer accept inline_password_enc/inline_key_enc. (+26 more)
 
 ### Community 211 - "Community 211"
-Cohesion: 0.13
-Nodes (24): CredentialUsage(), _credential(), _make_db(), _node_with_inline(), #748 (ARC-4): the inline SSH credential read-fallback is gone.  Before #748, ``c, A node with inline ssh_* attrs but no credential_id must NOT resolve to     the, A member group with only inline ssh_username (no credential_id) is no     longer, The group selection must be eligible by credential_id only — the inline     ``ss (+16 more)
+Cohesion: 0.08
+Nodes (42): CredentialUsage(), _credential(), _make_db(), _node_with_inline(), #748 (ARC-4) + #989 (Chunk 1): no inline SSH fallback, no node/legacy-group tier, A node with inline-style poison attrs but no credential_groups mapping     must, A node with inline-style poison attrs but no credential_groups mapping     must, A member group with only inline ssh_username (no credential_id) is no     longer (+34 more)
 
 ### Community 212 - "Community 212"
 Cohesion: 0.09
-Nodes (38): test_invalid_minion_id_path_traversal(), test_invalid_minion_id_spaces(), test_invalid_minion_id_yaml_injection(), test_safe_label_empty_becomes_unknown(), test_safe_label_strips_traversal(), test_safe_label_valid(), test_valid_minion_id(), _host() (+30 more)
+Nodes (22): Audit Fix Plan 7 — Critical Bugs & Quick Wins, code:python (# tests/unit/test_config.py), code:python (from fastapi import APIRouter, Depends, HTTPException, Query), code:python (from fastapi import APIRouter, Depends, HTTPException, Query), code:python (from fastapi import APIRouter, Depends, HTTPException, Query), code:bash (source .venv/bin/activate && pytest tests/unit/test_config.p), code:python (from fastapi import APIRouter, Depends, HTTPException, Query), code:python (from fastapi import APIRouter, Depends, HTTPException, Query) (+14 more)
 
 ### Community 213 - "Community 213"
-Cohesion: 0.10
-Nodes (26): discover_models — query provider API, Model discovery for Ollama backend, Model discovery for vLLM and LlamaCpp backends, discover_endpoint_models(), Query a provider endpoint and return available model IDs., Query a provider endpoint, probe health, and return available models., discover_models(), Query provider's model-list API. Returns [] on any error (never raises).      Ea (+18 more)
+Cohesion: 0.12
+Nodes (12): AsyncSession, MonitoringSummarySchema, monitoring_summary(), Return aggregated monitoring stats: node counts, queue depths, alert events, HTT, NodeCountsSchema, object, Behavioral tests for #45: monitoring stats page.  Backend checks now import the, The monitoring summary route must be mounted on the real FastAPI app. (+4 more)
 
 ### Community 214 - "Community 214"
-Cohesion: 0.15
-Nodes (23): auditor_client(), auditor_token(), auditor_user(), Verify the RBAC permission matrix — every role/endpoint combination., test_admin_can_access_audit_log(), test_admin_can_access_settings(), test_auditor_can_access_audit_log(), test_auditor_can_access_security_dashboard() (+15 more)
+Cohesion: 0.07
+Nodes (38): bool, int, str, _probe_model(), Send a 1-token chat request. Returns a tristate (healthy, latency_ms).      - (T, Send a 1-token chat request. Returns (healthy, latency_ms)., str, _make_probe_response() (+30 more)
 
 ### Community 215 - "Community 215"
-Cohesion: 0.17
-Nodes (18): int, MagicMock, Node with last_seen_at 2 hours ago must be marked offline by mark_stale_nodes., test_mark_stale_nodes_calls_commit(), test_mark_stale_nodes_returns_counts(), test_mark_stale_nodes_sets_offline_when_last_seen_2h_ago(), test_stale_offline_thresholds_b18, _make_mock_session() (+10 more)
+Cohesion: 0.13
+Nodes (10): Path, _all_task_dicts(), _load_tasks(), Contract tests for #970 — extend the kri air-gap to Linux salt + monitoring inst, Flatten include_tasks/block-free task lists; these role files are flat     lists, TestBundledLinuxArtifactsExist, TestLinuxSaltExtractionUsesXz, TestNoGetUrlInAirGappedInstalls (+2 more)
 
 ### Community 216 - "Community 216"
-Cohesion: 0.15
-Nodes (20): str, _defaults(), _linux_playbook_src(), _main_tasks_src(), _onedir_src(), Tests for Linux salt onedir air-gapped install wiring (#696).  These are structu, test_defaults_has_salt_linux_airgap(), test_defaults_has_salt_linux_arch() (+12 more)
+Cohesion: 0.14
+Nodes (22): str, _defaults(), _linux_playbook_src(), _main_tasks_src(), _onedir_src(), Tests for Linux salt onedir air-gapped install wiring (#696).  These are structu, test_defaults_has_salt_linux_airgap(), test_defaults_has_salt_linux_arch() (+14 more)
 
 ### Community 217 - "Community 217"
 Cohesion: 0.12
@@ -1869,20 +1883,20 @@ Cohesion: 0.11
 Nodes (22): kri Standalone Systemd Deployment README, 1. Create the kri system user, 2. Deploy the project, 3. Configure environment, 4. Install service units, 5. Enable and start services, 6. Verify, code:bash (sudo useradd --system --create-home --home-dir /opt/kri --sh) (+14 more)
 
 ### Community 222 - "Community 222"
-Cohesion: 0.16
-Nodes (4): _is_dangerous(), Return the matched pattern description if command is dangerous, else None., _is_dangerous returns the matched pattern or None., TestIsDangerous
+Cohesion: 0.14
+Nodes (14): MagicMock, _DB, FakeSelectResult, Tests for #735 — row-level lock on approve_proposal / reject_proposal (TOCTOU)., reject_proposal must re-fetch the row under a FOR UPDATE lock., Simulate TOCTOU: second approve call sees already-advanced status and must fail., Same TOCTOU scenario for awaiting_cosign state., Mimics the result of db.execute(select(...).with_for_update()). (+6 more)
 
 ### Community 223 - "Community 223"
-Cohesion: 0.14
-Nodes (17): ApprovalError, Raised when an approval/co-sign transition is not permitted., FakeAction, FakeDB, FakeResult, Unit tests for the apply-with-approval / co-sign service (#714).  Co-sign state, Mimics the PendingAction fields the service touches., test_cannot_approve_already_executed() (+9 more)
+Cohesion: 0.15
+Nodes (14): FakeAction, FakeDB, FakeResult, Unit tests for the apply-with-approval / co-sign service (#714).  Co-sign state, Mimics the PendingAction fields the service touches., test_cannot_approve_already_executed(), test_cosign_must_be_different_person(), test_cosign_required_waits_then_executes() (+6 more)
 
 ### Community 224 - "Community 224"
-Cohesion: 0.13
-Nodes (25): bool, datetime, str, _format_last_seen(), classify_status(), Return 'online', 'stale', 'offline', or 'unknown' based on last_seen_at age., Return True if plaintext_token matches the bcrypt hash. Returns False on corrupt, verify_node_token() (+17 more)
+Cohesion: 0.16
+Nodes (17): int, Node, RuntimeError, probe_node_ssh(), Probe one node's SSH reachability. Never raises.      ``node`` needs only ``.ip_, _creds(), _node(), Unit tests for the shared SSH probe (#356-ui).  Covers the four-state classifier (+9 more)
 
 ### Community 225 - "Community 225"
-Cohesion: 0.13
-Nodes (20): AsyncSession, Request, Response, generate_recommendations(), get_recommendations(), Return the latest stored fleet recommendation, or 204 if none exist yet., Generate a fresh fleet-wide recommendation set on demand., _fake_db() (+12 more)
+Cohesion: 0.08
+Nodes (25): AsyncSession, str, FleetRecommendation, FleetRecommendation, A single generated batch of fleet-wide AI recommendations.      Replaces the per, generate_fleet_recommendations(), get_latest_recommendation(), Return the newest stored recommendation, or None if none exist yet. (+17 more)
 
 ### Community 226 - "Community 226"
 Cohesion: 0.08
@@ -1893,24 +1907,24 @@ Cohesion: 0.14
 Nodes (24): ansible_delegated_vars, u1404, groups, groups, all, ungrouped, u1404, ansible_check_mode (+16 more)
 
 ### Community 228 - "Community 228"
-Cohesion: 0.11
-Nodes (39): AnsibleJob, playbook_tasks, Path, str, UUID, Redis, Tests for #355/#357/#358: honest credential banner, collections pre-flight, and, test_banner_says_attempting_not_resolved() (+31 more)
+Cohesion: 0.09
+Nodes (21): 10. `redeploy_kri.yml` Uses `command` Instead of `ansible.builtin.git`, 1. Duplicate Playbooks — Do the Same Job, 2. Repeated SSH/Become Vars Across Every Playbook, 3. `salt_master` Role Rederives Facts `common` Already Sets, 4. `salt_master/tasks/configure.yml` Repeats `group: wheel/root` 5 Times, 5. Checksum Verification Copy-Pasted 5 Times, 6. Onedir Install Logic Duplicated Between `salt_master` and `salt_minion`, 7. `node_exporter` and `otel_collector` Re-derive OS/Arch Facts (+13 more)
 
 ### Community 229 - "Community 229"
 Cohesion: 0.16
 Nodes (20): AppError, error_code_for_status(), ErrorCode, Structured error codes and exception types for API responses., Map HTTP status code to error code string., HTTPException with an explicit machine-readable error_code., Machine-readable error codes for API responses., errors (+12 more)
 
 ### Community 230 - "Community 230"
-Cohesion: 0.15
-Nodes (20): Strip secret-looking values from a process command line. Returns None for None., redact_cmdline(), str, Behavioral tests for fleet_platform.core.redaction.redact_cmdline.  Also drives, Verify ingest.py references redact_cmdline so the guard cannot be silently remov, test_api_key_hyphen_redacted(), test_api_key_underscore_redacted(), test_client_secret_flag_redacted() (+12 more)
+Cohesion: 0.12
+Nodes (24): Strip secret-looking values from a process command line. Returns None for None., redact_cmdline(), str, Behavioral tests for fleet_platform.core.redaction.redact_cmdline.  Also drives, Verify ingest.py references redact_cmdline so the guard cannot be silently remov, Return the undecorated coroutine behind slowapi's @limiter.limit wrapper., Drive ingest_process_stats and assert the row sent to the DB carries the     red, test_api_key_hyphen_redacted() (+16 more)
 
 ### Community 231 - "Community 231"
 Cohesion: 0.09
 Nodes (21): Tests for #840 Issue C2 — LLMAssistant chat role normalization.  Source-contract, Empty-stream error message must be human-readable, not a raw boolean., History capture must still come before addMessage (regression guard for #303)., History must exclude error-flagged messages., History must exclude messages with empty/whitespace content., History normalisation must collapse consecutive same-role messages., Collapsing must join content so nothing is silently dropped., History must strip any leading assistant turns (LLM expects user first). (+13 more)
 
 ### Community 232 - "Community 232"
-Cohesion: 0.15
-Nodes (22): _make_mock_db(), _make_pending_job(), _mock_runner_pair(), When the target lock cannot be acquired (another run is in progress),     run_pl, When the lock is acquired, run_playbook must reach ansible_runner.run_async, lock.release() must be called in finally even when the inner run raises., Return a MagicMock job in 'pending' state with a known target., When Redis is unreachable on acquire, run_playbook must:     - log a warning (no (+14 more)
+Cohesion: 0.08
+Nodes (34): int, MagicMock, _get_sync_redis(), Simple Redis-based task deduplication using SETNX., Decorator that skips task execution if a lock with the same key exists.      Usa, unique_task(), test_check_drift_threshold_fires_event(), test_check_drift_threshold_no_threshold() (+26 more)
 
 ### Community 233 - "Community 233"
 Cohesion: 0.13
@@ -1929,12 +1943,12 @@ Cohesion: 0.11
 Nodes (18): CI Integration, code:bash (# Run against all services/ (slow — 10-30 minutes)), code:yaml (# .github/workflows/mutation-tests.yml (manual trigger)), Interpreting Results, Key Services to Focus On, Mutation Testing with mutmut, Overview, Quick Start (+10 more)
 
 ### Community 237 - "Community 237"
-Cohesion: 0.18
-Nodes (16): Cloud fallback, Co-sign, Configuration, Kill switches, kri Agent — Admin Guide, Promotion (quarantine → live), Tier health, Co-Sign Requirement (>8 targets, different admin) (+8 more)
+Cohesion: 0.15
+Nodes (19): Cloud fallback, Co-sign, Configuration, Kill switches, kri Agent — Admin Guide, Promotion (quarantine → live), Tier health, Co-Sign Requirement (>8 targets, different admin) (+11 more)
 
 ### Community 238 - "Community 238"
-Cohesion: 0.12
-Nodes (21): _FakeDB, _make_master(), _patch_redis(), TDD tests for #734 — poll_salt_masters must probe all masters concurrently.  Fai, run_probe coroutines must overlap: peak concurrency equals master count.      FA, A single failing probe must not prevent the rest from completing.      FAILS bef, DB commit must happen AFTER all probes complete, not interleaved with IO.      F, Masters in backoff window must still be skipped.      Preserved behaviour — must (+13 more)
+Cohesion: 0.06
+Nodes (46): bool, datetime, str, audit_events(), test_audit_filter_by_action(), test_audit_filter_by_actor(), test_audit_filter_by_resource_type(), test_audit_filter_from_ts() (+38 more)
 
 ### Community 239 - "Community 239"
 Cohesion: 0.17
@@ -1953,8 +1967,8 @@ Cohesion: 0.08
 Nodes (23): 0. How the deliverable was produced (expert consultation), 1. Invocation constraints (must not break these), 2.1 Playbooks (file → purpose → issues), 2.2 Shared task files (candidates to fold into roles), 2.3 Existing roles, 2.4 Support files, 2. Inventory of current Ansible content, 3.1 Playbooks become thin orchestrators (+15 more)
 
 ### Community 243 - "Community 243"
-Cohesion: 0.12
-Nodes (13): normalize_tool_call(), Normalize a raw tool-call dict (from any backend) to a ``ToolCall``.      Accept, OpenAI native: arguments is a JSON-string — must be parsed to dict., If arguments is already a dict (some local servers), use as-is., Empty arguments string → empty dict, not an error., Malformed JSON in arguments → empty dict fallback., Llama / exo content form: name + parameters., Anthropic tool_use: type + name + input. (+5 more)
+Cohesion: 0.11
+Nodes (17): BaseSettings, Settings, validate_production_secrets(), bool, code:bash (# Install Python dependencies into the project venv), Development, test_good_jwt_secret_accepted_in_production(), test_insecure_jwt_secret_rejected_in_production() (+9 more)
 
 ### Community 244 - "Community 244"
 Cohesion: 0.17
@@ -1965,52 +1979,52 @@ Cohesion: 0.10
 Nodes (19): 12. API Design, code:json (// Success (list)), code:block43 (GET /api/v1/fleet/overview), code:block44 (GET /api/v1/nodes?status=online&group_id=uuid&tag=role:build), code:block45 (GET /api/v1/nodes/{node_id}), code:block46 (GET /api/v1/drift?severity=medium&group_id=uuid&from=2026-05), code:block47 (GET /api/v1/sbom/search?q=openssl&node_id=uuid&page=1&per_pa), code:block48 (GET /api/v1/groups) (+11 more)
 
 ### Community 246 - "Community 246"
-Cohesion: 0.21
-Nodes (14): 1. Frontend — `ModelCombobox` component, code:block6 (User types URL), Data flow summary, Design, Files changed, Goals, Key decisions (from review), LLM Endpoint Model Selector — Design Spec (+6 more)
+Cohesion: 0.16
+Nodes (17): 1. Frontend — `ModelCombobox` component, 3. Backend — Auto router, code:python (# key: (base_url: str, provider: str, model_id: str)), code:block5 (if endpoint.model == "__auto__":), code:block6 (User types URL), Data flow summary, Design, Files changed (+9 more)
 
 ### Community 247 - "Community 247"
 Cohesion: 0.14
 Nodes (22): POST /cmd with empty minion_ids list must return 422., Valid POST returns 202 with a task_id., Viewer role must be rejected with 403., POST with an empty body must return 422 (missing required fields)., POST with empty minion_ids list must return 422., Valid POST returns 202 with a task_id., Viewer role must be rejected with 403., POST /cmd with an empty body must return 422. (+14 more)
 
 ### Community 248 - "Community 248"
-Cohesion: 0.06
-Nodes (40): 0. Executive Summary, 1. Observed Failures (Transcript Evidence), 2. Root Cause Analysis, 3. RAG Readiness Scores, 4. Remediation Roadmap (by impact/effort), 5. Missing Capabilities (Not in Any Wave Above), 6. Files Affected, 7. Test Files Required (+32 more)
+Cohesion: 0.19
+Nodes (14): 0. Executive Summary, 1. Observed Failures (Transcript Evidence), 3. RAG Readiness Scores, 5. Missing Capabilities (Not in Any Wave Above), 6. Files Affected, 7. Test Files Required, code:block11 (tests/unit/test_llm_intent_routing.py       — intent classif), code:python (GOLDEN = [) (+6 more)
 
 ### Community 249 - "Community 249"
 Cohesion: 0.16
 Nodes (16): Path, str, _container_spec(), _k8s_deployments(), _k8s_services(), _load_yaml(), Deploy parity tests — issue #577.  Asserts that: 1. k8s manifests have Deploymen, The ingress.yaml targets kri-api:8000 and kri-frontend:80 — both Services must e (+8 more)
 
 ### Community 250 - "Community 250"
-Cohesion: 0.05
-Nodes (58): LicenseSummary, KeyboardShortcutsOverlay(), Props, sbom, KeyboardShortcutsOverlay, useKeyboardShortcuts, ShortcutMap, useKeyboardShortcuts() (+50 more)
+Cohesion: 0.08
+Nodes (39): LicenseSummary, sbom, license_summary(), Return license compliance summary across all latest SBOM scans., AsyncMock, object, datetime, MagicMock (+31 more)
 
 ### Community 251 - "Community 251"
-Cohesion: 0.23
-Nodes (14): UUID, Return True if predicate has correct structure for a dynamic group., Return node IDs matching all conditions in the predicate.      Predicate format:, resolve_dynamic_group(), validate_predicate(), test_resolve_dynamic_group_multiple_conditions(), test_resolve_dynamic_group_no_matches(), test_resolve_dynamic_group_with_valid_predicate() (+6 more)
+Cohesion: 0.04
+Nodes (78): AsyncSession, str, ImportValidateRequest, ImportValidateResponse, check_minion_id(), _get_or_create_default_group(), _import_from_salt(), import_validate() (+70 more)
 
 ### Community 252 - "Community 252"
 Cohesion: 0.12
 Nodes (11): Unit tests for issue #558 — GET /provision-status endpoint + provisionRefetchInt, When no MasterProvisionRun exists for the master, endpoint returns None., When the master does not exist, endpoint raises HTTPException(404)., A run with status='running' is returned correctly (live polling case)., GET /masters/{id}/provision-status must be registered in the router., The provision-status route must be a GET method., provision-status must use get_current_user (viewer-accessible, not admin-only)., Return a MagicMock MasterProvisionRun row. (+3 more)
 
 ### Community 253 - "Community 253"
-Cohesion: 0.04
-Nodes (70): Docker salt-master PKI export stage, Pre-flight validation stage, MasterMinionItem, MasterProvisionRunResponse, SaltMaster, SaltMasterCreate, SaltMasterHealthResponse, saltMastersApi (+62 more)
+Cohesion: 0.06
+Nodes (55): audit_tool_dispatch(), _is_sensitive_key(), Audit hook for the executor (#711 / #714).  Every tool dispatch is written to th, Persist one audit row per dispatch. Best-effort: never breaks the run., Redact sensitive fields from tool-call args before audit logging (#781).      De, _redact(), IdempotencyCache, Tool executor — the single, audited choke-point for every tool call (#711).  `di (+47 more)
 
 ### Community 254 - "Community 254"
 Cohesion: 0.11
 Nodes (24): Docker image version pinning (no :latest tags), Docker compose service resource limits, Healthchecks for api, beat, worker, and frontend services, Unit tests for SRE hardening (Issues #92, #93, #94, #96), _load_compose(), Unit tests for SRE hardening — issues #92, #93, #94, #96.  Covers:   - Docker im, No service image entry may use :latest., No FROM line in any Dockerfile may reference :latest. (+16 more)
 
 ### Community 255 - "Community 255"
-Cohesion: 0.17
-Nodes (20): completed_job(), delta_job(), from_byte mid-way through the base returns only the tail of the base., from_byte >= total base len returns empty stdout with correct total., from_byte far beyond base length returns empty stdout., Negative from_byte must be rejected with 422., Job with no running marker: base == full stdout, running_task is None., A job with plain stdout and no marker. (+12 more)
+Cohesion: 0.11
+Nodes (28): _host(), Tests for #349: ansible_ssh_pass must never appear inline in inventory.ini.  Pas, Private key file for key-auth host must be mode 0600., Hostname with unsafe chars must produce a sanitised alias and filename — no path, Sanitised alias in inventory must exactly match the host_vars filename stem., inventory.ini must be mode 0600., The literal 'ansible_ssh_pass=' f-string must not appear in playbook_tasks.py so, ansible_ssh_pass must NOT appear inline in inventory.ini for password hosts. (+20 more)
 
 ### Community 256 - "Community 256"
-Cohesion: 0.12
-Nodes (15): code:block2 (Sprint 2026-W23  █████████░ 89% complete), code:bash (# Clone the repository), code:block6 (kri/), Contributing, Current Sprint, Development Velocity, kri — Self-Hosted Fleet Operations Platform, License (+7 more)
+Cohesion: 0.10
+Nodes (20): 🤖 AI & Automation, code:block2 (Sprint 2026-W23  █████████░ 89% complete), code:bash (# Clone the repository), code:block6 (kri/), ⚙️ Configuration Management, Contributing, Current Sprint, Development Velocity (+12 more)
 
 ### Community 257 - "Community 257"
-Cohesion: 0.10
-Nodes (5): TestSaltMasterCreateSSHFields, After #690: salt_api_port defaults to 4507 (adjacent to ZMQ 4505/4506)., After #562: use_tls defaults to True., The create schema takes plaintext api_password, not api_password_enc., TestSaltMasterCreateSchema
+Cohesion: 0.12
+Nodes (13): normalize_tool_call(), Normalize a raw tool-call dict (from any backend) to a ``ToolCall``.      Accept, OpenAI native: arguments is a JSON-string — must be parsed to dict., If arguments is already a dict (some local servers), use as-is., Empty arguments string → empty dict, not an error., Malformed JSON in arguments → empty dict fallback., Llama / exo content form: name + parameters., Anthropic tool_use: type + name + input. (+5 more)
 
 ### Community 258 - "Community 258"
 Cohesion: 0.08
@@ -2021,8 +2035,8 @@ Cohesion: 0.09
 Nodes (22): 1.1 HTTP request metrics, 1.2 Node-action lifecycle metrics (issue #661), 1.3 Process-stats ingest counters (issue #661), 1.4 Salt dispatch counter (issue #661), 1.5 Availability / heartbeat metrics, 1.6 Other metrics, 1. Metrics Pillars, 2. Scrape Configuration (+14 more)
 
 ### Community 260 - "Community 260"
-Cohesion: 0.08
-Nodes (24): code:python (async def test_get_node_facts_no_grains_returns_empty(admin_), code:bash (source .venv/bin/activate && pytest tests/integration/test_n), code:python (from datetime import UTC, datetime), code:python (@router.get("/{node_id}/facts")), code:bash (source .venv/bin/activate && pytest tests/integration/test_n), code:bash (git add fleet_platform/api/routes/nodes.py tests/integration), Task 4: Node facts, packages, and tags endpoints, code:bash (TEST_DATABASE_URL=postgresql+psycopg://fleet:fleet@localhost) (+16 more)
+Cohesion: 0.10
+Nodes (13): attach_minions(), AttachMinionsRequest, Body for the attach-minions endpoint — node ids to re-point at this master., Re-point selected minions at ``master_id``, additively (#977, Phase C).      Enq, Body for the attach-minions endpoint — node ids to re-point at this master., Re-point selected minions at ``master_id``, additively (#977, Phase C).      Enq, Body for the attach-minions endpoint — node ids to re-point at this master., Re-point selected minions at ``master_id``, additively (#977, Phase C).      Enq (+5 more)
 
 ### Community 261 - "Community 261"
 Cohesion: 0.09
@@ -2053,8 +2067,8 @@ Cohesion: 0.13
 Nodes (29): test_cmd_deploy_calls_require_env, test_cmd_deploy_uses_compose, test_compose_function_exists, test_env_file_variable_set, test_kri_sh_exists, test_require_env_function_exists, test_test_all_subcommand_exists, test_test_e2e_subcommand_exists (+21 more)
 
 ### Community 268 - "Community 268"
-Cohesion: 0.15
-Nodes (16): Recursively scrub sensitive keys from extravars (flat dict, nested dict, or list, _scrub_extravars(), Tests for #494 (extravars scrub at write) and #495 (ssh_password not in broker)., run_playbook_endpoint must NOT forward ssh_password to the dispatched task., run_playbook task must not accept ssh_password (plaintext broker risk).      Ass, run_playbook_endpoint must not pass ssh_password= to run_playbook.delay()., test_run_playbook_endpoint_does_not_pass_ssh_password_to_broker(), test_run_playbook_endpoint_does_not_pass_ssh_password_to_delay() (+8 more)
+Cohesion: 0.20
+Nodes (10): Accumulate fragmented ``tool_calls`` deltas from an OpenAI-style SSE stream., ToolCallAccumulator, int, str, Name in first chunk, arguments split across all three → one ToolCall., Two concurrent tool calls at index 0 and 1 → two ToolCalls in index order., Delta without tool_calls key (e.g. content delta) must be silently ignored., If concatenated fragments can't be parsed → arguments={}. (+2 more)
 
 ### Community 269 - "Community 269"
 Cohesion: 0.14
@@ -2073,16 +2087,16 @@ Cohesion: 0.11
 Nodes (18): compilerOptions, allowImportingTsExtensions, erasableSyntaxOnly, jsx, lib, module, moduleDetection, moduleResolution (+10 more)
 
 ### Community 273 - "Community 273"
-Cohesion: 0.16
-Nodes (16): LLMEndpointResponse, _all_migration_files(), _minimal_response_kwargs(), _module_assignments(), #651 Phase 0 — per-endpoint tool_mode column tests.  Validates: - Migration 048, Migration 048 must declare revision and down_revision at module level., Including migration 048, the full chain must remain linear (no branches, no dang, Minimal valid kwargs for LLMEndpointResponse (no DB needed). (+8 more)
+Cohesion: 0.15
+Nodes (22): _make_mock_db(), _make_pending_job(), _mock_runner_pair(), When the target lock cannot be acquired (another run is in progress),     run_pl, When the lock is acquired, run_playbook must reach ansible_runner.run_async, lock.release() must be called in finally even when the inner run raises., Return a MagicMock job in 'pending' state with a known target., When Redis is unreachable on acquire, run_playbook must:     - log a warning (no (+14 more)
 
 ### Community 274 - "Community 274"
-Cohesion: 0.17
-Nodes (11): Frontend index.html (Vite Entry, main.tsx), license, name, @babel/core, dompurify, packageManager, pnpm, overrides (+3 more)
+Cohesion: 0.08
+Nodes (24): Frontend index.html (Vite Entry, main.tsx), license, name, @babel/core, dompurify, packageManager, pnpm, overrides (+16 more)
 
 ### Community 275 - "Community 275"
-Cohesion: 0.16
-Nodes (20): Amendments to #934 (decided 2026-06-30), Bootstrap Role-Consolidation + Push-Telemetry + Dynamic Var Modal — Implementation Plan, Critical-path prerequisite — BINARY SOURCING (operator-gated), Global Constraints, Phase 0 — Branch + binary manifest, Phase 1 — `salt_minion` role (bootstrap calls only this), Phase 2 — `node_telemetry` role, Phase 3 — `otel_agent` role (push telemetry) (+12 more)
+Cohesion: 0.15
+Nodes (21): Amendments to #934 (decided 2026-06-30), Bootstrap Role-Consolidation + Push-Telemetry + Dynamic Var Modal — Implementation Plan, Critical-path prerequisite — BINARY SOURCING (operator-gated), Global Constraints, Phase 0 — Branch + binary manifest, Phase 1 — `salt_minion` role (bootstrap calls only this), Phase 2 — `node_telemetry` role, Phase 3 — `otel_agent` role (push telemetry) (+13 more)
 
 ### Community 276 - "Community 276"
 Cohesion: 0.06
@@ -2093,16 +2107,16 @@ Cohesion: 0.24
 Nodes (13): Any, int, Redis, str, async_publish_job_event(), build_event(), _get_client(), publish_job_event() (+5 more)
 
 ### Community 278 - "Community 278"
-Cohesion: 0.12
+Cohesion: 0.10
 Nodes (13): Path, str, Contract tests for the otel_collector role (#968 — Phase 2 of the node-otel metr, Every ansible.builtin task module must use the fully-qualified name., _render_config(), _role_yaml_files(), test_all_module_references_are_fqcn(), test_config_template_grpc_protocol_uses_otlp_exporter() (+5 more)
 
 ### Community 279 - "Community 279"
-Cohesion: 0.06
-Nodes (54): In-memory catalogue of ToolSpecs keyed by name., Enabled tools the role may call. Kill-switched tools are never returned., One agent capability. Frozen so a registered spec can't mutate under us., ToolRegistry, ToolSpec, AuditHook, ToolRegistry, Any (+46 more)
+Cohesion: 0.03
+Nodes (102): AuditEvent, Replace values of sensitive keys with [redacted] before persisting., _scrub(), datetime, get_sync_db(), DeclarativeBase, Session, health_tasks (+94 more)
 
 ### Community 281 - "Community 281"
-Cohesion: 0.13
-Nodes (13): BaseSettings, Settings, test_good_jwt_secret_accepted_in_production(), test_insecure_jwt_secret_rejected_in_production(), test_short_jwt_secret_rejected_in_production(), Settings has a metrics_token field for /metrics auth (#763)., Settings.metrics_token defaults to None (#763)., Settings has a trusted_proxy_count field for rate-limiter IP key (#759). (+5 more)
+Cohesion: 0.06
+Nodes (40): Docker salt-master PKI export stage, Pre-flight validation stage, MasterProvisionRunResponse, SaltMasterHealthResponse, SaltMasterTestResponse, DOT, kri ingest base URL (100.89.50.27), krisalt API user (+32 more)
 
 ### Community 282 - "Community 282"
 Cohesion: 0.18
@@ -2117,28 +2131,28 @@ Cohesion: 0.11
 Nodes (17): compilerOptions, allowImportingTsExtensions, erasableSyntaxOnly, lib, module, moduleDetection, moduleResolution, noEmit (+9 more)
 
 ### Community 286 - "Community 286"
-Cohesion: 0.08
-Nodes (26): code:tsx (const { data: executions } = useQuery({), code:tsx (const { data: executions } = useQuery({), code:typescript (// frontend/src/api/executions.ts), code:bash (cd /home/dk/Documents/git/kri/frontend && npx tsc --noEmit), code:bash (cd /home/dk/Documents/git/kri), Task 3: Per-node execution filter in NodeDetail (L13), code:bash (grep -rn "Fleet\|Nodes\|Dashboard\|href.*nodes" frontend/src), code:typescript (// frontend/src/api/fleetHealth.ts) (+18 more)
+Cohesion: 0.17
+Nodes (19): _confirm_html(), Build the side-effect-free confirmation page for an emailed approval link., Build the side-effect-free confirmation page for an emailed approval link., Build the side-effect-free confirmation page for an emailed approval link., Build the side-effect-free confirmation page for an emailed approval link., bool, PendingAction, str (+11 more)
 
 ### Community 287 - "Community 287"
-Cohesion: 0.09
-Nodes (21): code:toml ("authlib>=1.3",), code:bash (source .venv/bin/activate && uv sync), code:python (oidc_enabled: bool = False), code:python (# tests/unit/test_oidc_svc.py), code:bash (python -m pytest tests/unit/test_oidc_svc.py -v 2>&1 | tail ), code:python (# fleet_platform/services/oidc_svc.py), code:bash (python -m pytest tests/unit/test_oidc_svc.py -v 2>&1 | tail ), code:bash (git add fleet_platform/services/oidc_svc.py fleet_platform/c) (+13 more)
+Cohesion: 0.15
+Nodes (23): auditor_client(), auditor_token(), auditor_user(), Verify the RBAC permission matrix — every role/endpoint combination., test_admin_can_access_audit_log(), test_admin_can_access_settings(), test_auditor_can_access_audit_log(), test_auditor_can_access_security_dashboard() (+15 more)
 
 ### Community 288 - "Community 288"
-Cohesion: 0.11
-Nodes (20): _default_key(), make_real_ip_key(), _rate_limiting_enabled(), Return a rate-limiter key function for the given trusted-proxy count., Lazy key function that reads trusted_proxy_count from settings at call time., Rate limiting is on everywhere except the automated E2E test stack.      The Pla, bool, int (+12 more)
-
-### Community 289 - "Community 289"
-Cohesion: 0.05
-Nodes (71): DeployResponse, AsyncSession, MobileconfigProfileCreate, UUID, AsyncSession, MobileconfigProfileCreate, str, UUID (+63 more)
-
-### Community 290 - "Community 290"
 Cohesion: 0.13
 Nodes (11): str, Errors must not propagate — /metrics must never 500., Monkeypatch get_sync_db to return a fake session yielding count=7., _read(), test_ingest_references_process_stats_ingested(), test_node_actions_references_node_action_total(), test_node_actions_references_rejected(), test_refresh_pending_action_queue_depth_gauge_sets_value() (+3 more)
 
+### Community 289 - "Community 289"
+Cohesion: 0.25
+Nodes (19): _ctx(), _FakeDB, _node(), Behavioral coverage for fleet_platform/agent/tools.py handlers (#799 / TST-2)., test_embed_text_errors_when_unconfigured(), test_embed_text_returns_dim_and_preview(), test_enable_node_missing_raises(), test_enable_node_sets_active_and_commits() (+11 more)
+
+### Community 290 - "Community 290"
+Cohesion: 0.06
+Nodes (30): create_app(), app_with_test_db(), client(), Tests for #756 (ARC-11): job-event push channel.  Covers the publish helper (``f, test_events_router_registered_in_app(), test_publish_job_event_swallows_redis_errors(), Tests for node action dry_run mode (issue #617)., NodeActionRequest.dry_run can be set to True. (+22 more)
+
 ### Community 291 - "Community 291"
-Cohesion: 0.07
-Nodes (22): create_app(), app_with_test_db(), app_with_test_db(), client(), int, _FakeSession, _limit_windows(), Behavioral tests for #766 — rate-limit the auth/refresh endpoint.  Previously th (+14 more)
+Cohesion: 0.12
+Nodes (15): int, _FakeSession, _limit_windows(), Behavioral tests for #766 — rate-limit the auth/refresh endpoint.  Previously th, The 11th POST /auth/refresh within the window is rejected with 429., refresh registers a 10/minute SlowAPI limit at runtime (matches login)., The refresh limit must match the login limit, per #766., SlowAPI requires the handler to accept a `request` parameter (live signature). (+7 more)
 
 ### Community 292 - "Community 292"
 Cohesion: 0.15
@@ -2153,12 +2167,12 @@ Cohesion: 0.10
 Nodes (24): str, _content(), Source-contract tests for issue #694 — bootstrap_node.yml hanging + broken check, The shasum -a 512 on-target verification task must still be present.      This i, The shasum -a 512 on-target verification task must still be present.      This i, The shasum verify task must exit 1 on mismatch (not just print a warning)., The shasum verify task must exit 1 on mismatch (not just print a warning)., lookup('file') on the controller cannot read a file downloaded to the target. (+16 more)
 
 ### Community 295 - "Community 295"
-Cohesion: 0.18
-Nodes (21): ProvisioningProfile, AsyncSession, bytes, str, UUID, ProvisioningProfile, delete_profile(), download_profile() (+13 more)
+Cohesion: 0.03
+Nodes (103): _bootstrap_node(), bootstrap(), bootstrap_logs(), bootstrap_run_detail(), bootstrap_status(), cancel_bootstrap(), Reset a stuck bootstrap job so the node can be re-bootstrapped., Reset a stuck bootstrap job so the node can be re-bootstrapped. (+95 more)
 
 ### Community 296 - "Community 296"
-Cohesion: 0.13
-Nodes (14): str, _extract_code_strings(), _extract_runtime_code(), Verify salt_tasks resolves salt-api credentials from DB, not SALT_API_* env vars, Extract all string literals from source code using AST (skips comments/docstring, salt_tasks must use DB api_url, not SALT_API_URL env var (#562)., Return source lines that are not pure comments (for grep that needs to catch imp, salt_tasks must not read SALT_API_URL from os.environ (#562). (+6 more)
+Cohesion: 0.17
+Nodes (18): int, MagicMock, Node with last_seen_at 2 hours ago must be marked offline by mark_stale_nodes., test_mark_stale_nodes_calls_commit(), test_mark_stale_nodes_returns_counts(), test_mark_stale_nodes_sets_offline_when_last_seen_2h_ago(), test_stale_offline_thresholds_b18, _make_mock_session() (+10 more)
 
 ### Community 297 - "Community 297"
 Cohesion: 0.14
@@ -2178,7 +2192,7 @@ Nodes (14): BaseProf, CpuProf, csv_writer(), dict_fromkeys(), json_writer(), Mem
 
 ### Community 301 - "Community 301"
 Cohesion: 0.10
-Nodes (21): ansible_port, ansible_user, play_hosts, vars, ansible_check_mode, ansible_host, ansible_play_hosts, ansible_port (+13 more)
+Nodes (21): ansible_user, playbook_dir, role_names, vars, ansible_check_mode, ansible_host, ansible_play_hosts, ansible_port (+13 more)
 
 ### Community 302 - "Community 302"
 Cohesion: 0.12
@@ -2209,28 +2223,28 @@ Cohesion: 0.16
 Nodes (17): str, tests/unit/test_cli_saltmaster_wrapper_561.py  #561 — Verify that scripts/kri cm, bash -n scripts/kri must pass with exit code 0., cmd_saltmaster_install invokes the shared macOS playbook., cmd_saltmaster_install invokes the shared Linux playbook., Post-install message directs operator to Settings → Salt Masters., Post-install message does not reference SALT_API_URL env var hint., Post-install message does not reference SALT_API_PASSWORD env var hint. (+9 more)
 
 ### Community 309 - "Community 309"
-Cohesion: 0.05
-Nodes (62): playbookSourcesApi, provisioningApi, SaltKeys, saltKeysApi, HubPage(), HubPageProps, HubTab, Node interface (+54 more)
+Cohesion: 0.06
+Nodes (40): ErrorBoundary, Props, State, KeyboardShortcutsOverlay(), Props, KeyboardShortcutsOverlay, useKeyboardShortcuts, Node interface (+32 more)
 
 ### Community 310 - "Community 310"
-Cohesion: 0.12
-Nodes (16): str, _compiled(), Tests for worker bug fixes: #459, #468, #469, #470, P3-3.  Behavioral conversion, salt_tasks must not bind _SALT_API_* credentials at module import time (#469 Par, reap_orphaned_jobs must build its stdout UPDATE with concat(coalesce(cast(...))), #468: sync_minion_presence must not update nodes that are in maintenance_mode., #459: Redis lock key must include playbook name to avoid blocking all playbooks, A minion reported 'up' that is in maintenance_mode must NOT be flipped online (# (+8 more)
+Cohesion: 0.11
+Nodes (19): str, _compiled(), Tests for worker bug fixes: #459, #468, #469, #470, P3-3.  Behavioral conversion, A failing salt-api runner call must return None and log a WARNING (#469 Part A)., salt_tasks must not bind _SALT_API_* credentials at module import time (#469 Par, reap_orphaned_jobs must build its stdout UPDATE with concat(coalesce(cast(...))), #468: sync_minion_presence must not update nodes that are in maintenance_mode., #459: Redis lock key must include playbook name to avoid blocking all playbooks (+11 more)
 
 ### Community 311 - "Community 311"
-Cohesion: 0.29
-Nodes (16): bool, MagicMock, str, _make_db_ctx(), _make_master(), _make_node(), _masters_execute_result(), _node_execute_result() (+8 more)
+Cohesion: 0.07
+Nodes (49): encrypt_secret(), Encrypt a secret string for storage., Encrypt a secret string for storage., Encrypt a secret string for storage., Decrypt a stored secret., bool, MagicMock, str (+41 more)
 
 ### Community 312 - "Community 312"
-Cohesion: 0.10
-Nodes (21): ansible_user, playbook_dir, role_names, vars, ansible_check_mode, ansible_host, ansible_play_hosts, ansible_port (+13 more)
+Cohesion: 0.09
+Nodes (22): ansible_user, environment, play_hosts, role_names, vars, ansible_check_mode, ansible_host, ansible_play_hosts (+14 more)
 
 ### Community 313 - "Community 313"
 Cohesion: 0.10
 Nodes (21): ansible_host, ansible_ssh_private_key_file, ansible_check_mode, ansible_host, ansible_port, ansible_ssh_private_key_file, ansible_user, group_names (+13 more)
 
 ### Community 314 - "Community 314"
-Cohesion: 0.08
-Nodes (35): IdempotencyCache, Tool executor — the single, audited choke-point for every tool call (#711).  `di, Per-session memoization keyed by (session, tool, canonical args)., Execute an already-approved live tool, bypassing the approval/dry-run         ga, Return an error string if ``args`` violate ``schema``, else None., validate_args(), _validate_value(), Privilege rank of a role: viewer=0 < operator=1 < admin=2.      Unknown / None r (+27 more)
+Cohesion: 0.14
+Nodes (13): DeployResponse, mobileconfigApi, MobileconfigProfile, ProfileComplianceEntry, mobileconfig_installed(), Custom grain: list installed macOS configuration profile UUIDs., Return dict with key 'mobileconfig_installed': list of UUIDs., macOS configuration profile models. (+5 more)
 
 ### Community 315 - "Community 315"
 Cohesion: 0.11
@@ -2258,7 +2272,7 @@ Nodes (15): Tests for #346: extravars must never be written to persistent host_v
 
 ### Community 321 - "Community 321"
 Cohesion: 0.10
-Nodes (21): ansible_check_mode, ansible_host, ansible_ssh_private_key_file, ansible_check_mode, ansible_host, ansible_port, ansible_ssh_private_key_file, ansible_user (+13 more)
+Nodes (21): ansible_check_mode, ansible_ssh_private_key_file, ansible_check_mode, ansible_host, ansible_port, ansible_ssh_private_key_file, ansible_user, group_names (+13 more)
 
 ### Community 323 - "Community 323"
 Cohesion: 0.12
@@ -2269,8 +2283,8 @@ Cohesion: 0.18
 Nodes (15): str, Issue #553 — bootstrap log view must use LogPane (not a bare <pre>) for auto-fol, Sanity check — the file must be present., LogPane is imported; AnsiText is no longer imported (it became unused).      The, The bootstrap live-log section must render via <LogPane., The old max-h-48 pre wrapping the bootstrap_logs AnsiText must be gone.      Two, isLive is tied to bootstrap_status === 'bootstrapping'., The bootstrap-run history expanded stdout must also use LogPane. (+7 more)
 
 ### Community 325 - "Community 325"
-Cohesion: 0.06
-Nodes (48): get_sync_db(), Session, maintenance, int, str, Build a DB session mock whose execute() returns node or masters list correctly., Verify the expected keys in the session list response dict., TestSessionListResponseStructure (+40 more)
+Cohesion: 0.16
+Nodes (15): LLMEndpointResponse, _all_migration_files(), _minimal_response_kwargs(), #651 Phase 0 — per-endpoint tool_mode column tests.  Validates: - Migration 048, Migration 048 must declare revision and down_revision at module level., Including migration 048, the full chain must remain linear (no branches, no dang, Minimal valid kwargs for LLMEndpointResponse (no DB needed)., test_all_migrations_form_single_linear_chain() (+7 more)
 
 ### Community 326 - "Community 326"
 Cohesion: 0.10
@@ -2285,12 +2299,12 @@ Cohesion: 0.16
 Nodes (17): Tests for #454 (timeout isinstance) and #455 (job_start_time pre-init)., Decimal('3600') must resolve to 3600, not 1800., 3600.0 must resolve to 3600, not 1800., int 3600 must still resolve to 3600., None must resolve to 1800 (default)., Values below 60 are clamped to 60., Values above 7200 are clamped to 7200., AST-hardened structural guard: job_start_time must be initialised before the (+9 more)
 
 ### Community 329 - "Community 329"
-Cohesion: 0.12
-Nodes (8): Contract test for the node_exporter role canonicalization (Phase 1).  See docs/s, meta: end_play aborts the WHOLE multi-host play, not just one host — banned., Arch/OS tarball names must be derived (ne_arch/ne_os), never hardcoded., Main service flow must use state: started; forced `restarted` is only     accept, _role_yaml_files(), test_no_hardcoded_arch_in_role(), test_no_meta_end_play_anywhere_in_role(), test_service_tasks_use_started_not_forced_restarted()
+Cohesion: 0.10
+Nodes (10): Contract test for the node_exporter role canonicalization (Phase 1).  See docs/s, #696 air-gap: install.yml must copy the bundled tarball from playbooks/files/,, meta: end_play aborts the WHOLE multi-host play, not just one host — banned., Arch/OS tarball names must be derived (ne_arch/ne_os), never hardcoded., Main service flow must use state: started; forced `restarted` is only     accept, _role_yaml_files(), test_no_hardcoded_arch_in_role(), test_no_meta_end_play_anywhere_in_role() (+2 more)
 
 ### Community 330 - "Community 330"
 Cohesion: 0.10
-Nodes (21): ansible_play_hosts, environment, hostvars, playbook_dir, vars, ansible_check_mode, ansible_host, ansible_play_hosts (+13 more)
+Nodes (21): ansible_check_mode, environment, inventory_file, playbook_dir, vars, ansible_check_mode, ansible_host, ansible_play_hosts (+13 more)
 
 ### Community 331 - "Community 331"
 Cohesion: 0.23
@@ -2317,8 +2331,8 @@ Cohesion: 0.13
 Nodes (12): Path, str, _load_tasks(), _non_comment_text(), Contract tests for the Phase 2 role extraction (roles-refactor plan).  See docs/, File content with `#`-comment lines stripped, so explanatory comments     that m, test_common_role_has_no_raw_uname(), test_kri_enroll_has_exactly_one_grains_uri_task() (+4 more)
 
 ### Community 337 - "Community 337"
-Cohesion: 0.15
-Nodes (18): _add_service_field(), _add_trace_id(), Inject a ``trace_id`` into every log record.      In order of preference:     1., Inject a static ``service`` key into every log record.      The value is always, _add_service_field and _add_trace_id produce a record with service=kri and trace, _add_service_field and _add_trace_id processors are registered in configure_logg, test_configure_logging_adds_service_and_trace_id(), test_log_record_contains_service_field() (+10 more)
+Cohesion: 0.10
+Nodes (5): TestSaltMasterCreateSSHFields, After #690: salt_api_port defaults to 4507 (adjacent to ZMQ 4505/4506)., After #562: use_tls defaults to True., The create schema takes plaintext api_password, not api_password_enc., TestSaltMasterCreateSchema
 
 ### Community 338 - "Community 338"
 Cohesion: 0.22
@@ -2333,12 +2347,12 @@ Cohesion: 0.14
 Nodes (16): code:bash (pytest tests/unit/ --cov=fleet_platform/services --cov-repor), code:bash (uv sync --extra dev), code:bash (pre-commit run --all-files), code:bash (cd frontend && npx tsc --noEmit), code:bash (source .venv/bin/activate), code:bash (pytest tests/unit/ -q), code:bash (# Ensure Docker services are up before running), code:bash (# Start the full stack first) (+8 more)
 
 ### Community 341 - "Community 341"
-Cohesion: 0.18
-Nodes (14): ToolCtx, _ctx(), Tests for #776: _run_salt_cmd must constrain the LLM-controlled args list.  Cons, grains.get with a sensitive key must be rejected before any Salt call., The OpenAI/tool schema for run_salt_cmd must advertise arg limits., Exactly 10 args should pass the count gate., test_run_salt_cmd_accepts_max_args(), test_run_salt_cmd_accepts_max_length_arg() (+6 more)
+Cohesion: 0.05
+Nodes (60): cancel_playbook_job(), get_ansible_job(), list_ansible_jobs(), Cancel a running or pending playbook job (#342)., List all ansible playbook jobs, newest first., AnsibleJob, AsyncSession, int (+52 more)
 
 ### Community 342 - "Community 342"
-Cohesion: 0.15
-Nodes (12): 19. Future Enhancements, 1. Executive Summary, 2. Architecture Overview, 3. Final Recommendation: SaltStack, 5. System Diagram, code:block1 (┌────────────────────────────────────────────────────┐), code:block4 (┌───────────────────────────────────────────────────────────), code:block5 (Mac Mini (minion)) (+4 more)
+Cohesion: 0.12
+Nodes (16): code:block1 (macos-fleet-platform/), File Map, 18. Repository Structure, 19. Future Enhancements, 1. Executive Summary, 2. Architecture Overview, 3. Final Recommendation: SaltStack, 5. System Diagram (+8 more)
 
 ### Community 343 - "Community 343"
 Cohesion: 0.12
@@ -2358,15 +2372,15 @@ Nodes (14): rate_limit_client(), Behavioral rate-limit integration tests (#801).
 
 ### Community 347 - "Community 347"
 Cohesion: 0.10
-Nodes (21): ansible_check_mode, ansible_ssh_private_key_file, ansible_check_mode, ansible_host, ansible_port, ansible_ssh_private_key_file, ansible_user, group_names (+13 more)
+Nodes (21): ansible_host, ansible_ssh_private_key_file, ansible_check_mode, ansible_host, ansible_port, ansible_ssh_private_key_file, ansible_user, group_names (+13 more)
 
 ### Community 348 - "Community 348"
-Cohesion: 0.17
-Nodes (12): Baseline, BaselineState, CaptureResult, OsFamily, BaselinesPage(), buildStateJson(), CreateBaselineModal(), parseStateJson() (+4 more)
+Cohesion: 0.21
+Nodes (17): test_add_tag_requires_operator(), test_add_tag_to_node(), test_delete_nonexistent_tag_returns_404(), test_delete_tag_from_node(), test_get_node_detail(), test_get_node_facts_returns_200(), test_get_node_not_found(), test_get_node_requires_auth() (+9 more)
 
 ### Community 349 - "Community 349"
-Cohesion: 0.29
-Nodes (4): platform_settings.py router must have a /test-email route., send_test_email must be importable from digest_svc via platform_settings., SettingsPage.tsx must contain 'Send test email' text., TestSourceContracts
+Cohesion: 0.15
+Nodes (8): bool, _ExecuteResult, _FakeSession, #744: reindex_nodes must not materialize the full nodes table at once., _ScalarResult, _selects_entity(), test_reindex_nodes_processes_nodes_in_bounded_batches(), Wrap a scalar so result.scalar_one() == value.
 
 ### Community 350 - "Community 350"
 Cohesion: 0.10
@@ -2377,8 +2391,8 @@ Cohesion: 0.17
 Nodes (8): Smoke-check that process_report.sls contains the required strings., The SLS must mention the /process_stats endpoint path., Must read ingest_url from the fleet_platform pillar., Must read node_token from the fleet_platform pillar., Must contain a pip install for psutil., Must guard psutil install with an unless: import check., macOS branch must keep an idempotent pip install for psutil (#673)., TestProcessReportSlsContract
 
 ### Community 352 - "Community 352"
-Cohesion: 0.08
-Nodes (30): list_master_minions(), promote_node_to_master(), Promote an existing fleet node to also act as a salt-master.      Looks up the n, Return nodes whose ``salt_master_id`` points to this master.      Returns an emp, SimpleNamespace, MagicMock, str, UUID (+22 more)
+Cohesion: 0.11
+Nodes (18): Periodic: trigger grain collection for all bootstrapped online nodes., Collect a node's grains and push them to the ingest API.      Primary path (#708, Periodic: trigger grain collection for all bootstrapped online nodes., Resolve SSH creds for provisioning a salt-master (#965).      Mirrors bootstrap_, Periodic: trigger grain collection for all bootstrapped online nodes., Resolve SSH creds for provisioning a salt-master (#965).      Mirrors bootstrap_, Resolve SSH creds for provisioning a salt-master (#965).      Mirrors bootstrap_, Periodic: trigger grain collection for all bootstrapped online nodes. (+10 more)
 
 ### Community 353 - "Community 353"
 Cohesion: 0.36
@@ -2390,15 +2404,15 @@ Nodes (7): control_mode must not be an accepted input field (#562)., api_eauth m
 
 ### Community 355 - "Community 355"
 Cohesion: 0.10
-Nodes (21): ansible_check_mode, environment, inventory_file, playbook_dir, vars, ansible_check_mode, ansible_host, ansible_play_hosts (+13 more)
+Nodes (21): environment, hostvars, playbook_dir, vars, ansible_check_mode, ansible_host, ansible_play_hosts, ansible_port (+13 more)
 
 ### Community 356 - "Community 356"
 Cohesion: 0.14
 Nodes (13): Agent Test Scope — Non-Negotiable, code:block1 ([ ] graphify query run → output pasted into agent prompt), code:bash (# 1. Query the graph (required — clears the dispatch hook se), code:block3 (Run: pytest tests/unit/test_<your_file>.py -q), code:block4 (Fix touches 1–3 files AND you have exact old_string/new_stri), code:bash (# At the start of any session involving agent dispatch:), code:bash (scripts/kri build          # build images), Commit Ordering for Parallel PRs (+5 more)
 
 ### Community 357 - "Community 357"
-Cohesion: 0.17
-Nodes (8): ActionModule, ActionModule, Some vars are substituted into the modules.  Have to make sure         that thos, generates params and passes them on to the rsync module, # TODO: have to add in the rest of the become methods here, formats rsync rsh target, escaping ipv6 addresses if needed, :arg host: hostname for the path         :arg path: file path         :arg user:, ActionBase
+Cohesion: 0.07
+Nodes (43): _arg(), assert_live_action_allowed(), co_sign_required(), GuardError, Safety guards for agent live-apply tools (#714).  These run *before* a gated liv, Raised when a live action is refused by a safety guard., Refuse live actions against protected targets / protected nodes.      Raises Gua, True when an action hits more than the co-sign threshold of targets (#714). (+35 more)
 
 ### Community 358 - "Community 358"
 Cohesion: 0.14
@@ -2410,7 +2424,7 @@ Nodes (23): AI Fleet Assistant, AI Plane, Principal Developer (Auditor), SSH con
 
 ### Community 360 - "Community 360"
 Cohesion: 0.10
-Nodes (21): ansible_host, ansible_ssh_private_key_file, ansible_check_mode, ansible_host, ansible_port, ansible_ssh_private_key_file, ansible_user, group_names (+13 more)
+Nodes (21): ansible_check_mode, ansible_host, ansible_port, ansible_ssh_private_key_file, ansible_check_mode, ansible_host, ansible_port, ansible_ssh_private_key_file (+13 more)
 
 ### Community 361 - "Community 361"
 Cohesion: 0.13
@@ -2432,13 +2446,17 @@ Nodes (14): 6. Frontend Architecture, code:typescript (// Centralized error boun
 Cohesion: 0.33
 Nodes (4): ipInput, globalSetup(), login(), SEED
 
+### Community 366 - "Community 366"
+Cohesion: 0.16
+Nodes (16): AsyncSession, Path, apply_state(), CmdRequest, get_salt_allowlist(), list_states(), Queue a Salt state.apply task. Returns the Celery task_id., Return the current Salt function allowlist from platform settings. (+8 more)
+
 ### Community 367 - "Community 367"
 Cohesion: 0.24
 Nodes (4): Redact sensitive fields from tool-call argument dicts (#781).      Two tiers:, redact_args(), Sensitive argument keys (password, secret, token, api_key, value,     content) m, TestAuditRedact
 
 ### Community 368 - "Community 368"
-Cohesion: 0.25
-Nodes (13): salt_ops, ApplyRequest, test_salt_pillar_dialog_b46, Tests for #46: Salt pillar input dialog., test_dialog_accepts_minion_ids_prop(), test_dialog_accepts_state_prop(), test_dialog_calls_onconfirm(), test_dialog_component_exists() (+5 more)
+Cohesion: 0.24
+Nodes (13): salt_tasks, saltOps, test_salt_ops_ux_b54, Tests for #54: Salt Ops UX improvements., test_inline_help_exists(), test_no_new_backend_files(), test_per_minion_result_table(), test_pip_install_in_allowlist() (+5 more)
 
 ### Community 369 - "Community 369"
 Cohesion: 0.25
@@ -2449,16 +2467,16 @@ Cohesion: 0.16
 Nodes (13): int, _make_redis_mock(), Unit tests for #768 — ingest rate limiter must fail CLOSED on Redis failure.  Up, If Redis is unreachable, _check_ingest_rate_limit must raise HTTP 503., If Redis pipeline.execute() raises, _check_ingest_rate_limit must raise 503., Happy-path: within limit → True (allow)., Happy-path: over limit → False (deny)., The 503 response should give operators a clue why ingest was rejected. (+5 more)
 
 ### Community 372 - "Community 372"
-Cohesion: 0.20
-Nodes (11): str, _compiled(), Tests for #444, #445, #450, #456, #462 fixes — updated with behavioural assertio, bootstrap_node must run with acks_late=False to prevent double-bootstrap on SIGK, bootstrap_node's real signature must not accept an ssh_password argument., Both UPDATEs issued by mark_stale_nodes must filter out maintenance_mode nodes., The DELETE built by cleanup_old_bootstrap_runs must include a finished_at IS NUL, test_bootstrap_acks_late_false() (+3 more)
+Cohesion: 0.15
+Nodes (18): _add_service_field(), _add_trace_id(), Inject a ``trace_id`` into every log record.      In order of preference:     1., Inject a static ``service`` key into every log record.      The value is always, _add_service_field and _add_trace_id produce a record with service=kri and trace, _add_service_field and _add_trace_id processors are registered in configure_logg, test_configure_logging_adds_service_and_trace_id(), test_log_record_contains_service_field() (+10 more)
 
 ### Community 373 - "Community 373"
 Cohesion: 0.13
 Nodes (8): #673: process_report_schedule.sls must restart the minion per-OS., Linux must reload the minion via systemctl., macOS must still reload the minion via launchctl (regression guard)., minion.d conf group must be wheel on macOS, root on Linux., Collector must be deployed to /opt/kri/process_collector.py., Must reference the Salt file-server source path., Must pass NODE_TOKEN as an env var to the collector., TestProcessReportScheduleSlsParity
 
 ### Community 374 - "Community 374"
-Cohesion: 0.08
-Nodes (29): MagicMock, SimpleNamespace, _make_master(), _make_scalar_one(), _make_scalar_one_or_none(), _make_scalars(), When api_password is provided, it must be encrypted before storage., When api_password is not provided, api_password_enc must be None. (+21 more)
+Cohesion: 0.04
+Nodes (84): AsyncSession, bool, int, str, UUID, bool, object, Path (+76 more)
 
 ### Community 375 - "Community 375"
 Cohesion: 0.14
@@ -2481,8 +2499,8 @@ Cohesion: 0.15
 Nodes (12): 0. Immediate containment, 1. Triage — what did it do?, 2. Was it prompt injection?, 3. Reverse a bad change, 4. Planner failover (chaos / outage), 5. Cloud overspend, 6. Post-incident, code:bash (# Stop all new agent runs (disable the planner tier endpoint) (+4 more)
 
 ### Community 380 - "Community 380"
-Cohesion: 0.24
-Nodes (12): _captured_kwarg(), _master_creds(), Tests for the Salt state.apply dry-run (test=True) toggle (P2).  Verifies the wi, An upstream error must not be reported as a successful dry-run., Pull the kwarg= value passed to _run_salt_api from a single mock call., Without test_mode the kwarg dict is None — backward compatibility., test_mode=True yields kwarg={'test': True} and status='ok_test'., Pillar + test=True share a single kwarg dict — neither overrides the other. (+4 more)
+Cohesion: 0.17
+Nodes (18): Any, bool, int, SaltMaster, str, Run a Salt command via docker exec and return the parsed JSON output.      Retur, apply_salt_state(), _extract_master_creds() (+10 more)
 
 ### Community 381 - "Community 381"
 Cohesion: 0.15
@@ -2501,56 +2519,60 @@ Cohesion: 0.14
 Nodes (16): Strip Markdown table-breaking characters from node-controlled strings., Strip Markdown table-breaking characters from node-controlled values.      Coerc, Sanitize a node-controlled value for a Markdown table cell.      Coerces non-str, _sanitize_cell(), #633: _sanitize_cell must coerce non-str node cells (IPv4Address, datetime, int,, test_build_static_context_with_ipv4address_ip_does_not_raise(), test_sanitize_cell_handles_ipv4address(), test_sanitize_cell_handles_non_str_types() (+8 more)
 
 ### Community 385 - "Community 385"
-Cohesion: 0.21
-Nodes (12): str, _make_claims(), _make_entry(), Behavioural tests for code quality fixes in #580.  Four tests — each fails again, run_playbook_endpoint accepts a playbook found in an external source dir.      B, GET /tasks/{task_id} must use require_role, not bare get_current_user.      get_, Calling run_playbook_endpoint with a bootstrap-only playbook must raise 403., reindex_nodes must aggregate ALL groups, not just the last.      The old `{str(r (+4 more)
+Cohesion: 0.19
+Nodes (13): get_task_status(), Return Celery task state + result for any queued task., str, str, _make_claims(), _make_entry(), Behavioural tests for code quality fixes in #580.  Four tests — each fails again, run_playbook_endpoint accepts a playbook found in an external source dir.      B (+5 more)
 
 ### Community 386 - "Community 386"
-Cohesion: 0.16
-Nodes (10): object, Path, str, _all_migration_files(), _module_assignments(), #710 Phase A — agent data model + migration 052 guards.  DB-free: validates the, proposed_by_agent / co_sign_required must default false at the DB layer., test_full_migration_chain_remains_linear() (+2 more)
+Cohesion: 0.07
+Nodes (73): list_playbook_files(), Return the full recursive file tree of the playbooks directory., Return the full recursive file tree of the playbooks directory., get_playbook_content(), get_playbook_tree(), list_playbooks(), playbook_stats(), Return raw YAML content of a discovered playbook or role's main task file. (+65 more)
 
 ### Community 387 - "Community 387"
 Cohesion: 0.21
 Nodes (12): test_playbook_tasks_no_git_commit_b31, Tests for #156: playbook_tasks must not commit var files to git.  Race condition, No 'import git' or 'from git import ...' in playbook_tasks — git ops cause race, #346: extravars must not be written to persistent host_vars/group_vars.      The, AST check: no git.Repo(...) call present in the module., AST check: no index.commit(...) call present in the module., test_extravars_never_written_to_persistent_var_files(), test_no_commit_var_files_function() (+4 more)
 
 ### Community 388 - "Community 388"
-Cohesion: 0.18
-Nodes (18): _confirm_html(), Build the side-effect-free confirmation page for an emailed approval link., Build the side-effect-free confirmation page for an emailed approval link., Build the side-effect-free confirmation page for an emailed approval link., bool, PendingAction, str, _action() (+10 more)
+Cohesion: 0.23
+Nodes (7): Metrics endpoint authentication helpers (#763).  The /metrics endpoint must not, _metrics_auth(), Authorize /metrics for the duration of the block (#763).      The endpoint now r, test_metrics_endpoint_content_type_is_text_plain(), test_metrics_endpoint_includes_kri_counter(), test_metrics_endpoint_includes_node_gauges(), test_metrics_endpoint_returns_200()
 
 ### Community 389 - "Community 389"
 Cohesion: 0.16
 Nodes (17): assemble_citations(), Return a structured citation list from retrieved chunks.      Each entry carries, Raise ``ValueError`` when *model* does not match the expected embed model., validate_embed_model(), Tests for RAG citation assembly, silent-failure logging, and model validation (#, build_fleet_context returns citation list alongside the context string., RAG retrieval errors must be logged at WARNING level, not silently dropped., test_assemble_citations_deduplicates() (+9 more)
 
 ### Community 390 - "Community 390"
-Cohesion: 0.16
-Nodes (16): body_for(), create_issue(), labels_for(), load_map(), main(), str, save_map(), _work() (+8 more)
+Cohesion: 0.09
+Nodes (27): discover_models — query provider API, Model discovery for Ollama backend, Model discovery for vLLM and LlamaCpp backends, discover_endpoint_models(), Query a provider endpoint and return available model IDs., Query a provider endpoint, probe health, and return available models., discover_models(), Discover available models from a live LLM provider endpoint. (+19 more)
 
 ### Community 391 - "Community 391"
 Cohesion: 0.17
 Nodes (8): collector(), _load_collector(), Unit tests for the kri process telemetry collector — GitHub issue #610.  Tests t, Load process_collector.py by file path without importing psutil., Known LLM/AI runtime names and cmdlines must classify as True., Known system process names must always classify as False., TestIsLlmProcessNegative, TestIsLlmProcessPositive
 
 ### Community 392 - "Community 392"
-Cohesion: 0.22
-Nodes (7): SimpleNamespace, _make_stat(), Return a SimpleNamespace that looks like a NodeProcessStat ORM row., is_llm has a default=False — validate it., Numeric(6,2) from SQLAlchemy comes back as Decimal — schema must accept it., BigInteger field — ensure large values (>2^31) round-trip., TestProcessStatOut
+Cohesion: 0.13
+Nodes (13): SimpleNamespace, _make_stat(), The GET /{node_id}/process_stats route must reject sort values outside mem_rss_b, Return a SimpleNamespace that looks like a NodeProcessStat ORM row., Assert the compiled regex rejects arbitrary sort values., The endpoint function must exist and be decorated on the router., is_llm has a default=False — validate it., Numeric(6,2) from SQLAlchemy comes back as Decimal — schema must accept it. (+5 more)
+
+### Community 393 - "Community 393"
+Cohesion: 0.10
+Nodes (33): AsyncSession, str, User, AsyncSession, bool, str, User, build_authorization_url() (+25 more)
 
 ### Community 394 - "Community 394"
 Cohesion: 0.17
 Nodes (12): VNC WebSocket proxy route, Seed default node_offline alert rule migration, Seed default drift_threshold alert rule migration, Frontend API client for fleet operations, Frontend API client for monitoring data, Frontend App.tsx main router and layout, Hub page tabbed interface component, Frontend package.json with React and dependencies (+4 more)
 
 ### Community 395 - "Community 395"
-Cohesion: 0.16
-Nodes (13): webssh, ssh_connection_cache, bool, int, str, cache_stats(), _credential_fingerprint(), evict_node() (+5 more)
+Cohesion: 0.21
+Nodes (13): admin_client(), admin_token(), admin_user(), app_with_test_db(), operator_client(), operator_token(), operator_user(), viewer_client() (+5 more)
 
 ### Community 396 - "Community 396"
-Cohesion: 0.12
-Nodes (15): code:python (# Email digest + Jenkins settings), code:python (def get_setting_sync(db: "Session", key: str) -> str | None:), code:python (from unittest.mock import MagicMock, patch), code:bash (source .venv/bin/activate && pytest tests/unit/test_digest_s), code:bash (source .venv/bin/activate && pytest tests/unit/test_digest_s), code:python (class PlatformSettingsUpdate(BaseModel):), code:python (class PlatformSettingsResponse(BaseModel):), code:python (@router.get("", response_model=PlatformSettingsResponse)) (+7 more)
+Cohesion: 0.18
+Nodes (15): Tests for #355/#357/#358: honest credential banner, collections pre-flight, and, test_banner_says_attempting_not_resolved(), test_classify_auth_and_unreachable_are_distinct(), test_classify_auth_failure_names_credential_source(), test_classify_task_failure_includes_task_name(), test_classify_timeout(), test_classify_unreachable(), test_playbook_uses_collections_detects_collections_key() (+7 more)
 
 ### Community 397 - "Community 397"
 Cohesion: 0.26
 Nodes (11): acl_changed(), build_command(), build_entry(), main(), splits entry and ensures normalized return, Builds and returns an entry string. Does not include the permissions bit if they, Builds and returns a getfacl/setfacl command., Returns true if the provided command affects the existing ACLs, false otherwise. (+3 more)
 
 ### Community 398 - "Community 398"
-Cohesion: 0.14
-Nodes (12): ansible_tasks, webssh module must expose a module-level logger instance., Decrypt failure must emit a WARNING log — not silently swallow., On decrypt failure, password must be empty string — no crash., Tests for logger in webssh.py (issue #66)., Tests for _get_node_credentials in ansible_tasks.py (issue #63)., TestGetNodeCredentialsLogging, _get_group_credentials() (+4 more)
+Cohesion: 0.16
+Nodes (10): object, Path, str, _all_migration_files(), _module_assignments(), #710 Phase A — agent data model + migration 052 guards.  DB-free: validates the, proposed_by_agent / co_sign_required must default false at the DB layer., test_full_migration_chain_remains_linear() (+2 more)
 
 ### Community 399 - "Community 399"
 Cohesion: 0.17
@@ -2589,36 +2611,36 @@ Cohesion: 0.17
 Nodes (7): Tests for frontend/src/lib/saltMasterGuard.ts — issue #538, epic #537.  Tests th, A single enabled master is sufficient to unblock fleet actions., undefined (None → null → undefined) must never block to avoid a load-flash., Empty list (zero masters at all) must block fleet actions., test_empty_list_blocks(), test_one_enabled_is_sufficient(), test_undefined_never_blocks()
 
 ### Community 409 - "Community 409"
-Cohesion: 0.16
-Nodes (15): code:toml (# pyproject.toml), code:bash (# .env.example), code:gitignore (# .gitignore), code:ini (# pytest.ini), code:bash (mkdir -p platform/api/routes platform/core platform/models p), code:bash (cp .env.example .env), code:bash (git add pyproject.toml .env.example .gitignore pytest.ini pl), Task 1: Project scaffolding (+7 more)
+Cohesion: 0.15
+Nodes (12): AsyncSession, bool, Node, str, TOFU check for SSH host key.      - First connection: stores the key, returns Tr, verify_or_store_host_key(), Unit tests for SSH TOFU host key management (issue #86)., AST-hardened absence guard: StrictHostKeyChecking=no must not appear as a string (+4 more)
 
 ### Community 410 - "Community 410"
 Cohesion: 0.11
 Nodes (19): ansible_check_mode, ansible_user, ansible_check_mode, ansible_user, group_names, inventory_dir, inventory_file, inventory_hostname (+11 more)
 
 ### Community 411 - "Community 411"
-Cohesion: 0.31
-Nodes (9): BreakPoint, Exception, add_dry_run_option(), apply_patch(), is_already_applied(), main(), PatchError, test_get_all_playbook_dirs_git_error_skipped() (+1 more)
+Cohesion: 0.19
+Nodes (7): str, load(), Source-contract tests for #1005 playbook_library async follow-up (#999).  `_dir_, get_all_playbook_dirs must never be called directly (unwrapped) in the sync path, Every call to _dir_source_pairs( in this file must be preceded by 'await '., TestCallersAwaitDirSourcePairs, TestDirSourcePairsIsAsync
 
 ### Community 412 - "Community 412"
-Cohesion: 0.21
-Nodes (13): admin_client(), admin_token(), admin_user(), app_with_test_db(), operator_client(), operator_token(), operator_user(), viewer_client() (+5 more)
+Cohesion: 0.25
+Nodes (13): Return True if predicate has correct structure for a dynamic group., Return node IDs matching all conditions in the predicate.      Predicate format:, resolve_dynamic_group(), validate_predicate(), test_resolve_dynamic_group_multiple_conditions(), test_resolve_dynamic_group_no_matches(), test_resolve_dynamic_group_with_valid_predicate(), test_resolve_empty_predicate_returns_empty() (+5 more)
 
 ### Community 413 - "Community 413"
-Cohesion: 0.15
-Nodes (14): bool, Path, _env_file_contains_fernet_key(), Unit tests for #765 — FERNET_SECRET_KEY / FERNET_KEY env-var reconciliation.  Ve, Settings.fernet_secret_key must be populated from the FERNET_KEY env var.      C, When FERNET_KEY is absent, fernet_secret_key should default to None., Backward compat: the legacy FERNET_SECRET_KEY env var must still populate     th, When both env vars are set, the canonical FERNET_KEY wins. (+6 more)
+Cohesion: 0.14
+Nodes (13): Tests for #921: salt_job event publication on ExecutionJob ingest.  Covers:   *, async_publish_job_event publishes a well-formed salt_job JSON payload., A Redis failure is swallowed and returns 0; it must not raise., None-valued extra kwargs must not appear in the published payload., ingest.py must import async_publish_job_event from job_events., ingest.py must call async_publish_job_event with kind='salt_job'., The await call to async_publish_job_event must appear after db.commit() in the, test_async_publish_drops_none_extras() (+5 more)
 
 ### Community 414 - "Community 414"
 Cohesion: 0.27
 Nodes (12): str, _kri(), Tests for kri.sh diagnose command (issue #5 — offline node investigation)., test_diagnose_checks_api(), test_diagnose_checks_network(), test_diagnose_checks_salt_key(), test_diagnose_checks_ssh_port(), test_diagnose_command_exists() (+4 more)
 
 ### Community 415 - "Community 415"
-Cohesion: 0.23
-Nodes (8): Behavioral tests for #369: worker emits ANSI colour + caps stored stdout.  The s, Stdout is stored verbatim — ANSI SGR sequences must NOT be stripped, so     the, test_append_capped_adds_sentinel_once_and_stops(), test_append_capped_appends_normally(), test_append_capped_just_under_cap_keeps_appending(), test_append_capped_stores_ansi_codes_verbatim(), _append_capped(), Append ``msg`` to ``lines`` until the 2 MB cap is reached, then append a     one
+Cohesion: 0.17
+Nodes (12): Baseline, BaselineState, CaptureResult, OsFamily, BaselinesPage(), buildStateJson(), CreateBaselineModal(), parseStateJson() (+4 more)
 
 ### Community 416 - "Community 416"
-Cohesion: 0.08
-Nodes (43): bytes, str, _delete_key(), Remove a PlatformSetting row if it exists, so each test starts clean., test_encrypt_decrypt_secret_roundtrip(), test_get_setting_returns_none_when_absent(), test_seed_settings_from_env_does_not_overwrite_embed_base_url(), test_seed_settings_from_env_does_not_overwrite_existing() (+35 more)
+Cohesion: 0.20
+Nodes (13): Path, str, Source-contract tests for async-event-loop-blocking fixes (#999).  Confirmed bug, The #999 follow-up (#1005): _dir_source_pairs was made async so the     get_all_, A wrapped call looks like ``asyncio.to_thread(get_all_playbook_dirs, ...)``, test_every_edited_route_file_imports_asyncio(), test_every_edited_route_file_wraps_get_all_playbook_dirs(), test_ios_tracking_svc_check_jenkins_agent_still_async() (+5 more)
 
 ### Community 417 - "Community 417"
 Cohesion: 0.21
@@ -2650,7 +2672,7 @@ Nodes (11): 20. Risks and Tradeoffs, code:sql (SELECT n.id FROM nodes n), code:t
 
 ### Community 424 - "Community 424"
 Cohesion: 0.18
-Nodes (11): 15. Operational Considerations, Backup Strategy, code:yaml (# deploy/docker-compose.yml), code:nginx (# deploy/nginx/nginx.conf), code:block66 (Logs:  structlog JSON → stdout → collected by Docker/systemd), code:bash (# Daily PostgreSQL backup), code:bash (#!/bin/bash), Deployment: Docker Compose (Phase 1) (+3 more)
+Nodes (6): str, load_migration_source(), Tests for #1005 S3: salt_masters.tls_verify must default to True.  Previously tl, Docstring must call out that existing rows are not backfilled., TestMigration068Metadata, TestSaltMasterModelDefault
 
 ### Community 425 - "Community 425"
 Cohesion: 0.18
@@ -2681,8 +2703,8 @@ Cohesion: 0.11
 Nodes (19): ansible_check_mode, ansible_user, ansible_check_mode, ansible_user, group_names, inventory_dir, inventory_file, inventory_hostname (+11 more)
 
 ### Community 433 - "Community 433"
-Cohesion: 0.25
-Nodes (13): Set a pillar key/value on a minion and trigger a full pillar refresh.      Calls, _set_pillar(), ToolCtx, _ctx(), Tests for #771: _set_pillar must validate its value arg and actually apply it., Valid args must invoke pillar.set before saltutil.refresh_pillar., Return dict must echo back pillar_key and value for audit trail., test_set_pillar_calls_pillar_set() (+5 more)
+Cohesion: 0.15
+Nodes (14): str, _compiled(), Tests for #444, #445, #450, #456, #462 fixes — updated with behavioural assertio, reap_orphaned_bootstraps must update both BootstrapRun rows and stuck Node rows., bootstrap_node must run with acks_late=False to prevent double-bootstrap on SIGK, reap_orphaned_bootstraps must update both BootstrapRun rows and stuck Node rows., bootstrap_node's real signature must not accept an ssh_password argument., Both UPDATEs issued by mark_stale_nodes must filter out maintenance_mode nodes. (+6 more)
 
 ### Community 435 - "Community 435"
 Cohesion: 0.20
@@ -2713,8 +2735,8 @@ Cohesion: 0.28
 Nodes (6): PortTransaction, IcmpBlockInversionTransaction, MasqueradeTransaction, ZoneTargetTransaction, ForwardPortTransaction, ZoneTransaction
 
 ### Community 442 - "Community 442"
-Cohesion: 0.25
-Nodes (14): create_proposal(), Create a pending agent action. Guards are re-checked here; a guarded     action, _capture_pending_action(), _make_db(), Tests for #742 — PendingAction.node_id must be nullable (None, not nil-UUID sent, When no minion_id or target is present, node_id must be None., When minion resolves to a real Node, node_id must be that node's id., Return the PendingAction instance passed to db.add(). (+6 more)
+Cohesion: 0.21
+Nodes (14): str, _fake_metrics(), _make_node(), When online nodes are found, exactly 2 get_sync_db() calls must be made., When there are no online nodes, only 1 DB session is opened (early return)., Session 1 must be fully closed (exited) before Salt metric collection., test_collect_fleet_health_closes_session_before_salt_calls(), test_collect_fleet_health_no_nodes_uses_one_session() (+6 more)
 
 ### Community 443 - "Community 443"
 Cohesion: 0.14
@@ -2725,12 +2747,12 @@ Cohesion: 0.22
 Nodes (10): _cfg(), get_load(), prep_jid(), Fleet Platform Salt returner.  Sends Salt job results to the Fleet Platform inge, POST job result to /api/v1/ingest/executions. Called after every Salt job., Return a job ID — delegate to Salt's jid generator., Required by Salt returner interface — not used., Required by Salt returner interface — not used. (+2 more)
 
 ### Community 445 - "Community 445"
-Cohesion: 0.11
-Nodes (18): ansible_play_hosts, environment, hostvars, vars, ansible_check_mode, ansible_play_hosts, ansible_user, environment (+10 more)
+Cohesion: 0.12
+Nodes (17): ansible_play_hosts, group_names, omit, vars, ansible_check_mode, ansible_play_hosts, ansible_user, environment (+9 more)
 
 ### Community 446 - "Community 446"
-Cohesion: 0.20
-Nodes (10): 17. GitOps Workflow, Baseline GitOps, CI Pipeline Integration, code:block76 (Changes to Salt states  → Salt applies them to nodes), code:yaml (# /etc/salt/master.d/gitfs.conf), code:block78 (Engineer branch:), code:block79 (Engineer branch:), code:yaml (# .github/workflows/deploy.yml (example)) (+2 more)
+Cohesion: 0.17
+Nodes (9): extract_tool_calls(), Extract tool calls from a non-streaming ``choices[0].message`` dict.      Strate, message with non-empty tool_calls list → use them, not content., message with tool_calls=None → parse content-embedded call., message without tool_calls key → fall back to content parse., tool_calls=[] (empty list) → treat as absent → fall back to content., Plain text answer with no tool call in either field → []., Multiple entries in tool_calls list → all normalized. (+1 more)
 
 ### Community 447 - "Community 447"
 Cohesion: 0.20
@@ -2817,8 +2839,8 @@ Cohesion: 0.31
 Nodes (8): _looks_like_tool_call(), main(), _post(), bool, float, int, str, Return (first_token_seconds, full_text). Uses streaming to time first token.
 
 ### Community 469 - "Community 469"
-Cohesion: 0.08
-Nodes (78): AsyncSession, LLMEndpointCreate, LLMEndpointUpdate, Request, str, UUID, bool, object (+70 more)
+Cohesion: 0.06
+Nodes (29): ChatHistoryMessage, LLMQueryRequest, Tests for LLM conversation history (closes #282)., History entries are included as a messages array in the request (#282)., When history exceeds 6000-token budget, oldest turns are dropped first., Requests without history field are valid and produce empty history., History entries appear between system and user in the messages list., test_empty_history_backward_compat() (+21 more)
 
 ### Community 470 - "Community 470"
 Cohesion: 0.11
@@ -2837,8 +2859,12 @@ Cohesion: 0.25
 Nodes (3): _alerts(), #419: kri monitoring artifacts are portable across all 3 deploy modes.  Guards t, test_portable_and_k8s_rules_in_sync()
 
 ### Community 475 - "Community 475"
-Cohesion: 0.33
-Nodes (8): agent_span(), Span for an agent operation (loop step / tool dispatch) (#710).      Always carr, object, #710 Phase A — OTEL agent-span helper degrades gracefully., test_agent_span_accepts_actor_session_tool_and_extra_attrs(), test_agent_span_handles_none_values(), test_agent_span_is_a_usable_context_manager(), test_agent_span_nests_without_error()
+Cohesion: 0.31
+Nodes (12): delete_group(), _claims(), _make_group(), _MembershipTotalRow, Empty group (aggregate query returns no rows) deletes cleanly., Mimics a SQLAlchemy (node_id, total) Row from the aggregate GROUP BY query., N+1 fix: whether the group has 1 member or 5, delete_group must call     db.exec, A node whose aggregate total is 1 (this group is its ONLY membership)     must s (+4 more)
+
+### Community 476 - "Community 476"
+Cohesion: 0.12
+Nodes (16): _additive_master_list(), Build the additive (HA) ``salt_masters`` list for a minion re-point (#977)., Re-point selected minions at ``master_id``, additively (HA attach, #977).      F, Build the additive (HA) ``salt_masters`` list for a minion re-point (#977)., Re-point selected minions at ``master_id``, additively (HA attach, #977).      F, Build the additive (HA) ``salt_masters`` list for a minion re-point (#977)., Build the additive (HA) ``salt_masters`` list for a minion re-point (#977)., Build the additive (HA) ``salt_masters`` list for a minion re-point (#977). (+8 more)
 
 ### Community 477 - "Community 477"
 Cohesion: 0.28
@@ -2877,28 +2903,28 @@ Cohesion: 0.28
 Nodes (7): str, _declared(), #439: react and react-dom MUST be the same version.  React 19 throws error #527, Return the package.json version range with any leading ^ or ~ stripped., react, react-dom and react-is should all track the same version.      react-is m, test_package_json_react_and_react_dom_match(), test_react_family_declared_versions_aligned()
 
 ### Community 487 - "Community 487"
-Cohesion: 0.05
-Nodes (61): call_openai_compat(), Call an OpenAI-compatible /chat/completions endpoint.     Returns (content, inpu, Native-tool-calling sibling of :func:`call_openai_compat` (#651).      Sends a t, Call an OpenAI-compatible /chat/completions endpoint.     Returns (content, inpu, str, _mock_chat_client(), A stream with no content deltas and 0 completion tokens raises LLMCallError (#84, Too-short content (< 5 chars) returns a helpful error message. (+53 more)
+Cohesion: 0.24
+Nodes (6): _make_master(), Return a MagicMock standing in for a SaltMaster ORM row., MasterProvisionRun.status should be 'completed' on success., MasterProvisionRun.status should be 'completed' on success., TestSshUnreachable, TestSuccessfulProvision
 
 ### Community 488 - "Community 488"
-Cohesion: 0.32
-Nodes (3): CallbackModule, This callback module tells you how long your plays ran for., CallbackBase
+Cohesion: 0.21
+Nodes (4): CallbackModule, CallbackModule, This callback module tells you how long your plays ran for., CallbackBase
 
 ### Community 489 - "Community 489"
 Cohesion: 0.25
 Nodes (6): find_underutilized_resources(), find_unused_volumes(), Finds unused volumes and reports it in slack, Finds underutilized resources and updates the same in slack, Send the message to slack, send_to_slack()
 
 ### Community 490 - "Community 490"
-Cohesion: 0.33
-Nodes (12): HTTPStatusError, _describe_http_error(), int, str, _make_http_status_error(), test_401_includes_auth_hint(), test_403_includes_auth_hint(), test_404_includes_response_body() (+4 more)
+Cohesion: 0.04
+Nodes (73): AsyncSession, int, str, object, str, int, object, Session (+65 more)
 
 ### Community 491 - "Community 491"
-Cohesion: 0.29
-Nodes (9): ToolCtx, _ctx(), Tests for #779: read-only Salt tools must reject comma-separated minion targets., test_dry_run_accepts_single_minion(), test_dry_run_rejects_comma_minion(), test_ping_node_accepts_single_minion(), test_ping_node_rejects_comma_minion(), test_run_salt_cmd_accepts_single_minion() (+1 more)
+Cohesion: 0.27
+Nodes (6): str, Any non-Darwin uname output should use the Linux playbook., Any non-Darwin uname output should use the Linux playbook., provision_master must pick the correct playbook based on OS., Run provision_master with a mocked uname and capture the playbook name used., TestOsDetectPlaybookSelection
 
 ### Community 492 - "Community 492"
-Cohesion: 0.17
-Nodes (11): Tests for #921: salt_job event publication on ExecutionJob ingest.  Covers:   *, async_publish_job_event publishes a well-formed salt_job JSON payload., None-valued extra kwargs must not appear in the published payload., ingest.py must import async_publish_job_event from job_events., ingest.py must call async_publish_job_event with kind='salt_job'., The await call to async_publish_job_event must appear after db.commit() in the, test_async_publish_drops_none_extras(), test_async_publish_sends_salt_job_payload() (+3 more)
+Cohesion: 0.23
+Nodes (8): Behavioral tests for #369: worker emits ANSI colour + caps stored stdout.  The s, Stdout is stored verbatim — ANSI SGR sequences must NOT be stripped, so     the, test_append_capped_adds_sentinel_once_and_stops(), test_append_capped_appends_normally(), test_append_capped_just_under_cap_keeps_appending(), test_append_capped_stores_ansi_codes_verbatim(), _append_capped(), Append ``msg`` to ``lines`` until the 2 MB cap is reached, then append a     one
 
 ### Community 493 - "Community 493"
 Cohesion: 0.25
@@ -2906,11 +2932,11 @@ Nodes (8): node_exporter launchd plist (macOS), node_exporter Linux tasks, node_
 
 ### Community 494 - "Community 494"
 Cohesion: 0.18
-Nodes (11): code:yaml (# deploy/docker-compose.override.yml), code:bash (#!/bin/bash), code:bash (chmod +x deploy/postgres-init/01-test-db.sh), code:bash (cd deploy), code:block14 (✔ Container deploy-postgres-1  Healthy), code:bash (docker exec deploy-postgres-1 psql -U fleet -d fleet_platfor), code:block16 (extname   | extversion), code:bash (docker exec deploy-postgres-1 psql -U fleet -d fleet_test \) (+3 more)
+Nodes (11): code:bash (alembic init platform/db/migrations), code:ini (# alembic.ini), code:python (# platform/db/migrations/env.py), code:python (# platform/db/migrations/versions/001_initial_schema.py), code:bash (alembic upgrade head), code:block44 (INFO  [alembic.runtime.migration] Running upgrade  -> 001, I), code:bash (docker exec deploy-postgres-1 psql -U fleet -d fleet_platfor), code:bash (docker exec deploy-postgres-1 psql -U fleet -d fleet_platfor) (+3 more)
 
 ### Community 495 - "Community 495"
-Cohesion: 0.24
-Nodes (13): salt_tasks, saltOps, test_salt_ops_ux_b54, Tests for #54: Salt Ops UX improvements., test_inline_help_exists(), test_no_new_backend_files(), test_per_minion_result_table(), test_pip_install_in_allowlist() (+5 more)
+Cohesion: 0.15
+Nodes (14): bool, Path, _env_file_contains_fernet_key(), Unit tests for #765 — FERNET_SECRET_KEY / FERNET_KEY env-var reconciliation.  Ve, Settings.fernet_secret_key must be populated from the FERNET_KEY env var.      C, When FERNET_KEY is absent, fernet_secret_key should default to None., Backward compat: the legacy FERNET_SECRET_KEY env var must still populate     th, When both env vars are set, the canonical FERNET_KEY wins. (+6 more)
 
 ### Community 496 - "Community 496"
 Cohesion: 0.22
@@ -2921,8 +2947,8 @@ Cohesion: 0.29
 Nodes (7): code:bash (gh api repos/hellodk/kri/environments/staging \), code:bash (gh api repos/hellodk/kri/environments/production \), code:bash (gh api user --jq '.id'), code:bash (gh api repos/hellodk/kri/environments --jq '.[].name'), code:yaml (jobs:), code:bash (git add .github/workflows/release.yml), Task 13: GitHub Environments — Staging and Production
 
 ### Community 498 - "Community 498"
-Cohesion: 0.15
-Nodes (28): AsyncSession, Group, int, UUID, GroupCreate, add_group_member(), create_group(), get_group() (+20 more)
+Cohesion: 0.14
+Nodes (12): Unit tests for #67 (OIDC exception logging) and #72 (login SSO error banner).  B, oidc_login must logger.exception(...) and 503 when discovery blows up., oidc_callback must logger.exception(...) and 503 when discovery blows up., An expired/invalid state must 400 before any discovery work — behavioral guard., All OIDC exception handlers must call logger.exception., The OIDC module must define a real module-level logger (#67)., _settings(), test_oidc_callback_logs_exception_on_discovery_failure() (+4 more)
 
 ### Community 499 - "Community 499"
 Cohesion: 0.43
@@ -2933,8 +2959,8 @@ Cohesion: 0.18
 Nodes (11): Test that LLM endpoints have SlowAPI rate limit decorators applied., ask_ai_about_node was removed (#4) — per-node Ask AI is now fleet-wide recommend, Verify that generate_recommendations has @limiter.limit decorator., Sanity check: both modules import successfully., Sanity check: both modules import successfully., Verify that submit_query has @limiter.limit decorator., test_imports_work(), test_llm_submit_query_has_rate_limit() (+3 more)
 
 ### Community 503 - "Community 503"
-Cohesion: 0.07
-Nodes (47): int, str, _extract_node_updates(), Try each key path in order; return float or None., _safe_float(), _check_extra(), _check_missing(), _check_services() (+39 more)
+Cohesion: 0.11
+Nodes (30): int, str, _check_extra(), _check_missing(), _check_services(), _check_versions(), compute_drift(), DriftResult (+22 more)
 
 ### Community 504 - "Community 504"
 Cohesion: 0.25
@@ -2945,20 +2971,20 @@ Cohesion: 0.25
 Nodes (7): Unit tests for #132 (scan_cxone blocking) and #158 (alert_tasks event loop)., alert_tasks must not use asyncio.run() directly — use new_event_loop() instead., ios_tasks must use get_sync_db, not asyncio.run()., _scan_cxone must not poll for longer than 3 minutes (was 10 min)., test_alert_tasks_no_bare_asyncio_run(), test_ios_tasks_no_asyncio_run(), test_scan_cxone_max_wait_reduced()
 
 ### Community 507 - "Community 507"
-Cohesion: 0.09
-Nodes (36): Path, Path, str, _clean_build(), _clean_setting(), Remove a platform_settings row if it exists., Duplicate ingest with same job_name + build_number returns 200 without error., Remove a jenkins_build_event row if it exists. (+28 more)
+Cohesion: 0.27
+Nodes (13): AsyncSession, UUID, create_rule(), create_webhook(), CreateRuleBody, CreateWebhookBody, delete_rule(), delete_webhook() (+5 more)
 
 ### Community 508 - "Community 508"
 Cohesion: 0.25
 Nodes (7): Test for GitHub issue #643: fix FERNET_KEY env var naming and set ENVIRONMENT., Verify FERNET_KEY is renamed to FERNET_SECRET_KEY in secret.yaml.template., Verify ENVIRONMENT is set to 'production' in the ConfigMap., Verify FERNET_KEY is renamed to FERNET_SECRET_KEY in all deployment manifests., test_environment_set_in_configmap(), test_fernet_secret_key_in_secret_template(), test_fernet_secret_key_renamed_in_deployments()
 
 ### Community 509 - "Community 509"
-Cohesion: 0.26
-Nodes (3): main(), Expects two string values. It will split the string by whitespace         and co, SysctlModule
+Cohesion: 0.33
+Nodes (13): Return *context* with sensitive data selectively redacted.      When *include_ip, _redact_sensitive_data(), test_llm_data_minimization_b25, Verify the LLM_INCLUDE_NODE_IPS constant is accessible from platform_settings_sv, test_empty_context(), test_keep_ips_when_enabled(), test_multiple_ips_redacted(), test_no_ips_returns_context_unchanged() (+5 more)
 
 ### Community 510 - "Community 510"
-Cohesion: 0.18
-Nodes (8): errorEl, editor, found, viewBtn, ADMIN, loginViaApi(), errors, runBtn
+Cohesion: 0.17
+Nodes (14): additionalProperties, $comment, title, type, $comment, $id, items, type (+6 more)
 
 ### Community 511 - "Community 511"
 Cohesion: 0.36
@@ -2973,20 +2999,20 @@ Cohesion: 0.33
 Nodes (6): Integration tests for POST /api/v1/settings/test-email (#417)., Admin with no SMTP host configured must receive HTTP 400 with a clear message., Viewer role must receive 403 — endpoint is admin-only., test_test_email_admin_no_smtp_host_returns_400(), test_test_email_viewer_forbidden(), AsyncClient
 
 ### Community 514 - "Community 514"
-Cohesion: 0.23
-Nodes (12): build_authorization_url(), _extract_role(), verify_id_token returns claims for a properly-signed token., verify_id_token must reject a tampered token even if JWKS key is valid., test_build_authorization_url_contains_required_params(), test_extract_role_defaults_to_viewer_when_no_kri_role(), test_extract_role_from_claims_admin(), test_extract_role_from_claims_auditor() (+4 more)
+Cohesion: 0.24
+Nodes (3): str, id column must have a callable default (uuid.uuid4)., TestSaltMasterModelDefaults
 
 ### Community 515 - "Community 515"
 Cohesion: 0.18
 Nodes (18): ansible_delegated_vars, u1404, u1404, ansible_check_mode, ansible_host, ansible_play_hosts, ansible_port, ansible_user (+10 more)
 
 ### Community 516 - "Community 516"
-Cohesion: 0.14
-Nodes (28): AsyncSession, UUID, JenkinsAgent, MagicMock, check_jenkins_agent(), get_expiring_certs(), iOS-specific tracking service: Xcode/macOS versions, certs, Jenkins agents., Extract iOS-relevant fields from Salt grains and update the Node row. (+20 more)
+Cohesion: 0.15
+Nodes (12): Unit tests for #119 (dev secret warning) and #127 (Redis lifecycle management)., Settings must log a warning when jwt_secret is insecure in non-production., Settings must raise ValueError when environment=production and jwt_secret is ins, Settings must not warn when jwt_secret is long and not in the insecure set., deps.py must expose init_redis and close_redis with health_check_interval., main.py lifespan must call BOTH init_redis (startup) and close_redis (shutdown)., Settings must log a warning when jwt_secret is insecure in non-production., test_config_no_warning_for_valid_secret() (+4 more)
 
 ### Community 517 - "Community 517"
-Cohesion: 0.05
-Nodes (40): code:bash (git add .), code:block1 (fleet_platform/), code:python (# tests/unit/test_celery_app.py), code:bash (pytest tests/unit/test_celery_app.py -v), code:python (# fleet_platform/workers/__init__.py), code:python (# fleet_platform/workers/celery_app.py), code:bash (pytest tests/unit/test_celery_app.py -v), code:python (# tests/unit/test_sync_session.py) (+32 more)
+Cohesion: 0.15
+Nodes (12): code:ts (discoverModels: (url: string, provider: string) =>), code:tsx (import { ModelCombobox, AUTO_VALUE, type DiscoveredModel } f), code:tsx (const [discoveredModels, setDiscoveredModels] = useState<Dis), code:tsx (if (res.models.length > 0 && !model) {), code:tsx (if (res.models.length > 0 && !model) {), code:tsx (async function handleRefresh() {), code:tsx ({/* Model */}), code:tsx (<span className="font-mono text-gray-700 text-xs">{ep.model}) (+4 more)
 
 ### Community 518 - "Community 518"
 Cohesion: 0.33
@@ -3005,8 +3031,8 @@ Cohesion: 0.52
 Nodes (6): int, str, Source-contract tests for #374: audit coverage.  Each parametrized case reads th, _src(), test_audit_call_count(), test_audit_strings_present()
 
 ### Community 524 - "Community 524"
-Cohesion: 0.14
-Nodes (14): MagicMock, _DB, FakeSelectResult, Tests for #735 — row-level lock on approve_proposal / reject_proposal (TOCTOU)., reject_proposal must re-fetch the row under a FOR UPDATE lock., Simulate TOCTOU: second approve call sees already-advanced status and must fail., Same TOCTOU scenario for awaiting_cosign state., Mimics the result of db.execute(select(...).with_for_update()). (+6 more)
+Cohesion: 0.58
+Nodes (8): card(), esc(), issue_link(), overview(), persona_section(), str, tab_buttons(), Counter
 
 ### Community 525 - "Community 525"
 Cohesion: 0.18
@@ -3014,27 +3040,27 @@ Nodes (18): ansible_delegated_vars, u1404, u1404, ansible_check_mode, ansible_ho
 
 ### Community 526 - "Community 526"
 Cohesion: 0.06
-Nodes (45): AggregateLiteral, bool, float, int, str, check(), bool, str (+37 more)
+Nodes (54): AggregateLiteral, bool, float, int, SaltMaster, str, _aggregate(), _check_dns() (+46 more)
 
 ### Community 527 - "Community 527"
-Cohesion: 0.17
-Nodes (14): additionalProperties, $comment, title, type, $comment, $id, items, type (+6 more)
+Cohesion: 0.15
+Nodes (8): Behavioral tests for #144 (retention) and #146 (thundering herd).  Replaces sour, The cleanup task must be wired into the real Celery beat schedule., The thundering-herd guard constant must exist and be a sane batch size., collect_fleet_health must split nodes into batches of <= BATCH_SIZE so it     ne, test_batch_size_is_a_positive_int(), test_cleanup_scheduled_in_beat(), test_cleanup_task_uses_90_day_cutoff(), test_collect_fleet_health_batches_salt_calls()
 
 ### Community 529 - "Community 529"
 Cohesion: 0.25
 Nodes (10): _copy_arg(), #549: bootstrap must not fail when salt_master_pub_key is not supplied.  The mas, The minion_master.pub pre-seed must be guarded by salt_master_pub_key is defined, Return the copy module args regardless of bare or FQCN module key., The minion_master.pub pre-seed must be guarded by salt_master_pub_key is defined, No unconditional task may reference salt_master_pub_key (would fail the play)., No unconditional task may reference salt_master_pub_key (would fail the play)., _tasks() (+2 more)
 
 ### Community 530 - "Community 530"
-Cohesion: 0.26
-Nodes (12): bool, Path, str, _check_guard(), Tests for P0 security fixes: #442 (pillar token leak) and #443 (path traversal)., Mirrors the fixed guard logic: returns True if path is safe., _scrub_token must redact a real-looking token from stdout., test_path_guard_accepts_nested_path() (+4 more)
+Cohesion: 0.25
+Nodes (8): code:python (# tests/unit/test_config.py), code:bash (pytest tests/unit/test_config.py -v), code:python (# platform/core/config.py), code:bash (pytest tests/unit/test_config.py -v), code:block23 (PASSED tests/unit/test_config.py::test_defaults_are_sane), code:python (# platform/db/session.py), code:bash (git add platform/core/config.py platform/db/session.py tests), Task 3: Config and DB session
 
 ### Community 531 - "Community 531"
-Cohesion: 0.15
-Nodes (12): Unit tests for #119 (dev secret warning) and #127 (Redis lifecycle management)., Settings must log a warning when jwt_secret is insecure in non-production., Settings must raise ValueError when environment=production and jwt_secret is ins, Settings must not warn when jwt_secret is long and not in the insecure set., deps.py must expose init_redis and close_redis with health_check_interval., main.py lifespan must call BOTH init_redis (startup) and close_redis (shutdown)., Settings must log a warning when jwt_secret is insecure in non-production., test_config_no_warning_for_valid_secret() (+4 more)
+Cohesion: 0.41
+Nodes (12): associate_group_credential(), GroupCredentialAssociate, Associate an existing Credential with a group (#1004).      Unlike ``PATCH /{gro, _claims(), _make_group(), The response dict must never carry a plaintext secret field., Same 409-on-race handling as PATCH /{group_id}/credentials (#1004 C6)., test_associate_group_credential_commit_race_returns_409() (+4 more)
 
 ### Community 533 - "Community 533"
-Cohesion: 0.10
-Nodes (21): code:block1 (macos-fleet-platform/), code:python (# platform/core/logging.py), code:bash (python -c "), code:bash (git add platform/core/logging.py), code:bash (pytest --tb=short -q), code:block78 (tests/unit/test_config.py ..                                ), code:bash (uvicorn platform.api.main:app --reload --port 8000), code:bash (curl -s http://localhost:8000/health | python3 -m json.tool) (+13 more)
+Cohesion: 0.20
+Nodes (9): str, normalize_tool_mode(), Resolve a stored/legacy tool_mode to a safe value for the call path.      Unknow, _fake_endpoint(), #710 Phase A — tool_mode is wired end-to-end (no longer dead schema).  - invalid, test_normalize_tool_mode(), test_to_response_surfaces_stored_tool_mode(), test_update_allows_none_and_valid() (+1 more)
 
 ### Community 534 - "Community 534"
 Cohesion: 0.16
@@ -3053,8 +3079,8 @@ Cohesion: 0.33
 Nodes (4): CallbackModule, Override for the default callback module.      Render std err/out outside of the, Return the text to output for a result., CallbackModule_default
 
 ### Community 538 - "Community 538"
-Cohesion: 0.14
-Nodes (10): Behavioral tests for #144 (retention) and #146 (thundering herd).  Replaces sour, The cleanup task must be wired into the real Celery beat schedule., The thundering-herd guard constant must exist and be a sane batch size., collect_fleet_health must split nodes into batches of <= BATCH_SIZE so it     ne, test_batch_size_is_a_positive_int(), test_cleanup_scheduled_in_beat(), test_cleanup_task_uses_90_day_cutoff(), test_collect_fleet_health_batches_salt_calls() (+2 more)
+Cohesion: 0.22
+Nodes (6): errorEl, editor, found, viewBtn, ADMIN, runBtn
 
 ### Community 539 - "Community 539"
 Cohesion: 0.56
@@ -3065,8 +3091,8 @@ Cohesion: 0.48
 Nodes (6): Acceptable Usages (no fix needed), Action Required, IST Timestamp Audit, Non-Compliant Usages (must fix — absolute timestamps displayed without IST), Summary, Non-compliant IST timestamp usages
 
 ### Community 541 - "Community 541"
-Cohesion: 0.27
-Nodes (5): object, Recursively sanitize string leaf values in a tool result payload (#770).      Wa, sanitize_result_value(), sanitize_result_value and the observation summary must neutralize injection, TestToolResultObservationSanitization
+Cohesion: 0.23
+Nodes (11): bool, int, str, _probe_ssh_auth(), Shared SSH reachability probe.  One probe implementation, two callers: - the 15-, Map a probe state to the legacy 0/1 reachability signal (Redis/Prometheus)., Return True if a TCP connection to ``ip:22`` succeeds within ``timeout``., Attempt a real SSH handshake and classify the outcome.      Assumes TCP :22 is a (+3 more)
 
 ### Community 542 - "Community 542"
 Cohesion: 0.33
@@ -3133,12 +3159,12 @@ Cohesion: 0.33
 Nodes (6): Agent Incident Response Runbook, AGENT_CLOUD_DAILY_CAP_USD Kill Switch, PendingAction Dry-Run Reversal + Audit, Planner Failover (Salt Service Stop), prompt_safety.is_suspicious Injection Triage, ToolSpec.enabled Kill Switch (agent/tools.py)
 
 ### Community 558 - "Community 558"
-Cohesion: 0.12
-Nodes (17): AI-10, number, title, url, url, DEV-4, number, title (+9 more)
+Cohesion: 0.50
+Nodes (4): AI-11, number, title, url
 
 ### Community 559 - "Community 559"
-Cohesion: 0.24
-Nodes (11): ProcessStatItem, ProcessStatsIngestPayload, #598 — Phase 1a: process-telemetry ingest pipeline unit tests.  Tests (no DB req, Pydantic accepts 300 items — the cap is enforced in the endpoint handler, not th, test_payload_with_300_processes_validates(), test_process_stat_item_edge_cases(), test_process_stat_item_full(), test_process_stat_item_minimal() (+3 more)
+Cohesion: 0.27
+Nodes (5): format_retrieved_chunks(), Format top-N chunks for insertion into the LLM context block., Format top-N chunks for injection-safe insertion into the LLM context (#773)., format_retrieved_chunks must wrap each chunk in an explicit delimited     block, TestRagChunkFencing
 
 ### Community 561 - "Community 561"
 Cohesion: 0.33
@@ -3185,8 +3211,8 @@ Cohesion: 0.50
 Nodes (4): VNC auth layer tests, fleet_platform.api.routes.vnc module, SBOM delta endpoint tests, WebSSH blocklist removal tests
 
 ### Community 576 - "Community 576"
-Cohesion: 0.17
-Nodes (9): extract_tool_calls(), Extract tool calls from a non-streaming ``choices[0].message`` dict.      Strate, message with non-empty tool_calls list → use them, not content., message with tool_calls=None → parse content-embedded call., message without tool_calls key → fall back to content parse., tool_calls=[] (empty list) → treat as absent → fall back to content., Plain text answer with no tool call in either field → []., Multiple entries in tool_calls list → all normalized. (+1 more)
+Cohesion: 0.29
+Nodes (9): ToolCtx, _ctx(), Tests for #779: read-only Salt tools must reject comma-separated minion targets., test_dry_run_accepts_single_minion(), test_dry_run_rejects_comma_minion(), test_ping_node_accepts_single_minion(), test_ping_node_rejects_comma_minion(), test_run_salt_cmd_accepts_single_minion() (+1 more)
 
 ### Community 577 - "Community 577"
 Cohesion: 0.60
@@ -3213,20 +3239,24 @@ Cohesion: 0.40
 Nodes (4): dest, _local_rsync_path, rsync_path, src
 
 ### Community 583 - "Community 583"
-Cohesion: 0.19
-Nodes (12): clear_cache(), _make_fake_conn(), Tests for SSH connection cache credential-keying fix (issue #733).  Verifies tha, Different client_keys must produce distinct cache entries., The credential fingerprint must be a fixed-length hex digest, never the raw secr, Reset the SSH connection cache and lock before each test., Two calls with same host/port/user but different passwords must NOT share a conn, Two calls with identical creds must reuse the cached connection. (+4 more)
+Cohesion: 0.14
+Nodes (13): Unit tests for FleetEmbedding model — issue #400.  Verifies the source/model con, FleetEmbedding must expose a 'tsv' attribute on the mapper., The 'tsv' column must be of type TSVECTOR., The 'tsv' column must be a server-side GENERATED ALWAYS computed column., The Computed expression must reference to_tsvector('english', chunk_text)., The computed column must be persisted=True (STORED), matching the migration., fleet_embeddings table must appear in Base.metadata with the tsv column., test_fleet_embedding_has_tsv_attribute() (+5 more)
+
+### Community 586 - "Community 586"
+Cohesion: 0.25
+Nodes (7): str, Contract tests for #975 — close the node-metrics loop (OTEL monitoring Phase 4)., _render_config(), test_config_template_fleet_instance_defaults_to_minion_id_when_otel_node_instance_empty(), test_config_template_fleet_instance_uses_explicit_override_when_set(), test_config_template_has_resource_fleet_processor(), test_config_template_metrics_pipeline_wires_resource_fleet_processor()
 
 ### Community 591 - "Community 591"
 Cohesion: 0.50
 Nodes (5): Dynamic Salt function allowlist with 60s cache, Salt function deny list blocking with minimum function protection, Salt HTTP API dispatch via salt-api /run endpoint, Unit tests for dynamic Salt function allowlist (Issue #255), Unit tests for salt_tasks HTTP API dispatch (Issue #82)
 
 ### Community 592 - "Community 592"
-Cohesion: 0.21
-Nodes (11): _make_mock_db(), _write_pillar_file must no longer exist in ansible_tasks (#509)., _pillar_dir_writable must no longer exist in ansible_tasks (#509)., test_bootstrap_node_missing_node_returns_error(), test_pillar_dir_writable_is_removed(), test_write_pillar_file_creates_correct_content(), test_write_pillar_file_creates_top_sls(), test_write_pillar_file_is_removed() (+3 more)
+Cohesion: 0.33
+Nodes (12): HTTPStatusError, _describe_http_error(), int, str, _make_http_status_error(), test_401_includes_auth_hint(), test_403_includes_auth_hint(), test_404_includes_response_body() (+4 more)
 
 ### Community 593 - "Community 593"
 Cohesion: 0.20
-Nodes (10): _make_cancel_db(), Tests for ansible.py route fixes., bootstrap_node.delay() must never forward ssh_password — plaintext on Redis brok, Return an AsyncMock db with execute() resolving to a MagicMock result., cancel_playbook_job must resolve the actor from the 'email' JWT claim (#342)., audit() must be awaited before db.commit() in cancel_playbook_job (#342)., test_bootstrap_delay_no_ssh_password(), test_cancel_audit_before_commit() (+2 more)
+Nodes (31): AlertEvent, AlertRule, int, AlertEvent, AlertRule, AsyncSession, datetime, str (+23 more)
 
 ### Community 594 - "Community 594"
 Cohesion: 0.40
@@ -3257,8 +3287,8 @@ Cohesion: 0.67
 Nodes (4): /api/v1/salt/apply endpoint, Celery task patching for salt operations, /api/v1/salt/cmd endpoint, fleet_platform.workers.salt_tasks module
 
 ### Community 603 - "Community 603"
-Cohesion: 0.19
-Nodes (13): int, test_ingest_ratelimit_llm_audit_b17, _make_redis_mock(), Unit tests for #168 (ingest rate limit) and #170 (LLM audit trail).  Behavioral, If Redis is down, ingest must still work (fail open)., Return (mock_redis, mock_pipe) backed by an async pipeline execute., Rate limiter must deny when count exceeds _INGEST_RATE_LIMIT and allow when with, When Redis is unreachable, the rate limiter must raise HTTP 503 and block the re (+5 more)
+Cohesion: 0.17
+Nodes (11): Tests for #501 (favorites 500→401) and #502 (enable_source upsert)., Sanity: the fix code path exists (UUID conversion is wrapped)., claims.get("sub", "") returns "" when sub is absent, triggering ValueError., Valid UUID sub parses without error., enable_source now calls db.execute with a pg_insert statement., enable_source returns 0 when rowcount is 0 (row already enabled, no-op)., test_enable_source_noop_when_already_enabled(), test_enable_source_uses_pg_insert() (+3 more)
 
 ### Community 604 - "Community 604"
 Cohesion: 0.83
@@ -3288,21 +3318,17 @@ Nodes (4): code:bash (# Get project ID and status field ID), code:yaml (name: Pr
 Cohesion: 0.50
 Nodes (3): dest, _local_rsync_path, src
 
-### Community 612 - "Community 612"
-Cohesion: 0.25
-Nodes (8): code:python (# tests/unit/test_config.py), code:bash (pytest tests/unit/test_config.py -v), code:python (# platform/core/config.py), code:bash (pytest tests/unit/test_config.py -v), code:block23 (PASSED tests/unit/test_config.py::test_defaults_are_sane), code:python (# platform/db/session.py), code:bash (git add platform/core/config.py platform/db/session.py tests), Task 3: Config and DB session
-
 ### Community 616 - "Community 616"
 Cohesion: 0.12
-Nodes (16): AI-2, number, title, url, DEV-3, number, title, url (+8 more)
+Nodes (17): AI-10, number, title, url, url, DEV-4, number, title (+9 more)
 
 ### Community 618 - "Community 618"
 Cohesion: 0.50
 Nodes (3): Regression tests for issue #740: asyncio.get_running_loop() inside coroutines., Target route files must use get_running_loop(), not deprecated get_event_loop()., test_no_get_event_loop_in_target_files()
 
 ### Community 619 - "Community 619"
-Cohesion: 0.12
-Nodes (17): ansible_check_mode, ansible_user, ansible_check_mode, ansible_user, group_names, inventory_dir, inventory_file, inventory_hostname (+9 more)
+Cohesion: 0.11
+Nodes (18): ansible_check_mode, ansible_user, ansible_check_mode, ansible_user, group_names, inventory_dir, inventory_file, inventory_hostname (+10 more)
 
 ### Community 620 - "Community 620"
 Cohesion: 0.67
@@ -3350,27 +3376,31 @@ Nodes (3): PostgreSQL extensions: pg_trgm, vector, timescaledb, Integration test
 
 ### Community 670 - "Community 670"
 Cohesion: 0.11
-Nodes (18): ansible_play_hosts, environment, omit, vars, ansible_check_mode, ansible_play_hosts, ansible_user, environment (+10 more)
+Nodes (18): ansible_play_hosts, environment, hostvars, vars, ansible_check_mode, ansible_play_hosts, ansible_user, environment (+10 more)
 
 ### Community 672 - "Community 672"
 Cohesion: 0.67
 Nodes (3): frontend/src/pages/SecurityPage.tsx, frontend/src/pages/SettingsPage.tsx, Skeleton loader UI tests
 
 ### Community 715 - "Community 715"
-Cohesion: 0.26
-Nodes (12): audit_events(), test_audit_filter_by_action(), test_audit_filter_by_actor(), test_audit_filter_by_resource_type(), test_audit_filter_from_ts(), test_audit_filter_from_ts_and_to_ts(), test_audit_filter_to_ts(), test_audit_list_no_filters() (+4 more)
+Cohesion: 0.08
+Nodes (18): _credential(), _node(), Issue #986 Phase 2c — migrate import/bootstrap/node callers off per-node credent, The /{node_id}/credential conflict-groups query must join credential_groups, get_node / update_node must surface the resolver's output, not a raw     db.get(, get_node / update_node must surface the resolver's output, not a raw     db.get(, Mimics a SQLAlchemy (Credential, group_name) Row for .first()., Mimics a SQLAlchemy (Credential, group_name) Row for .all(). (+10 more)
+
+### Community 748 - "Community 748"
+Cohesion: 0.25
+Nodes (13): salt_ops, ApplyRequest, test_salt_pillar_dialog_b46, Tests for #46: Salt pillar input dialog., test_dialog_accepts_minion_ids_prop(), test_dialog_accepts_state_prop(), test_dialog_calls_onconfirm(), test_dialog_component_exists() (+5 more)
 
 ### Community 777 - "Community 777"
-Cohesion: 0.27
-Nodes (5): format_retrieved_chunks(), Format top-N chunks for insertion into the LLM context block., Format top-N chunks for injection-safe insertion into the LLM context (#773)., format_retrieved_chunks must wrap each chunk in an explicit delimited     block, TestRagChunkFencing
+Cohesion: 0.13
+Nodes (66): AsyncSession, LLMEndpointCreate, LLMEndpointUpdate, Request, str, UUID, bool, object (+58 more)
 
 ### Community 805 - "Community 805"
 Cohesion: 0.13
 Nodes (3): ForwardPortTransaction, main(), MasqueradeTransaction
 
 ### Community 806 - "Community 806"
-Cohesion: 0.18
-Nodes (10): Tests for VNC proxy fix (#247) — raw bridge, no server-side auth., The vnc_session WebSocket handler must NOT call _rfb_auth (causes double-handsha, GET /session/{node_id}/creds route must exist., nodes route must handle vnc_password (confirms #256 storage is wired)., _rfb_auth must still exist (has unit tests, kept for reference)., NodeUpdateRequest schema must include a vnc_password field (confirms #256 storag, test_node_update_schema_accepts_vnc_password(), test_vnc_creds_route_exists() (+2 more)
+Cohesion: 0.25
+Nodes (4): _mock_db_context(), Unit tests for issue #557 — provision_master Celery task.  Tests cover: - OS det, Return a context manager mock whose scalar_one_or_none alternates between master, TestReapOrphanedMasterProvisions
 
 ### Community 807 - "Community 807"
 Cohesion: 0.23
@@ -3397,12 +3427,12 @@ Cohesion: 0.23
 Nodes (16): vars, vars, ansible_check_mode, ansible_delegated_vars, ansible_play_hosts, ansible_user, environment, group_names (+8 more)
 
 ### Community 813 - "Community 813"
-Cohesion: 0.27
-Nodes (10): object, Unit tests for the masked ansible command line emitted into bootstrap/provision, test_cmdline_includes_playbook_inventory_and_masks_secrets(), test_mask_passes_normal_values(), test_mask_redacts_credential_keys(), test_mask_truncates_long_nonsecret(), _format_ansible_cmdline(), _mask_extravar() (+2 more)
+Cohesion: 0.24
+Nodes (6): str, load(), Source-contract tests for #1005 A5: webssh SSH-stdout pump task must be referenc, The old `asyncio.create_task(read_ssh())` statement (no assignment) must be gone, close() should cancel the pump task if the session ends before it finishes., TestWebsshReadTaskReference
 
 ### Community 814 - "Community 814"
-Cohesion: 0.20
-Nodes (9): str, normalize_tool_mode(), Resolve a stored/legacy tool_mode to a safe value for the call path.      Unknow, _fake_endpoint(), #710 Phase A — tool_mode is wired end-to-end (no longer dead schema).  - invalid, test_normalize_tool_mode(), test_to_response_surfaces_stored_tool_mode(), test_update_allows_none_and_valid() (+1 more)
+Cohesion: 0.18
+Nodes (11): code:yaml (# deploy/docker-compose.override.yml), code:bash (#!/bin/bash), code:bash (chmod +x deploy/postgres-init/01-test-db.sh), code:bash (cd deploy), code:block14 (✔ Container deploy-postgres-1  Healthy), code:bash (docker exec deploy-postgres-1 psql -U fleet -d fleet_platfor), code:block16 (extname   | extversion), code:bash (docker exec deploy-postgres-1 psql -U fleet -d fleet_test \) (+3 more)
 
 ### Community 815 - "Community 815"
 Cohesion: 0.13
@@ -3410,23 +3440,23 @@ Nodes (5): FirewallTransaction, Function to wrap calls to make actions on firewa
 
 ### Community 816 - "Community 816"
 Cohesion: 0.31
-Nodes (10): Create a minimal Node row for health-history tests, clean up after., test_fleet_health_unauthenticated_returns_401(), test_get_fleet_health_returns_200(), test_node(), test_node_health_history_returns_list(), test_trigger_collect_requires_admin(), test_trigger_collect_returns_202(), AsyncClient (+2 more)
+Nodes (10): test_invalid_minion_id_path_traversal(), test_invalid_minion_id_spaces(), test_invalid_minion_id_yaml_injection(), test_safe_label_empty_becomes_unknown(), test_safe_label_strips_traversal(), test_safe_label_valid(), test_valid_minion_id(), _validate_minion_id() (+2 more)
 
 ### Community 817 - "Community 817"
-Cohesion: 0.09
-Nodes (20): SaltMaster, _check_token_delivery(), For ingest mode check that api_url is configured; pass for direct mode., MagicMock, _make_master(), Build a SaltMaster-like SimpleNamespace without hitting the DB., All checks pass → aggregate healthy., When salt_api_auth fails → aggregate must be unreachable, no exception raised. (+12 more)
+Cohesion: 0.18
+Nodes (10): code:python (# tests/unit/test_auth_core.py), code:bash (pytest tests/unit/test_auth_core.py -v), code:python (# platform/core/auth.py), code:bash (pytest tests/unit/test_auth_core.py -v), code:block56 (PASSED tests/unit/test_auth_core.py::test_password_hash_and_), code:bash (git add platform/core/auth.py tests/unit/test_auth_core.py), Fleet Platform — Plan 1: Foundation (DB + FastAPI Core + Auth), Plan 1 Self-Review (+2 more)
 
 ### Community 818 - "Community 818"
 Cohesion: 0.18
-Nodes (10): _GROUNDING_RULES must NOT deflect operators to the kri UI as a fallback answer., _GROUNDING_RULES must assert the data is authoritative., _GROUNDING_RULES must reference hostname as the node's name., build_static_context output contains the 'authoritative node records' intro line, An IP-looking hostname is included verbatim in the node table., test_build_static_context_authoritative_label_present(), test_build_static_context_ip_hostname_present(), test_grounding_rules_contains_authoritative() (+2 more)
+Nodes (11): 15. Operational Considerations, Backup Strategy, code:yaml (# deploy/docker-compose.yml), code:nginx (# deploy/nginx/nginx.conf), code:block66 (Logs:  structlog JSON → stdout → collected by Docker/systemd), code:bash (# Daily PostgreSQL backup), code:bash (#!/bin/bash), Deployment: Docker Compose (Phase 1) (+3 more)
 
 ### Community 819 - "Community 819"
-Cohesion: 0.33
-Nodes (10): _make_db(), _make_master(), A degraded response returns [] for every bucket (no missing keys)., When SaltApiError (e.g. auth failure), degraded=True and degraded_reason is set., Normal case: salt-api responds → degraded=False., pending_count must always be present., test_list_keys_degraded_buckets_return_empty_list(), test_list_keys_not_degraded_on_success() (+2 more)
+Cohesion: 0.19
+Nodes (13): int, test_ingest_ratelimit_llm_audit_b17, _make_redis_mock(), Unit tests for #168 (ingest rate limit) and #170 (LLM audit trail).  Behavioral, If Redis is down, ingest must still work (fail open)., Return (mock_redis, mock_pipe) backed by an async pipeline execute., Rate limiter must deny when count exceeds _INGEST_RATE_LIMIT and allow when with, When Redis is unreachable, the rate limiter must raise HTTP 503 and block the re (+5 more)
 
 ### Community 820 - "Community 820"
-Cohesion: 0.18
-Nodes (3): _FakeResult, _FakeSession, Minimal async session that assigns ids on flush and swallows writes.
+Cohesion: 0.54
+Nodes (7): test_ux_node_exec_bulk_b12, _find_file(), Unit tests for #150 (quick actions), #152 (execution filters), #161 (bulk select, test_bulk_selection_shows_node_names(), test_execution_history_has_date_filter(), test_execution_history_has_status_filter(), test_node_detail_has_quick_actions()
 
 ### Community 821 - "Community 821"
 Cohesion: 0.21
@@ -3436,17 +3466,17 @@ Nodes (13): MLX Local Cluster — Operator Runbook (#712), hydra repo ansible/ro
 Cohesion: 0.30
 Nodes (8): _FakeDB, _FakeMaster, _patch(), Issue #965 — provision_master must resolve SSH creds like bootstrap, not 'admin', db.execute(...).scalar_one_or_none() returns a sentinel node object., test_no_admin_fallback_when_nothing_resolves(), test_per_master_ssh_user_takes_priority(), test_promoted_master_inherits_linked_node_credentials()
 
+### Community 824 - "Community 824"
+Cohesion: 0.17
+Nodes (14): int, Build a DB session mock whose execute() returns node or masters list correctly., Verify the expected keys in the session list response dict., TestSessionListResponseStructure, _make_session(), Return a context-manager-compatible fake DB session., get_setting_sync returning non-integer must not raise; defaults are used., A Redis error in the heartbeat path must be swallowed — task must succeed. (+6 more)
+
 ### Community 825 - "Community 825"
 Cohesion: 0.18
-Nodes (11): code:bash (alembic init platform/db/migrations), code:ini (# alembic.ini), code:python (# platform/db/migrations/env.py), code:python (# platform/db/migrations/versions/001_initial_schema.py), code:bash (alembic upgrade head), code:block44 (INFO  [alembic.runtime.migration] Running upgrade  -> 001, I), code:bash (docker exec deploy-postgres-1 psql -U fleet -d fleet_platfor), code:bash (docker exec deploy-postgres-1 psql -U fleet -d fleet_platfor) (+3 more)
-
-### Community 826 - "Community 826"
-Cohesion: 0.20
-Nodes (10): 10. Drift Detection Design, code:yaml (# baselines/roles/builder.yaml), code:block33 (Severity weights:), code:block35 (drift score), code:block36 (DESIRED STATE (baseline v1.2)          ACTUAL STATE (collect), Desired State Model, Diff Visualization, Drift Scoring Model (+2 more)
+Nodes (4): Unit tests for the guarded compute-harden / unharden node action — #675.  Covers, TestHardenClassification, TestHardenSaltMapping, TestUnknownActionStillRaises
 
 ### Community 827 - "Community 827"
-Cohesion: 0.15
-Nodes (12): code:ts (discoverModels: (url: string, provider: string) =>), code:tsx (import { ModelCombobox, AUTO_VALUE, type DiscoveredModel } f), code:tsx (const [discoveredModels, setDiscoveredModels] = useState<Dis), code:tsx (if (res.models.length > 0 && !model) {), code:tsx (if (res.models.length > 0 && !model) {), code:tsx (async function handleRefresh() {), code:tsx ({/* Model */}), code:tsx (<span className="font-mono text-gray-700 text-xs">{ep.model}) (+4 more)
+Cohesion: 0.31
+Nodes (10): str, Unit tests for #1006 — removal of node->master promotion / as_master feature.  A, _read(), test_as_master_removed_from_ansible_tasks(), test_as_master_removed_from_bootstrap_route(), test_as_master_removed_from_bootstrap_svc(), test_as_master_removed_from_fleet_route(), test_as_master_removed_from_schemas() (+2 more)
 
 ### Community 828 - "Community 828"
 Cohesion: 0.39
@@ -3457,20 +3487,24 @@ Cohesion: 0.33
 Nodes (10): test_playbook_duration_b33, Tests for #165: playbook duration stats endpoint., test_fmtduration_in_frontend(), test_playbook_stats_api_in_frontend(), test_playbook_stats_endpoint_exists(), test_playbook_stats_endpoint_path(), test_playbook_stats_limits_to_5_runs(), test_playbook_stats_only_completed_jobs() (+2 more)
 
 ### Community 830 - "Community 830"
-Cohesion: 0.22
-Nodes (9): 8. Event and Data Flow, Baseline Drift Recompute Flow (on Git push), code:block17 (t=0   salt-minion grain sync triggers (every 5 min)), code:block18 (t=0    Celery beat triggers: schedule_sbom_scans() at 2am), code:block19 (t=0   Engineer pushes baseline YAML change to Git), code:block20 (t=0   Salt highstate triggered (manual or scheduled)), Execution Flow (Salt state run), Grain Sync Flow (primary state update path) (+1 more)
+Cohesion: 0.05
+Nodes (36): deriveApiUrl(), _derive_api_url(), Compute api_url from the SSoT fields — the single source of truth (#562)., Compute api_url from the SSoT fields — the single source of truth (#562)., Compute api_url from the SSoT fields — the single source of truth (#562)., SimpleNamespace, str, str (+28 more)
 
 ### Community 831 - "Community 831"
 Cohesion: 0.20
 Nodes (10): code:bash (source .venv/bin/activate), code:python (class DiscoveredModel(BaseModel):), code:python ("""Discover available models from a live LLM provider endpoi), code:python (class DiscoverModelsRequest(BaseModel):), code:python (from fleet_platform.services.model_discovery import discover), code:bash (source .venv/bin/activate), code:bash (source .venv/bin/activate), code:bash (git add fleet_platform/services/model_discovery.py fleet_pla) (+2 more)
 
 ### Community 832 - "Community 832"
-Cohesion: 0.50
-Nodes (4): ARC-4, number, title, url
+Cohesion: 0.14
+Nodes (14): code:python (# platform/core/logging.py), code:bash (python -c "), code:bash (git add platform/core/logging.py), code:bash (pytest --tb=short -q), code:block78 (tests/unit/test_config.py ..                                ), code:bash (uvicorn platform.api.main:app --reload --port 8000), code:bash (curl -s http://localhost:8000/health | python3 -m json.tool), code:json ({) (+6 more)
 
-### Community 834 - "Community 834"
-Cohesion: 0.40
-Nodes (5): Redis, Request, Stream job-state transitions to the client as SSE.      Any authenticated role m, stream_job_events(), StreamingResponse
+### Community 833 - "Community 833"
+Cohesion: 0.33
+Nodes (8): AsyncSession, datetime, int, str, AuditEventResponse, _from_orm(), list_audit_logs(), Build response from ORM object, coercing INET → str.
+
+### Community 835 - "Community 835"
+Cohesion: 0.20
+Nodes (10): code:python (# tests/integration/test_auth_endpoints.py), code:bash (pytest tests/integration/test_auth_endpoints.py -v), code:python (# platform/schemas/auth.py), code:python (# platform/api/routes/auth.py), code:python (from platform.api.routes import health, auth   # add auth), code:python (app.include_router(auth.router, tags=["auth"])), code:bash (pytest tests/integration/test_auth_endpoints.py -v), code:block75 (PASSED tests/integration/test_auth_endpoints.py::test_login_) (+2 more)
 
 ### Community 836 - "Community 836"
 Cohesion: 0.56
@@ -3501,16 +3535,16 @@ Cohesion: 0.22
 Nodes (8): 2026-07-05 — Add 3 nodes + make .64 the salt master, Actions & outcomes, Environment facts (verified), Issue A — only a bogus `e2e-master` salt master registered, Issue B — master config `auto_accept: False` + post-bootstrap key accept ⇒ deadlock/hang, Issue C — one-time bootstrap grain push targets the master, not the kri API, Root-cause findings (static analysis), Target topology
 
 ### Community 843 - "Community 843"
-Cohesion: 0.50
-Nodes (4): DEV-11, number, title, url
+Cohesion: 0.24
+Nodes (12): _captured_kwarg(), _master_creds(), Tests for the Salt state.apply dry-run (test=True) toggle (P2).  Verifies the wi, An upstream error must not be reported as a successful dry-run., Pull the kwarg= value passed to _run_salt_api from a single mock call., Without test_mode the kwarg dict is None — backward compatibility., test_mode=True yields kwarg={'test': True} and status='ok_test'., Pillar + test=True share a single kwarg dict — neither overrides the other. (+4 more)
 
 ### Community 844 - "Community 844"
-Cohesion: 0.25
-Nodes (6): RateLimitHeadersMiddleware, Emit ``X-RateLimit-*`` headers on every HTTP response for rate-limited routes., ASGIApp, Receive, Scope, Send
+Cohesion: 0.29
+Nodes (7): str, _make_entry(), Tests for #506 — bootstrap playbook guard in run_playbook_endpoint.  Converted f, Endpoint raises HTTP 403 for bootstrap_node.yml (not just grep check).      This, _BOOTSTRAP_ONLY_PLAYBOOKS is defined and contains the bootstrap playbook., test_bootstrap_only_playbooks_constant_exists(), test_run_playbook_rejects_bootstrap_playbook()
 
 ### Community 845 - "Community 845"
-Cohesion: 0.50
-Nodes (4): DEV-5, number, title, url
+Cohesion: 0.42
+Nodes (8): body_for(), create_issue(), labels_for(), load_map(), main(), str, save_map(), _work()
 
 ### Community 846 - "Community 846"
 Cohesion: 0.54
@@ -3561,20 +3595,24 @@ Cohesion: 0.54
 Nodes (8): ansible_version, full, major, minor, revision, string, ansible_version, ansible_version
 
 ### Community 861 - "Community 861"
-Cohesion: 0.20
-Nodes (6): Verify that list_keys allows any authenticated user; mutating ops require admin., accept_key route uses require_role('admin') dependency., reject_key route uses require_role('admin') dependency., delete_key route uses require_role('admin') dependency., require_role('admin') raises 403 for operator/viewer roles., TestRoleEnforcement
+Cohesion: 0.50
+Nodes (4): ARC-4, number, title, url
+
+### Community 862 - "Community 862"
+Cohesion: 0.50
+Nodes (4): DEV-11, number, title, url
 
 ### Community 865 - "Community 865"
-Cohesion: 0.05
-Nodes (48): Metrics endpoint authentication helpers (#763).  The /metrics endpoint must not, Verify that the incoming request is authorised to scrape /metrics.      Raises H, verify_metrics_request(), Request, Response, LoginRequest, Application-layer security header middleware.  Adds security headers to every re, SecurityHeaderMiddleware (+40 more)
+Cohesion: 0.33
+Nodes (8): agent_span(), Span for an agent operation (loop step / tool dispatch) (#710).      Always carr, object, #710 Phase A — OTEL agent-span helper degrades gracefully., test_agent_span_accepts_actor_session_tool_and_extra_attrs(), test_agent_span_handles_none_values(), test_agent_span_is_a_usable_context_manager(), test_agent_span_nests_without_error()
 
 ### Community 866 - "Community 866"
-Cohesion: 0.20
-Nodes (6): Unit tests for SSH TOFU host key management (issue #86)., AST-hardened absence guard: StrictHostKeyChecking=no must not appear as a string, test_ansible_tasks_no_unconditional_strict_host_key_no(), test_tofu_matching_key_passes(), test_tofu_mismatch_blocks_and_creates_event(), test_tofu_stores_key_on_first_connection()
+Cohesion: 0.50
+Nodes (4): DEV-5, number, title, url
 
-### Community 867 - "Community 867"
-Cohesion: 0.28
-Nodes (9): get_week_stats — Jenkins + node counts, render_html — email template, send_alert_email — real-time alert, send_digest — weekly email, decrypt_secret — Fernet decryption, encrypt_secret — Fernet encryption, get_setting — async DB read, seed_settings_from_env — startup init (+1 more)
+### Community 868 - "Community 868"
+Cohesion: 0.39
+Nodes (3): int, Each _check_* helper must receive and pass through tls_verify., TestSaltMasterProbeTlsVerify
 
 ### Community 869 - "Community 869"
 Cohesion: 0.53
@@ -3601,8 +3639,8 @@ Cohesion: 0.53
 Nodes (6): groups, groups, all, ungrouped, groups, groups
 
 ### Community 875 - "Community 875"
-Cohesion: 0.33
-Nodes (6): code:bash (# 1. Clone the repository), code:bash (# Start all services (API, Celery worker, frontend dev serve), Development Setup, Prerequisites, Running the full stack locally, Steps
+Cohesion: 0.67
+Nodes (5): add_dry_run_option(), apply_patch(), is_already_applied(), main(), PatchError
 
 ### Community 876 - "Community 876"
 Cohesion: 0.33
@@ -3652,29 +3690,25 @@ Nodes (5): groups, groups, all, ungrouped, groups
 Cohesion: 0.40
 Nodes (3): closeBtn, vncBtn, vncPanel
 
+### Community 889 - "Community 889"
+Cohesion: 0.29
+Nodes (4): platform_settings.py router must have a /test-email route., send_test_email must be importable from digest_svc via platform_settings., SettingsPage.tsx must contain 'Send test email' text., TestSourceContracts
+
 ### Community 890 - "Community 890"
-Cohesion: 0.36
-Nodes (3): int, Each _check_* helper must receive and pass through tls_verify., TestSaltMasterProbeTlsVerify
+Cohesion: 0.07
+Nodes (48): bool, int, MagicMock, str, UUID, _make_db_factory(), _make_master(), _make_node() (+40 more)
 
 ### Community 891 - "Community 891"
 Cohesion: 0.60
 Nodes (5): code:bash (gh release create v0.1.56 \), code:yaml (name: Release), code:bash (git add .github/workflows/release.yml), Task 4: Releases + Release Automation Workflow, Task 4 — Releases + Release Automation Workflow
 
-### Community 892 - "Community 892"
-Cohesion: 0.25
-Nodes (8): limits, max_artifact_bytes, max_filename_chars, max_quarantine_filename_chars, session_quota_bytes, ttl_seconds, user_quota_bytes, yaml_loader
-
 ### Community 893 - "Community 893"
-Cohesion: 0.29
-Nodes (7): str, _make_entry(), Tests for #506 — bootstrap playbook guard in run_playbook_endpoint.  Converted f, Endpoint raises HTTP 403 for bootstrap_node.yml (not just grep check).      This, _BOOTSTRAP_ONLY_PLAYBOOKS is defined and contains the bootstrap playbook., test_bootstrap_only_playbooks_constant_exists(), test_run_playbook_rejects_bootstrap_playbook()
+Cohesion: 0.25
+Nodes (8): 14. User Journeys, Journey 1: New Operator Onboarding — Zero to First Node, Journey 2: Bootstrapping a Fleet of 10 Mac Minis in One Shot, Journey 3: Detecting and Investigating a Drifted Node, Journey 4: Running a Playbook Against a Group, Journey 5: Cancelling a Stuck Bootstrap and Retrying, Journey 6: Inventory Management with Tags, Journey 7: SBOM Audit Workflow
 
 ### Community 894 - "Community 894"
-Cohesion: 0.58
-Nodes (8): card(), esc(), issue_link(), overview(), persona_section(), str, tab_buttons(), Counter
-
-### Community 895 - "Community 895"
-Cohesion: 0.50
-Nodes (4): AI-11, number, title, url
+Cohesion: 0.20
+Nodes (10): 2. Root Cause Analysis, code:ts (mutationFn: (text: string) =>), code:python (content, input_tokens, output_tokens = await call_openai_com), code:python (f"- Total nodes: {node_count}\n"   # ← scalar count; no name), RC-1 — Hardcoded `intent: 'explain'` in frontend [CRITICAL], RC-2 — No conversation history sent to API [CRITICAL], RC-3 — Aggregates instead of records in context [CRITICAL], RC-4 — No grounding/refusal rules [HIGH] (+2 more)
 
 ### Community 896 - "Community 896"
 Cohesion: 0.50
@@ -3756,10 +3790,6 @@ Nodes (4): ARC-9, number, title, url
 Cohesion: 0.50
 Nodes (4): DEV-1, number, title, url
 
-### Community 916 - "Community 916"
-Cohesion: 0.33
-Nodes (8): registered_node(), test_grain_ingest_invalid_token_returns_401(), test_grain_ingest_missing_token_returns_401(), test_grain_ingest_queues_drift_task(), test_grain_ingest_returns_200(), test_grain_ingest_unknown_minion_returns_404(), AsyncClient, AsyncSession
-
 ### Community 917 - "Community 917"
 Cohesion: 0.50
 Nodes (4): DEV-12, number, title, url
@@ -3769,8 +3799,8 @@ Cohesion: 0.50
 Nodes (4): DEV-2, number, title, url
 
 ### Community 919 - "Community 919"
-Cohesion: 0.54
-Nodes (7): test_ux_node_exec_bulk_b12, _find_file(), Unit tests for #150 (quick actions), #152 (execution filters), #161 (bulk select, test_bulk_selection_shows_node_names(), test_execution_history_has_date_filter(), test_execution_history_has_status_filter(), test_node_detail_has_quick_actions()
+Cohesion: 0.25
+Nodes (6): RateLimitHeadersMiddleware, Emit ``X-RateLimit-*`` headers on every HTTP response for rate-limited routes., ASGIApp, Receive, Scope, Send
 
 ### Community 920 - "Community 920"
 Cohesion: 0.50
@@ -3973,8 +4003,8 @@ Cohesion: 0.50
 Nodes (4): UX-9, number, title, url
 
 ### Community 971 - "Community 971"
-Cohesion: 0.50
-Nodes (4): 2. API — Discovery endpoint, code:json ({ "models": [{ "id": "llama3.2", "name": "llama3.2" }] }), code:json ({), code:ts (discoverModels: (url: string, provider: string) =>)
+Cohesion: 0.20
+Nodes (8): code:block6 (## Node Records), code:python (class ChatMessage(BaseModel):), code:python (messages = [{"role": "system", "content": system_prompt}]), Issue A: Add `fleet_query` intent and fix hardcoded `explain` [CRITICAL, S], Issue B: Inject per-node records into context (not just count) [CRITICAL, S], Issue C: Add grounding and anti-hallucination rules [CRITICAL, S], Issue D: Send conversation history to API [CRITICAL, M], Wave 1 — No new infrastructure, resolves 100% of transcript failures
 
 ### Community 972 - "Community 972"
 Cohesion: 0.50
@@ -3993,136 +4023,144 @@ Cohesion: 0.40
 Nodes (4): code:yaml (- hosts: targets), code:yaml (- name: Gather OS and hardware facts), common, Precondition: gathered facts required
 
 ### Community 976 - "Community 976"
-Cohesion: 0.25
-Nodes (8): code:python (# tests/unit/test_auto_model_routing_llm.py), code:bash (source .venv/bin/activate), code:python (async def _resolve_model(endpoint, db=None) -> str:), code:python (chosen_model = await _resolve_model(endpoint)), code:python (# anthropic branch (was endpoint.model at line 264):), code:bash (source .venv/bin/activate), code:bash (git add fleet_platform/api/routes/llm.py tests/unit/test_aut), Task 4: Backend — Auto routing in `llm.py`
+Cohesion: 0.20
+Nodes (10): 10. Drift Detection Design, code:yaml (# baselines/roles/builder.yaml), code:block33 (Severity weights:), code:block35 (drift score), code:block36 (DESIRED STATE (baseline v1.2)          ACTUAL STATE (collect), Desired State Model, Diff Visualization, Drift Scoring Model (+2 more)
 
 ### Community 977 - "Community 977"
-Cohesion: 0.29
-Nodes (7): scripts, build, dev, lint, preview, test, test:watch
+Cohesion: 0.12
+Nodes (16): AI-2, number, title, url, DEV-3, number, title, url (+8 more)
 
 ### Community 978 - "Community 978"
 Cohesion: 0.25
-Nodes (8): 14. User Journeys, Journey 1: New Operator Onboarding — Zero to First Node, Journey 2: Bootstrapping a Fleet of 10 Mac Minis in One Shot, Journey 3: Detecting and Investigating a Drifted Node, Journey 4: Running a Playbook Against a Group, Journey 5: Cancelling a Stuck Bootstrap and Retrying, Journey 6: Inventory Management with Tags, Journey 7: SBOM Audit Workflow
+Nodes (5): Issue #991 A1 — salt_master_probe.run_probe must not freeze the event loop.  `ru, run_probe itself must be a thin async wrapper — the blocking `_check_*`     call, Offloading to a thread must not change the return contract., test_run_probe_body_no_longer_inlines_blocking_checks(), test_run_probe_still_returns_probe_result()
 
 ### Community 981 - "Community 981"
-Cohesion: 0.05
-Nodes (52): bootstrap_history(), List all bootstrap runs for a node, newest first., ansibleApi, BootstrapHistoryResponse, BootstrapResponse, BootstrapRunSummary, FileNode, PlaybookTree (+44 more)
+Cohesion: 0.39
+Nodes (7): ToolCtx, _ctx(), Tests for #775: Salt state name must be validated before being passed to Salt., test_apply_salt_state_accepts_valid_name(), test_apply_salt_state_dry_run_accepts_valid_name(), test_apply_salt_state_dry_run_rejects_invalid_name(), test_apply_salt_state_rejects_invalid_name()
 
-### Community 982 - "Community 982"
-Cohesion: 0.22
-Nodes (8): Unit tests for #137 — LLM query log system_prompt truncation., system_prompt longer than 500 chars must be truncated before storage., Short system_prompts must be stored as-is., User prompt longer than 2000 chars must also be truncated., system_prompt longer than 500 chars must be truncated before storage., test_short_system_prompt_not_truncated(), test_system_prompt_truncated_in_log(), test_user_prompt_truncated_in_log()
+### Community 984 - "Community 984"
+Cohesion: 0.25
+Nodes (8): limits, max_artifact_bytes, max_filename_chars, max_quarantine_filename_chars, session_quota_bytes, ttl_seconds, user_quota_bytes, yaml_loader
 
-### Community 983 - "Community 983"
-Cohesion: 0.11
-Nodes (9): str, _effective_queue(), Architecture hardening — issue #579.  Two structural fixes are verified here, al, Resolve the queue a task is actually sent to.      Mirrors apply_async: the task, _result(), TestDefaultMasterDeleteGuard, TestOneDefaultMigration, TestQueueRouting (+1 more)
+### Community 987 - "Community 987"
+Cohesion: 0.20
+Nodes (10): 17. GitOps Workflow, Baseline GitOps, CI Pipeline Integration, code:block76 (Changes to Salt states  → Salt applies them to nodes), code:yaml (# /etc/salt/master.d/gitfs.conf), code:block78 (Engineer branch:), code:block79 (Engineer branch:), code:yaml (# .github/workflows/deploy.yml (example)) (+2 more)
 
 ### Community 988 - "Community 988"
-Cohesion: 0.33
-Nodes (8): str, _make_temp_file(), test_cleanup_old_sbom_scans_calls_db(), test_index_sbom_deletes_temp_file(), test_index_sbom_missing_file_returns_error(), cleanup_old_sbom_scans(), index_sbom(), Delete old SBOM scans fleet-wide, keeping the last keep_count per node. Run via
+Cohesion: 0.43
+Nodes (6): str, Issue #972 — salt-minion service verify must not use service_facts.  service_fac, _src(), test_verify_does_not_use_service_facts(), test_verify_fails_clearly_when_not_running(), test_verify_uses_pgrep_with_retries()
 
-### Community 989 - "Community 989"
-Cohesion: 0.25
-Nodes (8): 11. SBOM Pipeline, code:yaml (# salt/states/base/sbom_scan.sls), code:block40 (CycloneDX field       → Column), code:sql (-- Find all nodes with openssl 1.x), Format Choice: CycloneDX over SPDX, Search Optimization, Storage Schema, Syft Execution via Salt State
+### Community 993 - "Community 993"
+Cohesion: 0.29
+Nodes (5): An unexpected exception must not leave master.provision_status='provisioning'., The finally block must finalize any running MasterProvisionRun on exception., An unexpected exception must not leave master.provision_status='provisioning'., The finally block must finalize any running MasterProvisionRun on exception., TestExceptionHandling
 
 ### Community 994 - "Community 994"
-Cohesion: 0.33
-Nodes (6): RFC-001 Fleet Management and Observability Platform Architecture, PostgreSQL + TimescaleDB Schema Design, DriftEngine Scoring Model, React + TanStack Query + Zustand Frontend Architecture, SaltStack vs Ansible Decision (Event Bus, macOS, Drift), SBOM Pipeline — CycloneDX via Syft
+Cohesion: 0.20
+Nodes (6): Verify that list_keys allows any authenticated user; mutating ops require admin., accept_key route uses require_role('admin') dependency., reject_key route uses require_role('admin') dependency., delete_key route uses require_role('admin') dependency., require_role('admin') raises 403 for operator/viewer roles., TestRoleEnforcement
 
 ### Community 995 - "Community 995"
-Cohesion: 0.07
-Nodes (43): Agent subsystem: typed tool registry, executor and bounded loop (#711).  Phase B, AgentEvent, _call_signature(), Planner, Bounded agent loop (#711).  Drives planner ↔ executor until the planner returns, Stable identity for a tool call so identical repeats can be detected., A concise, honest answer for a bounded/stalled run (never domain-specific)., _stall_message() (+35 more)
+Cohesion: 0.22
+Nodes (9): 8. Event and Data Flow, Baseline Drift Recompute Flow (on Git push), code:block17 (t=0   salt-minion grain sync triggers (every 5 min)), code:block18 (t=0    Celery beat triggers: schedule_sbom_scans() at 2am), code:block19 (t=0   Engineer pushes baseline YAML change to Git), code:block20 (t=0   Salt highstate triggered (manual or scheduled)), Execution Flow (Salt state run), Grain Sync Flow (primary state update path) (+1 more)
+
+### Community 997 - "Community 997"
+Cohesion: 0.28
+Nodes (9): get_week_stats — Jenkins + node counts, render_html — email template, send_alert_email — real-time alert, send_digest — weekly email, decrypt_secret — Fernet decryption, encrypt_secret — Fernet encryption, get_setting — async DB read, seed_settings_from_env — startup init (+1 more)
+
+### Community 1000 - "Community 1000"
+Cohesion: 0.36
+Nodes (3): TestStatusFromSaltResult, Map a run_salt_cmd return value to a pending-action status., _status_from_salt_result()
 
 ### Community 1002 - "Community 1002"
-Cohesion: 0.33
-Nodes (3): Test that the command buffer accumulates and resets correctly., Verify the expected keys in the session list response dict., TestSSHProxySessionCommandBuffer
+Cohesion: 0.67
+Nodes (3): check(), bool, str
 
 ### Community 1003 - "Community 1003"
 Cohesion: 0.33
-Nodes (5): str, #741: SMTP send failures must be logged at WARNING, not silently swallowed., SMTP errors in _send_approval_email must emit a WARNING log., _smtp_settings(), test_send_approval_email_logs_smtp_failure()
+Nodes (3): Test that the command buffer accumulates and resets correctly., Verify the expected keys in the session list response dict., TestSSHProxySessionCommandBuffer
 
 ### Community 1004 - "Community 1004"
-Cohesion: 0.33
-Nodes (6): object, Path, str, _module_assignments(), Return module-level simple name=constant assignments from a .py file., test_migration_047_exists_with_module_level_ids()
-
-### Community 1005 - "Community 1005"
-Cohesion: 0.36
-Nodes (7): sbom_node(), test_sbom_ingest_invalid_token_returns_401(), test_sbom_ingest_queues_index_task(), test_sbom_ingest_returns_202(), test_sbom_ingest_unknown_minion_returns_404(), AsyncClient, AsyncSession
+Cohesion: 0.25
+Nodes (8): code:python (# tests/unit/test_auto_model_routing_llm.py), code:bash (source .venv/bin/activate), code:python (async def _resolve_model(endpoint, db=None) -> str:), code:python (chosen_model = await _resolve_model(endpoint)), code:python (# anthropic branch (was endpoint.model at line 264):), code:bash (source .venv/bin/activate), code:bash (git add fleet_platform/api/routes/llm.py tests/unit/test_aut), Task 4: Backend — Auto routing in `llm.py`
 
 ### Community 1006 - "Community 1006"
-Cohesion: 0.33
-Nodes (6): _models_role_guard(), Return the require_role dependency closure attached to GET /llm/models., The model catalog is read-only — a viewer claim must pass the auth guard., An unknown / below-viewer role must be rejected with 403., test_llm_list_models_admits_viewer(), test_llm_list_models_rejects_unknown_role()
-
-### Community 1007 - "Community 1007"
-Cohesion: 0.36
-Nodes (7): searchable_node(), test_search_by_hostname(), test_search_requires_auth(), test_search_requires_min_2_chars(), test_search_requires_min_3_chars(), AsyncClient, AsyncSession
-
-### Community 1009 - "Community 1009"
-Cohesion: 0.18
-Nodes (7): _read_version(), validate_production_secrets(), bool, str, APP_VERSION, code:bash (# Install Python dependencies into the project venv), Development
+Cohesion: 0.25
+Nodes (8): code:bash (git add .), code:bash (docker ps --format "table {{.Names}}\t{{.Status}}" | grep -E), code:bash (cd deploy && docker compose up -d && cd ..), code:bash (cd /home/dk/Documents/git/kri), code:block74 (tests/integration/test_auth_endpoints.py ...... [ xx%]), code:bash (source .venv/bin/activate), code:bash (git add -A), Task 11: Full test suite run
 
 ### Community 1010 - "Community 1010"
-Cohesion: 0.25
-Nodes (8): code:bash (cd /home/dk/Documents/git/kri/frontend && npx tsc --noEmit), code:bash (source /home/dk/Documents/git/kri/.venv/bin/activate), code:bash (cd /home/dk/Documents/git/kri/frontend && npm run dev &), code:bash (cd /home/dk/Documents/git/kri/frontend && npx tsc --noEmit), code:bash (cd /home/dk/Documents/git/kri/frontend && npm run build), code:bash (pkill -f uvicorn; pkill -f vite), code:bash (cd /home/dk/Documents/git/kri), Task 10: Final Smoke Test + Build Verification
+Cohesion: 0.46
+Nodes (6): _FakeMaster, _patch_crypto(), Issue #976 — provision must ensure salt-api creds exist, else 401.  provision_ma, test_defaults_user_but_keeps_existing_password(), test_generates_and_persists_when_absent(), test_preserves_existing_creds()
 
 ### Community 1011 - "Community 1011"
-Cohesion: 0.46
-Nodes (7): _make_mock_db(), _make_mock_redis(), Return a mock Redis client that always acquires the lock., Return a mock sync DB session context manager., test_compute_drift_no_baseline_returns_no_baseline_status(), test_compute_drift_no_facts_returns_no_facts_status(), test_compute_drift_writes_drift_record_and_returns_score()
+Cohesion: 0.25
+Nodes (8): 4. Remediation Roadmap (by impact/effort), code:block10 ([System: role + grounding rules + intent addendum]), code:sql (CREATE EXTENSION IF NOT EXISTS vector;), Issue E: Implement intent classifier [HIGH, M], Issue F: Upgrade answer model to 8B+ [HIGH, M], Issue G: pgvector + fleet knowledge embeddings [HIGH, XL], Wave 2 — Model and routing, Wave 3 — RAG pipeline (long arc)
 
-### Community 1013 - "Community 1013"
-Cohesion: 0.40
-Nodes (5): code:python (# tests/unit/test_model_health_cache.py), code:python ("""In-process health cache for discovered LLM models.), code:bash (source .venv/bin/activate), code:bash (git add fleet_platform/services/model_health_cache.py tests/), Task 1: Backend — `model_health_cache.py`
+### Community 1012 - "Community 1012"
+Cohesion: 0.33
+Nodes (6): code:bash (# 1. Clone the repository), code:bash (# Start all services (API, Celery worker, frontend dev serve), Development Setup, Prerequisites, Running the full stack locally, Steps
 
 ### Community 1014 - "Community 1014"
-Cohesion: 0.15
-Nodes (32): AsyncSession, Path, str, UUID, PlaybookCatalogDisableRequest, PlaybookCatalogEnableRequest, PlaybookCatalogEnableSourceRequest, add_favorite_entry() (+24 more)
+Cohesion: 0.60
+Nodes (4): _is_login_probe(), Issue #991 S2 — salt-api /login probe must set no_log so the api_password is nev, _tasks(), test_login_probe_task_has_no_log()
 
 ### Community 1015 - "Community 1015"
-Cohesion: 0.29
-Nodes (7): code:python (# tests/unit/test_auth_core.py), code:bash (pytest tests/unit/test_auth_core.py -v), code:python (# platform/core/auth.py), code:bash (pytest tests/unit/test_auth_core.py -v), code:block56 (PASSED tests/unit/test_auth_core.py::test_password_hash_and_), code:bash (git add platform/core/auth.py tests/unit/test_auth_core.py), Task 7: JWT auth core + RBAC
+Cohesion: 0.25
+Nodes (8): 11. SBOM Pipeline, code:yaml (# salt/states/base/sbom_scan.sls), code:block40 (CycloneDX field       → Column), code:sql (-- Find all nodes with openssl 1.x), Format Choice: CycloneDX over SPDX, Search Optimization, Storage Schema, Syft Execution via Salt State
 
 ### Community 1017 - "Community 1017"
 Cohesion: 0.40
-Nodes (4): Any, _parse_arguments(), Return a parsed dict from *args_raw*, which may be a dict, JSON string, or garba, Return the accumulated ``ToolCall`` list, ordered by index.
+Nodes (5): code:python (# tests/unit/test_model_health_cache.py), code:python ("""In-process health cache for discovered LLM models.), code:bash (source .venv/bin/activate), code:bash (git add fleet_platform/services/model_health_cache.py tests/), Task 1: Backend — `model_health_cache.py`
 
 ### Community 1018 - "Community 1018"
-Cohesion: 0.40
-Nodes (5): 🤖 AI & Automation, ⚙️ Configuration Management, Features, 🖥️ Fleet Operations, 📊 Observability & Security
-
-### Community 1019 - "Community 1019"
-Cohesion: 0.40
-Nodes (3): The from-node route must use require_role('admin'), not get_current_user., The minions route must use get_current_user (viewer+), not require_role('admin'), TestAuthContracts
-
-### Community 1020 - "Community 1020"
 Cohesion: 0.50
-Nodes (4): code:tsx (import { useState, useRef, useEffect, useCallback } from 're), code:bash (cd frontend && npm run build 2>&1 | tail -20), code:bash (git add frontend/src/components/ModelCombobox.tsx), Task 2: Frontend — `ModelCombobox` component
+Nodes (4): 2. API — Discovery endpoint, code:json ({ "models": [{ "id": "llama3.2", "name": "llama3.2" }] }), code:json ({), code:ts (discoverModels: (url: string, provider: string) =>)
 
 ### Community 1021 - "Community 1021"
-Cohesion: 0.50
-Nodes (4): Return the undecorated coroutine behind slowapi's @limiter.limit wrapper., Drive ingest_process_stats and assert the row sent to the DB carries the     red, test_ingest_process_stats_redacts_cmdline_before_db_write(), _unwrap()
+Cohesion: 0.33
+Nodes (5): str, #741: SMTP send failures must be logged at WARNING, not silently swallowed., SMTP errors in _send_approval_email must emit a WARNING log., _smtp_settings(), test_send_approval_email_logs_smtp_failure()
 
-### Community 1023 - "Community 1023"
-Cohesion: 0.67
-Nodes (3): 3. Backend — Auto router, code:python (# key: (base_url: str, provider: str, model_id: str)), code:block5 (if endpoint.model == "__auto__":)
+### Community 1022 - "Community 1022"
+Cohesion: 0.29
+Nodes (4): _write_known_hosts must normalise a legacy base64-wrapped key to a valid token., _write_known_hosts must accept a native key token without modification., An unparseable stored key must be skipped and all_have_keys=False., TestWriteKnownHostsNormalisation
+
+### Community 1025 - "Community 1025"
+Cohesion: 0.33
+Nodes (6): api singleton object, ApiError class, monitoringApi object, playbooksApi object, SaltKeyWatcher component, MonitoringSummarySchema
+
+### Community 1028 - "Community 1028"
+Cohesion: 0.05
+Nodes (77): bootstrap_history(), List all bootstrap runs for a node, newest first., List all bootstrap runs for a node, newest first., ansibleApi, BootstrapHistoryResponse, BootstrapResponse, BootstrapRunSummary, BootstrapStatus (+69 more)
+
+### Community 1033 - "Community 1033"
+Cohesion: 0.40
+Nodes (3): _read_version(), str, APP_VERSION
+
+### Community 1034 - "Community 1034"
+Cohesion: 0.40
+Nodes (4): Any, _parse_arguments(), Return a parsed dict from *args_raw*, which may be a dict, JSON string, or garba, Return the accumulated ``ToolCall`` list, ordered by index.
+
+### Community 1035 - "Community 1035"
+Cohesion: 0.50
+Nodes (4): Queue an immediate SSH reachability sweep for the whole fleet (#356-ui).      Re, Queue an immediate SSH reachability sweep for the whole fleet (#356-ui).      Re, Queue an immediate SSH reachability sweep for the whole fleet (#356-ui).      Re, refresh_all_ssh()
 
 ## Knowledge Gaps
-- **3442 isolated node(s):** `@playwright/test`, `deny`, `allow`, `allow`, `AsyncSession` (+3437 more)
+- **3491 isolated node(s):** `@playwright/test`, `deny`, `allow`, `allow`, `AsyncSession` (+3486 more)
   These have ≤1 connection - possible missing edges or undocumented components.
-- **151 thin communities (<3 nodes) omitted from report** — run `graphify query` to explore isolated nodes.
+- **159 thin communities (<3 nodes) omitted from report** — run `graphify query` to explore isolated nodes.
 
 ## Suggested Questions
 _Questions this graph is uniquely positioned to answer:_
 
-- **Why does `datetime` connect `Alert & Event System` to `kri CLI & Deployment`, `Ansible Schemas & Groups`, `Auth & Salt API Routes`, `Community 516`, `Fleet Health Monitoring`, `Node Ingest & Grains`, `Bootstrap & Ansible Tasks`, `React App Shell`, `Community 15`, `Community 16`, `Community 524`, `Community 526`, `Community 19`, `Community 21`, `Community 534`, `Community 23`, `Community 538`, `Community 26`, `Community 29`, `Community 31`, `Community 545`, `Community 559`, `Community 56`, `Community 57`, `Community 63`, `Community 74`, `Community 75`, `Community 76`, `Community 77`, `Community 87`, `Community 93`, `Community 98`, `Community 101`, `Community 102`, `Community 106`, `Community 110`, `Community 126`, `Community 128`, `Community 136`, `Community 137`, `Community 143`, `Community 152`, `Community 162`, `Community 170`, `Community 189`, `Community 200`, `Community 715`, `Community 223`, `Community 224`, `Community 225`, `Community 228`, `Community 238`, `Community 253`, `Community 270`, `Community 273`, `Community 284`, `Community 289`, `Community 295`, `Community 300`, `Community 814`, `Community 816`, `Community 309`, `Community 325`, `Community 332`, `Community 335`, `Community 862`, `Community 353`, `Community 384`, `Community 388`, `Community 916`, `Community 469`, `Community 488`, `Community 1003`, `Community 1005`, `Community 1007`, `Community 498`, `Community 507`?**
-  _High betweenness centrality (0.099) - this node is a cross-community bridge._
-- **Why does `maintenance` connect `Community 325` to `Alert & Event System`, `Community 98`, `Ansible Schemas & Groups`, `Community 228`, `Community 420`, `Community 200`, `Node Ingest & Grains`, `Community 526`, `Community 15`, `Community 111`, `Community 238`, `Community 469`, `Community 215`, `Community 31`, `Community 63`?**
-  _High betweenness centrality (0.071) - this node is a cross-community bridge._
-- **Why does `4. Ansible vs SaltStack Analysis` connect `Community 420` to `Community 325`, `Community 342`?**
-  _High betweenness centrality (0.069) - this node is a cross-community bridge._
-- **Are the 275 inferred relationships involving `Node` (e.g. with `AlertEvent` and `AlertRule`) actually correct?**
-  _`Node` has 275 INFERRED edges - model-reasoned connections that need verification._
+- **Why does `datetime` connect `Community 279` to `Community 128`, `kri CLI & Deployment`, `Community 386`, `Alert & Event System`, `Auth & Salt API Routes`, `Community 133`, `Digest & Build Events`, `Community 384`, `Community 136`, `Community 777`, `Community 393`, `Community 137`, `Community 392`, `Community 270`, `Community 527`, `Community 526`, `Community 145`, `Community 146`, `Community 21`, `Community 534`, `Community 23`, `Community 152`, `Community 25`, `Community 281`, `Community 26`, `Community 284`, `Community 29`, `Community 286`, `Community 31`, `Community 32`, `Community 545`, `Community 289`, `Community 33`, `Community 295`, `Community 41`, `Community 170`, `Community 169`, `Community 172`, `Community 300`, `Community 181`, `Community 56`, `Community 57`, `Community 314`, `Community 325`, `Community 75`, `Community 332`, `Community 335`, `Community 593`, `Community 341`, `Community 348`, `Community 93`, `Community 94`, `Community 223`, `Community 96`, `Community 353`, `Community 222`, `Community 867`, `Community 102`, `Community 488`, `Community 105`, `Community 490`, `Community 106`, `Community 108`, `Community 110`, `Community 238`, `Community 115`, `Community 374`, `Community 507`, `Community 533`, `Community 251`, `Community 1021`, `Community 126`?**
+  _High betweenness centrality (0.094) - this node is a cross-community bridge._
+- **Why does `Node` connect `Community 32` to `Community 128`, `Community 385`, `Community 386`, `kri CLI & Deployment`, `Community 1028`, `Community 133`, `Digest & Build Events`, `iOS Tracking & Certs`, `Community 136`, `Community 260`, `Community 514`, `React App Shell`, `Community 145`, `Community 531`, `Community 20`, `Community 279`, `Community 152`, `Community 25`, `Community 409`, `Community 23`, `Community 281`, `Community 29`, `Community 158`, `Community 151`, `Community 37`, `Community 295`, `Community 41`, `Community 170`, `Community 181`, `Community 57`, `Community 75`, `Community 593`, `Community 210`, `Community 337`, `Community 84`, `Community 341`, `Community 348`, `Community 93`, `Community 94`, `Community 349`, `Community 224`, `Community 353`, `Community 225`, `Community 101`, `Community 102`, `Community 490`, `Community 108`, `Community 374`, `Community 251`, `Community 124`, `Community 253`?**
+  _High betweenness centrality (0.075) - this node is a cross-community bridge._
+- **Why does `maintenance` connect `Community 279` to `Community 32`, `Community 98`, `Community 420`, `Community 296`, `Community 777`, `Community 526`, `Community 341`, `Community 374`, `Community 23`, `Community 188`, `Community 31`?**
+  _High betweenness centrality (0.067) - this node is a cross-community bridge._
+- **Are the 278 inferred relationships involving `Node` (e.g. with `AlertEvent` and `AlertRule`) actually correct?**
+  _`Node` has 278 INFERRED edges - model-reasoned connections that need verification._
 - **Are the 11 inferred relationships involving `datetime` (e.g. with `ExecutionIngestPayload` and `GrainIngestPayload`) actually correct?**
   _`datetime` has 11 INFERRED edges - model-reasoned connections that need verification._
-- **Are the 132 inferred relationships involving `HTTPException` (e.g. with `bootstrap()` and `bootstrap_logs()`) actually correct?**
-  _`HTTPException` has 132 INFERRED edges - model-reasoned connections that need verification._
+- **Are the 134 inferred relationships involving `HTTPException` (e.g. with `bootstrap()` and `bootstrap_logs()`) actually correct?**
+  _`HTTPException` has 134 INFERRED edges - model-reasoned connections that need verification._
 - **Are the 126 inferred relationships involving `HTTPException` (e.g. with `_bootstrap_node()` and `cancel_bootstrap()`) actually correct?**
   _`HTTPException` has 126 INFERRED edges - model-reasoned connections that need verification._
