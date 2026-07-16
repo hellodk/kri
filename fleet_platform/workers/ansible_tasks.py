@@ -76,7 +76,8 @@ def _format_ansible_cmdline(playbook: str, inventory: str, extravars: dict) -> s
         parts.append("-e")
         parts.append(f"{k}={_mask_extravar(k, v)}")
     cmd = " ".join(parts)
-    return f"── Ansible command ──────────────────────────────────────────\n$ {cmd}\n──────────────────────────────────────────────────────────────\n"
+    _bar = "─" * 62
+    return f"── Ansible command {'─' * 44}\n$ {cmd}\n{_bar}\n"
 
 
 def _classify_ansible_failure_category(full_stdout: str) -> str | None:
