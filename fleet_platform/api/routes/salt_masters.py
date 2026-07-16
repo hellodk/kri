@@ -75,6 +75,48 @@ async def list_salt_masters(
     return [SaltMasterResponse.model_validate(m) for m in result.scalars().all()]
 
 
+async def _assert_master_identity_unique(
+    db: AsyncSession,
+    *,
+    name: str,
+    address: str,
+    publish_port: int,
+    ret_port: int,
+    salt_api_port: int,
+    exclude_id: uuid.UUID | None = None,
+) -> None:
+    """Reject a duplicate salt-master by NAME or by network ENDPOINT (#1018).
+
+    A master IS its endpoint (address + publish/ret/api ports), so two rows for
+    the same endpoint are meaningless — that's how the 192.168.1.64 / -1 twins
+    appeared. Fail loud with 409 instead of allowing a silent duplicate (endpoint)
+    or raising a raw IntegrityError 500 (name).
+    """
+    name_stmt = select(SaltMaster).where(SaltMaster.name == name)
+    if exclude_id is not None:
+        name_stmt = name_stmt.where(SaltMaster.id != exclude_id)
+    if (await db.execute(name_stmt)).scalars().first() is not None:
+        raise HTTPException(status_code=409, detail=f"A salt-master named '{name}' already exists")
+
+    ep_stmt = select(SaltMaster).where(
+        SaltMaster.address == address,
+        SaltMaster.publish_port == publish_port,
+        SaltMaster.ret_port == ret_port,
+        SaltMaster.salt_api_port == salt_api_port,
+    )
+    if exclude_id is not None:
+        ep_stmt = ep_stmt.where(SaltMaster.id != exclude_id)
+    dup = (await db.execute(ep_stmt)).scalars().first()
+    if dup is not None:
+        raise HTTPException(
+            status_code=409,
+            detail=(
+                f"A salt-master already exists at {address} "
+                f"(ports {publish_port}/{ret_port}, api {salt_api_port}) — '{dup.name}'"
+            ),
+        )
+
+
 @router.post("/masters", response_model=SaltMasterResponse, status_code=201)
 async def create_salt_master(
     body: SaltMasterCreate,
@@ -88,6 +130,16 @@ async def create_salt_master(
     encrypted if provided.  If ``is_default=True`` all other masters are cleared
     first.  Requires admin role.
     """
+    # Reject duplicate name or endpoint up front (#1018) — a master IS its endpoint.
+    await _assert_master_identity_unique(
+        db,
+        name=body.name,
+        address=body.address,
+        publish_port=body.publish_port,
+        ret_port=body.ret_port,
+        salt_api_port=body.salt_api_port,
+    )
+
     # If setting as default, clear is_default on all existing masters first.
     if body.is_default:
         existing = await db.execute(select(SaltMaster).where(SaltMaster.is_default.is_(True)))
@@ -197,6 +249,18 @@ async def update_salt_master(
 
     for field, value in update_data.items():
         setattr(master, field, value)
+
+    # Reject a name/endpoint collision introduced by this update (#1018).
+    if {"name", "address", "publish_port", "ret_port", "salt_api_port"} & set(update_data):
+        await _assert_master_identity_unique(
+            db,
+            name=master.name,
+            address=master.address,
+            publish_port=master.publish_port,
+            ret_port=master.ret_port,
+            salt_api_port=master.salt_api_port,
+            exclude_id=master_id,
+        )
 
     # Recompute api_url after all field updates — keeps SSoT consistent (#562)
     master.api_url = _derive_api_url(master.address, master.salt_api_port, master.use_tls)

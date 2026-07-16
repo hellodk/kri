@@ -59,6 +59,8 @@ def _make_scalars(objects: list) -> MagicMock:
     """Return a mock result whose .scalars().all() yields `objects`."""
     scalars_mock = MagicMock()
     scalars_mock.all.return_value = objects
+    # #1018 uniqueness guard uses .scalars().first() — empty ⇒ no duplicate.
+    scalars_mock.first.return_value = objects[0] if objects else None
     result_mock = MagicMock()
     result_mock.scalars.return_value = scalars_mock
     return result_mock
@@ -68,6 +70,8 @@ def _make_scalar_one_or_none(obj) -> MagicMock:
     """Return a mock result whose .scalar_one_or_none() returns `obj`."""
     result_mock = MagicMock()
     result_mock.scalar_one_or_none.return_value = obj
+    # #1018 uniqueness guard reuses this result via .scalars().first() — no dup.
+    result_mock.scalars.return_value.first.return_value = None
     return result_mock
 
 
@@ -129,6 +133,19 @@ class TestSaltMasterSchemas:
 # ---------------------------------------------------------------------------
 # POST /masters — create
 # ---------------------------------------------------------------------------
+
+
+@pytest.fixture(autouse=True)
+def _stub_uniqueness_guard():
+    """These CRUD tests cover encryption/default/patch behaviour, not the #1018
+    name/endpoint uniqueness guard (that lives in
+    test_salt_master_endpoint_unique_1018.py). Stub it to a no-op so its selects
+    don't disturb the mocked SaltMaster class / db.execute sequences here."""
+    with patch(
+        "fleet_platform.api.routes.salt_masters._assert_master_identity_unique",
+        new=AsyncMock(),
+    ):
+        yield
 
 
 class TestCreateSaltMaster:
