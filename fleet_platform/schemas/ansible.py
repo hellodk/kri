@@ -19,6 +19,10 @@ class BootstrapRequest(BaseModel):
     ssh_password: str | None = None  # overrides platform setting ssh_bootstrap_password
     ssh_key: str | None = None  # plaintext private key for key-based auth
     salt_master_ids: list[str] | None = None  # HA: specific master IDs to use; None → all enabled
+    # Master-first bootstrap (#1019): stand up the node as its own salt-master
+    # first, then bootstrap the minion — reverses #1006's removal with correct
+    # ordering (chain: provision_master → bootstrap_node, no deadlock).
+    as_master: bool = False
     # Runtime overrides for #830 (all optional; omitted → playbook/group_vars defaults apply)
     node_exporter_version: str | None = None
     node_exporter_listen_address: str | None = None
