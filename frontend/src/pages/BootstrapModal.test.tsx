@@ -169,3 +169,50 @@ describe('BootstrapModal — Advanced options (issue #830)', () => {
     })
   })
 })
+
+describe('BootstrapModal — master-first bootstrap (issue #1019)', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+  })
+
+  it('renders the "Also make this node a salt-master" checkbox, unchecked by default', async () => {
+    renderModal()
+    await waitFor(() => screen.getByText('mm1'))
+
+    const checkbox = screen.getByRole('checkbox', { name: /also make this node a salt-master/i })
+    expect(checkbox).toBeInTheDocument()
+    expect(checkbox).not.toBeChecked()
+  })
+
+  it('passes as_master via the asMaster option to ansibleApi.bootstrap when the toggle is checked', async () => {
+    const { ansibleApi } = await import('../api/ansible')
+    renderModal()
+    const user = userEvent.setup()
+
+    await waitFor(() => screen.getByText('mm1'))
+
+    // Switch to "New node" tab
+    await user.click(screen.getByRole('button', { name: /new node/i }))
+
+    // Fill minion ID and IP
+    await user.type(screen.getByPlaceholderText('mac-mini-01'), 'test-node')
+    await user.type(screen.getByPlaceholderText('10.0.1.11'), '10.0.0.99')
+    await user.type(screen.getByPlaceholderText('••••••••'), 'password')
+
+    // Check the "Also make this node a salt-master" toggle
+    const checkbox = screen.getByRole('checkbox', { name: /also make this node a salt-master/i })
+    await user.click(checkbox)
+    expect(checkbox).toBeChecked()
+
+    const submitBtn = await screen.findByRole('button', { name: /^bootstrap$/i })
+    await user.click(submitBtn)
+
+    await waitFor(() => {
+      expect(ansibleApi.bootstrap).toHaveBeenCalled()
+      const [, , , , , opts] = (ansibleApi.bootstrap as ReturnType<typeof vi.fn>).mock.calls[0]
+      expect(opts).toMatchObject({
+        asMaster: true,
+      })
+    })
+  })
+})

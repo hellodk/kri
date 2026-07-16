@@ -50,6 +50,8 @@ class ImportCommitRequest(BaseModel):
     ssh_key: str | None = None
     ssh_auth_mode: str | None = None  # "password" | "key"; inferred when omitted
     auto_bootstrap: bool = False
+    # Master-first bootstrap (#1019): see BootstrapRequest.as_master.
+    as_master: bool = False
 
 
 class ImportCommitResponse(BaseModel):

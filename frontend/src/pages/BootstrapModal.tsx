@@ -56,6 +56,7 @@ function SingleMode({ onClose }: { onClose: () => void }) {
   const [neVersion, setNeVersion] = useState('1.8.2')
   const [neListenAddress, setNeListenAddress] = useState(':9100')
   const [neUrlOverride, setNeUrlOverride] = useState('')
+  const [asMaster, setAsMaster] = useState(false)
 
   const toast = useToastStore((s) => s.add)
   const qc = useQueryClient()
@@ -175,6 +176,7 @@ function SingleMode({ onClose }: { onClose: () => void }) {
         nodeExporterVersion: neVersion !== '1.8.2' ? neVersion : undefined,
         nodeExporterListenAddress: neListenAddress !== ':9100' ? neListenAddress : undefined,
         nodeExporterUrlOverride: neUrlOverride || undefined,
+        asMaster,
       },
     ),
     onMutate: () => { setLocalLogs('') },
@@ -666,6 +668,22 @@ function SingleMode({ onClose }: { onClose: () => void }) {
           )}
         </div>
 
+        {/* Master-first bootstrap (#1019) */}
+        <div className="border border-gray-200 rounded-xl px-3 py-2">
+          <label className="flex items-center gap-3 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={asMaster}
+              onChange={(e) => setAsMaster(e.target.checked)}
+              className="rounded"
+            />
+            <span className="text-sm font-medium text-gray-900">Also make this node a salt-master</span>
+          </label>
+          <p className="mt-1 pl-7 text-xs text-gray-500">
+            Installs salt-master + salt-api on this node first, then enrols it.
+          </p>
+        </div>
+
         <p className="text-xs text-gray-500 bg-amber-50 border border-amber-200 rounded-lg p-3">
           Make sure Remote Login (SSH) is enabled before bootstrapping.
         </p>
@@ -844,6 +862,7 @@ function BulkMode({ onClose }: { onClose: () => void }) {
   const [input, setInput] = useState('')
   const [jobs, setJobs] = useState<BulkJob[]>([])
   const [launching, setLaunching] = useState(false)
+  const [asMaster, setAsMaster] = useState(false)
   const toast = useToastStore((s) => s.add)
   const qc = useQueryClient()
 
@@ -912,7 +931,7 @@ function BulkMode({ onClose }: { onClose: () => void }) {
     setJobs(initial)
 
     const results = await Promise.allSettled(
-      parsedRows.map((r) => ansibleApi.bootstrap(r.minionId, r.targetIp))
+      parsedRows.map((r) => ansibleApi.bootstrap(r.minionId, r.targetIp, undefined, undefined, undefined, { asMaster }))
     )
 
     setJobs(parsedRows.map((r, i) => {
@@ -943,7 +962,7 @@ function BulkMode({ onClose }: { onClose: () => void }) {
     setJobs(initial)
 
     const results = await Promise.allSettled(
-      checked.map((n) => ansibleApi.bootstrap(n.minion_id, n.ip_address ?? ''))
+      checked.map((n) => ansibleApi.bootstrap(n.minion_id, n.ip_address ?? '', undefined, undefined, undefined, { asMaster }))
     )
 
     setJobs(checked.map((n, i) => {
@@ -1001,6 +1020,22 @@ function BulkMode({ onClose }: { onClose: () => void }) {
             {m === 'group' ? 'From Group' : 'CSV paste'}
           </button>
         ))}
+      </div>
+
+      {/* Master-first bootstrap (#1019) — applies to every job in this batch */}
+      <div className="border border-gray-200 rounded-xl px-3 py-2">
+        <label className="flex items-center gap-3 cursor-pointer">
+          <input
+            type="checkbox"
+            checked={asMaster}
+            onChange={(e) => setAsMaster(e.target.checked)}
+            className="rounded"
+          />
+          <span className="text-sm font-medium text-gray-900">Also make these nodes salt-masters</span>
+        </label>
+        <p className="mt-1 pl-7 text-xs text-gray-500">
+          Installs salt-master + salt-api on each node first, then enrols it.
+        </p>
       </div>
 
       {bulkSubMode === 'group' ? (

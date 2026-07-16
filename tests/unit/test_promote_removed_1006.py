@@ -1,8 +1,17 @@
-"""Unit tests for #1006 — removal of node->master promotion / as_master feature.
+"""Unit tests for #1006 — removal of node->master promotion feature.
 
-Asserts the promote-node-to-master endpoint and the as_master parameter/field
-have been fully removed from the backend, and the host_prep_gate.yml
-reachability gate no longer special-cases as_master.
+Asserts the promote-node-to-master endpoint remains removed, and the
+host_prep_gate.yml reachability gate remains a plain gate with no
+as_master special-casing (it never regains one — #1019's master-first
+bootstrap achieves reachability by ordering the Celery chain, not by
+teaching the gate about as_master).
+
+Note: #1019 deliberately reverses the *rest* of #1006's removal (the
+as_master request flag + bootstrap_svc orchestration) with corrected
+ordering — a provision_master→bootstrap_node Celery chain instead of the
+deadlock-prone same-call ordering #1006 removed. The as_master-removed
+assertions that used to live here were retired for that reason; current
+behaviour is covered by tests/unit/test_master_first_bootstrap_1019.py.
 """
 
 from pathlib import Path
@@ -20,31 +29,8 @@ def test_promote_node_to_master_removed():
     assert "from-node" not in src
 
 
-def test_as_master_removed_from_schemas():
-    ansible_schema = _read("fleet_platform/schemas/ansible.py")
-    assert "as_master" not in ansible_schema
-
-    node_import_schema = _read("fleet_platform/schemas/node_import.py")
-    assert "as_master" not in node_import_schema
-
-
-def test_as_master_removed_from_bootstrap_svc():
-    src = _read("fleet_platform/services/bootstrap_svc.py")
-    assert "as_master" not in src
-
-
-def test_as_master_removed_from_bootstrap_route():
-    src = _read("fleet_platform/api/routes/ansible/bootstrap.py")
-    assert "as_master" not in src
-
-
 def test_as_master_removed_from_ansible_tasks():
     src = _read("fleet_platform/workers/ansible_tasks.py")
-    assert "as_master" not in src
-
-
-def test_as_master_removed_from_fleet_route():
-    src = _read("fleet_platform/api/routes/fleet.py")
     assert "as_master" not in src
 
 

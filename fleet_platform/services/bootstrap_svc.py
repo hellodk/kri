@@ -11,10 +11,12 @@ resolved from the node's group (credential_groups) at bootstrap-worker time
 
 from __future__ import annotations
 
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from fleet_platform.core.audit import audit
 from fleet_platform.models.node import Node
+from fleet_platform.models.salt_master import SaltMaster
 from fleet_platform.services.credential_resolver import node_has_group
 
 
@@ -37,6 +39,8 @@ async def queue_node_bootstrap(
     node_exporter_version: str | None = None,
     node_exporter_listen_address: str | None = None,
     node_exporter_url_override: str | None = None,
+    # Master-first bootstrap (#1019)
+    as_master: bool = False,
 ):
     """Mark the node pending, audit, commit, and queue bootstrap.
 
@@ -49,6 +53,13 @@ async def queue_node_bootstrap(
     :func:`fleet_platform.services.credential_resolver.resolve_node_credentials`.
     Secrets are never forwarded to the Celery task (that would put plaintext on
     the Redis broker — see #495).
+
+    ``as_master`` (#1019, reverses #1006's removal with correct ordering):
+    when set, the node is stood up as its OWN salt-master FIRST (so the
+    minion's reachability gate passes), then the minion is bootstrapped — via
+    a Celery chain (``provision_master`` → ``bootstrap_node``). This avoids the
+    deadlock that #1006 removed (minion waiting on a master that never
+    provisions because bootstrap hadn't happened yet).
     """
     node.bootstrap_status = "pending"
     node.bootstrap_ip = target_ip
@@ -82,12 +93,82 @@ async def queue_node_bootstrap(
     # Lazy import: avoid a services→workers import cycle at module load.
     from fleet_platform.workers.ansible_tasks import bootstrap_node
 
-    return bootstrap_node.delay(
-        str(node.id),
-        target_ip,
-        ssh_username=ssh_username,
-        salt_master_ids=salt_master_ids,
-        node_exporter_version=node_exporter_version,
-        node_exporter_listen_address=node_exporter_listen_address,
-        node_exporter_url_override=node_exporter_url_override,
+    if not as_master:
+        return bootstrap_node.delay(
+            str(node.id),
+            target_ip,
+            ssh_username=ssh_username,
+            salt_master_ids=salt_master_ids,
+            node_exporter_version=node_exporter_version,
+            node_exporter_listen_address=node_exporter_listen_address,
+            node_exporter_url_override=node_exporter_url_override,
+        )
+
+    # --- Master-first bootstrap (#1019) ---------------------------------
+    # Reuse-or-create the SaltMaster row for this node's own endpoint, then
+    # chain provision_master → bootstrap_node so the master is installed
+    # before the minion's reachability gate is evaluated.
+    existing = (
+        await db.execute(
+            select(SaltMaster).where(
+                SaltMaster.address == target_ip,
+                SaltMaster.publish_port == 4505,
+                SaltMaster.ret_port == 4506,
+                SaltMaster.salt_api_port == 4507,
+            )
+        )
+    ).scalar_one_or_none()
+
+    if existing is not None:
+        master_id = existing.id
+    else:
+        name = node.hostname or target_ip
+        name_clash = (await db.execute(select(SaltMaster).where(SaltMaster.name == name))).scalar_one_or_none()
+        if name_clash is not None:
+            raise BootstrapGroupRequired(
+                f"A salt-master named '{name}' already exists — rename it or provision manually"
+            )
+
+        import secrets as _secrets
+
+        from fleet_platform.services.platform_settings_svc import encrypt_secret
+
+        is_first = (await db.execute(select(func.count()).select_from(SaltMaster))).scalar_one() == 0
+        new_master = SaltMaster(
+            name=name,
+            address=target_ip,
+            enabled=True,
+            is_default=is_first,
+            publish_port=4505,
+            ret_port=4506,
+            salt_api_port=4507,
+            use_tls=True,
+            api_url=f"https://{target_ip}:4507",
+            api_user="kri-api",
+            api_password_enc=encrypt_secret(_secrets.token_urlsafe(24)),
+            api_eauth="pam",
+            provision_status="provisioning",
+            node_id=node.id,
+        )
+        db.add(new_master)
+        await db.flush()
+        master_id = new_master.id
+
+    await db.commit()
+
+    from celery import chain
+
+    from fleet_platform.workers.ansible_tasks import provision_master
+
+    sig = chain(
+        provision_master.si(str(master_id), "install"),
+        bootstrap_node.si(
+            str(node.id),
+            target_ip,
+            salt_master_ids=[str(master_id)],
+            node_exporter_version=node_exporter_version,
+            node_exporter_listen_address=node_exporter_listen_address,
+            node_exporter_url_override=node_exporter_url_override,
+        ),
     )
+    return sig.apply_async(queue="ansible")
