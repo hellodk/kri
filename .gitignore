@@ -53,6 +53,11 @@ playwright-report/
 *.png
 *.jpg
 *.jpeg
+*.gif
+*.webp
+# screenshots/ — local screenshot home: ignore its contents, keep the folder
+screenshots/*
+!screenshots/.gitkeep
 !frontend/src/assets/**
 
 # ── IDE & OS ──────────────────────────────────────────────────────────────────
