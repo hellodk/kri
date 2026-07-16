@@ -13,11 +13,15 @@ env:
 jobs:
   move-card:
     runs-on: ubuntu-latest
+    # Best-effort Kanban automation — must never fail a PR. Every step is
+    # continue-on-error so a missing/insufficient GH_TOKEN (can't write to the
+    # ProjectV2 board) leaves the check green instead of a spurious red X.
     permissions:
       contents: read
     steps:
       - name: Add PR to project and get item ID
         id: get_item
+        continue-on-error: true
         env:
           GH_TOKEN: ${{ secrets.GH_TOKEN }}
           NODE_ID: ${{ github.event.pull_request.node_id }}
@@ -32,6 +36,7 @@ jobs:
           echo "item_id=$ITEM_ID" >> $GITHUB_OUTPUT
 
       - name: Move to In Review (PR opened)
+        continue-on-error: true
         if: github.event.action == 'opened' || github.event.action == 'ready_for_review'
         env:
           GH_TOKEN: ${{ secrets.GH_TOKEN }}
@@ -47,6 +52,7 @@ jobs:
             }"
 
       - name: Move to Done (PR merged)
+        continue-on-error: true
         if: github.event.action == 'closed' && github.event.pull_request.merged == true
         env:
           GH_TOKEN: ${{ secrets.GH_TOKEN }}
