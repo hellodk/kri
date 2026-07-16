@@ -8,7 +8,7 @@
 import { useEffect, useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { Link2 } from 'lucide-react'
-import { saltMastersApi, type SaltMaster, type SaltMasterCreate, type SaltMasterUpdate, type MasterMinionItem } from '../api/saltMasters'
+import { saltMastersApi, type SaltMaster, type SaltMasterUpdate, type MasterMinionItem } from '../api/saltMasters'
 import { fleetApi } from '../api/fleet'
 import { saltMasterBadge } from '../lib/saltMasterHelpers'
 import { provisionRefetchInterval } from '../lib/provisionPolling'
@@ -103,21 +103,6 @@ interface FormState {
   api_password: string
   tls_verify: boolean
   auto_accept: boolean
-}
-
-const EMPTY_FORM: FormState = {
-  name: '',
-  address: '',
-  enabled: true,
-  is_default: false,
-  publish_port: '4505',
-  ret_port: '4506',
-  salt_api_port: '4507',
-  use_tls: true,
-  api_user: '',
-  api_password: '',
-  tls_verify: false,
-  auto_accept: true,
 }
 
 function masterToForm(m: SaltMaster): FormState {
@@ -741,7 +726,6 @@ export function SaltMastersTab() {
   const toast = useToastStore((s) => s.add)
 
   // Modal state
-  const [showCreate, setShowCreate] = useState(false)
   const [editMaster, setEditMaster] = useState<SaltMaster | null>(null)
   const [deleteMaster, setDeleteMaster] = useState<SaltMaster | null>(null)
   const [attachMaster, setAttachMaster] = useState<SaltMaster | null>(null)
@@ -786,19 +770,6 @@ export function SaltMastersTab() {
     },
   })
 
-  const createMutation = useMutation({
-    mutationFn: (body: SaltMasterCreate) => saltMastersApi.create(body),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['salt-masters'] })
-      toast('Salt master created', 'success')
-      setShowCreate(false)
-      setFormError(null)
-    },
-    onError: (err: Error) => {
-      setFormError(err.message)
-    },
-  })
-
   const updateMutation = useMutation({
     mutationFn: ({ id, body }: { id: string; body: SaltMasterUpdate }) =>
       saltMastersApi.update(id, body),
@@ -829,26 +800,6 @@ export function SaltMastersTab() {
       setDeleteMaster(null)
     },
   })
-
-  function handleCreate(form: FormState) {
-    setFormError(null)
-    const body: SaltMasterCreate = {
-      name: form.name.trim(),
-      address: form.address.trim(),
-      enabled: form.enabled,
-      is_default: form.is_default,
-      publish_port: parseInt(form.publish_port, 10),
-      ret_port: parseInt(form.ret_port, 10),
-      // SSoT fields (#562): api_url is derived server-side; never sent
-      salt_api_port: parseInt(form.salt_api_port, 10) || 4507,
-      use_tls: form.use_tls,
-      api_user: form.api_user.trim() || null,
-      api_password: form.api_password || null,
-      tls_verify: form.tls_verify,
-      auto_accept: form.auto_accept,
-    }
-    createMutation.mutate(body)
-  }
 
   function handleUpdate(form: FormState) {
     if (!editMaster) return
@@ -894,16 +845,10 @@ export function SaltMastersTab() {
         <div>
           <h2 className="text-base font-semibold text-gray-900">Salt Masters</h2>
           <p className="text-sm text-gray-600 mt-1">
-            Configured Salt API endpoints. Default first.
+            Configured Salt API endpoints. Default first. New masters are created via Bootstrap
+            (check &quot;Also make this node a salt-master&quot;).
           </p>
         </div>
-        <button
-          type="button"
-          onClick={() => { setFormError(null); setShowCreate(true) }}
-          className="shrink-0 px-3 py-1.5 text-sm font-medium text-white bg-brand-600 hover:bg-brand-700 rounded-lg transition-colors"
-        >
-          + Add master
-        </button>
       </div>
 
       {(!masters || masters.length === 0) && (
@@ -915,7 +860,9 @@ export function SaltMastersTab() {
             </svg>
           </div>
           <h3 className="text-sm font-semibold text-gray-900 mb-1">No salt-master configured</h3>
-          <p className="text-sm text-gray-600">Click <strong>+ Add master</strong> to add your first salt master.</p>
+          <p className="text-sm text-gray-600">
+            Bootstrap a node with <strong>&quot;Also make this node a salt-master&quot;</strong> checked to create your first salt master.
+          </p>
         </div>
       )}
 
@@ -1162,19 +1109,6 @@ export function SaltMastersTab() {
           )
         })}
       </div>
-
-      {/* Create modal */}
-      {showCreate && (
-        <MasterForm
-          initial={EMPTY_FORM}
-          title="Add Salt Master"
-          submitLabel="Create"
-          isLoading={createMutation.isPending}
-          error={formError}
-          onSubmit={handleCreate}
-          onClose={() => { setShowCreate(false); setFormError(null) }}
-        />
-      )}
 
       {/* Edit modal */}
       {editMaster && (
