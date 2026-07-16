@@ -61,6 +61,21 @@ function StatusBadge({ status }: { status: ImportRow['status'] }) {
   )
 }
 
+// ─── SSH reachability dot (#1012) — inline indicator next to the IP, warn-only ──
+function SshDot({ state, detail }: { state?: string | null; detail?: string | null }) {
+  if (!state || state === 'unknown') return null
+  const color = state === 'ok' ? '#16A34A' : '#DC2626'
+  const label = state === 'ok' ? 'SSH reachable' : state === 'auth_failed' ? 'SSH auth failed' : 'SSH unreachable'
+  return (
+    <span
+      title={detail ? `SSH: ${detail}` : label}
+      aria-label={label}
+      className="inline-block rounded-full flex-shrink-0"
+      style={{ width: 8, height: 8, backgroundColor: color }}
+    />
+  )
+}
+
 // ─── Preview table ─────────────────────────────────────────────────────────────
 function PreviewTable({ result, loading }: { result: ImportValidateResponse | null; loading: boolean }) {
   if (loading) {
@@ -106,7 +121,12 @@ function PreviewTable({ result, loading }: { result: ImportValidateResponse | nu
                     </td>
                     <td className="px-3 py-2 font-mono text-gray-900 whitespace-nowrap">{row.minion_id}</td>
                     <td className="px-3 py-2 text-gray-600 whitespace-nowrap">{row.hostname ?? '—'}</td>
-                    <td className="px-3 py-2 text-gray-600 whitespace-nowrap">{row.ip ?? '—'}</td>
+                    <td className="px-3 py-2 text-gray-600 whitespace-nowrap">
+                      <span className="inline-flex items-center gap-1.5">
+                        {row.ip ?? '—'}
+                        <SshDot state={row.ssh_state} detail={row.ssh_detail} />
+                      </span>
+                    </td>
                     <td className="px-3 py-2 text-gray-500">{row.reason || '—'}</td>
                   </tr>
                 ))}
@@ -182,6 +202,14 @@ export function ImportNodesModal({ onClose }: { onClose: () => void }) {
     }
   }, [])
 
+  // ── SSH creds shared with the validate call (#1012 — probe reachability) ────
+  const sshCredsBody = useCallback(() => ({
+    ssh_username: sshUsername.trim() || undefined,
+    ssh_auth_mode: sshAuthMode,
+    ssh_password: sshAuthMode === 'password' ? (sshPassword || undefined) : undefined,
+    ssh_key: sshAuthMode === 'key' ? (sshKey.trim() || undefined) : undefined,
+  }), [sshUsername, sshAuthMode, sshPassword, sshKey])
+
   // ── Paste tab: debounced validation ────────────────────────────────────────
   function onPasteChange(text: string) {
     setPasteText(text)
@@ -191,7 +219,7 @@ export function ImportNodesModal({ onClose }: { onClose: () => void }) {
       return
     }
     pasteTimerRef.current = setTimeout(() => {
-      runValidate({ source: 'paste', text })
+      runValidate({ source: 'paste', text, ...sshCredsBody() })
     }, 400)
   }
 
@@ -204,7 +232,7 @@ export function ImportNodesModal({ onClose }: { onClose: () => void }) {
     reader.onload = (ev) => {
       const content = ev.target?.result as string
       setCsvContent(content)
-      runValidate({ source: 'csv', csv_content: content })
+      runValidate({ source: 'csv', csv_content: content, ...sshCredsBody() })
     }
     reader.readAsText(file)
   }
@@ -214,8 +242,9 @@ export function ImportNodesModal({ onClose }: { onClose: () => void }) {
     if (tab === 'salt') {
       // eslint-disable-next-line react-hooks/set-state-in-effect -- resetting validation result when switching to the salt tab; refactor tracked in #380 follow-up
       setValidateResult(null)
-      runValidate({ source: 'salt' })
+      runValidate({ source: 'salt', ...sshCredsBody() })
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- only re-run when the tab changes; ssh creds are read at call time via sshCredsBody()
   }, [tab, runValidate])
 
   // Reset results when switching tabs

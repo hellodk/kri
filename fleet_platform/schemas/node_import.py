@@ -20,6 +20,8 @@ class ImportRow(BaseModel):
     ssh_user: str | None = None
     status: str = "new"
     reason: str = ""
+    ssh_state: str | None = None
+    ssh_detail: str | None = None
 
 
 class ImportValidateRequest(BaseModel):
@@ -27,6 +29,12 @@ class ImportValidateRequest(BaseModel):
     text: str | None = None
     csv_content: str | None = None
     mapping: dict | None = None
+    # Operator-supplied SSH creds (#1012) — used only to probe reachability
+    # during validate; never persisted here. Mirrors ImportCommitRequest.
+    ssh_username: str | None = None
+    ssh_password: str | None = None
+    ssh_key: str | None = None
+    ssh_auth_mode: str | None = None  # "password" | "key"; inferred when omitted
 
 
 class ImportValidateResponse(BaseModel):

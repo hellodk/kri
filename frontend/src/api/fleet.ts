@@ -16,6 +16,8 @@ export interface ImportRow {
   ssh_user: string | null
   status: 'new' | 'duplicate' | 'invalid'
   reason: string
+  ssh_state?: string | null
+  ssh_detail?: string | null
 }
 
 export interface NodeResolvedCredential {
@@ -101,7 +103,7 @@ export const fleetApi = {
   // Queue an immediate fleet-wide SSH sweep; dashboard polling picks up results.
   sshRefreshAll: () =>
     api.post<{ status: string; task_id: string | null }>('/api/v1/nodes/ssh-refresh', {}),
-  importValidate: (body: { source: string; text?: string; csv_content?: string; mapping?: Record<string, string> }) =>
+  importValidate: (body: { source: string; text?: string; csv_content?: string; mapping?: Record<string, string>; ssh_username?: string; ssh_password?: string; ssh_key?: string; ssh_auth_mode?: 'password' | 'key' }) =>
     api.post<ImportValidateResponse>('/api/v1/fleet/nodes/import/validate', body),
   importCommit: (body: { rows: ImportRow[]; group_id?: string; ssh_username?: string; ssh_password?: string; ssh_key?: string; ssh_auth_mode?: 'password' | 'key'; auto_bootstrap?: boolean }) =>
     api.post<ImportCommitResponse>('/api/v1/fleet/nodes/import/commit', body),

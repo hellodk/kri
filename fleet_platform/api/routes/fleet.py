@@ -4,6 +4,7 @@ import json
 import logging
 import re
 import secrets
+import types
 import uuid
 from datetime import UTC, datetime
 
@@ -40,6 +41,7 @@ from fleet_platform.services.node_import import (
     parse_paste,
     validate_row,
 )
+from fleet_platform.services.ssh_probe import SSH_OK, SSH_UNKNOWN, probe_node_ssh
 
 router = APIRouter(prefix="/api/v1/fleet")
 logger = logging.getLogger(__name__)
@@ -205,6 +207,33 @@ async def import_validate(
             existing_ips.add(str(ip))
 
     validated = dedup_rows([validate_row(r, existing_minions, existing_ips) for r in raw_rows])
+
+    # SSH reachability probe (#1012): warn-only signal so the operator can see
+    # which rows are bootstrap-able before committing. Never blocks commit.
+    creds = {
+        "ssh_user": payload.ssh_username,
+        "ssh_password": payload.ssh_password,
+        "ssh_key": payload.ssh_key,
+        "auth_mode": payload.ssh_auth_mode or ("key" if payload.ssh_key and not payload.ssh_password else "password"),
+    }
+    sem = asyncio.Semaphore(10)
+
+    async def _probe_row(row: dict) -> None:
+        ip = row.get("ip")
+        if not ip:
+            row["ssh_state"] = SSH_UNKNOWN
+            row["ssh_detail"] = "no IP"
+            return
+        stub = types.SimpleNamespace(ip_address=ip, minion_id=row.get("minion_id"))
+        async with sem:
+            result = await asyncio.to_thread(probe_node_ssh, stub, creds, timeout=3)
+        row["ssh_state"] = result["state"]
+        row["ssh_detail"] = result["detail"]
+        if not row.get("reason") and result["state"] != SSH_OK:
+            row["reason"] = result["detail"]
+
+    await asyncio.gather(*(_probe_row(r) for r in validated))
+
     summary: dict = {"new": 0, "duplicate": 0, "invalid": 0, "total": len(validated)}
     for r in validated:
         status_key = r["status"]
@@ -342,9 +371,7 @@ async def import_commit(
                         select(func.count()).select_from(GroupMember).where(GroupMember.group_id == _grp.id)
                     )
                     if _created_node_ids:
-                        _existing_count_stmt = _existing_count_stmt.where(
-                            GroupMember.node_id.notin_(_created_node_ids)
-                        )
+                        _existing_count_stmt = _existing_count_stmt.where(GroupMember.node_id.notin_(_created_node_ids))
                     _existing_member_count = (await db.execute(_existing_count_stmt)).scalar_one()
                     if _existing_member_count > 0:
                         logger.warning(
