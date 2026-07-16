@@ -1,0 +1,838 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>kri — UI Optimisation Mockups</title>
+<style>
+  :root {
+    --bg: #F9FAFB;
+    --card: #FFFFFF;
+    --text: #111827;
+    --muted: #4B5563;
+    --border: #E5E7EB;
+    --brand: #444CE7;
+    --brand-light: #EEF0FF;
+    --green: #16A34A;
+    --green-bg: #F0FDF4;
+    --amber: #D97706;
+    --amber-bg: #FFFBEB;
+    --red: #DC2626;
+    --red-bg: #FEF2F2;
+    --blue: #2563EB;
+    --sidebar-bg: #0f0f23;
+    --sidebar-active: rgba(68,76,231,0.2);
+    --radius: 12px;
+    --radius-sm: 8px;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: system-ui, -apple-system, sans-serif; background: #111827; color: var(--text); }
+
+  /* ── Page Shell ── */
+  .page-shell { display: flex; height: 100vh; overflow: hidden; }
+
+  /* ── Sidebar ── */
+  .sidebar {
+    width: 240px; min-width: 240px;
+    background: linear-gradient(180deg, #0f0f23 0%, #1a1a3e 100%);
+    display: flex; flex-direction: column;
+    padding: 16px 0;
+    border-right: 1px solid rgba(255,255,255,0.06);
+  }
+  .sidebar-logo {
+    display: flex; align-items: center; gap: 10px;
+    padding: 0 20px; margin-bottom: 24px;
+  }
+  .sidebar-logo .k {
+    width: 32px; height: 32px; background: var(--brand);
+    border-radius: 8px; display: flex; align-items: center; justify-content: center;
+    color: white; font-weight: 700; font-size: 16px;
+  }
+  .sidebar-logo span { color: #fff; font-weight: 600; font-size: 15px; }
+  .sidebar-section { padding: 0 12px; margin-bottom: 8px; }
+  .sidebar-label {
+    font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.08em;
+    color: rgba(255,255,255,0.35); padding: 0 8px; margin-bottom: 6px;
+  }
+  .sidebar-link {
+    display: flex; align-items: center; gap: 10px;
+    padding: 8px 12px; border-radius: 8px; cursor: pointer;
+    color: rgba(255,255,255,0.6); font-size: 13px; font-weight: 500;
+    transition: all 0.15s;
+    text-decoration: none;
+  }
+  .sidebar-link:hover { background: rgba(255,255,255,0.06); color: rgba(255,255,255,0.9); }
+  .sidebar-link.active { background: var(--sidebar-active); color: #a5b4fc; }
+  .sidebar-link svg { width: 18px; height: 18px; opacity: 0.7; flex-shrink: 0; }
+  .sidebar-link.active svg { opacity: 1; }
+  .sidebar-badge {
+    margin-left: auto; background: var(--brand); color: white;
+    font-size: 10px; font-weight: 700; padding: 1px 6px; border-radius: 10px;
+    min-width: 18px; text-align: center;
+  }
+
+  /* ── Main Area ── */
+  .main-area { flex: 1; display: flex; flex-direction: column; overflow: hidden; background: var(--bg); }
+
+  /* ── TopBar ── */
+  .topbar {
+    height: 56px; background: var(--card); border-bottom: 1px solid var(--border);
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 0 24px; flex-shrink: 0;
+  }
+  .topbar-search {
+    display: flex; align-items: center; gap: 8px;
+    background: var(--bg); border: 1px solid var(--border); border-radius: var(--radius-sm);
+    padding: 6px 12px; font-size: 13px; color: var(--muted); min-width: 280px;
+  }
+  .topbar-search kbd {
+    background: var(--card); border: 1px solid var(--border); border-radius: 4px;
+    padding: 1px 5px; font-size: 11px; font-family: inherit; color: var(--muted);
+  }
+  .topbar-right { display: flex; align-items: center; gap: 12px; }
+  .topbar-avatar {
+    width: 30px; height: 30px; border-radius: 50%; background: var(--brand);
+    display: flex; align-items: center; justify-content: center;
+    color: white; font-size: 12px; font-weight: 600;
+  }
+
+  /* ── Hub Tabs ── */
+  .hub-header {
+    background: var(--card); border-bottom: 1px solid var(--border);
+    padding: 0 24px; flex-shrink: 0;
+  }
+  .hub-title { padding: 16px 0 0; font-size: 18px; font-weight: 700; color: var(--text); }
+  .hub-tabs { display: flex; gap: 0; margin-top: 12px; }
+  .hub-tab {
+    padding: 8px 16px; font-size: 13px; font-weight: 500; color: var(--muted);
+    cursor: pointer; border-bottom: 2px solid transparent; transition: all 0.15s;
+    white-space: nowrap;
+  }
+  .hub-tab:hover { color: var(--text); }
+  .hub-tab.active { color: var(--brand); border-bottom-color: var(--brand); }
+
+  /* ── Content ── */
+  .content { flex: 1; overflow-y: auto; padding: 24px; }
+
+  /* ── Stat Cards Row ── */
+  .stat-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; margin-bottom: 24px; }
+
+  /* ── Card ── */
+  .card {
+    background: var(--card); border: 1px solid var(--border); border-radius: var(--radius);
+    box-shadow: 0 1px 3px rgba(0,0,0,0.04); overflow: hidden;
+  }
+  .card-header {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 16px 20px; border-bottom: 1px solid var(--border);
+  }
+  .card-header h3 { font-size: 14px; font-weight: 600; }
+  .card-body { padding: 0; }
+
+  /* ── Stat Card (new unified) ── */
+  .stat-card {
+    background: var(--card); border: 1px solid var(--border); border-radius: var(--radius);
+    padding: 16px 20px; box-shadow: 0 1px 3px rgba(0,0,0,0.04);
+    border-left: 4px solid var(--brand); cursor: pointer; transition: box-shadow 0.15s;
+  }
+  .stat-card:hover { box-shadow: 0 4px 12px rgba(0,0,0,0.08); }
+  .stat-card .label { font-size: 12px; color: var(--muted); font-weight: 500; margin-bottom: 4px; }
+  .stat-card .value { font-size: 28px; font-weight: 700; color: var(--text); line-height: 1; }
+  .stat-card .detail { font-size: 12px; color: var(--muted); margin-top: 4px; }
+  .stat-card.green { border-left-color: var(--green); }
+  .stat-card.amber { border-left-color: var(--amber); }
+  .stat-card.red { border-left-color: var(--red); }
+
+  /* ── Table ── */
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  thead th {
+    background: #F9FAFB; border-bottom: 1px solid var(--border);
+    padding: 10px 16px; text-align: left; font-size: 11px; font-weight: 600;
+    text-transform: uppercase; letter-spacing: 0.05em; color: var(--muted);
+  }
+  tbody td { padding: 12px 16px; border-bottom: 1px solid var(--border); vertical-align: middle; }
+  tbody tr:hover { background: #F9FAFB; }
+  tbody tr:last-child td { border-bottom: none; }
+
+  /* ── Badges ── */
+  .badge {
+    display: inline-flex; align-items: center; gap: 4px;
+    padding: 2px 8px; border-radius: 12px; font-size: 11px; font-weight: 600;
+  }
+  .badge-dot { width: 6px; height: 6px; border-radius: 50%; }
+  .badge-green { background: var(--green-bg); color: var(--green); }
+  .badge-green .badge-dot { background: var(--green); }
+  .badge-amber { background: var(--amber-bg); color: var(--amber); }
+  .badge-amber .badge-dot { background: var(--amber); }
+  .badge-red { background: var(--red-bg); color: var(--red); }
+  .badge-red .badge-dot { background: var(--red); }
+  .badge-gray { background: #F3F4F6; color: #6B7280; }
+  .badge-gray .badge-dot { background: #6B7280; }
+  .badge-brand { background: var(--brand-light); color: var(--brand); }
+
+  /* ── Drift Bar ── */
+  .drift-bar { display: flex; align-items: center; gap: 8px; }
+  .drift-bar-track { flex: 1; height: 6px; background: #E5E7EB; border-radius: 3px; overflow: hidden; max-width: 80px; }
+  .drift-bar-fill { height: 100%; border-radius: 3px; transition: width 0.3s; }
+  .drift-bar-label { font-size: 12px; font-weight: 600; min-width: 32px; }
+
+  /* ── Buttons ── */
+  .btn {
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 7px 14px; border-radius: var(--radius-sm); font-size: 13px; font-weight: 500;
+    cursor: pointer; border: 1px solid var(--border); background: var(--card);
+    color: var(--text); transition: all 0.15s;
+  }
+  .btn:hover { background: #F9FAFB; }
+  .btn-primary { background: var(--brand); color: white; border-color: var(--brand); }
+  .btn-primary:hover { background: #3730A3; }
+  .btn-sm { padding: 4px 10px; font-size: 12px; }
+  .btn-danger { color: var(--red); border-color: var(--red); background: var(--red-bg); }
+  .btn-ghost { border: none; background: transparent; }
+  .btn-ghost:hover { background: #F3F4F6; }
+
+  /* ── Modal Overlay ── */
+  .modal-overlay {
+    position: fixed; inset: 0; z-index: 50;
+    display: flex; align-items: center; justify-content: center;
+    background: rgba(0,0,0,0.4); backdrop-filter: blur(2px);
+  }
+  .modal {
+    background: var(--card); border-radius: var(--radius); box-shadow: 0 25px 50px rgba(0,0,0,0.25);
+    width: 100%; max-width: 480px; margin: 0 16px; border: 1px solid var(--border);
+    animation: modalIn 0.2s ease-out;
+  }
+  @keyframes modalIn { from { opacity: 0; transform: scale(0.95) translateY(8px); } to { opacity: 1; transform: scale(1) translateY(0); } }
+  .modal-header {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 20px 24px 0;
+  }
+  .modal-header h2 { font-size: 16px; font-weight: 600; }
+  .modal-close {
+    width: 28px; height: 28px; border-radius: 6px; border: none; background: transparent;
+    cursor: pointer; display: flex; align-items: center; justify-content: center;
+    color: var(--muted); transition: background 0.15s;
+  }
+  .modal-close:hover { background: #F3F4F6; }
+  .modal-body { padding: 20px 24px; }
+  .modal-footer {
+    display: flex; justify-content: flex-end; gap: 8px;
+    padding: 16px 24px; border-top: 1px solid var(--border);
+  }
+
+  /* ── Form ── */
+  .form-group { margin-bottom: 16px; }
+  .form-group:last-child { margin-bottom: 0; }
+  .form-label { display: block; font-size: 12px; font-weight: 600; color: var(--muted); margin-bottom: 6px; text-transform: uppercase; letter-spacing: 0.03em; }
+  .form-input {
+    width: 100%; padding: 8px 12px; border: 1px solid var(--border); border-radius: var(--radius-sm);
+    font-size: 13px; color: var(--text); background: var(--card); outline: none; transition: border 0.15s;
+  }
+  .form-input:focus { border-color: var(--brand); box-shadow: 0 0 0 3px rgba(68,76,231,0.1); }
+  .form-select {
+    width: 100%; padding: 8px 12px; border: 1px solid var(--border); border-radius: var(--radius-sm);
+    font-size: 13px; color: var(--text); background: var(--card); outline: none;
+    appearance: none; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%236B7280' stroke-width='2'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");
+    background-repeat: no-repeat; background-position: right 10px center;
+  }
+
+  /* ── Empty State ── */
+  .empty-state {
+    text-align: center; padding: 48px 24px; color: var(--muted);
+  }
+  .empty-state svg { width: 48px; height: 48px; margin: 0 auto 12px; opacity: 0.3; }
+  .empty-state p { font-size: 13px; margin-bottom: 16px; }
+
+  /* ── Skeleton ── */
+  .skeleton { background: linear-gradient(90deg, #E5E7EB 25%, #F3F4F6 50%, #E5E7EB 75%); background-size: 200% 100%; animation: shimmer 1.5s infinite; border-radius: 6px; }
+  @keyframes shimmer { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }
+
+  /* ── Section Label ── */
+  .section-label {
+    font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.1em;
+    color: rgba(255,255,255,0.4); margin: 40px 0 16px; padding-bottom: 8px;
+    border-bottom: 1px solid rgba(255,255,255,0.08);
+  }
+  .section-label:first-child { margin-top: 0; }
+
+  /* ── Mockup Nav ── */
+  .mockup-nav {
+    position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%);
+    display: flex; gap: 4px; background: #1F2937; border: 1px solid #374151;
+    border-radius: 12px; padding: 6px; z-index: 100;
+    box-shadow: 0 8px 32px rgba(0,0,0,0.4);
+  }
+  .mockup-nav button {
+    padding: 8px 16px; border-radius: 8px; border: none; background: transparent;
+    color: #9CA3AF; font-size: 12px; font-weight: 600; cursor: pointer;
+    font-family: inherit; transition: all 0.15s; white-space: nowrap;
+  }
+  .mockup-nav button:hover { color: white; background: rgba(255,255,255,0.06); }
+  .mockup-nav button.active { background: var(--brand); color: white; }
+
+  /* ── Page Sections ── */
+  .mockup-page { display: none; }
+  .mockup-page.active { display: flex; }
+
+  /* ── Progress Bar ── */
+  .progress-bar { display: flex; align-items: center; gap: 6px; }
+  .progress-track { flex: 1; height: 4px; background: #E5E7EB; border-radius: 2px; overflow: hidden; max-width: 60px; }
+  .progress-fill { height: 100%; border-radius: 2px; }
+
+  /* ── Annotation ── */
+  .anno {
+    position: relative; outline: 2px dashed rgba(68,76,231,0.5); outline-offset: 4px;
+    border-radius: 4px;
+  }
+  .anno-tag {
+    position: absolute; top: -10px; right: -10px;
+    background: var(--brand); color: white; font-size: 9px; font-weight: 700;
+    padding: 2px 6px; border-radius: 6px; white-space: nowrap; z-index: 10;
+    text-transform: uppercase; letter-spacing: 0.05em;
+  }
+
+  /* ── Inline code ── */
+  code {
+    background: #1F2937; color: #A5B4FC; padding: 2px 6px; border-radius: 4px;
+    font-size: 12px; font-family: 'SF Mono', 'Fira Code', monospace;
+  }
+
+  /* ── Callout ── */
+  .callout {
+    background: var(--brand-light); border-left: 3px solid var(--brand);
+    border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+    padding: 12px 16px; margin: 16px 0; font-size: 13px; color: #3730A3;
+  }
+
+  /* ── Lazy tab indicator ── */
+  .lazy-indicator {
+    display: inline-flex; align-items: center; gap: 4px;
+    font-size: 10px; color: var(--brand); font-weight: 600;
+    background: var(--brand-light); padding: 2px 8px; border-radius: 10px;
+    margin-left: 8px;
+  }
+
+  /* ── Query state flow ── */
+  .flow-row { display: flex; gap: 16px; margin: 16px 0; align-items: stretch; }
+  .flow-box {
+    flex: 1; background: var(--card); border: 1px solid var(--border); border-radius: var(--radius);
+    padding: 16px; font-size: 13px;
+  }
+  .flow-box h4 { font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; color: var(--muted); margin-bottom: 8px; }
+  .flow-arrow { display: flex; align-items: center; color: var(--muted); font-size: 20px; }
+</style>
+</head>
+<body>
+
+<!-- ════════════════════════════════════════════════════════════════════════ -->
+<!-- MOCKUP 1: Dashboard with Unified Components                           -->
+<!-- ════════════════════════════════════════════════════════════════════════ -->
+<div class="mockup-page active" id="page-dashboard">
+<div class="page-shell">
+  <!-- Sidebar -->
+  <nav class="sidebar">
+    <div class="sidebar-logo"><div class="k">k</div><span>kri</span></div>
+    <div class="sidebar-section">
+      <div class="sidebar-label">Overview</div>
+      <a class="sidebar-link active" href="#"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>Dashboard</a>
+      <a class="sidebar-link" href="#"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>Fleet</a>
+      <a class="sidebar-link" href="#"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>Health</a>
+      <a class="sidebar-link" href="#"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>Groups</a>
+    </div>
+    <div class="sidebar-section">
+      <div class="sidebar-label">Compliance</div>
+      <a class="sidebar-link" href="#"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>Drift</a>
+      <a class="sidebar-link" href="#"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>SBOM</a>
+    </div>
+    <div class="sidebar-section">
+      <div class="sidebar-label">Automation</div>
+      <a class="sidebar-link" href="#"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>Playbooks</a>
+      <a class="sidebar-link" href="#"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>Salt Ops</a>
+      <a class="sidebar-link" href="#"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>Keys <span class="sidebar-badge">3</span></a>
+    </div>
+  </nav>
+
+  <!-- Main -->
+  <div class="main-area">
+    <!-- TopBar -->
+    <header class="topbar">
+      <div class="topbar-search">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+        Search nodes, playbooks, commands… <kbd>⌘K</kbd>
+      </div>
+      <div class="topbar-right">
+        <div class="topbar-avatar">DK</div>
+      </div>
+    </header>
+
+    <!-- Hub Header -->
+    <div class="hub-header">
+      <div class="hub-title">Overview</div>
+      <div class="hub-tabs">
+        <div class="hub-tab active">Dashboard</div>
+        <div class="hub-tab">Fleet</div>
+        <div class="hub-tab">Health</div>
+        <div class="hub-tab">Groups</div>
+        <div class="hub-tab">Salt Masters</div>
+      </div>
+    </div>
+
+    <!-- Content -->
+    <div class="content">
+      <!-- Annotation callout -->
+      <div class="callout">
+        <strong>Mockup 1 — Unified Components:</strong> All cards, tables, badges, and stat blocks use shared <code>&lt;Card&gt;</code>, <code>&lt;TableHead&gt;</code>, <code>&lt;StatCard&gt;</code>, and <code>&lt;Badge&gt;</code> components. Eliminates 17 duplicate card wrappers and 16 duplicate table header class strings.
+      </div>
+
+      <!-- Stat Cards -->
+      <div class="stat-row">
+        <div class="anno">
+          <span class="anno-tag">New &lt;StatCard&gt;</span>
+          <div class="stat-card">
+            <div class="label">Total Nodes</div>
+            <div class="value">12</div>
+            <div class="detail">3 groups across 2 masters</div>
+          </div>
+        </div>
+        <div class="stat-card green">
+          <div class="label">Online</div>
+          <div class="value" style="color: var(--green)">9</div>
+          <div class="detail">75% fleet health</div>
+        </div>
+        <div class="stat-card amber">
+          <div class="label">Drift Detected</div>
+          <div class="value" style="color: var(--amber)">3</div>
+          <div class="detail">Avg drift score: 8.2%</div>
+        </div>
+        <div class="stat-card red">
+          <div class="label">Alerts</div>
+          <div class="value" style="color: var(--red)">1</div>
+          <div class="detail">Disk usage &gt; 90%</div>
+        </div>
+      </div>
+
+      <!-- Fleet Table Card -->
+      <div class="anno" style="margin-bottom: 24px;">
+        <span class="anno-tag">New &lt;Card&gt;</span>
+        <div class="card">
+          <div class="card-header">
+            <h3>Fleet Nodes</h3>
+            <div style="display:flex;gap:8px;">
+              <button class="btn btn-sm"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg> Export</button>
+              <button class="btn btn-primary btn-sm">+ Add Node</button>
+            </div>
+          </div>
+          <div class="card-body">
+            <table>
+              <thead>
+                <tr>
+                  <th style="width:40px"><input type="checkbox" /></th>
+                  <th>Node</th>
+                  <th>Status</th>
+                  <th>SSH</th>
+                  <th>Drift</th>
+                  <th>CPU</th>
+                  <th>Memory</th>
+                  <th>Last Seen</th>
+                  <th style="width:60px"></th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><input type="checkbox" /></td>
+                  <td><div style="font-weight:600">mm1</div><div style="font-size:11px;color:var(--muted)">192.168.1.64</div></td>
+                  <td><span class="badge badge-green"><span class="badge-dot"></span>Online</span></td>
+                  <td><span class="badge badge-green"><span class="badge-dot"></span>OK</span></td>
+                  <td>
+                    <div class="drift-bar">
+                      <div class="drift-bar-track"><div class="drift-bar-fill" style="width:2%;background:var(--green)"></div></div>
+                      <span class="drift-bar-label" style="color:var(--green)">2%</span>
+                    </div>
+                  </td>
+                  <td>
+                    <div class="progress-bar">
+                      <div class="progress-track"><div class="progress-fill" style="width:34%;background:var(--green)"></div></div>
+                      <span style="font-size:12px;color:var(--muted)">34%</span>
+                    </div>
+                  </td>
+                  <td>
+                    <div class="progress-bar">
+                      <div class="progress-track"><div class="progress-fill" style="width:62%;background:var(--amber)"></div></div>
+                      <span style="font-size:12px;color:var(--muted)">62%</span>
+                    </div>
+                  </td>
+                  <td style="font-size:12px;color:var(--muted)">2m ago</td>
+                  <td><button class="btn btn-ghost btn-sm">⋯</button></td>
+                </tr>
+                <tr>
+                  <td><input type="checkbox" /></td>
+                  <td><div style="font-weight:600">mm2</div><div style="font-size:11px;color:var(--muted)">100.104.14.62</div></td>
+                  <td><span class="badge badge-green"><span class="badge-dot"></span>Online</span></td>
+                  <td><span class="badge badge-amber"><span class="badge-dot"></span>Slow</span></td>
+                  <td>
+                    <div class="drift-bar">
+                      <div class="drift-bar-track"><div class="drift-bar-fill" style="width:15%;background:var(--amber)"></div></div>
+                      <span class="drift-bar-label" style="color:var(--amber)">15%</span>
+                    </div>
+                  </td>
+                  <td>
+                    <div class="progress-bar">
+                      <div class="progress-track"><div class="progress-fill" style="width:78%;background:var(--red)"></div></div>
+                      <span style="font-size:12px;color:var(--red)">78%</span>
+                    </div>
+                  </td>
+                  <td>
+                    <div class="progress-bar">
+                      <div class="progress-track"><div class="progress-fill" style="width:45%;background:var(--green)"></div></div>
+                      <span style="font-size:12px;color:var(--muted)">45%</span>
+                    </div>
+                  </td>
+                  <td style="font-size:12px;color:var(--muted)">5m ago</td>
+                  <td><button class="btn btn-ghost btn-sm">⋯</button></td>
+                </tr>
+                <tr>
+                  <td><input type="checkbox" /></td>
+                  <td><div style="font-weight:600">cylon</div><div style="font-size:11px;color:var(--muted)">192.168.1.10</div></td>
+                  <td><span class="badge badge-red"><span class="badge-dot"></span>Offline</span></td>
+                  <td><span class="badge badge-gray"><span class="badge-dot"></span>—</span></td>
+                  <td>
+                    <div class="drift-bar">
+                      <div class="drift-bar-track"><div class="drift-bar-fill" style="width:0%;background:var(--muted)"></div></div>
+                      <span class="drift-bar-label" style="color:var(--muted)">—</span>
+                    </div>
+                  </td>
+                  <td><span style="font-size:12px;color:var(--muted)">—</span></td>
+                  <td><span style="font-size:12px;color:var(--muted)">—</span></td>
+                  <td style="font-size:12px;color:var(--muted)">2h ago</td>
+                  <td><button class="btn btn-ghost btn-sm">⋯</button></td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- Annotation: QueryStateWrapper -->
+      <div class="callout">
+        <strong>Mockup 2 — QueryStateWrapper:</strong> The loading/error/data states are handled by a single wrapper component, eliminating the 3-branch boilerplate repeated in 20+ pages.
+      </div>
+
+      <div class="flow-row">
+        <div class="flow-box">
+          <h4>Before (×20+ pages)</h4>
+          <pre style="font-size:12px;font-family:monospace;color:var(--text);white-space:pre-wrap;line-height:1.6">if (isLoading)
+  return &lt;Skeleton rows={6} /&gt;
+
+if (isError)
+  return &lt;ErrorState
+    retry={refetch} /&gt;
+
+return (
+  &lt;div&gt;
+    {data.items.map(...)}
+  &lt;/div&gt;
+)</pre>
+        </div>
+        <div class="flow-arrow">→</div>
+        <div class="flow-box" style="border-color:var(--brand)">
+          <h4>After (1 component)</h4>
+          <pre style="font-size:12px;font-family:monospace;color:var(--text);white-space:pre-wrap;line-height:1.6">&lt;<span style="color:var(--brand);font-weight:700">QueryStateWrapper</span>
+  data={data}
+  isLoading={isLoading}
+  isError={isError}
+  retry={refetch}
+  rows={6}
+&gt;
+  {(data) =&gt;
+    data.items.map(item =&gt;
+      &lt;Row key={item.id}
+           {...item} /&gt;
+    )
+  }
+&lt;/<span style="color:var(--brand);font-weight:700">QueryStateWrapper</span>&gt;</pre>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</div>
+</div>
+
+<!-- ════════════════════════════════════════════════════════════════════════ -->
+<!-- MOCKUP 2: Unified Modal Component                                      -->
+<!-- ════════════════════════════════════════════════════════════════════════ -->
+<div class="mockup-page" id="page-modal">
+<div class="page-shell">
+  <nav class="sidebar">
+    <div class="sidebar-logo"><div class="k">k</div><span>kri</span></div>
+    <div class="sidebar-section">
+      <div class="sidebar-label">Overview</div>
+      <a class="sidebar-link active" href="#"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>Dashboard</a>
+      <a class="sidebar-link" href="#"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>Fleet</a>
+    </div>
+  </nav>
+  <div class="main-area">
+    <header class="topbar">
+      <div class="topbar-search">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+        Search nodes, playbooks, commands… <kbd>⌘K</kbd>
+      </div>
+      <div class="topbar-right"><div class="topbar-avatar">DK</div></div>
+    </header>
+    <div class="content" style="position:relative">
+      <div class="callout" style="margin-bottom:24px">
+        <strong>Mockup 3 — Unified Modal:</strong> One <code>&lt;Modal&gt;</code> component with <code>&lt;Modal.Header&gt;</code>, <code>&lt;Modal.Body&gt;</code>, <code>&lt;Modal.Footer&gt;</code> slots replaces 8+ inline modal implementations (~300 lines in FleetDashboard alone).
+      </div>
+
+      <div style="background:var(--card);border:1px solid var(--border);border-radius:var(--radius);padding:24px;opacity:0.3">
+        <p style="color:var(--muted);font-size:13px">Fleet table content (dimmed behind modal)…</p>
+      </div>
+
+      <!-- Modal Overlay -->
+      <div class="modal-overlay" style="position:absolute;inset:0;background:rgba(0,0,0,0.3)">
+        <div class="modal">
+          <div class="modal-header">
+            <h2>Edit Node</h2>
+            <button class="modal-close">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+            </button>
+          </div>
+          <div class="modal-body">
+            <div class="form-group">
+              <label class="form-label">Hostname</label>
+              <input class="form-input" value="mm2" />
+            </div>
+            <div class="form-group">
+              <label class="form-label">Status</label>
+              <select class="form-select">
+                <option>Online</option>
+                <option>Offline</option>
+                <option>Maintenance</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label class="form-label">Tags</label>
+              <input class="form-input" value="build-agent, apple-silicon" />
+            </div>
+            <div class="form-group">
+              <label class="form-label">Group</label>
+              <select class="form-select">
+                <option>builders</option>
+                <option>edge-servers</option>
+                <option>— None —</option>
+              </select>
+            </div>
+          </div>
+          <div class="modal-footer">
+            <button class="btn">Cancel</button>
+            <button class="btn btn-primary">Save Changes</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+</div>
+
+<!-- ════════════════════════════════════════════════════════════════════════ -->
+<!-- MOCKUP 3: Lazy Tab Loading                                            -->
+<!-- ════════════════════════════════════════════════════════════════════════ -->
+<div class="mockup-page" id="page-lazy">
+<div class="page-shell">
+  <nav class="sidebar">
+    <div class="sidebar-logo"><div class="k">k</div><span>kri</span></div>
+    <div class="sidebar-section">
+      <div class="sidebar-label">Overview</div>
+      <a class="sidebar-link" href="#"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>Dashboard</a>
+      <a class="sidebar-link" href="#"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>Fleet</a>
+      <a class="sidebar-link" href="#"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>Health</a>
+      <a class="sidebar-link" href="#"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/></svg>Groups</a>
+      <a class="sidebar-link" href="#"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>Salt Ops</a>
+      <a class="sidebar-link" href="#"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>Keys <span class="sidebar-badge">3</span></a>
+    </div>
+  </nav>
+  <div class="main-area">
+    <header class="topbar">
+      <div class="topbar-search">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+        Search nodes, playbooks, commands… <kbd>⌘K</kbd>
+      </div>
+      <div class="topbar-right"><div class="topbar-avatar">DK</div></div>
+    </header>
+
+    <div class="hub-header">
+      <div class="hub-title">Compliance</div>
+      <div class="hub-tabs">
+        <div class="hub-tab active">Drift</div>
+        <div class="hub-tab">Baselines <span class="lazy-indicator">lazy</span></div>
+        <div class="hub-tab">SBOM <span class="lazy-indicator">lazy</span></div>
+        <div class="hub-tab">Licenses <span class="lazy-indicator">lazy</span></div>
+        <div class="hub-tab">Security <span class="lazy-indicator">lazy</span></div>
+        <div class="hub-tab">Alerts <span class="lazy-indicator">lazy</span></div>
+      </div>
+    </div>
+
+    <div class="content">
+      <div class="callout" style="margin-bottom:24px">
+        <strong>Mockup 4 — Lazy Tab Loading:</strong> Only the active tab's code is downloaded. Other tabs show a skeleton on first click, then cache. Reduces initial bundle for hub pages by ~60%.
+      </div>
+
+      <!-- Bundle size comparison -->
+      <div class="flow-row">
+        <div class="flow-box">
+          <h4>Before (eager imports)</h4>
+          <div style="margin-top:12px">
+            <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
+              <div style="width:120px;font-size:12px;font-weight:600">OverviewHub.js</div>
+              <div style="height:20px;background:var(--red);border-radius:4px;width:100%;display:flex;align-items:center;padding-left:8px;color:white;font-size:10px;font-weight:600">187 KB (all 6 tabs)</div>
+            </div>
+            <div style="font-size:11px;color:var(--muted);margin-top:8px">
+              DashboardPage · FleetDashboard · FleetHealthPage<br>
+              MonitoringPage · GroupExplorer · SaltMastersTab<br>
+              <strong style="color:var(--red)">All loaded on first visit</strong>
+            </div>
+          </div>
+        </div>
+        <div class="flow-arrow">→</div>
+        <div class="flow-box" style="border-color:var(--brand)">
+          <h4>After (React.lazy per tab)</h4>
+          <div style="margin-top:12px">
+            <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px">
+              <div style="width:120px;font-size:12px;font-weight:600">OverviewHub.js</div>
+              <div style="height:20px;background:var(--brand);border-radius:4px;width:25%;display:flex;align-items:center;padding-left:8px;color:white;font-size:10px;font-weight:600">42 KB</div>
+            </div>
+            <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px">
+              <div style="width:120px;font-size:12px;color:var(--muted)">+ DashboardPage</div>
+              <div style="height:16px;background:#C7D2FE;border-radius:4px;width:30%;display:flex;align-items:center;padding-left:8px;color:var(--brand);font-size:10px;font-weight:600">54 KB (loaded)</div>
+            </div>
+            <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px">
+              <div style="width:120px;font-size:12px;color:var(--muted)">+ FleetDashboard</div>
+              <div style="height:16px;background:#E5E7EB;border-radius:4px;width:35%;display:flex;align-items:center;padding-left:8px;color:var(--muted);font-size:10px;font-weight:600">61 KB (on demand)</div>
+            </div>
+            <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px">
+              <div style="width:120px;font-size:12px;color:var(--muted)">+ others…</div>
+              <div style="height:16px;background:#E5E7EB;border-radius:4px;width:30%;display:flex;align-items:center;padding-left:8px;color:var(--muted);font-size:10px;font-weight:600">30 KB each</div>
+            </div>
+            <div style="font-size:11px;color:var(--green);margin-top:8px;font-weight:600">~77% smaller initial load</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Simulated tab content -->
+      <div class="card" style="margin-top:24px">
+        <div class="card-header">
+          <h3>Drift Score Timeline</h3>
+          <div style="display:flex;gap:8px">
+            <button class="btn btn-sm">Last 24h ▾</button>
+            <button class="btn btn-sm">All Nodes ▾</button>
+          </div>
+        </div>
+        <div class="card-body" style="padding:24px">
+          <!-- Skeleton loading simulation -->
+          <div style="display:flex;gap:8px;align-items:end;height:120px;padding:0 16px">
+            <div class="skeleton" style="width:8%;height:40%;border-radius:4px 4px 0 0"></div>
+            <div class="skeleton" style="width:8%;height:55%;border-radius:4px 4px 0 0"></div>
+            <div class="skeleton" style="width:8%;height:35%;border-radius:4px 4px 0 0"></div>
+            <div class="skeleton" style="width:8%;height:70%;border-radius:4px 4px 0 0"></div>
+            <div class="skeleton" style="width:8%;height:45%;border-radius:4px 4px 0 0"></div>
+            <div class="skeleton" style="width:8%;height:60%;border-radius:4px 4px 0 0"></div>
+            <div class="skeleton" style="width:8%;height:30%;border-radius:4px 4px 0 0"></div>
+            <div class="skeleton" style="width:8%;height:50%;border-radius:4px 4px 0 0"></div>
+            <div class="skeleton" style="width:8%;height:65%;border-radius:4px 4px 0 0"></div>
+            <div class="skeleton" style="width:8%;height:42%;border-radius:4px 4px 0 0"></div>
+            <div class="skeleton" style="width:8%;height:58%;border-radius:4px 4px 0 0"></div>
+            <div class="skeleton" style="width:8%;height:38%;border-radius:4px 4px 0 0"></div>
+          </div>
+          <div style="text-align:center;margin-top:12px;font-size:11px;color:var(--muted)">
+            Skeleton placeholder while tab component loads via React.lazy + Suspense
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+</div>
+
+<!-- ════════════════════════════════════════════════════════════════════════ -->
+<!-- MOCKUP 4: useCrudMutation Pattern                                      -->
+<!-- ════════════════════════════════════════════════════════════════════════ -->
+<div class="mockup-page" id="page-mutation">
+<div style="min-height:100vh;background:#111827;padding:40px;display:flex;flex-direction:column;align-items:center">
+  <div class="section-label" style="color:rgba(255,255,255,0.5);border-color:rgba(255,255,255,0.1);width:100%;max-width:900px;text-align:left">Code Pattern Optimisation</div>
+
+  <div class="flow-row" style="width:100%;max-width:900px">
+    <div class="flow-box" style="background:#1F2937;border-color:#374151;color:#E5E7EB">
+      <h4 style="color:#9CA3AF">Before: 10+ lines × 30 mutations</h4>
+      <pre style="font-size:11.5px;font-family:'SF Mono','Fira Code',monospace;line-height:1.7;white-space:pre-wrap;color:#E5E7EB;overflow-x:auto"><span style="color:#C084FC">const</span> mutation = <span style="color:#67E8F9">useMutation</span>({
+  <span style="color:#9CA3AF">mutationFn:</span> (data) <span style="color:#C084FC">=></span> nodesApi.<span style="color:#67E8F9">update</span>(id, data),
+  <span style="color:#9CA3AF">onSuccess:</span> () <span style="color:#C084FC">=></span> {
+    qc.<span style="color:#67E8F9">invalidateQueries</span>({
+      <span style="color:#9CA3AF">queryKey:</span> [<span style="color:#86EFAC">'nodes'</span>]
+    })
+    <span style="color:#67E8F9">toast</span>(<span style="color:#86EFAC">'Node updated'</span>)
+    <span style="color:#67E8F9">onClose</span>()
+  },
+  <span style="color:#9CA3AF">onError:</span> (e) <span style="color:#C084FC">=></span>
+    <span style="color:#67E8F9">toast</span>(e.message, <span style="color:#86EFAC">'error'</span>),
+})</pre>
+    </div>
+    <div class="flow-arrow" style="color:#6B7280">→</div>
+    <div class="flow-box" style="background:#1F2937;border-color:var(--brand);color:#E5E7EB">
+      <h4 style="color:#A5B4FC">After: 3 lines × 30 mutations</h4>
+      <pre style="font-size:11.5px;font-family:'SF Mono','Fira Code',monospace;line-height:1.7;white-space:pre-wrap;color:#E5E7EB;overflow-x:auto"><span style="color:#C084FC">const</span> mutation = <span style="color:#67E8F9">useCrudMutation</span>({
+  <span style="color:#9CA3AF">fn:</span> (data) <span style="color:#C084FC">=></span> nodesApi.<span style="color:#67E8F9">update</span>(id, data),
+  <span style="color:#9CA3AF">invalidate:</span> [<span style="color:#86EFAC">'nodes'</span>],
+  <span style="color:#9CA3AF">successMsg:</span> <span style="color:#86EFAC">'Node updated'</span>,
+  <span style="color:#9CA3AF">onDone:</span> onClose,
+})</pre>
+      <div style="margin-top:12px;padding:8px 12px;background:rgba(68,76,231,0.1);border-radius:6px;font-size:11px;color:#A5B4FC">
+        ✓ Auto-invalidates query cache<br>
+        ✓ Auto-shows toast (success/error)<br>
+        ✓ Auto-calls onDone callback<br>
+        ✓ Handles Optimistic updates (opt-in)
+      </div>
+    </div>
+  </div>
+
+  <!-- Summary card -->
+  <div style="width:100%;max-width:900px;margin-top:32px">
+    <div class="section-label" style="color:rgba(255,255,255,0.5);border-color:rgba(255,255,255,0.1)">Estimated Impact</div>
+    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px">
+      <div style="background:#1F2937;border:1px solid #374151;border-radius:12px;padding:20px;text-align:center">
+        <div style="font-size:32px;font-weight:700;color:#67E8F9">~300</div>
+        <div style="font-size:12px;color:#9CA3AF;margin-top:4px">lines removed (frontend)</div>
+      </div>
+      <div style="background:#1F2937;border:1px solid #374151;border-radius:12px;padding:20px;text-align:center">
+        <div style="font-size:32px;font-weight:700;color:#86EFAC">~600</div>
+        <div style="font-size:12px;color:#9CA3AF;margin-top:4px">lines removed (backend)</div>
+      </div>
+      <div style="background:#1F2937;border:1px solid #374151;border-radius:12px;padding:20px;text-align:center">
+        <div style="font-size:32px;font-weight:700;color:#FCA5A5">25→2</div>
+        <div style="font-size:12px;color:#9CA3AF;margin-top:4px">queries per page (N+1 fix)</div>
+      </div>
+    </div>
+  </div>
+</div>
+</div>
+
+<!-- ════════════════════════════════════════════════════════════════════════ -->
+<!-- Navigation                                                            -->
+<!-- ════════════════════════════════════════════════════════════════════════ -->
+<nav class="mockup-nav">
+  <button class="active" onclick="showPage('page-dashboard', this)">1. Dashboard</button>
+  <button onclick="showPage('page-modal', this)">2. Modal</button>
+  <button onclick="showPage('page-lazy', this)">3. Lazy Tabs</button>
+  <button onclick="showPage('page-mutation', this)">4. Code Patterns</button>
+</nav>
+
+<script>
+function showPage(id, btn) {
+  document.querySelectorAll('.mockup-page').forEach(p => p.classList.remove('active'));
+  document.getElementById(id).classList.add('active');
+  document.querySelectorAll('.mockup-nav button').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+}
+</script>
+</body>
+</html>

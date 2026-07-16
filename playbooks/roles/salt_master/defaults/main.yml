@@ -4,8 +4,10 @@
 # Salt version — must match the minion version installed by bootstrap_node.yml
 salt_version: "3007.14"
 
-# Download source: Artifactory mirror first, falls back to official URL
-artifactory_binary_url: "http://10.105.205.92:8082/artifactory/example-repo-local/salt"
+# Download source: Artifactory mirror first, falls back to official URL.
+# Blank by default (matches group_vars/all.yml) — set per-host in host_vars or via
+# -e; never hardcode an internal IP here (#1006 hygiene).
+artifactory_binary_url: ""
 salt_pkg_official_base: "https://packages.broadcom.com/artifactory/saltproject-generic/onedir/{{ salt_version }}"
 
 # Linux salt package repos — override to point at an air-gapped Artifactory mirror

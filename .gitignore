@@ -100,3 +100,4 @@ test-reports/**
 
 # best-of-n-runner / agent worktrees (never commit)
 .claude/worktrees/
+graphify-out/20*/
