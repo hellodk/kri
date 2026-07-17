@@ -325,7 +325,9 @@ function SingleMode({ onClose }: { onClose: () => void }) {
     const canSubmit = !!minionId && !!targetIp && !!sshUsername &&
       (!(!sshPassword && !hasSavedPassword)) &&
       !bootstrapMutation.isPending &&
-      canBootstrap(selectedMasterIds.size)
+      // #1022: a self-master node is its own master — an existing-master
+      // selection isn't required (any ticked masters are additive HA).
+      (canBootstrap(selectedMasterIds.size) || asMaster)
 
     return (
       <form onSubmit={(e) => { e.preventDefault(); bootstrapMutation.mutate() }} className="space-y-4">
@@ -652,9 +654,14 @@ function SingleMode({ onClose }: { onClose: () => void }) {
               })}
             </div>
           )}
-          {enabledMasters.length > 0 && selectedMasterIds.size === 0 && (
+          {enabledMasters.length > 0 && selectedMasterIds.size === 0 && !asMaster && (
             <p className="px-3 py-2 text-xs text-red-600 bg-red-50 border-t border-red-100">
               Select at least one master to bootstrap.
+            </p>
+          )}
+          {enabledMasters.length > 0 && selectedMasterIds.size === 0 && asMaster && (
+            <p className="px-3 py-2 text-xs text-gray-500 bg-gray-50 border-t border-gray-100">
+              This node will be its own salt-master — selecting an existing master is optional (tick others only for HA failover).
             </p>
           )}
           {enabledMasters.length > 0 && selectedMasterIds.size > 0 &&

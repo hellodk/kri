@@ -137,6 +137,45 @@ async def test_as_master_true_no_existing_master_creates_and_chains(
     assert si_kwargs["salt_master_ids"] == [str(added_master.id)]
 
 
+# ── as_master=True + selected masters → own + selected (optional HA, #1022) ──
+
+
+@pytest.mark.asyncio
+@patch("fleet_platform.services.platform_settings_svc.encrypt_secret", return_value="enc-secret")
+@patch("fleet_platform.services.bootstrap_svc.audit", new_callable=AsyncMock)
+@patch("fleet_platform.services.bootstrap_svc.node_has_group", new_callable=AsyncMock, return_value=True)
+@patch("celery.chain")
+@patch("fleet_platform.workers.ansible_tasks.provision_master")
+@patch("fleet_platform.workers.ansible_tasks.bootstrap_node")
+async def test_as_master_combines_own_and_selected_masters_for_ha(
+    mock_bootstrap_node, mock_provision_master, mock_chain, mock_has_group, mock_audit, mock_encrypt
+):
+    """#1022: a self-master node enrols into its OWN master PLUS any additional
+    masters the caller selected (deduped, own-first)."""
+    node = _make_node(hostname="mm1")
+    db = _make_db()
+    db.execute = AsyncMock(
+        side_effect=[
+            _result(scalar_one_or_none=None),  # endpoint lookup: none
+            _result(scalar_one_or_none=None),  # name lookup: no clash
+            _result(scalar_one=0),  # count: first master
+        ]
+    )
+
+    await queue_node_bootstrap(
+        db,
+        node,
+        target_ip="10.0.0.5",
+        actor="a@b.com",
+        as_master=True,
+        salt_master_ids=["ha-other-master"],
+    )
+
+    (added_master,) = db.add.call_args.args
+    _, si_kwargs = mock_bootstrap_node.si.call_args
+    assert si_kwargs["salt_master_ids"] == [str(added_master.id), "ha-other-master"]
+
+
 # ── as_master=True, existing master already at the endpoint (reuse) ────────
 
 
