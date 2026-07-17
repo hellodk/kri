@@ -126,3 +126,12 @@ salt_dispatch_total = Counter(
     "salt-api dispatches via run_salt_cmd by function and outcome",
     ["function", "outcome"],
 )
+
+# ---------------------------------------------------------------------------
+# Embedding index staleness (issue #1027)
+# ---------------------------------------------------------------------------
+
+embedding_index_staleness_seconds = Gauge(
+    "kri_embedding_index_staleness_seconds",
+    "Seconds since the oldest embedding was last refreshed. 0 when no embeddings exist. Alert: > 3600",
+)

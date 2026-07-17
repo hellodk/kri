@@ -219,8 +219,8 @@ async def test_rag_search_projects_chunks(monkeypatch):
 
     out = await tools._rag_search(_ctx(_FakeDB()), "q", top_k=99)
     assert out["count"] == 1
-    # chunk_text is capped at 1500 chars for the prompt.
-    assert len(out["results"][0]["chunk_text"]) == 1500
+    # chunk_text is capped at 3000 chars for the prompt.
+    assert len(out["results"][0]["chunk_text"]) == 3000
 
 
 async def test_embed_text_returns_dim_and_preview(monkeypatch):

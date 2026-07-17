@@ -254,7 +254,7 @@ async def build_fleet_context(db: AsyncSession, intent: str, query: str = "") ->
                 retrieve,
             )
 
-            chunks = await retrieve(db, query, embed_url, top_k=6)
+            chunks = await retrieve(db, query, embed_url, top_k=6, source_types=["node", "playbook", "salt_state"])
             retrieved_chunks_text = format_retrieved_chunks(chunks) or None
             rag_citations = assemble_citations(chunks)
         except Exception as exc:

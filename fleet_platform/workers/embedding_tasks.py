@@ -145,6 +145,49 @@ def reindex_playbooks() -> dict:
     return asyncio.run(_run())
 
 
+@celery_app.task(name="fleet_platform.workers.embedding_tasks.reindex_salt_states")
+def reindex_salt_states() -> dict:
+    """Embed per-state-ID chunks for all .sls files in the configured directory."""
+    import asyncio
+
+    from fleet_platform.db.session import AsyncSessionLocal as async_session_factory
+    from fleet_platform.services.embedding_svc import (
+        chunk_salt_state,
+        sweep_deleted_sources,
+        upsert_chunks,
+    )
+    from fleet_platform.services.platform_settings_svc import (
+        LLM_EMBED_BASE_URL,
+        get_settings_bulk,
+    )
+
+    SALT_STATES_DIR_KEY = "SALT_STATES_DIR"
+
+    async def _run():
+        async with async_session_factory() as db:
+            settings = await get_settings_bulk(db, [LLM_EMBED_BASE_URL, SALT_STATES_DIR_KEY])
+            embed_url = settings.get(LLM_EMBED_BASE_URL) or ""
+            states_dir = settings.get(SALT_STATES_DIR_KEY) or ""
+            if not embed_url or not states_dir:
+                return {"skipped": "missing embed_base_url or salt_states_dir"}
+
+            all_chunks = []
+            for sls_path in Path(states_dir).glob("**/*.sls"):
+                try:
+                    content = sls_path.read_text()
+                    rel = str(sls_path.relative_to(states_dir))
+                    all_chunks.extend(chunk_salt_state(f"salt/states/{rel}", content))
+                except Exception as exc:
+                    logger.warning("reindex_salt_states: skipping %s — %s", sls_path, exc)
+                    continue
+
+            upserted = await upsert_chunks(db, all_chunks, embed_url)
+            swept = await sweep_deleted_sources(db, "salt_state", [c["source_id"] for c in all_chunks])
+            return {"upserted": upserted, "total": len(all_chunks), "swept": swept}
+
+    return asyncio.run(_run())
+
+
 @celery_app.task(name="fleet_platform.workers.embedding_tasks.reindex_drift_history")
 def reindex_drift_history() -> dict:
     """Embed drift records from the last 7 days."""

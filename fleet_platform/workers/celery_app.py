@@ -190,6 +190,10 @@ celery_app.conf.update(
             "task": "fleet_platform.workers.embedding_tasks.reindex_drift_history",
             "schedule": 300,  # every 5 min — tracks new drift records
         },
+        "reindex-salt-states": {
+            "task": "fleet_platform.workers.embedding_tasks.reindex_salt_states",
+            "schedule": 900,  # every 15 min — tracks salt state file changes
+        },
         "check-ssh-connectivity": {
             "task": "fleet_platform.workers.connectivity_tasks.check_ssh_connectivity",
             "schedule": 900,  # every 15 minutes — proactive SSH reachability sweep (#356)

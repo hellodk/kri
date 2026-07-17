@@ -1,29 +1,31 @@
-"""Cloud-fallback cost tracking + daily cap (#715).
+"""Cloud-fallback cost tracking + daily cap (#715, #1030).
 
 The local MLX cluster serves ~all traffic at $0; the admin-gated cloud endpoint
-is the only spend path. This tracks per-day cloud spend in-process and enforces a
-hard daily cap so a degraded local cluster can't run up an unbounded bill. The
-tier router consults :func:`can_spend` before returning a cloud endpoint, and the
+is the only spend path. This tracks per-day cloud spend via Redis (shared across
+workers) with fallback to in-process state when Redis is unavailable. The tier
+router consults :func:`can_spend` before returning a cloud endpoint, and the
 agent route records spend after a cloud-served run.
 
-In-process state is sufficient as a circuit-breaker cap; the audit log remains the
-source of truth for actual usage. Note that each worker process has its own STATE
-so the effective cap in a multi-worker deployment is N × DAILY_CAP_USD — size the
-cap accordingly or point LLM_COST_REDIS_URL at a Redis instance to share state
-across workers (#774 partial mitigation: threading lock eliminates the in-process
-data race; cross-process sharing is a follow-up).
+Redis key: ``kri:llm:spend:YYYY-MM-DD`` with 48h TTL.  Falls back to in-process
+``_CostState`` when Redis is unreachable (fail-open for availability).
 """
 
 from __future__ import annotations
 
+import logging
 import os
 import threading
 from datetime import date
 from typing import Any
 
+logger = logging.getLogger(__name__)
+
 # Rough blended $/1K tokens for the cloud fallback model; override via env.
 COST_PER_1K_TOKENS_USD = float(os.getenv("AGENT_CLOUD_COST_PER_1K_USD", "0.009"))
 DAILY_CAP_USD = float(os.getenv("AGENT_CLOUD_DAILY_CAP_USD", "5.0"))
+
+# Redis key TTL — 48h auto-expire stale keys.
+_REDIS_KEY_TTL = int(os.getenv("LLM_COST_REDIS_TTL", str(48 * 3600)))
 
 # Providers whose endpoints incur real spend and must be tracked (#780).
 CLOUD_PROVIDERS: frozenset[str] = frozenset(
@@ -41,7 +43,29 @@ CLOUD_PROVIDERS: frozenset[str] = frozenset(
 )
 
 
+def _redis_key(today: date | None = None) -> str:
+    d = today or date.today()
+    return f"kri:llm:spend:{d.isoformat()}"
+
+
+def _get_redis():
+    """Return a sync Redis connection or None if unavailable."""
+    try:
+        import redis as sync_redis
+
+        from fleet_platform.core.config import settings
+
+        redis_url = getattr(settings, "llm_cost_redis_url", None) or getattr(settings, "redis_url", None)
+        if not redis_url:
+            return None
+        return sync_redis.Redis.from_url(redis_url, socket_connect_timeout=2)
+    except Exception:  # noqa: BLE001
+        return None
+
+
 class _CostState:
+    """In-process fallback when Redis is unavailable."""
+
     def __init__(self) -> None:
         self._lock = threading.Lock()
         self._day: date | None = None
@@ -87,12 +111,32 @@ class _CostState:
 STATE = _CostState()
 
 
-def can_spend() -> bool:
-    return STATE.can_spend()
+def can_spend(*, today: date | None = None) -> bool:
+    """Check if daily spend is below the cap. Uses Redis when available."""
+    r = _get_redis()
+    if r is not None:
+        try:
+            raw = r.get(_redis_key(today))
+            spend = float(raw) if raw else 0.0
+            return spend < DAILY_CAP_USD
+        except Exception:  # noqa: BLE001
+            logger.debug("can_spend: Redis read failed, falling back to local state")
+    return STATE.can_spend(today=today)
 
 
-def record_tokens(input_tokens: int, output_tokens: int) -> float:
-    return STATE.record_tokens(input_tokens, output_tokens)
+def record_tokens(input_tokens: int, output_tokens: int, *, today: date | None = None) -> float:
+    """Record token spend. Uses Redis INCRBY when available, falls back to local."""
+    cost = (max(0, input_tokens) + max(0, output_tokens)) / 1000.0 * COST_PER_1K_TOKENS_USD
+    r = _get_redis()
+    if r is not None:
+        try:
+            key = _redis_key(today)
+            r.incrbyfloat(key, cost)
+            r.expire(key, _REDIS_KEY_TTL)
+            return cost
+        except Exception:  # noqa: BLE001
+            logger.debug("record_tokens: Redis write failed, falling back to local state")
+    return STATE.record_tokens(input_tokens, output_tokens, today=today)
 
 
 def record_tokens_for_endpoint(
@@ -107,12 +151,31 @@ def record_tokens_for_endpoint(
     Uses ``endpoint.provider`` (not the routing tag) so direct-UUID endpoint
     selections and non-standard routing tags are both covered.  Returns the cost
     recorded (0.0 for local providers).
+
+    When ``state`` is provided (e.g. in tests), records directly to that
+    ``_CostState`` instance instead of the shared Redis/local path.
     """
     if getattr(endpoint, "provider", None) not in CLOUD_PROVIDERS:
         return 0.0
-    target = state if state is not None else STATE
-    return target.record_tokens(input_tokens, output_tokens)
+    if state is not None:
+        return state.record_tokens(input_tokens, output_tokens)
+    return record_tokens(input_tokens, output_tokens)
 
 
-def snapshot() -> dict:
-    return STATE.snapshot()
+def snapshot(*, today: date | None = None) -> dict:
+    """Return current spend snapshot. Uses Redis when available."""
+    r = _get_redis()
+    if r is not None:
+        try:
+            raw = r.get(_redis_key(today))
+            spend = float(raw) if raw else 0.0
+            return {
+                "date": (today or date.today()).isoformat(),
+                "spend_usd": round(spend, 4),
+                "daily_cap_usd": DAILY_CAP_USD,
+                "remaining_usd": round(max(0.0, DAILY_CAP_USD - spend), 4),
+                "capped": spend >= DAILY_CAP_USD,
+            }
+        except Exception:  # noqa: BLE001
+            logger.debug("snapshot: Redis read failed, falling back to local state")
+    return STATE.snapshot(today=today)
