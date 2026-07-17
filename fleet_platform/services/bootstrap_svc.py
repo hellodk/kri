@@ -160,12 +160,17 @@ async def queue_node_bootstrap(
 
     from fleet_platform.workers.ansible_tasks import provision_master
 
+    # Enrol into the node's OWN master plus any additional masters the caller
+    # selected (optional multi-master HA, #1022) — deduped, own-first.
+    _own = str(master_id)
+    _ha_master_ids = [_own] + [m for m in (salt_master_ids or []) if str(m) != _own]
+
     sig = chain(
-        provision_master.si(str(master_id), "install"),
+        provision_master.si(_own, "install"),
         bootstrap_node.si(
             str(node.id),
             target_ip,
-            salt_master_ids=[str(master_id)],
+            salt_master_ids=_ha_master_ids,
             node_exporter_version=node_exporter_version,
             node_exporter_listen_address=node_exporter_listen_address,
             node_exporter_url_override=node_exporter_url_override,
