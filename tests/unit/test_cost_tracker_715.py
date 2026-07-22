@@ -12,9 +12,15 @@ from fleet_platform.services.cost_tracker import _CostState
 
 @pytest.fixture(autouse=True)
 def _reset():
-    cost_tracker.STATE.reset()
-    yield
-    cost_tracker.STATE.reset()
+    # Force the in-process path so these STATE-based assertions are Redis-independent
+    # and can't leak across CI runs (the Redis path is covered by
+    # test_cost_tracker_redis.py, #1030).
+    from unittest.mock import patch
+
+    with patch("fleet_platform.services.cost_tracker._get_redis", return_value=None):
+        cost_tracker.STATE.reset()
+        yield
+        cost_tracker.STATE.reset()
 
 
 def test_starts_at_zero_and_can_spend():

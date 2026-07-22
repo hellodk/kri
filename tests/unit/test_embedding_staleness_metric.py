@@ -19,14 +19,14 @@ class TestEmbeddingStalenessMetric:
         assert embedding_index_staleness_seconds._name == "kri_embedding_index_staleness_seconds"
 
     @patch("fleet_platform.db.session.get_sync_db")
-    def test_staleness_calculated_from_oldest_embedded_at(self, mock_get_db):
+    def test_staleness_calculated_from_newest_embedded_at(self, mock_get_db):
         from fleet_platform.api.metrics_collectors import refresh_embedding_staleness_gauge
         from fleet_platform.metrics import embedding_index_staleness_seconds
 
-        # Mock DB returning oldest embedded_at as 2 hours ago
-        oldest_time = datetime.now(UTC) - timedelta(hours=2)
+        # Mock DB returning the MOST RECENT embedded_at as 2 hours ago (#1027 min→max)
+        newest_time = datetime.now(UTC) - timedelta(hours=2)
         mock_result = MagicMock()
-        mock_result.scalar_one_or_none.return_value = oldest_time
+        mock_result.scalar_one_or_none.return_value = newest_time
         mock_db = MagicMock()
         mock_db.execute.return_value = mock_result
         mock_get_db.return_value.__enter__ = MagicMock(return_value=mock_db)

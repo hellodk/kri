@@ -162,10 +162,11 @@ def refresh_pending_action_queue_depth_gauge() -> None:
 
 
 def refresh_embedding_staleness_gauge() -> None:
-    """Query DB for the oldest embedding timestamp and export staleness as seconds.
+    """Query DB for the most-recent embedding timestamp and export staleness as seconds.
 
     ``kri_embedding_index_staleness_seconds`` is the delta between now and the
-    oldest ``embedded_at`` across all source types.  0 when no embeddings exist.
+    NEWEST ``embedded_at`` across all source types — i.e. how long since the embed
+    pipeline last wrote anything.  0 when no embeddings exist.
 
     Alert: > 3600 (index is over 1 hour stale — embed server may be down).
 
@@ -180,14 +181,18 @@ def refresh_embedding_staleness_gauge() -> None:
         from fleet_platform.models.fleet_embedding import FleetEmbedding
 
         with get_sync_db() as db:
-            oldest = db.execute(select(func.min(FleetEmbedding.embedded_at))).scalar_one_or_none()
+            # MAX (most recent) — freshness of the index, i.e. "how long since the
+            # embed pipeline last wrote anything". MIN would be the age of the
+            # OLDEST embedding, which stays pinned forever because upsert_chunks
+            # skips unchanged content (no embedded_at bump) → chronic false alerts.
+            newest = db.execute(select(func.max(FleetEmbedding.embedded_at))).scalar_one_or_none()
 
-        if oldest is None:
+        if newest is None:
             embedding_index_staleness_seconds.set(0)
         else:
-            if oldest.tzinfo is None:
-                oldest = oldest.replace(tzinfo=UTC)
-            staleness = (datetime.now(UTC) - oldest).total_seconds()
+            if newest.tzinfo is None:
+                newest = newest.replace(tzinfo=UTC)
+            staleness = (datetime.now(UTC) - newest).total_seconds()
             embedding_index_staleness_seconds.set(max(0, staleness))
     except Exception as exc:  # noqa: BLE001
         logger.debug("refresh_embedding_staleness_gauge failed: %s", exc)

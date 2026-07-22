@@ -15,6 +15,21 @@ from fleet_platform.services import tier_router
 from fleet_platform.services.tier_router import RouteResult
 
 
+@pytest.fixture(autouse=True)
+def _isolate_cost_tracker():
+    """Force the in-process cost path + a clean daily spend so the admin-gated
+    cloud-fallback gate is deterministic regardless of Redis or other tests
+    (#1030 made can_spend() consult Redis when available)."""
+    from unittest.mock import patch
+
+    from fleet_platform.services import cost_tracker
+
+    with patch("fleet_platform.services.cost_tracker._get_redis", return_value=None):
+        cost_tracker.STATE.reset()
+        yield
+        cost_tracker.STATE.reset()
+
+
 class FakeEndpoint:
     def __init__(self, name, caps, *, enabled=True, is_default=False, model="m"):
         self.id = uuid.uuid4()

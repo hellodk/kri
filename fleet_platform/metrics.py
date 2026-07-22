@@ -133,5 +133,5 @@ salt_dispatch_total = Counter(
 
 embedding_index_staleness_seconds = Gauge(
     "kri_embedding_index_staleness_seconds",
-    "Seconds since the oldest embedding was last refreshed. 0 when no embeddings exist. Alert: > 3600",
+    "Seconds since the most recent embedding was written (index freshness). 0 when no embeddings exist. Alert: > 3600",
 )
