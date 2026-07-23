@@ -24,7 +24,7 @@ dependencies = [
     "structlog>=26.1.0",
     "python-multipart>=0.0.32",  # CVE-2026-53538/53539/53540
     "httpx>=0.28.1",
-    "anthropic>=0.116.0",
+    "anthropic>=0.117.0",
     "slowapi>=0.1.10",
     "aiofiles>=25.1.0",
     "email-validator>=2.3.0",
@@ -60,7 +60,7 @@ dev = [
     "vulture>=2.16",
     "bandit[toml]>=1.9.4",
     "pre-commit>=4.6.0",
-    "hypothesis>=6.156.6",
+    "hypothesis>=6.157.0",
     # Pin below 3.6.0: that release renamed the [tool.mutmut] keys
     # (paths_to_mutate->source_paths, tests_dir folded into
     # pytest_add_cli_args_test_selection) AND shipped a config-loader bug that
