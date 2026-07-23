@@ -24,6 +24,7 @@ import logging
 
 from fleet_platform.metrics import (
     beat_last_run_timestamp_seconds,
+    embedding_index_staleness_seconds,
     node_ssh_reachable,
     nodes_offline,
     nodes_online,
@@ -160,6 +161,43 @@ def refresh_pending_action_queue_depth_gauge() -> None:
         logger.debug("refresh_pending_action_queue_depth_gauge failed: %s", exc)
 
 
+def refresh_embedding_staleness_gauge() -> None:
+    """Query DB for the most-recent embedding timestamp and export staleness as seconds.
+
+    ``kri_embedding_index_staleness_seconds`` is the delta between now and the
+    NEWEST ``embedded_at`` across all source types — i.e. how long since the embed
+    pipeline last wrote anything.  0 when no embeddings exist.
+
+    Alert: > 3600 (index is over 1 hour stale — embed server may be down).
+
+    Issue #1027.
+    """
+    try:
+        from datetime import UTC, datetime
+
+        from sqlalchemy import func, select
+
+        from fleet_platform.db.session import get_sync_db
+        from fleet_platform.models.fleet_embedding import FleetEmbedding
+
+        with get_sync_db() as db:
+            # MAX (most recent) — freshness of the index, i.e. "how long since the
+            # embed pipeline last wrote anything". MIN would be the age of the
+            # OLDEST embedding, which stays pinned forever because upsert_chunks
+            # skips unchanged content (no embedded_at bump) → chronic false alerts.
+            newest = db.execute(select(func.max(FleetEmbedding.embedded_at))).scalar_one_or_none()
+
+        if newest is None:
+            embedding_index_staleness_seconds.set(0)
+        else:
+            if newest.tzinfo is None:
+                newest = newest.replace(tzinfo=UTC)
+            staleness = (datetime.now(UTC) - newest).total_seconds()
+            embedding_index_staleness_seconds.set(max(0, staleness))
+    except Exception as exc:  # noqa: BLE001
+        logger.debug("refresh_embedding_staleness_gauge failed: %s", exc)
+
+
 def refresh_all_gauges() -> None:
     """Convenience wrapper — refresh every gauge that needs a scrape-time update.
 
@@ -170,3 +208,4 @@ def refresh_all_gauges() -> None:
     refresh_node_count_gauges()
     refresh_beat_heartbeat_gauge()
     refresh_pending_action_queue_depth_gauge()
+    refresh_embedding_staleness_gauge()

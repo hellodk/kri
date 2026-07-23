@@ -89,7 +89,11 @@ def chunk_node(
 
 
 def chunk_playbook(path: str, yaml_content: str) -> list[dict[str, Any]]:
-    """One play = one chunk. Includes play name, hosts, task names."""
+    """One play = one chunk, split if exceeding ~400 tokens.
+
+    Long plays with many tasks are split into sub-chunks, each retaining
+    the play header for context.
+    """
     try:
         plays = yaml.safe_load(yaml_content) or []
     except yaml.YAMLError:
@@ -104,17 +108,64 @@ def chunk_playbook(path: str, yaml_content: str) -> list[dict[str, Any]]:
         hosts = play.get("hosts", "all")
         tasks = play.get("tasks", [])
         task_names = [t.get("name", "") for t in tasks if isinstance(t, dict)]
-        body = f"Playbook: {path}\nPlay: {name}\nHosts: {hosts}\nTasks: {', '.join(t for t in task_names if t)}"
-        source_id = f"{path}:play_{i}"
-        chunks.append(
-            {
-                "source_type": "playbook",
-                "source_id": source_id,
-                "chunk_text": f"[src: {source_id}] {body}",
-                "content_hash": compute_content_hash(body),
-                "metadata": {"path": path, "play_name": name, "hosts": hosts},
-            }
-        )
+        header = f"Playbook: {path}\nPlay: {name}\nHosts: {hosts}\n"
+        tasks_text = ", ".join(t for t in task_names if t)
+        full_body = f"{header}Tasks: {tasks_text}"
+
+        # Split if body exceeds ~400 tokens (~1600 chars)
+        _MAX_CHUNK_CHARS = 1600
+        if len(full_body) <= _MAX_CHUNK_CHARS:
+            source_id = f"{path}:play_{i}"
+            chunks.append(
+                {
+                    "source_type": "playbook",
+                    "source_id": source_id,
+                    "chunk_text": f"[src: {source_id}] {full_body}",
+                    "content_hash": compute_content_hash(full_body),
+                    "metadata": {"path": path, "play_name": name, "hosts": hosts},
+                }
+            )
+        else:
+            # Split tasks into batches that fit within the limit
+            batch: list[str] = []
+            batch_len = len(header)
+            batch_idx = 0
+            for task_name in task_names:
+                if not task_name:
+                    continue
+                addition = len(task_name) + 2  # +2 for ", "
+                if batch and batch_len + addition > _MAX_CHUNK_CHARS:
+                    # Emit current batch
+                    body = f"{header}Tasks ({batch_idx + 1}): {', '.join(batch)}"
+                    source_id = f"{path}:play_{i}_part{batch_idx}"
+                    chunks.append(
+                        {
+                            "source_type": "playbook",
+                            "source_id": source_id,
+                            "chunk_text": f"[src: {source_id}] {body}",
+                            "content_hash": compute_content_hash(body),
+                            "metadata": {"path": path, "play_name": name, "hosts": hosts, "part": batch_idx},
+                        }
+                    )
+                    batch = []
+                    batch_len = len(header)
+                    batch_idx += 1
+                batch.append(task_name)
+                batch_len += addition
+            # Emit remaining batch
+            if batch:
+                suffix = f" ({batch_idx + 1})" if batch_idx > 0 else ""
+                body = f"{header}Tasks{suffix}: {', '.join(batch)}"
+                source_id = f"{path}:play_{i}" if batch_idx == 0 else f"{path}:play_{i}_part{batch_idx}"
+                chunks.append(
+                    {
+                        "source_type": "playbook",
+                        "source_id": source_id,
+                        "chunk_text": f"[src: {source_id}] {body}",
+                        "content_hash": compute_content_hash(body),
+                        "metadata": {"path": path, "play_name": name, "hosts": hosts, "part": batch_idx},
+                    }
+                )
     return chunks
 
 

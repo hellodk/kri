@@ -272,7 +272,7 @@ async def _rag_search(ctx: ToolCtx, query: str, top_k: int = 8, source_types: li
             {
                 "source_type": c.get("source_type"),
                 "source_id": c.get("source_id"),
-                "chunk_text": (c.get("chunk_text") or "")[:1500],
+                "chunk_text": (c.get("chunk_text") or "")[:3000],
             }
             for c in chunks
         ],
