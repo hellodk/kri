@@ -33,6 +33,10 @@ COPY playbooks/ ./playbooks/
 COPY salt/ ./salt/
 COPY alembic.ini ./
 COPY deploy/migrate.sh /app/deploy/migrate.sh
+# API entrypoint (#1050) — compose runs `bash /app/deploy/api-entrypoint.sh`;
+# keep it executable in the image regardless of build-context file mode.
+COPY deploy/api-entrypoint.sh /app/deploy/api-entrypoint.sh
+RUN chmod 0755 /app/deploy/migrate.sh /app/deploy/api-entrypoint.sh
 
 ENV PYTHONPATH=/app
 ENV PYTHONUNBUFFERED=1

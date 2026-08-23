@@ -141,7 +141,10 @@ services:
   redis:
     image: redis:7.4.1-alpine
     restart: unless-stopped
-    command: redis-server --requirepass ${REDIS_PASSWORD:?REDIS_PASSWORD must be set in .env.docker} --appendonly yes
+    # maxmemory + noeviction (#1050): cap Redis memory below the container
+    # limit; noeviction makes Celery/RedBeat writes fail loudly instead of
+    # silently evicting schedule/task data under pressure.
+    command: redis-server --requirepass ${REDIS_PASSWORD:?REDIS_PASSWORD must be set in .env.docker} --appendonly yes --maxmemory 512mb --maxmemory-policy noeviction
     volumes:
       - redisdata:/data
     healthcheck:
@@ -162,7 +165,11 @@ services:
       dockerfile: deploy/Dockerfile.api
     # migrate.sh acquires a PostgreSQL advisory lock before running alembic upgrade
     # head, preventing concurrent migration races when multiple API replicas start.
-    command: ["sh", "-c", "chown $(id -u):$(id -g) /home/appuser/.kri 2>/dev/null || true && chown -R $(id -u):$(id -g) /home/appuser/.kri/git-repos 2>/dev/null || true && bash /app/deploy/migrate.sh && uv run uvicorn fleet_platform.api.main:app --host 0.0.0.0 --port 8000 --log-level info"]
+    # init: true runs a tiny tini-style init as PID 1 so zombie git/ssh children
+    # from ansible-runner are reaped (#1050). The entrypoint script keeps the
+    # chown + migrate sequence and execs uvicorn so it receives signals directly.
+    init: true
+    command: ["bash", "/app/deploy/api-entrypoint.sh"]
     restart: unless-stopped
     env_file: ../.env.docker
     depends_on:
@@ -195,6 +202,9 @@ services:
       context: ..
       dockerfile: deploy/Dockerfile.api
     command: ["uv", "run", "celery", "-A", "fleet_platform.workers.celery_app", "worker", "--queues", "default,maintenance,drift,sbom", "--concurrency", "4", "--loglevel", "info"]
+    # 2200s > task_time_limit=2100 (#1050): a hard-killed long task gets the
+    # full SIGTERM grace window on shutdown instead of losing in-flight work.
+    stop_grace_period: 2200s
     restart: unless-stopped
     env_file: ../.env.docker
     environment:
@@ -245,6 +255,10 @@ services:
       context: ..
       dockerfile: deploy/Dockerfile.api
     command: ["uv", "run", "celery", "-A", "fleet_platform.workers.celery_app", "worker", "--queues", "ansible", "--concurrency", "2", "--loglevel", "info"]
+    # 3700s (#1050): ansible jobs run up to task_time_limit=2100 (35 min hard
+    # kill); the grace period must outlive that so a shutdown never SIGKILLs a
+    # mid-flight playbook before Celery can ack/requeue it.
+    stop_grace_period: 3700s
     restart: unless-stopped
     env_file: ../.env.docker
     environment:
@@ -297,6 +311,9 @@ services:
       context: ..
       dockerfile: deploy/Dockerfile.api
     command: ["uv", "run", "celery", "-A", "fleet_platform.workers.celery_app", "beat", "--scheduler=redbeat.RedBeatScheduler", "--loglevel", "info"]
+    # 2200s (#1050): match the default worker so a beat shutdown mid-schedule
+    # write (RedBeat lock release) isn't cut off by the 10 s Docker default.
+    stop_grace_period: 2200s
     restart: unless-stopped
     env_file: ../.env.docker
     depends_on:
@@ -306,7 +323,11 @@ services:
         condition: service_healthy
     volumes: []
     healthcheck:
-      test: ["CMD-SHELL", "python3 -c 'from fleet_platform.workers.celery_app import celery_app; s=celery_app.backend; exit(0)' 2>/dev/null || exit 1"]
+      # Real check (#1050): the old probe imported celery_app and exited 0 —
+      # tautological. This pings Redis via settings.redis_url and SCANs for any
+      # RedBeat key (prefix 'redbeat:', e.g. redbeat::lock / redbeat:*); exit 0
+      # when found, 30 when the scheduler has no state in Redis yet.
+      test: ["CMD-SHELL", "python3 -c 'import sys,redis; from fleet_platform.core.config import settings; r=redis.from_url(settings.redis_url); r.ping(); sys.exit(0 if r.scan(0,match=\"redbeat:*\",count=5)[1] else 30)' 2>/dev/null || exit 30"]
       interval: 60s
       timeout: 5s
       retries: 3

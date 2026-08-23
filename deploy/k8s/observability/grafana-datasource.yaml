@@ -9,9 +9,9 @@ data:
   kri-datasource.yaml: |
     apiVersion: 1
     datasources:
-      - name: KRI-Prometheus
-        type: prometheus
-        url: http://prometheus-operated.monitoring.svc:9090
+      - name: KRI-VictoriaMetrics
+        type: prometheus        # VictoriaMetrics speaks the Prometheus query API
+        url: http://victoriametrics.monitoring.svc:8428
         isDefault: false         # NEVER set isDefault: true
         jsonData:
           timeInterval: "30s"

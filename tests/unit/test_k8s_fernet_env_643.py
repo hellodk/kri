@@ -1,5 +1,6 @@
 """Test for GitHub issue #643: fix FERNET_KEY env var naming and set ENVIRONMENT."""
 
+import re
 from pathlib import Path
 
 import yaml
@@ -58,22 +59,20 @@ def test_fernet_secret_key_in_secret_template():
 
 
 def test_environment_set_in_configmap():
-    """Verify ENVIRONMENT is set to 'production' in the ConfigMap."""
+    """#1050: the invalid-by-construction configmap.yaml ($(VAR) shell expansion in
+    ConfigMap data) was removed. ENVIRONMENT=production must come from the env files
+    that compose actually reads; k8s deployments inline their env."""
     deploy_dir = Path(__file__).resolve().parents[2] / "deploy" / "k8s"
-    filepath = deploy_dir / "configmap.yaml"
-
-    assert filepath.exists(), f"Expected manifest {filepath} not found"
-
-    with open(filepath) as f:
-        doc = yaml.safe_load(f)
-
-    assert doc["kind"] == "ConfigMap", "configmap.yaml must be a ConfigMap"
-    assert "data" in doc, "ConfigMap must have 'data' section"
-
-    # ENVIRONMENT must be set
-    assert "ENVIRONMENT" in doc["data"], "ConfigMap: ENVIRONMENT not found in data section"
-
-    # ENVIRONMENT must be "production"
-    assert doc["data"]["ENVIRONMENT"] == "production", (
-        f"ConfigMap: ENVIRONMENT={doc['data']['ENVIRONMENT']} — expected 'production'"
+    assert not (deploy_dir / "configmap.yaml").exists(), (
+        "configmap.yaml embedded $(POSTGRES_PASSWORD) which only works in pod env — "
+        "it must stay deleted unless rewritten without shell expansion"
     )
+
+    for env_example in (
+        Path(__file__).resolve().parents[2] / ".env.docker.example",
+        Path(__file__).resolve().parents[2] / "deploy" / ".env.docker.example",
+    ):
+        content = env_example.read_text()
+        assert re.search(r"^ENVIRONMENT=production\s*$", content, re.M), (
+            f"{env_example.name}: ENVIRONMENT=production missing"
+        )

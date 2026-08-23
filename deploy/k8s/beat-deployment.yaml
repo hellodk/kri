@@ -7,9 +7,13 @@ metadata:
     app: kri-beat
     component: beat
 spec:
-  # Beat must remain a singleton — running multiple beat schedulers against
-  # the same RedBeat Redis key produces duplicate task dispatches.
-  replicas: 1
+  # Two replicas (#1050) — RedBeat lock election provides beat HA. Per
+  # fleet_platform/workers/celery_app.py: multiple beat processes safely
+  # compete for the RedBeat schedule lock in Redis; only one dispatches at a
+  # time and a hot-standby takes over within one lock timeout (~150 s at the
+  # 30-s poll-salt-masters schedule). Do NOT revert to a singleton: a single
+  # beat crash silently stops grain refresh, alert evaluation, and all reapers.
+  replicas: 2
   selector:
     matchLabels:
       app: kri-beat
@@ -96,11 +100,14 @@ spec:
             - name: uv-cache
               mountPath: /home/appuser/.cache
           livenessProbe:
+            # Real check (#1050): ping Redis via settings.redis_url and SCAN for
+            # any RedBeat key (prefix 'redbeat:', e.g. redbeat::lock). The old
+            # probe imported celery_app and exited 0 unconditionally.
             exec:
               command:
                 - python3
                 - -c
-                - "from fleet_platform.workers.celery_app import celery_app; s=celery_app.backend; exit(0)"
+                - "import sys,redis; from fleet_platform.core.config import settings; r=redis.from_url(settings.redis_url); r.ping(); sys.exit(0 if r.scan(0,match='redbeat:*',count=5)[1] else 30)"
             initialDelaySeconds: 30
             periodSeconds: 60
             timeoutSeconds: 10
@@ -110,7 +117,7 @@ spec:
               command:
                 - python3
                 - -c
-                - "from fleet_platform.workers.celery_app import celery_app; s=celery_app.backend; exit(0)"
+                - "import sys,redis; from fleet_platform.core.config import settings; r=redis.from_url(settings.redis_url); r.ping(); sys.exit(0 if r.scan(0,match='redbeat:*',count=5)[1] else 30)"
             initialDelaySeconds: 20
             periodSeconds: 30
             timeoutSeconds: 10

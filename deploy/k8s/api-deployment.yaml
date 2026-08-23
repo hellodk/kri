@@ -78,6 +78,13 @@ spec:
                 secretKeyRef:
                   name: kri-secrets
                   key: SALT_API_PASSWORD
+            # Bearer token for /metrics scraping (#1050/#1051) — vmagent presents
+            # it via the kri-metrics-token Secret (see observability/vm-agent.yaml).
+            - name: METRICS_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: kri-secrets
+                  key: METRICS_TOKEN
             - name: DATABASE_URL
               value: "postgresql+psycopg://fleet:$(POSTGRES_PASSWORD)@postgres.utilities.svc.cluster.local:5432/fleet_platform"
             - name: REDIS_URL
