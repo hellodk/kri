@@ -5,8 +5,15 @@
 #      (state.apply fetches from the MASTER and has no built-in timeout, so an
 #      unreachable master would hang indefinitely — bounded via async/poll,
 #      NOT the `timeout` binary which is absent on stock macOS).
-#   2. Applies the kri heartbeat + process-report schedules via salt-call.
+#   2. Applies the kri heartbeat schedule, installs the process-report
+#      collector (base.process_report: psutil + collector script), then the
+#      process-report schedule — in that order (#1047 item 7 handoff).
 #   3. Pushes initial grains (facts + packages) to the kri ingest API.
+#
+# FAILURE SURFACING (#1047 item 7): every critical step registers its result
+# and is followed by an ansible.builtin.fail that names the failing step and
+# carries a stdout/stderr tail — enrollment can never silently half-complete.
+# A failed step makes the role (and therefore ansible-runner) return non-zero.
 #
 # REQUIRES the common role's facts (cpu_arch, salt_call_bin, brew_prefix,
 # brew_user on macOS) and gathered facts (ansible_distribution_version,
@@ -25,6 +32,15 @@
   changed_when: false
   failed_when: false
 
+- name: Fail enrollment — minion cannot reach salt-master (test.ping)
+  ansible.builtin.fail:
+    msg: >-
+      kri_enroll[test.ping] FAILED: minion could not reach its salt-master after retries
+      (rc={{ salt_ping.rc | default(-1) }}).
+      stdout_tail={{ ((salt_ping.stdout | default('')) | trim)[-400:] }};
+      stderr_tail={{ ((salt_ping.stderr | default('')) | trim)[-400:] }}
+  when: salt_ping.rc | default(1) != 0
+
 - name: Apply kri heartbeat schedule via salt-call
   ansible.builtin.command: "{{ salt_call_bin }} state.apply base.heartbeat"
   async: 120
@@ -32,7 +48,40 @@
   become: true
   changed_when: false
   failed_when: false
+  register: heartbeat_result
   when: salt_ping.rc | default(1) == 0
+
+- name: Fail enrollment — base.heartbeat apply failed
+  ansible.builtin.fail:
+    msg: >-
+      kri_enroll[heartbeat] FAILED: 'state.apply base.heartbeat' returned rc={{ heartbeat_result.rc | default(-1) }}
+      on {{ inventory_hostname }}.
+      stdout_tail={{ ((heartbeat_result.stdout | default('')) | trim)[-400:] }};
+      stderr_tail={{ ((heartbeat_result.stderr | default('')) | trim)[-400:] }}
+  when:
+    - not (heartbeat_result.skipped | default(false))
+    - heartbeat_result.rc | default(0) != 0
+
+- name: Install process-report collector via salt-call (psutil + collector)
+  ansible.builtin.command: "{{ salt_call_bin }} state.apply base.process_report"
+  async: 300
+  poll: 10
+  become: true
+  changed_when: false
+  failed_when: false
+  register: collector_result
+  when: salt_ping.rc | default(1) == 0
+
+- name: Fail enrollment — base.process_report collector install failed
+  ansible.builtin.fail:
+    msg: >-
+      kri_enroll[collector] FAILED: 'state.apply base.process_report' returned rc={{ collector_result.rc | default(-1) }}
+      on {{ inventory_hostname }} (psutil/collector not installed).
+      stdout_tail={{ ((collector_result.stdout | default('')) | trim)[-400:] }};
+      stderr_tail={{ ((collector_result.stderr | default('')) | trim)[-400:] }}
+  when:
+    - not (collector_result.skipped | default(false))
+    - collector_result.rc | default(0) != 0
 
 - name: Apply kri process-report schedule via salt-call
   ansible.builtin.command: "{{ salt_call_bin }} state.apply base.process_report_schedule"
@@ -41,7 +90,19 @@
   become: true
   changed_when: false
   failed_when: false
+  register: schedule_result
   when: salt_ping.rc | default(1) == 0
+
+- name: Fail enrollment — process_report_schedule apply failed
+  ansible.builtin.fail:
+    msg: >-
+      kri_enroll[schedule] FAILED: 'state.apply base.process_report_schedule' returned rc={{ schedule_result.rc | default(-1) }}
+      on {{ inventory_hostname }}.
+      stdout_tail={{ ((schedule_result.stdout | default('')) | trim)[-400:] }};
+      stderr_tail={{ ((schedule_result.stderr | default('')) | trim)[-400:] }}
+  when:
+    - not (schedule_result.skipped | default(false))
+    - schedule_result.rc | default(0) != 0
 
 # ── macOS-only: hardware serial (no gathered-fact equivalent — §9 #4 keeps
 # this one shell call, everything else below uses gathered facts). ──────────
@@ -113,4 +174,15 @@
   become: false
   no_log: true
   failed_when: false
+  register: grains_push_result
   when: ingest_url is defined and node_token is defined
+
+- name: Fail enrollment — initial grains push rejected by kri ingest API
+  ansible.builtin.fail:
+    msg: >-
+      kri_enroll[grains_push] FAILED: kri API returned status={{ grains_push_result.status | default(-1) }}
+      for minion {{ minion_id }} — enrollment cannot complete without initial grains.
+      msg_tail={{ ((grains_push_result.msg | default('')) | trim)[-400:] }}
+  when:
+    - not (grains_push_result.skipped | default(false))
+    - grains_push_result.status | default(0) not in [200, 201, 204]
