@@ -102,7 +102,7 @@ class TestSaltApiClientTlsVerify:
 
     @patch("fleet_platform.services.salt_api_client.requests.post")
     def test_post_uses_getattr_fallback_when_no_tls_verify_attr(self, mock_post):
-        """If master doesn't have tls_verify attribute, getattr default of False is used."""
+        """If master doesn't have tls_verify attribute, getattr default of True is used (#1046: fail secure)."""
         mock_post.return_value = self._make_ok_response()
         master = MagicMock(spec=[])  # no attributes at all
         master.api_url = "http://salt.local:8080"
@@ -115,7 +115,7 @@ class TestSaltApiClientTlsVerify:
         _post(master, [{"client": "runner", "fun": "test.ping"}])
 
         _, kwargs = mock_post.call_args
-        assert kwargs["verify"] is False
+        assert kwargs["verify"] is True
 
 
 # ---------------------------------------------------------------------------

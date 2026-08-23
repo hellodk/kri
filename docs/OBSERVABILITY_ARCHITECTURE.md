@@ -175,3 +175,65 @@ Instrumented paths:
 | Dashboards | Import `kri.json` + `kri-actions.json` manually | `ConfigMap` with `grafana_dashboard: "1"` | Import manually |
 | Traces | OTLP to local Tempo or Jaeger | OTLP to `avika-tempo.avika.svc.cluster.local` | OTLP to local Tempo |
 | Logs | Promtail container sidecar | Promtail DaemonSet | Promtail systemd unit |
+
+---
+
+## 8. Realtime Troubleshooting (#1052)
+
+Every inbound HTTP request gets a correlation id, and every Celery task carries its own, so a single grep joins an API call to everything it triggered.
+
+| Field | Set by | Scope |
+|-------|--------|-------|
+| `trace_id` | structlog processor reading the active OTEL span (falls back to UUID4) | Every log line, API and worker — same value Tempo indexes |
+| `request_id` | `RequestContextMiddleware` (client `X-Request-ID`, else 12-char hex) | One HTTP request; echoed back as the `X-Request-ID` response header |
+| `method`, `path` | `RequestContextMiddleware` | One HTTP request |
+| `task_id`, `task_name` | `task_prerun`/`task_postrun` signals in `workers/celery_app.py` | One Celery task execution on a worker slot |
+
+### Grep / jq recipes
+
+Raw pod stdout (works even when Loki is down):
+
+```bash
+# Everything that happened inside one API request
+kubectl logs -n kri -l app=kri-api --prefix --tail=-1 \
+  | jq -c 'select(.request_id=="9f2c41d0a8b3")'
+
+# One trace across API and workers (same trace_id on both sides)
+kubectl logs -n kri -l app=kri-api --prefix --tail=-1   | jq -c 'select(.trace_id=="<32-hex>")'
+kubectl logs -n kri -l app=kri-worker --prefix --tail=-1 | jq -c 'select(.trace_id=="<32-hex>")'
+
+# All worker lines for one task execution
+kubectl logs -n kri -l app=kri-worker --prefix --tail=-1 \
+  | jq -c 'select(.task_id=="<uuid>")'
+
+# Everything touching one node (minion id)
+kubectl logs -n kri -l app=kri-api --prefix --tail=-1    | jq -c 'select(.minion_id=="node-42")'
+kubectl logs -n kri -l app=kri-worker --prefix --tail=-1 | jq -c 'select(.minion_id=="node-42")'
+```
+
+The same filters in Grafana Explore / LogQL:
+
+```logql
+{namespace="kri"} | json | request_id="9f2c41d0a8b3"
+{namespace="kri"} | json | task_name="fleet_platform.workers.playbook_tasks.run_playbook"
+{namespace="kri"} | json | minion_id="node-42" | line_format "{{.timestamp}} {{.level}} {{.message}}"
+```
+
+### Tempo link flow
+
+1. Copy `trace_id` from any JSON log line (or `X-Request-ID` → grep for `request_id` → grab its `trace_id`).
+2. Grafana Explore → Tempo datasource → paste the id into **TraceQL** (`<trace_id>` or `trace:id="..."`) → open the trace.
+3. The trace starts at the FastAPI server span; child spans show SQLAlchemy queries and outbound httpx calls. If the request dispatched a task, the OTEL Celery instrumentation propagates the trace context through the broker message headers, so the worker-side task span appears in the **same trace**.
+4. From a worker span back to logs: its `task_id` attribute matches the `task_id` field in the JSON lines above.
+
+### Worked example — playbook run stuck at 40%
+
+Symptom: UI shows bootstrap run `b7e1...` stuck at 40% for 20 minutes.
+
+1. Grab `X-Request-ID` from the failed API response: `req-id = 9f2c41d0a8b3`.
+2. `{namespace="kri"} | json | request_id="9f2c41d0a8b3"` → last API line is `POST /api/nodes/42/bootstrap 202`, carrying `task_id=<uuid>` and `trace_id=<t>`.
+3. Open Tempo with `<t>`: API span → `run_playbook` producer span ends fine — so enqueue succeeded; the stall is worker-side.
+4. `jq -c 'select(.task_id=="<uuid>")'` over worker pods → last line before the gap is `ansible-playbook ... timeout=1800s`, then `SoftTimeLimitExceeded`.
+5. Conclusion: node SSH blackholed mid-run until the 30-minute soft limit fired. Remediation is in the runbook (check node firewall); the alert `kri_worker_task_timeout` should have fired alongside.
+
+If a log line has no `request_id`/`task_id`, either it ran outside both contexts (beat-scheduled task start-up lines) or the middleware/signals did not run — check pod startup logs for `configure_logging` errors first.

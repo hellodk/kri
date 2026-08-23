@@ -1,8 +1,11 @@
+import structlog
 from celery import Celery
 from celery.schedules import crontab
-from celery.signals import worker_process_init
+from celery.signals import task_postrun, task_prerun, worker_process_init
 
 from fleet_platform.core.config import settings
+
+_TASK_BOUND_KEYS = ("task_id", "task_name")
 
 
 @worker_process_init.connect
@@ -17,7 +20,7 @@ def _init_worker_observability(**_kwargs) -> None:
     text rather than the JSON-with-trace_id format that the API emits — the
     OTEL backend can still join records by trace_id, but Loki/Promtail can't.
     """
-    from fleet_platform.core.logging import configure_logging
+    from fleet_platform.core.logging import configure_logging, resolve_log_level
     from fleet_platform.core.tracing import (
         configure_tracing,
         instrument_celery,
@@ -26,12 +29,37 @@ def _init_worker_observability(**_kwargs) -> None:
         instrument_sqlalchemy,
     )
 
-    configure_logging()
+    # resolve_log_level uppercases and falls back to INFO for garbage values,
+    # so a bad LOG_LEVEL env var can never break basicConfig (#1052).
+    configure_logging(resolve_log_level(settings.log_level))
     configure_tracing(service_name="kri-worker")
     instrument_celery()
     instrument_sqlalchemy()
     instrument_httpx()
     instrument_redis()
+
+
+@task_prerun.connect
+def _bind_task_log_context(sender=None, task=None, task_id=None, **_kwargs) -> None:
+    """Bind ``task_id``/``task_name`` into structlog contextvars (#1052).
+
+    Every JSON line emitted while this task runs (including from nested
+    services) then carries the same ``task_id`` that Celery's result backend,
+    the OTEL Celery spans, and the API-side ``.delay()`` call site use, so a
+    single grep joins API trace → worker logs. Any stale bindings are cleared
+    first in case a previous task died between prerun and postrun.
+    """
+    name = getattr(task, "name", None) or getattr(sender, "name", None)
+    if not task_id or not name:
+        return  # non-task signal fire (e.g. eager/broadcast) — nothing to bind
+    structlog.contextvars.unbind_contextvars(*_TASK_BOUND_KEYS)
+    structlog.contextvars.bind_contextvars(task_id=task_id, task_name=name)
+
+
+@task_postrun.connect
+def _unbind_task_log_context(**_kwargs) -> None:
+    """Clear the per-task context so the next job on this slot stays clean."""
+    structlog.contextvars.unbind_contextvars(*_TASK_BOUND_KEYS)
 
 
 celery_app = Celery(
@@ -189,6 +217,12 @@ celery_app.conf.update(
         "reindex-drift-history": {
             "task": "fleet_platform.workers.embedding_tasks.reindex_drift_history",
             "schedule": 300,  # every 5 min — tracks new drift records
+        },
+        # #1049 item 2: refresh the pkgs/services grains that compute_drift
+        # reads. Routed to the "drift" queue by the drift_tasks.* task_route.
+        "collect-package-service-facts": {
+            "task": "fleet_platform.workers.drift_tasks.collect_package_service_facts",
+            "schedule": 21600,  # every 6 hours
         },
         "reindex-salt-states": {
             "task": "fleet_platform.workers.embedding_tasks.reindex_salt_states",

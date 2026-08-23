@@ -27,6 +27,10 @@ class Settings(BaseSettings):
     frontend_origin: str = "http://localhost:5173"
     environment: str = "development"
 
+    # Log level for API and worker processes (#1052). Read from LOG_LEVEL env;
+    # invalid values fall back to INFO (see core.logging.resolve_log_level).
+    log_level: str = "INFO"
+
     # Canonical env var is FERNET_KEY (matches CI and .env*.example). The legacy
     # name FERNET_SECRET_KEY is still accepted for backward compatibility so that
     # existing deployments keep decrypting secrets after the rename — otherwise

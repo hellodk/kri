@@ -55,8 +55,9 @@ from fleet_platform.api.routes.vnc import router as vnc_router
 from fleet_platform.api.routes.webssh import router as webssh_router
 from fleet_platform.core.config import VERSION, settings
 from fleet_platform.core.errors import AppError, error_code_for_status
-from fleet_platform.core.logging import configure_logging, get_logger
+from fleet_platform.core.logging import configure_logging, get_logger, resolve_log_level
 from fleet_platform.middleware.prometheus import PrometheusMiddleware
+from fleet_platform.middleware.request_context import RequestContextMiddleware
 from fleet_platform.middleware.security_headers import SecurityHeaderMiddleware
 
 _log = get_logger(__name__)
@@ -76,7 +77,9 @@ async def lifespan(app: FastAPI):
     )
 
     configure_tracing(service_name="kri-api")
-    configure_logging()
+    # resolve_log_level uppercases and falls back to INFO for garbage values,
+    # so a bad LOG_LEVEL env var can never break basicConfig (#1052).
+    configure_logging(resolve_log_level(settings.log_level))
     instrument_sqlalchemy()
     instrument_httpx()
     instrument_redis()
@@ -162,6 +165,11 @@ def create_app() -> FastAPI:
     # SecurityHeaderMiddleware is registered last so it runs innermost and adds headers
     # to the actual response after all routing; it must come after CORS so that CORS
     # headers set by CORSMiddleware are not overwritten.
+    #
+    # RequestContextMiddleware (#1052) is registered before PrometheusMiddleware so it
+    # runs innermost — every route, service and exception handler downstream of it
+    # already sees request_id/method/path in structlog contextvars.
+    app.add_middleware(RequestContextMiddleware)
     app.add_middleware(PrometheusMiddleware)
 
     app.add_middleware(

@@ -1,0 +1,158 @@
+---
+# vmagent metrics pipeline for kri (#1051) — replaces the former ServiceMonitor
+# CR. This cluster runs no prometheus-operator and no vmoperator, so the
+# scrape agent ships as a plain Deployment + ConfigMap + Service:
+#
+#   kri-api:8000/metrics  ──scrape──▶  vmagent (this file)
+#                                          │ remote_write (VictoriaMetrics
+#                                          │ Prometheus-compatible API)
+#                                          ▼
+#                    victoriametrics.monitoring.svc:8428
+#
+# The bearer token is read from the Secret `kri-metrics-token` (key
+# METRICS_TOKEN) mounted as a credentials file — vmagent re-reads it on change.
+# Create it with:
+#   kubectl -n kri create secret generic kri-metrics-token \
+#     --from-literal=METRICS_TOKEN="$(python3 -c 'import secrets; print(secrets.token_hex(32))')"
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: vmagent-scrape-config
+  namespace: kri              # app namespace — never monitoring
+  labels:
+    app: vmagent
+data:
+  scrape.yml: |
+    global:
+      scrape_interval: 30s
+    scrape_configs:
+      # Static target — the kri-api Service DNS (api-service.yaml).
+      - job_name: kri-api
+        metrics_path: /metrics
+        static_configs:
+          - targets: ["kri-api:8000"]
+            labels:
+              app: kri
+              mode: kubernetes
+        authorization:
+          type: Bearer
+          credentials_file: /etc/vmagent/secrets/kri-metrics-token/METRICS_TOKEN
+      # Optional pod-discovery variant — once API pods carry prometheus.io/scrape
+      # annotations this block replaces the static target above:
+      #   - job_name: kri-api-k8s-sd
+      #     metrics_path: /metrics
+      #     kubernetes_sd_configs:
+      #       - role: pod
+      #         namespaces:
+      #           names: [kri]
+      #     relabel_configs:
+      #       - source_labels: [__meta_kubernetes_pod_label_app]
+      #         regex: kri-api
+      #         action: keep
+      #       - source_labels: [__meta_kubernetes_pod_ip]
+      #         target_label: __address__
+      #         replacement: "${1}:8000"
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: vmagent
+  namespace: kri              # app namespace — never monitoring
+  labels:
+    app: vmagent
+    component: observability
+spec:
+  replicas: 1                 # stateless scraper — a single replica suffices
+  selector:
+    matchLabels:
+      app: vmagent
+  template:
+    metadata:
+      labels:
+        app: vmagent
+        component: observability
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65534      # nobody — vmagent is stateless here
+        runAsGroup: 65534
+        fsGroup: 65534
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: vmagent
+          image: victoriametrics/vmagent:v1.150.0   # pinned (#1051)
+          imagePullPolicy: IfNotPresent
+          args:
+            - -promscrape.config=/etc/vmagent/scrape.yml
+            - -remoteWrite.url=http://victoriametrics.monitoring.svc:8428/api/v1/write
+            - -httpListenAddr=:8429
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+          ports:
+            - name: http
+              containerPort: 8429
+              protocol: TCP
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8429
+            initialDelaySeconds: 10
+            periodSeconds: 30
+            timeoutSeconds: 5
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 8429
+            initialDelaySeconds: 5
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
+          resources:
+            requests:
+              cpu: "50m"
+              memory: "64Mi"
+            limits:
+              cpu: "500m"
+              memory: "256Mi"
+          volumeMounts:
+            - name: scrape-config
+              mountPath: /etc/vmagent/scrape.yml
+              subPath: scrape.yml
+              readOnly: true
+            - name: metrics-token
+              mountPath: /etc/vmagent/secrets/kri-metrics-token
+              readOnly: true
+      volumes:
+        - name: scrape-config
+          configMap:
+            name: vmagent-scrape-config
+        - name: metrics-token
+          secret:
+            secretName: kri-metrics-token
+            items:
+              - key: METRICS_TOKEN
+                path: METRICS_TOKEN
+---
+# Exposes vmagent's own metrics (-httpListenAddr :8429) so the monitoring
+# stack can observe the scraper itself (e.g. vm_promscrape_targets status).
+apiVersion: v1
+kind: Service
+metadata:
+  name: vmagent
+  namespace: kri              # app namespace — never monitoring
+  labels:
+    app: vmagent
+spec:
+  selector:
+    app: vmagent
+  ports:
+    - name: http
+      port: 8429
+      targetPort: 8429
+      protocol: TCP
+  type: ClusterIP

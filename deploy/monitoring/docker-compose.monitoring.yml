@@ -1,0 +1,84 @@
+# kri observability stack — VictoriaMetrics flavour (#1051).
+#
+# Optional standalone stack: VictoriaMetrics (storage) + vmagent (scrape) +
+# vmalert (rules). Bring up from the repo root with:
+#
+#   export METRICS_TOKEN=$(python3 -c 'import secrets; print(secrets.token_hex(32))')
+#   docker compose -f deploy/monitoring/docker-compose.monitoring.yml up -d
+#
+# All images are pinned (no :latest, per project rules). Grafana points its
+# Prometheus datasource at http://localhost:8428 — see deploy/monitoring/README.md.
+
+x-logging: &default-logging
+  driver: "json-file"
+  options:
+    max-size: "10m"
+    max-file: "3"
+
+services:
+  victoria-metrics:
+    image: victoriametrics/victoria-metrics:v1.150.0
+    restart: unless-stopped
+    command:
+      - -retentionPeriod=90d
+      - -storageDataPath=/data
+      - -httpListenAddr=:8428
+    ports:
+      # Loopback only — query UI / write API stay off the LAN.
+      - "127.0.0.1:8428:8428"
+    volumes:
+      - vmdata:/data
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 1G
+    logging: *default-logging
+
+  vmagent:
+    image: victoriametrics/vmagent:v1.150.0
+    restart: unless-stopped
+    command:
+      - -promscrape.config=/etc/vmagent/scrape.yml
+      - -remoteWrite.url=http://victoriametrics:8428/api/v1/write
+      - -httpListenAddr=:8429
+    environment:
+      # Expanded into ${METRICS_TOKEN} inside vmagent-scrape.yml.
+      METRICS_TOKEN: "${METRICS_TOKEN:?Set METRICS_TOKEN in the environment}"
+    volumes:
+      - ./vmagent-scrape.yml:/etc/vmagent/scrape.yml:ro
+    ports:
+      - "127.0.0.1:8429:8429"
+    depends_on:
+      - victoria-metrics
+    deploy:
+      resources:
+        limits:
+          cpus: "0.25"
+          memory: 256M
+    logging: *default-logging
+
+  vmalert:
+    image: victoriametrics/vmalert:v1.150.0
+    restart: unless-stopped
+    command:
+      - -datasource.url=http://victoriametrics:8428
+      - -rule=/etc/vmalert/*.yml
+      # Notifier placeholder — uncomment and point at an Alertmanager once one
+      # runs alongside this stack; until then alerts are evaluated and stored
+      # in VM but not delivered anywhere.
+      # - -notifier.url=http://alertmanager:9093
+    volumes:
+      # Same portable rules file every other mode uses — single source of truth.
+      - ./rules/kri-alerts.rules.yml:/etc/vmalert/kri-alerts.rules.yml:ro
+    depends_on:
+      - victoria-metrics
+    deploy:
+      resources:
+        limits:
+          cpus: "0.25"
+          memory: 256M
+    logging: *default-logging
+
+volumes:
+  vmdata:

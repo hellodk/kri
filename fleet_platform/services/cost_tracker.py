@@ -20,9 +20,65 @@ from typing import Any
 
 logger = logging.getLogger(__name__)
 
-# Rough blended $/1K tokens for the cloud fallback model; override via env.
+# Legacy blended $/1K tokens; override via env. Now serves as the fallback
+# rate for unknown provider/model pairs (#1048), expressed per 1M tokens.
 COST_PER_1K_TOKENS_USD = float(os.getenv("AGENT_CLOUD_COST_PER_1K_USD", "0.009"))
 DAILY_CAP_USD = float(os.getenv("AGENT_CLOUD_DAILY_CAP_USD", "5.0"))
+
+# Per-provider/model rates in USD per 1M tokens (input, output) (#1048).
+# Matched case-insensitively by substring against the model name; the most
+# specific (cheapest) match wins, so gpt-4o-mini is checked before gpt-4o.
+COST_PER_1M_USD: dict[tuple[str, str], tuple[float, float]] = {
+    ("anthropic", "haiku"): (0.80, 4.00),
+    ("anthropic", "sonnet"): (3.00, 15.00),
+    ("openai", "gpt-4o-mini"): (0.15, 0.60),
+    ("openai", "gpt-4o"): (2.50, 10.00),
+}
+
+# Substring probes tried in order — first hit selects the table row above.
+_MODEL_RATE_PROBES: tuple[str, ...] = (
+    "gpt-4o-mini",
+    "gpt-4o",
+    "haiku",
+    "sonnet",
+)
+
+
+def blended_rate() -> tuple[float, float]:
+    """Fallback (input, output) $/1M for unknown provider/model pairs (#1048)."""
+    blended = COST_PER_1K_TOKENS_USD * 1000.0
+    return (blended, blended)
+
+
+def rate_for(provider: str | None, model: str | None) -> tuple[float, float]:
+    """Return the (input, output) USD-per-1M-token rate for an endpoint (#1048).
+
+    Known classes (anthropic haiku/sonnet, openai gpt-4o class) use published
+    list prices; anything else falls back to the legacy blended rate.
+    """
+    p = (provider or "").strip().lower()
+    m = (model or "").strip().lower()
+    if p == "anthropic":
+        for probe in ("haiku", "sonnet"):
+            if probe in m:
+                return COST_PER_1M_USD[("anthropic", probe)]
+    elif p == "openai":
+        for probe in _MODEL_RATE_PROBES:
+            if probe in m:
+                return COST_PER_1M_USD[("openai", probe)]
+    return blended_rate()
+
+
+def _token_cost(
+    input_tokens: int,
+    output_tokens: int,
+    *,
+    provider: str | None = None,
+    model: str | None = None,
+) -> float:
+    r_in, r_out = rate_for(provider, model)
+    return max(0, input_tokens) / 1_000_000.0 * r_in + max(0, output_tokens) / 1_000_000.0 * r_out
+
 
 # Redis key TTL — 48h auto-expire stale keys.
 _REDIS_KEY_TTL = int(os.getenv("LLM_COST_REDIS_TTL", str(48 * 3600)))
@@ -85,8 +141,16 @@ class _CostState:
     def can_spend(self, *, today: date | None = None) -> bool:
         return self.today_spend(today=today) < DAILY_CAP_USD
 
-    def record_tokens(self, input_tokens: int, output_tokens: int, *, today: date | None = None) -> float:
-        cost = (max(0, input_tokens) + max(0, output_tokens)) / 1000.0 * COST_PER_1K_TOKENS_USD
+    def record_tokens(
+        self,
+        input_tokens: int,
+        output_tokens: int,
+        *,
+        today: date | None = None,
+        provider: str | None = None,
+        model: str | None = None,
+    ) -> float:
+        cost = _token_cost(input_tokens, output_tokens, provider=provider, model=model)
         with self._lock:
             self._roll(today or date.today())
             self._spend_usd += cost
@@ -124,9 +188,20 @@ def can_spend(*, today: date | None = None) -> bool:
     return STATE.can_spend(today=today)
 
 
-def record_tokens(input_tokens: int, output_tokens: int, *, today: date | None = None) -> float:
-    """Record token spend. Uses Redis INCRBY when available, falls back to local."""
-    cost = (max(0, input_tokens) + max(0, output_tokens)) / 1000.0 * COST_PER_1K_TOKENS_USD
+def record_tokens(
+    input_tokens: int,
+    output_tokens: int,
+    *,
+    today: date | None = None,
+    provider: str | None = None,
+    model: str | None = None,
+) -> float:
+    """Record token spend. Uses Redis INCRBY when available, falls back to local.
+
+    ``provider``/``model`` select the per-model rate table (#1048); omitted
+    values keep the legacy blended rate (backwards-compatible signature).
+    """
+    cost = _token_cost(input_tokens, output_tokens, provider=provider, model=model)
     r = _get_redis()
     if r is not None:
         try:
@@ -136,7 +211,7 @@ def record_tokens(input_tokens: int, output_tokens: int, *, today: date | None =
             return cost
         except Exception:  # noqa: BLE001
             logger.debug("record_tokens: Redis write failed, falling back to local state")
-    return STATE.record_tokens(input_tokens, output_tokens, today=today)
+    return STATE.record_tokens(input_tokens, output_tokens, today=today, provider=provider, model=model)
 
 
 def record_tokens_for_endpoint(
@@ -157,9 +232,11 @@ def record_tokens_for_endpoint(
     """
     if getattr(endpoint, "provider", None) not in CLOUD_PROVIDERS:
         return 0.0
+    provider = getattr(endpoint, "provider", None)
+    model = getattr(endpoint, "model", None)
     if state is not None:
-        return state.record_tokens(input_tokens, output_tokens)
-    return record_tokens(input_tokens, output_tokens)
+        return state.record_tokens(input_tokens, output_tokens, provider=provider, model=model)
+    return record_tokens(input_tokens, output_tokens, provider=provider, model=model)
 
 
 def snapshot(*, today: date | None = None) -> dict:

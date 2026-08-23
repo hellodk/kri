@@ -42,6 +42,20 @@ def _add_trace_id(logger, method, event_dict):  # noqa: ARG001
     return event_dict
 
 
+_VALID_LOG_LEVELS = frozenset({"CRITICAL", "ERROR", "WARNING", "INFO", "DEBUG"})
+
+
+def resolve_log_level(raw: str | None) -> str:
+    """Normalise a requested log level name; unknown values fall back to INFO.
+
+    ``logging.getLevelName()`` returns a nonsense string ("Level BOGUS") for
+    unknown names instead of raising, so an unvalidated LOG_LEVEL env var would
+    silently break both the structlog filter and stdlib basicConfig (#1052).
+    """
+    level = (raw or "").strip().upper()
+    return level if level in _VALID_LOG_LEVELS else "INFO"
+
+
 def configure_logging(level: str = "INFO") -> None:
     structlog.configure(
         processors=[

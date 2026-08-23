@@ -70,7 +70,7 @@ async def test_native_mode_parses_openai_tool_call(monkeypatch):
     monkeypatch.setattr(llm_caller, "call_openai_compat_tools", fake_openai_tools)
 
     planner = _make_planner("native")
-    decision = await planner.plan(prompt="status of mm1?", history=[], tool_results=[])
+    decision = await planner.plan(prompt="status of mm1?", tool_results=[])
 
     assert decision.final is None
     assert [c.name for c in decision.tool_calls] == ["get_node_status"]
@@ -96,7 +96,7 @@ async def test_anthropic_mode_parses_tool_use(monkeypatch):
     monkeypatch.setattr(llm_caller, "call_anthropic_tools", fake_anthropic_tools)
 
     planner = _make_planner("anthropic")
-    decision = await planner.plan(prompt="status of mm2?", history=[], tool_results=[])
+    decision = await planner.plan(prompt="status of mm2?", tool_results=[])
 
     assert decision.final is None
     assert [c.name for c in decision.tool_calls] == ["get_node_status"]
@@ -116,7 +116,7 @@ async def test_json_mode_still_parses_from_content(monkeypatch):
     monkeypatch.setattr(llm_caller, "call_openai_compat", fake_openai)
 
     planner = _make_planner("json")
-    decision = await planner.plan(prompt="status of mm3?", history=[], tool_results=[])
+    decision = await planner.plan(prompt="status of mm3?", tool_results=[])
 
     assert decision.final is None
     assert [c.name for c in decision.tool_calls] == ["get_node_status"]
@@ -135,7 +135,7 @@ async def test_native_mode_falls_back_to_content_when_no_native_call(monkeypatch
     monkeypatch.setattr(llm_caller, "call_openai_compat_tools", fake_openai_tools)
 
     planner = _make_planner("native")
-    decision = await planner.plan(prompt="status?", history=[], tool_results=[])
+    decision = await planner.plan(prompt="status?", tool_results=[])
 
     assert decision.tool_calls == []
     assert decision.final == "mm1 is healthy and online."
@@ -155,7 +155,7 @@ async def test_unknown_tool_name_is_filtered_to_final(monkeypatch):
     monkeypatch.setattr(llm_caller, "call_openai_compat_tools", fake_openai_tools)
 
     planner = _make_planner("native")
-    decision = await planner.plan(prompt="?", history=[], tool_results=[])
+    decision = await planner.plan(prompt="?", tool_results=[])
 
     assert decision.tool_calls == []
     assert decision.final == "done"
@@ -175,8 +175,8 @@ async def test_token_accounting_accumulates_across_iterations(monkeypatch):
     monkeypatch.setattr(llm_caller, "call_openai_compat_tools", fake_openai_tools)
 
     planner = _make_planner("native")
-    await planner.plan(prompt="p", history=[], tool_results=[])
-    await planner.plan(prompt="p", history=[], tool_results=[])
+    await planner.plan(prompt="p", tool_results=[])
+    await planner.plan(prompt="p", tool_results=[])
 
     assert planner.input_tokens == 20
     assert planner.output_tokens == 40

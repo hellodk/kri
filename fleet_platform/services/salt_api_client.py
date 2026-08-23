@@ -51,7 +51,9 @@ def _post(master: SaltMaster, lowstate: list[dict]) -> Any:
     # Inject credentials into every lowstate item
     enriched = [{**item, "username": api_user, "password": api_password, "eauth": api_eauth} for item in lowstate]
 
-    tls_verify: bool = getattr(master, "tls_verify", False)
+    # #1046: verify TLS by default. The DB column default is True
+    # (SaltMaster.tls_verify); the fallback for attribute-less stubs must agree.
+    tls_verify: bool = bool(getattr(master, "tls_verify", True))
 
     try:
         resp = requests.post(f"{api_url}/run", json=enriched, timeout=_API_TIMEOUT, verify=tls_verify)

@@ -15,9 +15,11 @@ _READ_TIMEOUT = 30.0  # max silence between consecutive SSE chunks
 _STREAM_TIMEOUT = httpx.Timeout(connect=_CONNECT_TIMEOUT, read=_READ_TIMEOUT, write=10.0, pool=5.0)
 
 # Anthropic's SDK defaults to a 600s timeout, which would pin a DB connection
-# and event-loop slot on a stalled call. Bound it to the same budget as the
-# OpenAI-compatible path (#667).
-_ANTHROPIC_TIMEOUT = httpx.Timeout(connect=_CONNECT_TIMEOUT, read=_READ_TIMEOUT, write=10.0, pool=5.0)
+# and event-loop slot on a truly stalled call. The read budget is much larger
+# than the OpenAI-compatible path because Claude reasoning models legitimately
+# stay silent for minutes while thinking (#1048); connect/write/pool stay tight.
+_ANTHROPIC_READ_TIMEOUT = 180.0
+_ANTHROPIC_TIMEOUT = httpx.Timeout(connect=_CONNECT_TIMEOUT, read=_ANTHROPIC_READ_TIMEOUT, write=10.0, pool=5.0)
 
 # Claude context window when the caller doesn't supply one. Used only to size
 # the truncation budget so a runaway prompt can't blow the window (#667).
@@ -66,6 +68,39 @@ def _budget_inputs(
 
 class LLMCallError(Exception):
     """Raised when an LLM provider call fails — wraps transport and parse errors."""
+
+
+def _estimate_usage_if_missing(
+    *,
+    prompt_tokens: int,
+    completion_tokens: int,
+    input_text: str,
+    output_text: str,
+) -> tuple[int, int]:
+    """Fill in missing usage counts with a chars-per-token estimate (#1049).
+
+    Some providers/servers (mlx-lm without stream_options, certain proxies)
+    report 0 tokens even on successful calls, which zeroes cost tracking and
+    makes endpoints look unused. Each side is estimated independently via
+    :func:`fleet_platform.services.llm_context.estimate_tokens`; reported
+    values pass through untouched. Logs ``llm_usage_estimated`` when any side
+    was estimated so dashboards can tell measured from estimated usage.
+    """
+    from fleet_platform.services.llm_context import estimate_tokens
+
+    if prompt_tokens <= 0 or completion_tokens <= 0:
+        if prompt_tokens <= 0:
+            prompt_tokens = estimate_tokens(input_text)
+        if completion_tokens <= 0:
+            completion_tokens = estimate_tokens(output_text)
+        logger.info(
+            "llm_usage_estimated",
+            extra={
+                "estimated_input_tokens": prompt_tokens,
+                "estimated_output_tokens": completion_tokens,
+            },
+        )
+    return prompt_tokens, completion_tokens
 
 
 def _describe_http_error(exc: "httpx.HTTPStatusError", base_url: str) -> str:
@@ -274,6 +309,12 @@ async def call_openai_compat(
         # Echo-detection only makes sense for small non-thinking models
         content = _validate_response(content, system_prompt)
 
+    prompt_tokens, completion_tokens = _estimate_usage_if_missing(
+        prompt_tokens=prompt_tokens,
+        completion_tokens=completion_tokens,
+        input_text="\n".join(str(m.get("content", "")) for m in messages),
+        output_text=content,
+    )
     return content, prompt_tokens, completion_tokens
 
 
@@ -416,6 +457,12 @@ async def call_openai_compat_tools(
         content = _validate_response(content, system_prompt)
 
     message = {"role": "assistant", "content": content, "tool_calls": tool_calls}
+    prompt_tokens, completion_tokens = _estimate_usage_if_missing(
+        prompt_tokens=prompt_tokens,
+        completion_tokens=completion_tokens,
+        input_text="\n".join(str(m.get("content", "")) for m in messages),
+        output_text=content + _json.dumps(tool_calls, default=str),
+    )
     return message, prompt_tokens, completion_tokens
 
 
@@ -482,12 +529,18 @@ async def call_anthropic(
     except anthropic.APIError as exc:
         raise LLMCallError(f"Anthropic API error: {exc}") from exc
     except httpx.TimeoutException as exc:
-        raise LLMCallError(f"Anthropic call timed out after {_READ_TIMEOUT}s") from exc
+        raise LLMCallError(f"Anthropic call timed out after {_ANTHROPIC_READ_TIMEOUT}s") from exc
     block = message.content[0]
     content: str = block.text if hasattr(block, "text") else ""
     if not content and message.usage.output_tokens == 0:
         raise LLMCallError("Model returned no content (0 tokens) — the endpoint or model may be broken")
-    return content, message.usage.input_tokens, message.usage.output_tokens
+    input_tokens, output_tokens = _estimate_usage_if_missing(
+        prompt_tokens=message.usage.input_tokens,
+        completion_tokens=message.usage.output_tokens,
+        input_text="\n".join(str(m.get("content", "")) for m in messages),
+        output_text=content,
+    )
+    return content, input_tokens, output_tokens
 
 
 async def call_anthropic_tools(
@@ -534,7 +587,7 @@ async def call_anthropic_tools(
     except anthropic.APIError as exc:
         raise LLMCallError(f"Anthropic API error: {exc}") from exc
     except httpx.TimeoutException as exc:
-        raise LLMCallError(f"Anthropic call timed out after {_READ_TIMEOUT}s") from exc
+        raise LLMCallError(f"Anthropic call timed out after {_ANTHROPIC_READ_TIMEOUT}s") from exc
 
     text_parts: list[str] = []
     tool_calls: list[dict] = []
@@ -559,7 +612,13 @@ async def call_anthropic_tools(
         raise LLMCallError("Model returned no content (0 tokens) — the endpoint or model may be broken")
 
     result_message = {"role": "assistant", "content": content, "tool_calls": tool_calls}
-    return result_message, message.usage.input_tokens, message.usage.output_tokens
+    input_tokens, output_tokens = _estimate_usage_if_missing(
+        prompt_tokens=message.usage.input_tokens,
+        completion_tokens=message.usage.output_tokens,
+        input_text="\n".join(str(m.get("content", "")) for m in messages),
+        output_text=content + _json.dumps(tool_calls, default=str),
+    )
+    return result_message, input_tokens, output_tokens
 
 
 # ── Streaming variants (SSE-friendly) ────────────────────────────────────────

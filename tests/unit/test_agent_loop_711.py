@@ -16,7 +16,7 @@ class ScriptedPlanner:
         self._decisions = list(decisions)
         self.calls = 0
 
-    async def plan(self, *, prompt, history, tool_results):
+    async def plan(self, *, prompt, tool_results):
         d = self._decisions[self.calls] if self.calls < len(self._decisions) else PlanDecision(final="done")
         self.calls += 1
         return d

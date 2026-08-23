@@ -101,9 +101,96 @@ spec:
         - port: 6379
           protocol: TCP
 ---
+# Allow vmagent/Prometheus in the monitoring namespace to scrape the api's
+# /metrics endpoint (tcp/8000) (#1050). The scrape pipeline is a plain vmagent
+# Deployment since this cluster has no prometheus-operator — see
+# deploy/k8s/observability/vm-agent.yaml.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-metrics-scrape-from-monitoring
+  namespace: kri
+spec:
+  podSelector:
+    matchExpressions:
+      - key: component
+        operator: In
+        values: [api]
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: monitoring
+      ports:
+        - port: 8000
+          protocol: TCP
+---
+# Allow backend pods to reach LAN fleet nodes and the native salt-master over
+# SSH (22) and the Salt HTTP API (8080) inside RFC1918 ranges (#1050).
+# allow-external-egress below deliberately EXCLUDES RFC1918 from internet
+# egress; this rule re-opens only the two fleet-management ports.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-rfc1918-fleet-egress
+  namespace: kri
+spec:
+  podSelector:
+    matchExpressions:
+      - key: component
+        operator: In
+        values: [api, worker, worker-ansible]
+  policyTypes:
+    - Egress
+  egress:
+    - to:
+        - ipBlock:
+            cidr: 10.0.0.0/8
+        - ipBlock:
+            cidr: 172.16.0.0/12
+        - ipBlock:
+            cidr: 192.168.0.0/16
+      ports:
+        - port: 22
+          protocol: TCP
+        - port: 8080
+          protocol: TCP
+---
+# Allow backend pods to push OTLP traces/spans to the OTEL gateway in the
+# monitoring namespace — gRPC 4317, HTTP 4318 (#1050). All outbound calls are
+# instrumented per docs/OBSERVABILITY_ARCHITECTURE.md; without this rule every
+# span export is silently dropped by default-deny-all.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-otlp-egress-to-monitoring
+  namespace: kri
+spec:
+  podSelector:
+    matchExpressions:
+      - key: component
+        operator: In
+        values: [api, worker, worker-ansible]
+  policyTypes:
+    - Egress
+  egress:
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: monitoring
+      ports:
+        - port: 4317
+          protocol: TCP
+        - port: 4318
+          protocol: TCP
+---
 # Allow the api and worker pods to reach external services (Salt HTTP API
 # on port 8080, HTTPS on 443, SSH on 22 for bootstrapping). Internal RFC-1918
-# ranges are excluded — those should be reached via in-cluster services.
+# ranges are excluded here for internet egress — LAN fleet nodes and the
+# native master are reached via allow-rfc1918-fleet-egress above, which opens
+# only ports 22 and 8080 (#1050).
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:

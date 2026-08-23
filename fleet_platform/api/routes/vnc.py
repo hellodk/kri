@@ -184,6 +184,15 @@ async def vnc_session(
         await websocket.close(code=4001, reason="Authentication failed")
         return
 
+    # RBAC (#1045): screen control requires operator or admin.
+    from fleet_platform.api.routes.webssh import WsRoleDeniedError, ensure_ws_role
+
+    try:
+        ensure_ws_role(claims.get("role"))
+    except WsRoleDeniedError:
+        await websocket.close(code=4003, reason="Forbidden")
+        return
+
     # Load node
     result = await db.execute(select(Node).where(Node.id == node_id))
     node = result.scalar_one_or_none()

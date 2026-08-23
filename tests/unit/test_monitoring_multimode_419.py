@@ -13,7 +13,8 @@ ROOT = Path(__file__).parent.parent.parent
 PORTABLE = ROOT / "deploy/monitoring/rules/kri-alerts.rules.yml"
 K8S_RULE = ROOT / "deploy/k8s/observability/kri-prometheusrule.yaml"
 README = ROOT / "deploy/monitoring/README.md"
-SCRAPES = ROOT / "deploy/monitoring/prometheus-scrape-examples.yml"
+SCRAPES = ROOT / "deploy/monitoring/vmagent-scrape.yml"
+VM_STACK = ROOT / "deploy/monitoring/docker-compose.monitoring.yml"
 
 
 def _alerts(groups):
@@ -21,7 +22,7 @@ def _alerts(groups):
 
 
 def test_all_artifacts_exist():
-    for p in (PORTABLE, K8S_RULE, README, SCRAPES):
+    for p in (PORTABLE, K8S_RULE, README, SCRAPES, VM_STACK):
         assert p.exists(), f"missing monitoring artifact: {p}"
 
 
@@ -38,16 +39,19 @@ def test_k8s_rule_targets_kri_namespace_and_release_label():
     assert doc["metadata"]["labels"]["release"] == "monitoring"
 
 
-def test_servicemonitor_not_in_monitoring_namespace():
-    sm = yaml.safe_load((ROOT / "deploy/k8s/observability/service-monitor.yaml").read_text())
-    assert sm["metadata"]["namespace"] != "monitoring"
-    assert sm["metadata"]["labels"]["release"] == "monitoring"
-
-
-def test_scrape_examples_cover_compose_and_standalone():
+def test_vm_agent_scrapes_kri_with_metrics_token():
+    """#1051: vmagent scrape config targets kri-api with METRICS_TOKEN auth (#1050)."""
     cfg = yaml.safe_load(SCRAPES.read_text())
-    jobs = {s["job_name"] for s in cfg["scrape_configs"]}
-    assert "kri-compose" in jobs and "kri-standalone" in jobs
+    jobs = {s["job_name"]: s for s in cfg["scrape_configs"]}
+    assert "kri-api" in jobs, f"vmagent scrape must keep job_name kri-api (alerts depend on it): {sorted(jobs)}"
+    job = yaml.safe_dump(jobs["kri-api"])
+    assert "authorization" in job or "bearer" in job.lower(), "kri /metrics requires METRICS_TOKEN bearer auth"
+
+
+def test_vm_stack_pins_victoriametrics_images():
+    txt = VM_STACK.read_text()
+    for image in ("victoria-metrics:v1.150.0", "vmagent:v1.150.0", "vmalert:v1.150.0"):
+        assert image in txt, f"monitoring stack must pin {image} (no :latest)"
 
 
 def test_readme_documents_all_three_modes():

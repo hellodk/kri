@@ -26,7 +26,6 @@ namespace: kri
 
 resources:
   - namespace.yaml
-  - configmap.yaml
   - api-service.yaml
   - frontend-service.yaml
   - api-deployment.yaml
@@ -38,6 +37,15 @@ resources:
   - network-policy.yaml
   - pod-disruption-budget.yaml
   - hpa.yaml
+  # Observability (#1051): vmagent scrape pipeline replaces the ServiceMonitor
+  # CR — this cluster has no prometheus-operator/vmoperator. The PrometheusRule
+  # and Grafana dashboard/datasource ConfigMaps ride along so a single
+  # `kubectl apply -k` brings up the full stack.
+  - observability/vm-agent.yaml
+  - observability/kri-prometheusrule.yaml
+  - observability/grafana-dashboard.yaml
+  - observability/grafana-dashboard-actions.yaml
+  - observability/grafana-datasource.yaml
 
 # Image-tag transformer — bump the tag here (or in an overlay) instead of
 # editing every Deployment manifest. The pre-commit VERSION-bump hook can

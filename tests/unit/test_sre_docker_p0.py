@@ -128,7 +128,7 @@ def test_migrate_sh_has_advisory_lock():
 
 
 def test_docker_compose_api_uses_migrate_sh():
-    """docker-compose.yml api service command must invoke migrate.sh."""
+    """api service must boot through api-entrypoint.sh, which execs migrate.sh then uvicorn (issue #90 + #1050)."""
     import yaml
 
     compose_file = REPO_ROOT / "deploy" / "docker-compose.yml"
@@ -136,9 +136,11 @@ def test_docker_compose_api_uses_migrate_sh():
         cfg = yaml.safe_load(f)
 
     api_command = " ".join(cfg["services"]["api"].get("command", []))
-    assert "migrate.sh" in api_command, (
-        f"docker-compose.yml api service command must call migrate.sh (issue #90). Current command: {api_command!r}"
+    assert "api-entrypoint.sh" in api_command, (
+        f"docker-compose.yml api service must boot via api-entrypoint.sh (#1050). Current command: {api_command!r}"
     )
+    entrypoint = (REPO_ROOT / "deploy" / "api-entrypoint.sh").read_text()
+    assert "migrate.sh" in entrypoint, "api-entrypoint.sh must still run migrate.sh before exec uvicorn"
 
 
 def test_dockerfile_api_copies_migrate_sh():

@@ -176,7 +176,7 @@ A node joins the fleet when it meets these requirements:
 | **AI** | pgvector (RAG embeddings), local LLM support (Ollama, vLLM, exo) and Anthropic |
 | **Frontend** | React 18, TanStack Query 5, Tailwind CSS, Vite, xterm.js, noVNC |
 | **Infrastructure** | Docker Compose, Nginx, Alembic migrations |
-| **Observability** | Prometheus, Grafana, OpenTelemetry, Trivy security scanning |
+| **Observability** | VictoriaMetrics (vmagent/vmalert), Grafana, OpenTelemetry, Trivy security scanning |
 | **Testing** | pytest, pytest-asyncio, Playwright E2E |
 
 ---

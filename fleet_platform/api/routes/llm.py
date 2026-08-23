@@ -33,6 +33,7 @@ from fleet_platform.services.llm_caller import (
 from fleet_platform.services.llm_context import build_fleet_context
 from fleet_platform.services.model_catalog import get_models
 from fleet_platform.services.model_discovery import discover_models_with_health
+from fleet_platform.services.prompt_safety import sanitize_llm_output
 
 router = APIRouter(prefix="/api/v1/llm", tags=["llm"])
 
@@ -403,6 +404,11 @@ async def submit_query(
 
     duration_ms = int((time.perf_counter() - t0) * 1000)
 
+    # Sanitize the complete model answer once at the API boundary (#782,
+    # #1048): covers the response body (``result``) and the persisted log row.
+    if content:
+        content = sanitize_llm_output(content)
+
     log = await llm_svc.create_query_log(
         db,
         endpoint_id=endpoint.id,
@@ -613,6 +619,12 @@ async def submit_query_stream(
             yield f"data: {json.dumps({'type': 'error', 'error': error})}\n\n"
 
         duration_ms = int((time.perf_counter() - t0) * 1000)
+
+        # Sanitize the joined model answer before persisting (#782, #1048).
+        # Raw deltas were already forwarded untouched for progressive
+        # rendering; the persisted form is the sanitized one.
+        if joined_content:
+            joined_content = sanitize_llm_output(joined_content)
 
         log = await llm_svc.create_query_log(
             db,

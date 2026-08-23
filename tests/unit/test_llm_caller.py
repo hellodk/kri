@@ -525,8 +525,9 @@ async def test_stream_usage_missing_defaults_to_zero():
             user_prompt="hi",
         )
 
-    assert inp == 0
-    assert out == 0
+    # #1048: missing usage chunks are now estimated, not zeroed
+    assert inp > 0
+    assert out > 0
 
 
 @pytest.mark.asyncio
