@@ -28,6 +28,19 @@ from fleet_platform.workers.celery_app import celery_app
 from ._router import _BOOTSTRAP_ONLY_PLAYBOOKS, _PLAYBOOKS_DIR, router
 
 
+def validate_source_dir(source_dir: str, roots) -> Path:
+    """Return the resolved ``source_dir`` iff it equals an approved playbook root (#1046).
+
+    Rejects any other path — including ones that escape via symlinks or ``..``
+    traversal, since both sides are resolved before comparison — with HTTP 403.
+    """
+    candidate = Path(source_dir).resolve()
+    approved = {Path(r).resolve() for r in roots}
+    if candidate not in approved:
+        raise HTTPException(status_code=403, detail="source_dir is not an approved playbook root")
+    return candidate
+
+
 @router.get("/playbooks", response_model=list[PlaybookEntryResponse])
 async def list_playbooks(
     db: AsyncSession = Depends(get_db),
@@ -204,10 +217,10 @@ async def get_playbook_tree(
     sources_json = setting.value if setting else None
 
     # Find which directory contains this filename
+    all_dirs = await asyncio.to_thread(get_all_playbook_dirs, sources_json, _PLAYBOOKS_DIR)
     if source_dir:
-        playbooks_dir = Path(source_dir)
+        playbooks_dir = validate_source_dir(source_dir, all_dirs)
     else:
-        all_dirs = await asyncio.to_thread(get_all_playbook_dirs, sources_json, _PLAYBOOKS_DIR)
         playbooks_dir = next(
             (d for d in all_dirs if (d / filename).exists() or (d / "roles" / filename.replace("roles/", "")).is_dir()),
             _PLAYBOOKS_DIR,

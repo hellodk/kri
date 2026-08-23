@@ -92,5 +92,5 @@ def _resolve_node_master_creds(db, node) -> dict | None:
         "api_user": master.api_user or "",
         "api_password": api_password,
         "api_eauth": master.api_eauth or "pam",
-        "tls_verify": bool(getattr(master, "tls_verify", False)),
+        "tls_verify": bool(getattr(master, "tls_verify", True)),
     }

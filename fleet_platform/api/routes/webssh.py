@@ -31,6 +31,7 @@ from fleet_platform.core.auth import (
     decode_token,
     is_token_revoked,
     require_role,
+    role_satisfies,
 )
 from fleet_platform.db.session import AsyncSessionLocal
 from fleet_platform.models.node import Node
@@ -72,6 +73,21 @@ async def get_current_user_ws(token: str, redis: aioredis.Redis | None = None) -
             )
             raise ValueError("Token revocation check unavailable — connection rejected") from exc
     return claims
+
+
+class WsRoleDeniedError(Exception):
+    """Raised when WebSocket claims lack the required role (#1045)."""
+
+
+def ensure_ws_role(role: str | None) -> None:
+    """Enforce operator/admin on WebSocket endpoints (#1045).
+
+    Mirrors the REST ``require_role("operator", "admin")`` dependency using the
+    same role hierarchy from fleet_platform.core.auth (``role_satisfies``).
+    Callers must close the websocket with code=4003 when this raises.
+    """
+    if not role_satisfies(role, "operator"):
+        raise WsRoleDeniedError(f"Role '{role}' cannot open interactive sessions")
 
 
 class SSHProxySession:
@@ -213,6 +229,13 @@ async def webssh_session(
         await websocket.close(code=4001, reason="Authentication failed")
         return
 
+    # RBAC (#1045): interactive shells require operator or admin.
+    try:
+        ensure_ws_role(claims.get("role"))
+    except WsRoleDeniedError:
+        await websocket.close(code=4003, reason="Forbidden")
+        return
+
     # Load node
     result = await db.execute(select(Node).where(Node.id == node_id))
     node = result.scalar_one_or_none()
@@ -324,12 +347,19 @@ async def webssh_session(
         return
 
     try:
-        # Connect to node via asyncssh (with connection cache)
+        # Connect to node via asyncssh (with connection cache).
+        # #1046: when the node has a stored host key, pin it via a temp
+        # known_hosts file so a mismatch fails during the handshake — BEFORE
+        # any credential is transmitted. First contact keeps the post-connect
+        # TOFU store below.
+        from fleet_platform.services.ssh_host_key_svc import pinned_known_hosts_file
+
+        pinned_kh = pinned_known_hosts_file(str(node.bootstrap_ip), getattr(node, "ssh_host_key", None))
         connect_kwargs: dict = dict(
             host=node.bootstrap_ip,
             port=22,
             username=creds["ssh_user"],
-            known_hosts=None,
+            known_hosts=pinned_kh,
             connect_timeout=15,
         )
         if creds["auth_mode"] == "key" and creds.get("ssh_key"):
@@ -364,9 +394,12 @@ async def webssh_session(
         if proxy._ssh_conn is None:
             raise RuntimeError("SSH proxy connection was not established")
 
-        # TOFU: verify/store SSH host key
+        # TOFU: verify/store SSH host key. When the key was pinned above, a
+        # mismatch already raised during the handshake (before credentials were
+        # sent); this post-connect check remains for first contact and for
+        # servers that did not present a key via the pinned file path.
         server_host_key = proxy._ssh_conn.get_server_host_key()
-        if server_host_key is not None:
+        if server_host_key is not None and pinned_kh is None:
             _key_export = server_host_key.export_public_key("openssh")
             key_text: str = (
                 _key_export.decode("ascii", errors="replace") if isinstance(_key_export, bytes) else _key_export
@@ -435,6 +468,15 @@ async def webssh_session(
             except WebSocketDisconnect:
                 break
 
+    except asyncssh.HostKeyNotVerifiable:
+        # #1046: pinned known_hosts rejected the server key during the
+        # handshake — no credentials were transmitted.
+        err = (
+            "\r\n\x1b[31m[SSH Error] Host key mismatch — connection refused before "
+            "authentication.\x1b[0m\r\n\x1b[33mPossible man-in-the-middle attack. "
+            "Contact your administrator.\x1b[0m\r\n"
+        )
+        await proxy.send_to_browser(err.encode())
     except asyncssh.DisconnectError as e:
         err = f"\r\n\033[31mSSH error: {e}\033[0m\r\n"
         await proxy.send_to_browser(err.encode())
@@ -445,6 +487,13 @@ async def webssh_session(
         except Exception:
             pass
     finally:
+        if pinned_kh:
+            import os
+
+            try:
+                os.unlink(pinned_kh)
+            except OSError:
+                pass
         await proxy.close()
 
 

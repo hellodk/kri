@@ -63,6 +63,34 @@ def to_known_hosts_token(stored: str) -> str | None:
     return None
 
 
+def pinned_known_hosts_file(host: str, stored_key: str | None) -> str | None:
+    """Write a temp known_hosts file pinning *host* to its stored key (#1046).
+
+    Passing the returned path as asyncssh's ``known_hosts`` makes a key mismatch
+    fail during the SSH handshake — BEFORE any credential is transmitted —
+    instead of after authentication (detection, not prevention).
+
+    Returns the temp file path (caller must unlink it), or ``None`` when no
+    parseable stored key exists (first contact → TOFU flow still applies).
+    """
+    import os
+    import tempfile
+
+    token = to_known_hosts_token(stored_key or "")
+    if not token:
+        return None
+
+    fd, path = tempfile.mkstemp(prefix="kri-kh-", suffix=".known_hosts")
+    try:
+        os.fchmod(fd, 0o600)
+        with os.fdopen(fd, "w") as f:
+            f.write(f"{host} {token}\n")
+    except Exception:
+        os.unlink(path)
+        return None
+    return path
+
+
 async def verify_or_store_host_key(
     node: Node,
     host_key_b64: str,

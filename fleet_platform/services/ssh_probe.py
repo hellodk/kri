@@ -34,6 +34,9 @@ SSH_OK = "ok"
 SSH_AUTH_FAILED = "auth_failed"
 SSH_UNREACHABLE = "unreachable"
 SSH_UNKNOWN = "unknown"
+# #1046: stored host key did not match during the handshake — credentials were
+# never sent. Surfaced as its own state so the UI can demand explicit re-TOFU.
+SSH_HOST_KEY_MISMATCH = "host_key_mismatch"
 
 _TCP_TIMEOUT = 5  # seconds — TCP connect and SSH handshake budget
 
@@ -57,20 +60,29 @@ async def _probe_ssh_auth(
     key: str,
     password: str,
     timeout: int,
+    stored_host_key: str | None = None,
 ) -> dict:
     """Attempt a real SSH handshake and classify the outcome.
 
     Assumes TCP :22 is already known to be open (caller did the cheap pre-check),
     so a connection failure here is treated as ``unreachable`` and a credential
     rejection as ``auth_failed``.
+
+    ``stored_host_key`` (#1046): when the node has a stored host key it is
+    pinned via a temp known_hosts file so a mismatch fails DURING the
+    handshake — before credentials are transmitted — and classifies as
+    ``host_key_mismatch``. First contact (no stored key) keeps the TOFU flow.
     """
     import asyncssh
 
+    from fleet_platform.services.ssh_host_key_svc import pinned_known_hosts_file
+
+    known_hosts_path = pinned_known_hosts_file(ip, stored_host_key)
     connect_kwargs: dict = {
         "host": ip,
         "port": 22,
         "username": user,
-        "known_hosts": None,  # reachability probe — host-key TOFU is out of scope
+        "known_hosts": known_hosts_path,  # None → first contact, TOFU out of scope for a probe
         "connect_timeout": timeout,
         # Never fall back to the controller's ssh-agent or on-disk default keys;
         # we want to test exactly the credential resolved for this node.
@@ -94,10 +106,20 @@ async def _probe_ssh_auth(
         except Exception:  # noqa: BLE001 — close is best-effort
             pass
         return {"state": SSH_OK, "detail": "authenticated"}
+    except asyncssh.HostKeyNotVerifiable as exc:
+        return {"state": SSH_HOST_KEY_MISMATCH, "detail": f"host key mismatch: {str(exc)[:120]}"}
     except asyncssh.PermissionDenied as exc:
         return {"state": SSH_AUTH_FAILED, "detail": f"authentication rejected: {str(exc)[:120]}"}
     except (asyncssh.Error, OSError, asyncio.TimeoutError) as exc:  # noqa: UP041
         return {"state": SSH_UNREACHABLE, "detail": f"connection failed: {str(exc)[:120]}"}
+    finally:
+        if known_hosts_path:
+            import os
+
+            try:
+                os.unlink(known_hosts_path)
+            except OSError:
+                pass
 
 
 def probe_node_ssh(node, creds: dict, *, timeout: int = _TCP_TIMEOUT) -> dict:
@@ -131,7 +153,17 @@ def probe_node_ssh(node, creds: dict, *, timeout: int = _TCP_TIMEOUT) -> dict:
             # Port is open but there's no credential to verify a login with.
             return {"state": SSH_UNKNOWN, "detail": "port 22 open; auth not verified (no stored credential)"}
 
-        return asyncio.run(_probe_ssh_auth(ip, user, auth_mode, key, password, timeout))
+        return asyncio.run(
+            _probe_ssh_auth(
+                ip,
+                user,
+                auth_mode,
+                key,
+                password,
+                timeout,
+                stored_host_key=getattr(node, "ssh_host_key", None),
+            )
+        )
     except Exception as exc:  # noqa: BLE001 — a probe must never crash its caller
         logger.debug("ssh probe error node=%s: %s", getattr(node, "minion_id", "?"), exc)
         return {"state": SSH_UNREACHABLE, "detail": f"probe error: {str(exc)[:120]}"}

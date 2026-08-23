@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import html
 import json
 import logging
 import uuid
@@ -122,6 +123,39 @@ async def expire_old(db: AsyncSession) -> int:
     return result.rowcount  # type: ignore[attr-defined]
 
 
+def _build_approval_body(
+    *,
+    node_name: str,
+    requested_by: str,
+    action_type: str,
+    confirm_url: str,
+) -> str:
+    """Render the approval email HTML body (#1046 item 5).
+
+    All user-controlled interpolations are HTML-escaped so a hostile node name,
+    requester identity or action type cannot inject markup into the email.
+    """
+    safe_node_name = html.escape(node_name)
+    safe_requested_by = html.escape(requested_by)
+    safe_action_type = html.escape(action_type)
+    return f"""
+<html><body style="font-family:sans-serif;color:#111827">
+  <h2 style="color:#D97706">&#9888; Action Approval Required</h2>
+  <p><strong>Requested by:</strong> {safe_requested_by}</p>
+  <p><strong>Node:</strong> {safe_node_name}</p>
+  <p><strong>Action:</strong> {safe_action_type}</p>
+  <p><strong>Expires:</strong> 15 minutes from request</p>
+  <p style="margin-top:24px">
+    <a href="{confirm_url}"
+       style="background:#2563EB;color:white;padding:10px 20px;border-radius:6px;
+              text-decoration:none">Review &amp; decide &rarr;</a>
+  </p>
+  <p style="color:#6B7280;font-size:12px;margin-top:16px">
+    This link opens a confirmation page; no action is taken until you click Approve or Reject there.
+  </p>
+</body></html>"""
+
+
 async def _send_approval_email(action: PendingAction, node, requested_by: str) -> None:
     """Send approval email for a destructive action (non-blocking)."""
     import asyncio
@@ -169,22 +203,12 @@ async def _send_approval_email(action: PendingAction, node, requested_by: str) -
         # prefetch can no longer auto-approve a destructive action).
         confirm_url = f"{api_url}/api/v1/actions/{action.approval_token}"
 
-        body = f"""
-<html><body style="font-family:sans-serif;color:#111827">
-  <h2 style="color:#D97706">&#9888; Action Approval Required</h2>
-  <p><strong>Requested by:</strong> {requested_by}</p>
-  <p><strong>Node:</strong> {node_name}</p>
-  <p><strong>Action:</strong> {action.action_type}</p>
-  <p><strong>Expires:</strong> 15 minutes from request</p>
-  <p style="margin-top:24px">
-    <a href="{confirm_url}"
-       style="background:#2563EB;color:white;padding:10px 20px;border-radius:6px;
-              text-decoration:none">Review &amp; decide &rarr;</a>
-  </p>
-  <p style="color:#6B7280;font-size:12px;margin-top:16px">
-    This link opens a confirmation page; no action is taken until you click Approve or Reject there.
-  </p>
-</body></html>"""
+        body = _build_approval_body(
+            node_name=node_name,
+            requested_by=requested_by,
+            action_type=action.action_type,
+            confirm_url=confirm_url,
+        )
 
         msg = MIMEMultipart("alternative")
         msg["Subject"] = f"[kri] Approval required: {action.action_type} on {node_name}"

@@ -113,7 +113,9 @@ def git_auth_env(
     env = {**os.environ}
     env["GIT_TERMINAL_PROMPT"] = "0"
 
-    ssh_cmd_parts = ["ssh", "-o", "BatchMode=yes", "-o", "StrictHostKeyChecking=no"]
+    # #1046: accept-new — TOFU without the MITM window of "no". New hosts are
+    # trusted on first contact and pinned; changed keys fail the clone.
+    ssh_cmd_parts = ["ssh", "-o", "BatchMode=yes", "-o", "StrictHostKeyChecking=accept-new"]
 
     try:
         if ssh_key:
