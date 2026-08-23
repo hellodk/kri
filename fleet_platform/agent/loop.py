@@ -7,7 +7,10 @@ it is fully unit-testable with a scripted planner and never blocks on a model.
 
 Hard bounds (a confused planner fails loudly, never loops — #716):
 - MAX_ITERATIONS = 6
-- MAX_TOOL_CALLS = 12 per run
+- MAX_TOOL_CALLS = MAX_ITERATIONS — one observation per iteration is what makes
+  the next decision useful, so a call that never yields an observation only
+  burns budget; capping calls at the iteration bound keeps both limits in
+  lockstep (#1048).
 - NO-PROGRESS guard: a planner that only re-requests tool calls it has already
   made (same name + args) is stuck; stop immediately instead of burning every
   iteration on an identical lookup (a weak model would otherwise repeat one
@@ -29,7 +32,9 @@ from fleet_platform.agent.executor import AWAITING_APPROVAL, Executor
 from fleet_platform.agent.registry import ToolCtx
 
 MAX_ITERATIONS = 6
-MAX_TOOL_CALLS = 12
+# A tool call without a following observation wastes an iteration, so the
+# per-run tool-call budget is the iteration budget (#1048).
+MAX_TOOL_CALLS = MAX_ITERATIONS
 
 # Tools whose successful result satisfies the "dry-run first" gate for live tools.
 DRY_RUN_TOOLS = frozenset({"apply_salt_state_dry_run", "dry_run_artifact"})
@@ -86,7 +91,7 @@ class PlanDecision:
 
 
 class Planner(Protocol):
-    async def plan(self, *, prompt: str, history: list[dict], tool_results: list[Any]) -> PlanDecision: ...
+    async def plan(self, *, prompt: str, tool_results: list[Any]) -> PlanDecision: ...
 
 
 @dataclass
@@ -114,7 +119,6 @@ class AgentLoop:
         self.should_stop = should_stop
 
     async def run(self, prompt: str) -> AsyncIterator[AgentEvent]:
-        history: list[dict] = []
         tool_results: list[Any] = []
         total_calls = 0
         last_dry_run: Any = None
@@ -128,7 +132,7 @@ class AgentLoop:
                 return
 
             yield AgentEvent("step_start", {"iteration": iteration})
-            decision = await self.planner.plan(prompt=prompt, history=history, tool_results=tool_results)
+            decision = await self.planner.plan(prompt=prompt, tool_results=tool_results)
 
             if decision.final is not None:
                 yield AgentEvent("final", {"text": decision.final, "iterations": iteration})
@@ -178,7 +182,6 @@ class AgentLoop:
                     last_dry_run = result.result
 
                 tool_results.append(result)
-                history.append({"tool": call.name, "args": call.args, "ok": result.ok})
                 yield AgentEvent(
                     "tool_result",
                     {

@@ -32,6 +32,14 @@ from fleet_platform.services.tool_calling import extract_tool_calls, parse_tool_
 # a hostile/huge tool result from blowing the context window or smuggling payload.
 TOOL_RESULT_CAP = 4096
 
+# Observation window (#1048): the two newest tool results are kept verbatim so
+# the planner can reason over fresh data; everything older is collapsed into a
+# bounded one-line-per-call digest. This caps total user-prompt growth no
+# matter how many iterations a run takes.
+_VERBATIM_TAIL = 2
+_DIGEST_MAX_LINES = 12
+_DIGEST_LINE_CAP = 80
+
 _SYSTEM_PREAMBLE = (
     "You are kri's fleet operations agent. You answer the operator's question by "
     "calling read-only tools, observing their results, and reasoning step by step.\n\n"
@@ -105,6 +113,38 @@ def sanitize_llm_output(text: str) -> str:
     return _impl(text)
 
 
+def _digest_line(result: Any) -> str:
+    """One bounded line per collapsed observation: tool name + ok/error (#1048)."""
+    name = getattr(result, "name", "?")
+    ok = getattr(result, "ok", False)
+    if not ok:
+        from fleet_platform.services.prompt_safety import sanitize_untrusted
+
+        raw_err = getattr(result, "error", None) or getattr(result, "status", "error")
+        safe_err = sanitize_untrusted(str(raw_err)) if raw_err is not None else "error"
+        line = f"[{name}] ERROR: {safe_err}"
+    else:
+        line = f"[{name}] OK"
+    return line[:_DIGEST_LINE_CAP]
+
+
+def _digest(older: list[Any]) -> str:
+    """Collapse all but the newest observations into ≤12 one-liner lines (#1048).
+
+    When more than ``_DIGEST_MAX_LINES`` older calls exist the most recent are
+    kept and a single omission marker notes how many were dropped, so prompt
+    growth stays bounded across arbitrarily long runs.
+    """
+    lines = [_digest_line(r) for r in older]
+    omitted = 0
+    if len(lines) > _DIGEST_MAX_LINES:
+        omitted = len(lines) - _DIGEST_MAX_LINES
+        lines = lines[-_DIGEST_MAX_LINES:]
+    if omitted:
+        lines.insert(0, f"(+{omitted} earlier tool calls omitted)")
+    return "\n".join(lines)
+
+
 @dataclass
 class LLMPlanner:
     """Planner that asks an LLM endpoint which tool to call next.
@@ -134,12 +174,16 @@ class LLMPlanner:
     def _user_prompt(self, prompt: str, tool_results: list[Any]) -> str:
         if not tool_results:
             return prompt
-        observations = "\n".join(_summarize_result(r) for r in tool_results)
-        return (
-            f"Original question: {prompt}\n\n"
-            f"Tool observations so far:\n{observations}\n\n"
-            "Decide the next tool call, or give your final answer."
-        )
+        # Bounded observation window (#1048): newest results verbatim, older
+        # calls collapsed to one-liners so prompt growth is capped.
+        older, recent = tool_results[:-_VERBATIM_TAIL], tool_results[-_VERBATIM_TAIL:]
+        sections = [f"Original question: {prompt}"]
+        if older:
+            sections.append("Earlier tool calls (summary):\n" + _digest(older))
+        observations = "\n".join(_summarize_result(r) for r in recent)
+        sections.append(f"Recent tool observations:\n{observations}")
+        sections.append("Decide the next tool call, or give your final answer.")
+        return "\n\n".join(sections)
 
     def _accumulate(self, in_tok: Any, out_tok: Any) -> None:
         self.input_tokens += int(in_tok or 0)
@@ -157,7 +201,7 @@ class LLMPlanner:
             return PlanDecision(tool_calls=[ToolCall(name=c.name, args=c.arguments) for c in valid[:1]])
         return PlanDecision(final=(content or "").strip())
 
-    async def plan(self, *, prompt: str, history: list[dict], tool_results: list[Any]) -> PlanDecision:
+    async def plan(self, *, prompt: str, tool_results: list[Any]) -> PlanDecision:
         from fleet_platform.services.llm_caller import (
             call_anthropic,
             call_anthropic_tools,

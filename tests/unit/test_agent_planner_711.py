@@ -29,7 +29,7 @@ async def test_plan_parses_json_tool_call(monkeypatch):
 
     monkeypatch.setattr(llm_caller, "call_openai_compat", fake_call)
     planner = _planner()
-    decision = await planner.plan(prompt="what is degraded?", history=[], tool_results=[])
+    decision = await planner.plan(prompt="what is degraded?", tool_results=[])
     assert decision.final is None
     assert len(decision.tool_calls) == 1
     assert decision.tool_calls[0].name == "list_nodes"
@@ -43,7 +43,7 @@ async def test_plan_plain_text_is_final(monkeypatch):
 
     monkeypatch.setattr(llm_caller, "call_openai_compat", fake_call)
     planner = _planner()
-    decision = await planner.plan(prompt="why?", history=[], tool_results=[])
+    decision = await planner.plan(prompt="why?", tool_results=[])
     assert decision.tool_calls == []
     assert decision.final == "mm7 is degraded because of high drift."
 
@@ -54,7 +54,7 @@ async def test_plan_drops_unknown_tool(monkeypatch):
 
     monkeypatch.setattr(llm_caller, "call_openai_compat", fake_call)
     planner = _planner()
-    decision = await planner.plan(prompt="hi", history=[], tool_results=[])
+    decision = await planner.plan(prompt="hi", tool_results=[])
     # Unknown tool → no tool calls; the raw text becomes the (best-effort) final.
     assert decision.tool_calls == []
     assert decision.final is not None
@@ -66,8 +66,8 @@ async def test_plan_accumulates_tokens_across_calls(monkeypatch):
 
     monkeypatch.setattr(llm_caller, "call_openai_compat", fake_call)
     planner = _planner()
-    await planner.plan(prompt="a", history=[], tool_results=[])
-    await planner.plan(prompt="b", history=[], tool_results=[])
+    await planner.plan(prompt="a", tool_results=[])
+    await planner.plan(prompt="b", tool_results=[])
     assert planner.input_tokens == 8 and planner.output_tokens == 12
 
 

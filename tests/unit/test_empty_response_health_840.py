@@ -131,7 +131,8 @@ async def test_call_openai_compat_content_without_usage_chunk_succeeds():
             user_prompt="hello",
         )
     assert content == "short"
-    assert out == 0  # no usage chunk provided
+    # #1048: usage missing -> estimated from content length (non-zero)
+    assert out > 0
 
 
 # ── stream_openai_compat ─────────────────────────────────────────────────────

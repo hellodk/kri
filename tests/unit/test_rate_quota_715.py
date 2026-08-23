@@ -14,7 +14,8 @@ def test_loop_iteration_and_call_bounds():
     from fleet_platform.agent import loop
 
     assert loop.MAX_ITERATIONS == 6
-    assert loop.MAX_TOOL_CALLS == 12
+    # #1048: planner emits one call per iteration, so the call bound equals the iteration bound
+    assert loop.MAX_TOOL_CALLS == 6
 
 
 def test_tool_result_cap():

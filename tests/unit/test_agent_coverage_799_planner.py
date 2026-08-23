@@ -105,7 +105,7 @@ async def test_plan_uses_anthropic_provider_branch(monkeypatch):
 
     monkeypatch.setattr(llm_caller, "call_anthropic", fake_anthropic)
     planner = _planner(provider="anthropic")
-    decision = await planner.plan(prompt="q", history=[], tool_results=[])
+    decision = await planner.plan(prompt="q", tool_results=[])
 
     assert decision.tool_calls and decision.tool_calls[0].name == "list_nodes"
     assert planner.input_tokens == 3 and planner.output_tokens == 4

@@ -47,6 +47,43 @@ router = APIRouter(prefix="/api/v1/agent", tags=["agent"])
 
 logger = logging.getLogger(__name__)
 
+# How often the disconnect watcher polls request.is_disconnected() (#1048).
+_DISCONNECT_POLL_S = 2.0
+
+
+def _note_endpoint_error(exc: Exception, endpoint_id: str) -> None:
+    """Poison endpoint health ONLY for LLM endpoint failures (#1048).
+
+    ``LLMCallError`` is the llm_caller wrapper for provider transport/HTTP
+    failures (timeouts, 5xx, connection refused) — exactly the conditions the
+    tier router's health cooldown exists for. Any other exception (a DB hiccup,
+    a serialization bug) must NOT cool the endpoint down: doing so steers
+    healthy traffic away from a working endpoint because an unrelated bug
+    happened mid-session.
+    """
+    from fleet_platform.services.llm_caller import LLMCallError
+
+    if isinstance(exc, LLMCallError):
+        tier_router.STATE.mark_unhealthy(endpoint_id)
+
+
+async def _watch_disconnect(request: Request, disconnected: asyncio.Event) -> None:
+    """Poll for client disconnect every ``_DISCONNECT_POLL_S`` (#1048).
+
+    Runs as a background task for the lifetime of the stream; sets the event
+    so AgentLoop's ``should_stop`` can abort between iterations.
+    """
+    while True:
+        try:
+            if await request.is_disconnected():
+                disconnected.set()
+                return
+        except asyncio.CancelledError:
+            raise
+        except Exception:  # noqa: BLE001 — transport gone; stop watching quietly
+            return
+        await asyncio.sleep(_DISCONNECT_POLL_S)
+
 
 async def require_agent_enabled(db: AsyncSession = Depends(get_db)) -> None:
     """Master kill-switch guard for the agent surface (#879).
@@ -135,7 +172,8 @@ async def run_agent_stream(
         tool_mode=endpoint.tool_mode,
     )
     ctx = ToolCtx(actor=claims["email"], role=claims["role"], session_id=session.id, db=db)
-    loop = AgentLoop(executor, planner, ctx)
+    disconnected = asyncio.Event()
+    loop = AgentLoop(executor, planner, ctx, should_stop=disconnected.is_set)
 
     async def event_stream():
         t0 = time.perf_counter()
@@ -144,113 +182,154 @@ async def run_agent_stream(
         final_text: str | None = None
         terminal = "completed"
         error: str | None = None
+        finalized = False
+        query_id: str | None = None
+        watcher = asyncio.create_task(_watch_disconnect(request, disconnected))
 
-        yield _sse(
-            {
-                "type": "session_start",
-                "session_id": str(session.id),
-                "model": chosen_model,
-                "routed_via": routed_via,
-            }
-        )
+        async def finalize_once() -> str | None:
+            """Persist cost + session + query log. Exactly once per stream (#1048).
+
+            Reached via the normal completion path AND via the cancel/close
+            path (client vanished mid-stream); the ``finalized`` guard makes
+            the second arrival a no-op.
+            """
+            nonlocal finalized, query_id
+            if finalized:
+                return query_id
+            finalized = True
+            duration_ms = int((time.perf_counter() - t0) * 1000)
+
+            # Persisted tool-call args go through the same redaction as audit
+            # rows (#781/#1048): secrets never reach the query log.
+            from fleet_platform.agent.audit import _redact
+
+            redacted_calls = [{"name": tc.get("name"), "args": _redact(tc.get("args") or {})} for tc in tool_calls]
+
+            # Record cloud spend based on the endpoint's provider, not the routing tag (#780).
+            from fleet_platform.services import cost_tracker
+
+            cost_tracker.record_tokens_for_endpoint(planner.input_tokens, planner.output_tokens, endpoint=endpoint)
+
+            # Finalize the session + persist a linked query log (best-effort).
+            try:
+                session.status = terminal
+                session.iteration_count = iterations
+                session.tool_call_count = len(tool_calls)
+                session.error = error
+                db.add(session)
+
+                log = LLMQueryLog(
+                    endpoint_id=endpoint.id,
+                    user_id=claims["sub"],
+                    intent="agent",
+                    prompt=payload.prompt,
+                    system_prompt=planner._system_prompt()[:500],
+                    response=final_text,
+                    model_used=chosen_model,
+                    input_tokens=planner.input_tokens,
+                    output_tokens=planner.output_tokens,
+                    duration_ms=duration_ms,
+                    error=error,
+                    tool_calls=redacted_calls or None,
+                    agent_session_id=session.id,
+                )
+                db.add(log)
+                await db.commit()
+                query_id = str(log.id)
+            except Exception:  # noqa: BLE001
+                logger.exception("run_agent_stream: persist failed")
+                await db.rollback()
+                query_id = None
+            return query_id
 
         try:
-            with tier_router.lease(endpoint):
-                async for event in loop.run(payload.prompt):
-                    if event.type == "step_start":
-                        iterations = max(iterations, int(event.data.get("iteration", iterations)))
-                    elif event.type == "tool_call":
-                        tool_calls.append({"name": event.data.get("name"), "args": event.data.get("args")})
-                    elif event.type == "final":
-                        raw_text = event.data.get("text") or ""
-                        from fleet_platform.agent.planner import sanitize_llm_output
-
-                        safe_text = sanitize_llm_output(raw_text)
-                        event.data["text"] = safe_text
-                        final_text = safe_text
-                    elif event.type in ("limit_reached", "aborted"):
-                        terminal = "aborted"
-                    elif event.type == "awaiting_approval":
-                        # Turn the proposed live action into a PendingAction for
-                        # human approval (+ co-sign when it hits > N targets).
-                        terminal = "awaiting_approval"
-                        try:
-                            action = await agent_apply_svc.create_proposal(
-                                db,
-                                session_id=session.id,
-                                actor=claims["email"],
-                                tool_name=event.data.get("name"),
-                                args=event.data.get("args") or {},
-                                dry_run_result=event.data.get("dry_run_result"),
-                            )
-                            event.data["pending_action_id"] = str(action.id)
-                            event.data["co_sign_required"] = action.co_sign_required
-                            event.data["target_count"] = action.target_count
-                        except Exception as exc:  # noqa: BLE001 — guard refusal or db error
-                            event.data["proposal_error"] = str(exc)
-                    yield _sse({"type": event.type, **event.data})
-        except Exception as exc:  # noqa: BLE001 — always emit a terminal frame
-            # A planner call failure trips the endpoint's health cooldown so the
-            # router steers subsequent sessions elsewhere.
-            tier_router.STATE.mark_unhealthy(str(endpoint.id))
-            error = f"agent run failed: {exc}"
-            terminal = "aborted"
-            logger.exception("run_agent_stream failed", extra={"session_id": str(session.id)})
-            yield _sse({"type": "error", "error": error})
-
-        duration_ms = int((time.perf_counter() - t0) * 1000)
-
-        # Record cloud spend based on the endpoint's provider, not the routing tag
-        # (#780): direct-endpoint selections (routed_via=None) are now also tracked.
-        from fleet_platform.services import cost_tracker
-
-        cost_tracker.record_tokens_for_endpoint(planner.input_tokens, planner.output_tokens, endpoint=endpoint)
-
-        # Finalize the session + persist a linked query log (best-effort).
-        try:
-            session.status = terminal
-            session.iteration_count = iterations
-            session.tool_call_count = len(tool_calls)
-            session.error = error
-            db.add(session)
-
-            log = LLMQueryLog(
-                endpoint_id=endpoint.id,
-                user_id=claims["sub"],
-                intent="agent",
-                prompt=payload.prompt,
-                system_prompt=planner._system_prompt()[:500],
-                response=final_text,
-                model_used=chosen_model,
-                input_tokens=planner.input_tokens,
-                output_tokens=planner.output_tokens,
-                duration_ms=duration_ms,
-                error=error,
-                tool_calls=tool_calls or None,
-                agent_session_id=session.id,
+            yield _sse(
+                {
+                    "type": "session_start",
+                    "session_id": str(session.id),
+                    "model": chosen_model,
+                    "routed_via": routed_via,
+                }
             )
-            db.add(log)
-            await db.commit()
-            query_id = str(log.id)
-        except Exception:  # noqa: BLE001
-            logger.exception("run_agent_stream: persist failed")
-            await db.rollback()
-            query_id = None
 
-        yield _sse(
-            {
-                "type": "done",
-                "session_id": str(session.id),
-                "query_id": query_id,
-                "status": terminal,
-                "iterations": iterations,
-                "tool_calls": len(tool_calls),
-                "input_tokens": planner.input_tokens,
-                "output_tokens": planner.output_tokens,
-                "duration_ms": duration_ms,
-            }
-        )
-        yield "data: [DONE]\n\n"
+            try:
+                with tier_router.lease(endpoint):
+                    async for event in loop.run(payload.prompt):
+                        if event.type == "step_start":
+                            iterations = max(iterations, int(event.data.get("iteration", iterations)))
+                        elif event.type == "tool_call":
+                            tool_calls.append({"name": event.data.get("name"), "args": event.data.get("args")})
+                        elif event.type == "final":
+                            raw_text = event.data.get("text") or ""
+                            from fleet_platform.agent.planner import sanitize_llm_output
+
+                            safe_text = sanitize_llm_output(raw_text)
+                            event.data["text"] = safe_text
+                            final_text = safe_text
+                        elif event.type in ("limit_reached", "aborted"):
+                            terminal = "aborted"
+                        elif event.type == "awaiting_approval":
+                            # Turn the proposed live action into a PendingAction for
+                            # human approval (+ co-sign when it hits > N targets).
+                            terminal = "awaiting_approval"
+                            try:
+                                action = await agent_apply_svc.create_proposal(
+                                    db,
+                                    session_id=session.id,
+                                    actor=claims["email"],
+                                    tool_name=event.data.get("name"),
+                                    args=event.data.get("args") or {},
+                                    dry_run_result=event.data.get("dry_run_result"),
+                                )
+                                event.data["pending_action_id"] = str(action.id)
+                                event.data["co_sign_required"] = action.co_sign_required
+                                event.data["target_count"] = action.target_count
+                            except Exception as exc:  # noqa: BLE001 — guard refusal or db error
+                                event.data["proposal_error"] = str(exc)
+                        yield _sse({"type": event.type, **event.data})
+            except (asyncio.CancelledError, GeneratorExit):
+                # The client went away mid-stream (#1048). Finalize exactly once —
+                # cost record, aborted status, query log — then let the close
+                # propagate. Never swallow GeneratorExit without re-raising.
+                terminal = "aborted"
+                error = error or "client disconnected"
+                await finalize_once()
+                raise
+            except Exception as exc:  # noqa: BLE001 — always emit a terminal frame
+                # Only provider/transport failures trip the endpoint's health
+                # cooldown so the router steers subsequent sessions elsewhere;
+                # unrelated bugs must not poison endpoint health (#1048).
+                _note_endpoint_error(exc, str(endpoint.id))
+                error = f"agent run failed: {exc}"
+                terminal = "aborted"
+                logger.exception("run_agent_stream failed", extra={"session_id": str(session.id)})
+                yield _sse({"type": "error", "error": error})
+
+            watcher.cancel()
+            query_id = await finalize_once()
+
+            yield _sse(
+                {
+                    "type": "done",
+                    "session_id": str(session.id),
+                    "query_id": query_id,
+                    "status": terminal,
+                    "iterations": iterations,
+                    "tool_calls": len(tool_calls),
+                    "input_tokens": planner.input_tokens,
+                    "output_tokens": planner.output_tokens,
+                    "duration_ms": int((time.perf_counter() - t0) * 1000),
+                }
+            )
+            yield "data: [DONE]\n\n"
+        finally:
+            watcher.cancel()
+            # Last-resort guard: any teardown path that skipped both handlers
+            # above still persists exactly once (no-op if already finalized).
+            if not finalized:
+                terminal = "aborted"
+                error = error or "client disconnected"
+            await finalize_once()
 
     return StreamingResponse(
         event_stream(),
