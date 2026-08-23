@@ -707,7 +707,7 @@ def collect_node_grains(self, node_id: str) -> dict:
     name="fleet_platform.workers.ansible_tasks.refresh_all_node_grains",
     queue="maintenance",
 )
-@unique_task()  # singleton — one run at a time; must be inner decorator so .delay is preserved
+@unique_task(ttl=2400)  # singleton, inner decorator (preserves .delay); grain sweep outlasts the 300s default (#1048)
 def refresh_all_node_grains() -> dict:
     """Periodic: trigger grain collection for all bootstrapped online nodes."""
     try:
@@ -819,6 +819,8 @@ def _ensure_master_api_creds(master) -> str:
     bind=True,
     max_retries=0,
     queue="ansible",  # dedicated long-job queue — isolates from control plane (#579)
+    soft_time_limit=7200,  # 2h ceiling — matches run_playbook's long-job semantics (#1049 item 4)
+    time_limit=7260,  # 2h + 60s hard kill
     acks_late=False,
 )
 def provision_master(self, salt_master_id: str, action: str = "install") -> dict:

@@ -1,5 +1,16 @@
 # fleet_platform/services/drift_engine.py
-"""Pure stateless drift computation. No DB, no Celery — fully unit-testable."""
+"""Pure stateless drift computation. No DB, no Celery — fully unit-testable.
+
+Supported version constraints in ``baseline.packages.required[].version``
+(#1049 item 2):
+  * absent / empty  — presence-only check (installed = compliant)
+  * ``>=X[.Y[.Z]]`` — installed version must be greater than or equal
+  * ``==X[.Y[.Z]]`` — exact pin; installed version must parse equal
+
+Any other prefix characters are stripped by ``_parse_version`` but only the
+two operators above are enforced; unknown constraint syntax is treated as a
+presence check.
+"""
 
 import re
 from dataclasses import dataclass, field
@@ -104,7 +115,19 @@ def _check_versions(grains: dict, baseline: dict) -> list[dict]:
             continue
         actual_v = _parse_version(installed[name])
         required_v = _parse_version(constraint)
-        if ">=" in constraint and actual_v < required_v:
+        if constraint.startswith("==") and actual_v != required_v:
+            # Exact pin (#1049 item 2): any difference is a mismatch — the
+            # severity follows the same major/minor split as the >= branch.
+            severity = "major" if (actual_v[0] if actual_v else 0) != (required_v[0] if required_v else 0) else "minor"
+            mismatches.append(
+                {
+                    "name": pkg["name"],
+                    "actual": installed[name],
+                    "required": constraint,
+                    "severity": severity,
+                }
+            )
+        elif ">=" in constraint and actual_v < required_v:
             severity = "major" if (actual_v[0] if actual_v else 0) < (required_v[0] if required_v else 0) else "minor"
             mismatches.append(
                 {
