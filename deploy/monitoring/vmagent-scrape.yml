@@ -1,0 +1,31 @@
+# vmagent scrape configuration for kri /metrics (#1051).
+#
+# Mounted by deploy/monitoring/docker-compose.monitoring.yml at
+# /etc/vmagent/scrape.yml. The bearer token is expanded by vmagent from its
+# environment (${METRICS_TOKEN} — passed through the service environment in
+# the compose stack; generate with:
+#   python3 -c "import secrets; print(secrets.token_hex(32))").
+# If your vmagent build lacks env expansion, render the file first:
+#   METRICS_TOKEN=... envsubst < vmagent-scrape.yml > rendered.yml
+#
+# Job names match deploy/monitoring/rules/kri-alerts.rules.yml
+# (KriAPIDown fires on up{job="kri-api"} == 0) and the Grafana dashboard.
+global:
+  scrape_interval: 30s
+
+scrape_configs:
+  # ── docker-compose mode ──────────────────────────────────────────────
+  # Target the api service DNS inside the same compose project. For a
+  # standalone install (or scraping from outside the compose network),
+  # replace the target with the host's reachable address (see README,
+  # "standalone" section) and keep the job name kri-api so alerts stay valid.
+  - job_name: kri-api
+    metrics_path: /metrics
+    static_configs:
+      - targets: ["api:8000"]
+        labels:
+          app: kri
+          mode: compose
+    authorization:
+      type: Bearer
+      credentials: "${METRICS_TOKEN}"
