@@ -9,8 +9,8 @@ requires-python = ">=3.13"
 dependencies = [
     "fastapi>=0.141.1",
     "starlette>=1.6.0",  # CVE-2026-54282/54283 (transitive via fastapi)
-    "gitpython>=3.1.59",
-    "uvicorn[standard]>=0.52.3",
+    "gitpython>=3.1.60",
+    "uvicorn[standard]>=0.52.4",
     "sqlalchemy>=2.0.52",
     "alembic>=1.19.1",
     "psycopg[async,binary]>=3.3.4",
@@ -24,16 +24,16 @@ dependencies = [
     "structlog>=26.1.0",
     "python-multipart>=0.0.32",  # CVE-2026-53538/53539/53540
     "httpx>=0.28.1",
-    "anthropic>=0.122.0",
+    "anthropic>=1.2.0",
     "slowapi>=0.1.10",
     "aiofiles>=25.1.0",
     "email-validator>=2.3.0",
     "pyyaml>=6.0.3",
     "ansible-runner>=2.4.3",
     "ansible-core>=2.21.3",
-    "cryptography>=50.0.0",  # GHSA-537c-gmf6-5ccf
+    "cryptography>=50.0.1",  # GHSA-537c-gmf6-5ccf
     "authlib>=1.7.2",
-    "idna>=3.18",           # CVE-2026-45409: ReDoS in encode(); fix in 3.15
+    "idna>=3.19",           # CVE-2026-45409: ReDoS in encode(); fix in 3.15
     "asyncssh>=2.24.0",
     "requests>=2.34.2",
     "prometheus-client>=0.26.0",
@@ -55,12 +55,12 @@ dev = [
     "pytest>=9.1.1",
     "pytest-asyncio>=1.4.0",
     "pytest-cov>=7.1.0",
-    "ruff>=0.16.3",
-    "mypy>=2.3.0",
+    "ruff>=0.16.5",
+    "mypy>=2.3.1",
     "vulture>=2.16",
     "bandit[toml]>=1.9.4",
     "pre-commit>=4.6.2",
-    "hypothesis>=6.165.7",
+    "hypothesis>=6.165.10",
     # Pin below 3.6.0: that release renamed the [tool.mutmut] keys
     # (paths_to_mutate->source_paths, tests_dir folded into
     # pytest_add_cli_args_test_selection) AND shipped a config-loader bug that
