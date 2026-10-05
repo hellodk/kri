@@ -7,16 +7,16 @@ name = "fleet-platform"
 dynamic = ["version"]
 requires-python = ">=3.13"
 dependencies = [
-    "fastapi>=0.141.1",
-    "starlette>=1.6.0",  # CVE-2026-54282/54283 (transitive via fastapi)
-    "gitpython>=3.1.59",
-    "uvicorn[standard]>=0.52.3",
-    "sqlalchemy>=2.0.52",
-    "alembic>=1.19.1",
-    "psycopg[async,binary]>=3.3.4",
-    "pydantic>=2.13.4",
+    "fastapi>=0.142.2",
+    "starlette>=1.7.0",  # CVE-2026-54282/54283 (transitive via fastapi)
+    "gitpython>=3.2.0",
+    "uvicorn[standard]>=0.54.0",
+    "sqlalchemy>=2.1.2",
+    "alembic>=1.20.0",
+    "psycopg[async,binary]>=3.3.6",
+    "pydantic>=2.13.5",
     "pydantic-settings>=2.15.0",  # GHSA-4xgf-cpjx-pc3j
-    "pyjwt[crypto]>=2.13.0",
+    "pyjwt[crypto]>=2.15.1",
     "bcrypt>=5.0.0",
     "celery[redis]>=5.6.3",
     "redis>=5.3.1",
@@ -24,16 +24,16 @@ dependencies = [
     "structlog>=26.1.0",
     "python-multipart>=0.0.32",  # CVE-2026-53538/53539/53540
     "httpx>=0.28.1",
-    "anthropic>=0.122.0",
+    "anthropic>=1.11.0",
     "slowapi>=0.1.10",
     "aiofiles>=25.1.0",
     "email-validator>=2.3.0",
     "pyyaml>=6.0.3",
     "ansible-runner>=2.4.3",
-    "ansible-core>=2.21.3",
-    "cryptography>=50.0.0",  # GHSA-537c-gmf6-5ccf
-    "authlib>=1.7.2",
-    "idna>=3.18",           # CVE-2026-45409: ReDoS in encode(); fix in 3.15
+    "ansible-core>=2.21.4",
+    "cryptography>=50.0.2",  # GHSA-537c-gmf6-5ccf
+    "authlib>=1.8.0",
+    "idna>=3.20",           # CVE-2026-45409: ReDoS in encode(); fix in 3.15
     "asyncssh>=2.24.0",
     "requests>=2.34.2",
     "prometheus-client>=0.26.0",
@@ -41,13 +41,13 @@ dependencies = [
     # OpenTelemetry — wire real distributed tracing so trace_id in logs maps to
     # spans in Tempo (replaces the random UUID4 fallback in core/logging.py).
     # Configure via OTEL_EXPORTER_OTLP_ENDPOINT; if unset the SDK is a no-op.
-    "opentelemetry-sdk>=1.44.0",
-    "opentelemetry-exporter-otlp-proto-grpc>=1.44.0",
-    "opentelemetry-instrumentation-fastapi>=0.65b0",
-    "opentelemetry-instrumentation-sqlalchemy>=0.65b0",
-    "opentelemetry-instrumentation-celery>=0.65b0",
-    "opentelemetry-instrumentation-httpx>=0.65b0",
-    "opentelemetry-instrumentation-redis>=0.65b0",
+    "opentelemetry-sdk>=1.45.0",
+    "opentelemetry-exporter-otlp-proto-grpc>=1.45.0",
+    "opentelemetry-instrumentation-fastapi>=0.66b0",
+    "opentelemetry-instrumentation-sqlalchemy>=0.66b0",
+    "opentelemetry-instrumentation-celery>=0.66b0",
+    "opentelemetry-instrumentation-httpx>=0.66b0",
+    "opentelemetry-instrumentation-redis>=0.66b0",
 ]
 
 [project.optional-dependencies]
@@ -55,18 +55,18 @@ dev = [
     "pytest>=9.1.1",
     "pytest-asyncio>=1.4.0",
     "pytest-cov>=7.1.0",
-    "ruff>=0.16.3",
-    "mypy>=2.3.0",
+    "ruff>=0.16.10",
+    "mypy>=2.4.0",
     "vulture>=2.16",
     "bandit[toml]>=1.9.4",
     "pre-commit>=4.6.2",
-    "hypothesis>=6.165.7",
+    "hypothesis>=6.168.3",
     # Pin below 3.6.0: that release renamed the [tool.mutmut] keys
     # (paths_to_mutate->source_paths, tests_dir folded into
     # pytest_add_cli_args_test_selection) AND shipped a config-loader bug that
     # crashes `mutmut results` with "can only concatenate list (not 'str') to
     # list", failing the mutation CI job. 3.5.0 reads our string-valued config.
-    "mutmut>=3.7.0,<3.8.0",
+    "mutmut>=3.8.0,<3.9.0",
 ]
 
 # Only package fleet_platform — exclude playbooks/ and other top-level dirs.
